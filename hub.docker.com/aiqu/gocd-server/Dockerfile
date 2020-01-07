@@ -1,0 +1,5 @@
+ARG BASE_IMAGE_VERSION=v19.8.0
+
+FROM gocd/gocd-server:${BASE_IMAGE_VERSION:-v19.8.0}
+
+USER root

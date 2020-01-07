@@ -1,0 +1,8 @@
+FROM golang:alpine
+
+RUN apk add --no-cache git \
+ && go get -u gopkg.in/alecthomas/gometalinter.v1 \
+ && go get github.com/axw/gocov/... \
+ && go get github.com/AlekSi/gocov-xml \
+ && go get -u github.com/jstemmer/go-junit-report \
+ && gometalinter.v1 --install

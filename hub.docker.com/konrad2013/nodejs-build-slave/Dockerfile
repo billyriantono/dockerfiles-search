@@ -1,0 +1,29 @@
+FROM ubuntu:16.04
+RUN apt-get update \
+    && apt-get install -y curl jekyll apt-transport-https ca-certificates openssh-server default-jdk \
+    && curl -L "https://cli.run.pivotal.io/stable?release=linux64-binary&source=github" | tar -zx \
+    && mv cf /bin/ \
+    && curl -sL https://deb.nodesource.com/setup_6.x | bash - \
+    && apt-get install -y nodejs \
+    && apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D \
+    && echo "deb https://apt.dockerproject.org/repo ubuntu-xenial main" > /etc/apt/sources.list.d/docker.list \
+    && curl https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list \
+    && apt-get update \
+    && apt-get install -y docker-engine google-chrome-stable \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* 
+
+RUN useradd -ms /bin/bash build \
+    && usermod -aG docker build \
+    && sed -i 's/PermitRootLogin without-password/PermitRootLogin yes/' /etc/ssh/sshd_config \
+    && sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd \
+    && echo 'build:jenkins-slave' | chpasswd \
+    && node -v \
+    && npm -v \
+    && google-chrome --version \
+    && java -version \
+    && docker --version
+    
+EXPOSE 22
+CMD ["/usr/sbin/sshd", "-D"]

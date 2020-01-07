@@ -1,0 +1,43 @@
+#
+# Alpine base image, see README for more details
+#
+# VERSION               1.0.1
+#
+FROM alpine:3.8
+
+#
+# Standard environment variables
+#
+ENV TZ="GMT+08" LANG="en_US.UTF-8" LANGUAGE="en_US.UTF-8"
+
+#
+# Standard "restricted user"
+#
+
+# Add the "appuser" with gid 1000 &&
+# Add the "appuser" with uid 1000, gid 1000
+RUN addgroup -g 1000 -S appuser && \
+    adduser -u 1000 -S appuser -G appuser
+
+#
+# Standard pre-installed libraries
+#
+RUN apk add --no-cache bash curl wget vim iputils gettext grep
+
+#
+# Standard folders, and WORKDIR
+#
+RUN mkdir -p /entrypoint/ /application/ /storage/
+WORKDIR /appspace/
+
+#
+# Standard entrypoint script setup
+#
+
+# Script contents : https://github.com/uilicious/uilicious-dockerfile/blob/master/base/alpine-base/entrypoint-base.sh
+COPY entrypoint-base.sh /entrypoint/base.sh
+RUN chmod 555 /entrypoint/base.sh
+
+# Setup entrypoint script, with default "sleep"
+ENTRYPOINT ["/entrypoint/base.sh"]
+CMD ["/bin/bash"]

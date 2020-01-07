@@ -1,0 +1,14 @@
+FROM node:10-slim
+RUN \
+    apt-get update && \
+    apt-get -y install sudo && \
+    sudo apt-get install -y apt-transport-https && \
+    sudo apt-get install -y git-core && \
+    sudo apt-get update && sudo apt-get install -y libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev build-essential g++ && \
+    npm install -g gulp-cli && \
+    npm install -g bower && \
+    sudo apt-get install -y python-pip && \
+    yarn global add @testim/testim-cli && \
+    sudo pip install 'awsebcli==3.14.6' && \
+    rm -rf /var/lib/apt/lists/*
+CMD ["bash"]

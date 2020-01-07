@@ -1,0 +1,2 @@
+FROM  gcr.io/tf-on-k8s-dogfood/tf_operator:v20180131-cabc1c0-dirty-e3b0c44
+MAINTAINER wut@neunn.com

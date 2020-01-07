@@ -1,0 +1,7 @@
+# To build a docker image: docker  build -t bchupika/youtube-jv-nov18 .
+# To run the docker image: docker run -p 8080:8080 bchupika/youtube-jv-nov18
+FROM openjdk:8-jdk-alpine
+VOLUME /tmp
+ARG JAR_FILE
+COPY ${JAR_FILE} youtube-jv-nov18.jar
+ENTRYPOINT ["java","-Djava.security.egd=file:/dev/./urandom","-jar","/youtube-jv-nov18.jar"]

@@ -1,0 +1,28 @@
+FROM node:10.15.3-alpine
+
+LABEL maintainer="Alexander Sidorenko <alexander.s@namastetechnologies.com>"
+
+RUN apk add --no-cache tzdata
+
+ENV SERVICE_HOME=/opt/app
+ENV NODE_ENV=production
+
+RUN mkdir -p ${SERVICE_HOME}
+WORKDIR ${SERVICE_HOME}
+
+ONBUILD ARG SERVICE
+ONBUILD ARG VERSION
+ONBUILD ARG PORT=3000
+
+ONBUILD ENV SERVICE=${SERVICE}
+ONBUILD ENV VERSION=${VERSION}
+ONBUILD ENV PORT=${PORT}
+
+ONBUILD COPY . .
+
+ONBUILD EXPOSE ${PORT}
+
+ONBUILD LABEL service=${SERVICE}
+ONBUILD LABEL version=${VERSION}
+
+CMD npm start

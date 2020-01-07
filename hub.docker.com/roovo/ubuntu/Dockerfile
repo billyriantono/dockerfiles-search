@@ -1,0 +1,13 @@
+FROM ubuntu:12.04
+
+MAINTAINER roovo "roovo@roovoweb.com"
+
+RUN \
+  echo "export HOME=/root" > /.profile ;\
+  echo 'APT::Get::Assume-Yes "true";' > /etc/apt/apt.conf.d/90forceyes ;\
+  echo 'deb http://archive.ubuntu.com/ubuntu precise main universe' > /etc/apt/sources.list ;\
+  apt-get update ;\
+  dpkg-divert --local --rename --add /sbin/initctl ;\
+  ln -s /bin/true /sbin/initctl ;\
+  apt-get install wget ;\
+# END RUN

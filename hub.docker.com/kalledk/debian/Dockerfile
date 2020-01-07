@@ -1,0 +1,5 @@
+FROM debian:jessie
+
+MAINTAINER Kalle R. Møller
+
+ENV APT_GET_UPDATE=2015-12-21

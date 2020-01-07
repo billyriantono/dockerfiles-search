@@ -1,0 +1,1 @@
+FROM scaleway/alpine:latest

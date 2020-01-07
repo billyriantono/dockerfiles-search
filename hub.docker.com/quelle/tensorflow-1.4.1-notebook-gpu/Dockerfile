@@ -1,0 +1,2 @@
+# googlecontainers,kube-scheduler
+FROM gcr.io/kubeflow-images-public/tensorflow-1.4.1-notebook-gpu:v0.2.1

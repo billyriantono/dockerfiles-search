@@ -1,0 +1,11 @@
+FROM node:9.2.0-alpine
+
+WORKDIR app
+
+ONBUILD ARG NODE_ENV
+ONBUILD ENV NODE_ENV $NODE_ENV
+
+ONBUILD COPY . .
+ONBUILD RUN ./build.sh
+
+CMD [ "./up.sh" ]

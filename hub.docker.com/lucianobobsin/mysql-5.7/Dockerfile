@@ -1,0 +1,8 @@
+FROM mysql:5.7
+
+ENV MYSQL_ROOT_PASSWORD 4p4ch3
+ENV MYSQL_PASSWORD 4p4ch3
+
+VOLUME  ["/var/lib/mysql"]
+
+EXPOSE 3306

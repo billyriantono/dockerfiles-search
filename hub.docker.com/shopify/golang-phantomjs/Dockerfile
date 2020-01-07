@@ -1,0 +1,9 @@
+FROM golang:1.4.1
+ 
+RUN \
+  echo "deb http://http.debian.net/debian jessie contrib" >> /etc/apt/sources.list && \
+  echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | debconf-set-selections && \
+  apt-get update && apt-get install -y libfreetype6 libfontconfig ttf-mscorefonts-installer bzip2 && \
+  curl -L https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-1.9.8-linux-x86_64.tar.bz2 | tar -xjf- && \
+  mv phantomjs-1.9.8-linux-x86_64/bin/phantomjs /usr/bin/phantomjs && \
+  rm -rf phantomjs-1.9.8-linux-x86_64

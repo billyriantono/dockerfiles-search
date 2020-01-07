@@ -1,0 +1,8 @@
+#
+# Alpine base image, with openssh + rsync + sshpass
+#
+# VERSION               1.0.1
+#
+FROM uilicious/alpine-base
+
+RUN apk add --no-cache openssh rsync sshpass unison

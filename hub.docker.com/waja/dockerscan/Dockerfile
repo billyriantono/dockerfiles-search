@@ -1,0 +1,37 @@
+FROM alpine:3.10
+                                                                                
+# Dockerfile Maintainer
+MAINTAINER Jan Wagner "waja@cyconet.org"
+
+ARG BUILD_DATE
+ARG BUILD_VERSION
+ARG VCS_URL
+ARG VCS_REF
+ARG VCS_BRANCH
+
+# See http://label-schema.org/rc1/ and https://microbadger.com/labels
+LABEL org.label-schema.name="dockerscan - security analysis & hacking tools" \
+    org.label-schema.description="Docker security analysis & hacking tools on Alpine Linux based container" \
+    org.label-schema.vendor="Cyconet" \
+    org.label-schema.schema-version="1.0" \
+    org.label-schema.build-date="${BUILD_DATE:-unknown}" \
+    org.label-schema.version="${BUILD_VERSION:-unknown}" \
+    org.label-schema.vcs-url="${VCS_URL:-unknown}" \
+    org.label-schema.vcs-ref="${VCS_REF:-unknown}" \
+    org.label-schema.vcs-branch="${VCS_BRANCH:-unknown}"
+
+ENV DOCKERSCAN_VERSION 1.0.0a3
+
+RUN apk --no-cache update && apk --no-cache upgrade && \
+ apk --no-cache add python3 && \
+ python3 -m ensurepip && \
+ rm -r /usr/lib/python*/ensurepip && \
+ pip3 install --upgrade pip setuptools && \
+ if [ ! -e /usr/bin/pip ]; then ln -s pip3 /usr/bin/pip ; fi && \
+ pip install dockerscan==$DOCKERSCAN_VERSION && \
+ rm -r /root/.cache
+
+COPY entrypoint.sh /
+ENTRYPOINT ["/entrypoint.sh"]
+
+CMD ["dockerscan"]

@@ -1,0 +1,10 @@
+FROM moltar/plenv:latest
+
+MAINTAINER moltar <moltar@moltar.net>
+
+ENV PLENV_VERSION 5.22.0
+ENV PLENV_INSTALL_OPTION -Duseshrplib
+
+ADD plenv_install_perl.sh $PLENV_INSTALL
+
+RUN $PLENV_INSTALL $PLENV_VERSION $PLENV_INSTALL_OPTION

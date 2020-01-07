@@ -1,0 +1,1 @@
+from quay.io/kubernetes-ingress-controller/nginx-ingress-controller-amd64:0.25.1 as nginx-ingress-controller

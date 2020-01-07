@@ -1,0 +1,23 @@
+# Source (EOL)
+FROM alpine:3.3
+
+# Install openrc
+RUN apk --no-cache add openrc && \
+# Setup compatibility with libc
+mkdir -p /lib64 && ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2 && \
+# Disable ttys
+sed -i 's/^tty/#tty/g' /etc/inittab && \
+# Purge logs
+rm -rf /var/log/*
+
+# Needed by OpenRC
+VOLUME [ "/run" ]
+
+# Start via init
+CMD ["/sbin/init"]
+
+# Image metadata
+LABEL org.label-schema.vendor="Mesaguy" \
+      org.label-schema.name="Alpine Linux 3.3 boot" \
+      org.label-schema.description="Image boots Alpine Linux 3.3 via OpenRC" \
+      com.mesaguy.operatingsystem.eol="true"

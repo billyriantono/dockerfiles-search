@@ -1,0 +1,1 @@
+FROM registry.gitlab.com/gitlab-org/gitlab-omnibus-builder/debian_packer:latest

@@ -1,0 +1,41 @@
+###  package a nodejs application to learn k8s concept
+
+FROM ubuntu:16.04
+
+ARG DB_WORKDIR=/opt/datastore
+ARG NODEJS_WORKDIR=/opt/k8s_concepts_nodejs
+ARG DB_FILE=/opt/datastore/data/dbfile
+ENV DB_FILE ${DB_FILE}
+
+RUN rm /var/lib/dpkg/lock \
+    && dpkg --configure -a
+
+RUN apt-get update \
+    && apt-get install -y nodejs \
+    && apt-get install -y npm \
+    && apt-get install -y curl vim net-tools telnet iputils-ping
+    
+RUN mkdir -p ${DB_WORKDIR}/data/ \
+    && mkdir -p ${DB_WORKDIR}/container/ \
+    && mkdir -p ${DB_WORKDIR}/probes/ \
+    && touch ${DB_FILE} \
+    && mkdir -p ${NODEJS_WORKDIR}/server
+
+ADD ./k8s_concepts_nodejs/main/server.js ${NODEJS_WORKDIR}/server
+ADD ./k8s_concepts_db/generatedata.sh  ${DB_WORKDIR}/
+ADD ./k8s_concepts_db/container/postStart.sh  ${DB_WORKDIR}/container/postStart.sh
+ADD ./k8s_concepts_db/container/preStop.sh   ${DB_WORKDIR}/container/preStop.sh
+ADD ./k8s_concepts_db/probes/livenessprobe.file   ${DB_WORKDIR}/probes/livenessprobe.file
+ADD ./k8s_concepts_db/probes/readinessprobe.file   ${DB_WORKDIR}/probes/readinessprobe.file
+
+WORKDIR ${DB_WORKDIR}
+
+RUN chmod +x generatedata.sh
+RUN chmod +x container/postStart.sh
+RUN chmod +x container/preStop.sh
+
+EXPOSE 8888
+
+
+##ENTRYPOINT ["/bin/bash", "-c", "generatedata.sh ${DB_FILE} yes"]
+ENTRYPOINT ["./generatedata.sh", "/opt/datastore/data/dbfile", "yes"]

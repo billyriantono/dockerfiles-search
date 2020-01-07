@@ -1,0 +1,60 @@
+FROM gettlabs/docker-spark:spark2.3.1conda3
+
+RUN apt-get update && \
+    apt-get install -y g++ && \
+    apt-get install -y python-dev && \
+    pip install Cython && \
+    pip install jupyter && \
+    conda install -c conda-forge papermill  && \
+    pip install findspark && \
+    pip install pandas && \
+    pip install psycopg2-binary && \
+    pip install sqlalchemy && \
+    conda install -c blaze pyhive && \
+    pip install boto3==1.7.40 && \
+    pip install botocore==1.10.40 && \
+    pip install chardet==3.0.4 && \
+    pip install docutils==0.14 && \
+    pip install findspark==1.3.0 && \
+    pip install future==0.16.0 && \
+    pip install haversine==0.4.5 && \
+    pip install hexgrid-py==1.3 && \
+    pip install hexgridgeo-py==1.3 && \
+    pip install idna==2.7 && \
+    pip install jmespath==0.9.3 && \
+    conda install -c conda-forge lightgbm  && \
+    pip install morton-py==1.3 && \
+    pip install numpy==1.14.5 && \
+    pip install pika==0.11.2 && \
+    pip install PyHive==0.6.0 && \
+    conda install -c anaconda python-dateutil && \
+    pip install pytz==2018.4 && \
+    conda install -c conda-forge pyyaml && \
+    conda install -c conda-forge/label/gcc7 pyyaml && \
+    pip install redis==2.10.6 && \
+    pip install requests==2.19.1 && \
+    pip install requests-toolbelt==0.8.0 && \
+    pip install s2sphere==0.2.5 && \
+    pip install s3transfer==0.1.13 && \
+    pip install scipy==1.1.0 && \
+    pip install six==1.11.0 && \
+    pip install timezonefinder==3.0.1 && \
+    pip install urllib3==1.23 && \
+    pip install seaborn && \
+    conda install -c anaconda scikit-learn && \ 
+    pip install haversine && \
+    pip install matplotlib==3.0.0 && \
+    pip install tqdm && \
+    pip install geojson && \
+    pip install folium && \
+    pip install shapely && \
+    conda install -c anaconda pandas  && \
+    conda install -c conda-forge pyarrow
+#kubectl
+RUN apt-get update && apt-get install -y apt-transport-https
+RUN curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+RUN echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" | tee -a /etc/apt/sources.list.d/kubernetes.list
+RUN apt-get update
+RUN apt-get install -y kubectl
+
+

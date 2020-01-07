@@ -1,0 +1,1 @@
+FROM sjoerdmulder/teamcity-agent

@@ -1,0 +1,1 @@
+FROM fhem/fhem-arm64v8_linux:5.9-s17621_1.3.0

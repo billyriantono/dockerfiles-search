@@ -1,0 +1,1 @@
+FROM hypercloud/nodejs-runtime

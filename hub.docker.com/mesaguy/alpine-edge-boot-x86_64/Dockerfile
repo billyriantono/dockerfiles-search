@@ -1,0 +1,21 @@
+# Source
+FROM alpine:edge
+
+# Install openrc
+RUN apk --no-cache add openrc && \
+# Disable ttys
+sed -i 's/^tty/#tty/g' /etc/inittab && \
+# Purge logs
+rm -rf /var/log/*
+
+# Needed by OpenRC
+VOLUME [ "/run" ]
+
+# Start via init
+CMD ["/sbin/init"]
+
+# Image metadata
+LABEL org.label-schema.vendor="Mesaguy" \
+      org.label-schema.name="Alpine Linux edge latest rolling-release boot" \
+      org.label-schema.description="Image boots Alpine Linux's latest rolling-release edge via OpenRC" \
+      com.mesaguy.operatingsystem.eol="false"

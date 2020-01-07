@@ -1,0 +1,6 @@
+FROM golang:latest
+
+WORKDIR $GOPATH
+
+EXPOSE 8080
+VOLUME /go

@@ -1,0 +1,1 @@
+FROM gcr.io/google_samples/xtrabackup:1.0

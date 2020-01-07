@@ -1,0 +1,1 @@
+FROM bitnami/tensorflow-serving:1.8.0

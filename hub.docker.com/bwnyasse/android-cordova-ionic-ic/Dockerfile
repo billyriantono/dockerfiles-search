@@ -1,0 +1,17 @@
+FROM bwnyasse/android-cordova-ionic
+
+MAINTAINER bwnyasse
+
+ENV DEV_EXTRA_RESOURCES_PATH=/extra-resources
+
+RUN mkdir -p $DEV_EXTRA_RESOURCES_PATH $DEV_EXTRA_RESOURCES_PATH/bin
+
+COPY key/app.keystore $DEV_EXTRA_RESOURCES_PATH/
+
+ADD ic $DEV_EXTRA_RESOURCES_PATH/bin/
+
+RUN chmod +x $DEV_EXTRA_RESOURCES_PATH/bin/*.sh
+
+ENV PATH $DEV_EXTRA_RESOURCES_PATH/bin:$PATH
+
+ENTRYPOINT ["build.sh"]

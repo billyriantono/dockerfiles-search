@@ -1,0 +1,18 @@
+FROM node:alpine
+
+RUN apk add --no-cache python python-dev  \
+    linux-headers build-base bash git ca-certificates
+
+RUN set -ex; \
+    apk add --no-cache --virtual .fetch-deps libressl; \
+    wget -O get-pip.py 'https://bootstrap.pypa.io/get-pip.py'; \
+    apk del .fetch-deps; \
+    python get-pip.py --no-cache-dir; \
+    pip --version; \
+    find /usr/local -depth \
+        \( \
+            \( -type d -a \( -name test -o -name tests \) \) \
+            -o \
+            \( -type f -a \( -name '*.pyc' -o -name '*.pyo' \) \) \
+        \) -exec rm -rf '{}' +; \
+    rm -f get-pip.py
