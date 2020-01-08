@@ -1,0 +1,40 @@
+# Compiled version of watchman, for debian-slim
+FROM debian:buster-slim
+
+# https://facebook.github.io/watchman/docs/install.html
+RUN cd /tmp \
+    && apt-get update \
+    && apt-get install --no-install-recommends -y \
+      build-essential \
+      ca-certificates \
+      curl \
+      libssl-dev \
+      autoconf \
+      automake \
+      libtool \
+      libpcre3-dev \
+      pkg-config \
+      unzip \
+    && curl -L https://github.com/facebook/watchman/archive/v4.9.0.zip > watchman-4.9.0.zip \
+    && unzip watchman-4.9.0.zip \
+    && cd watchman-4.9.0 \
+    && ./autogen.sh \
+    && ./configure --prefix=/usr --enable-lenient \
+    && make -j4 \
+    && make install \
+    && cd /tmp \
+    && rm -rf /tmp/watchman-4.9.0* \
+    && apt-get remove --purge -y \
+      build-essential \
+      ca-certificates \
+      curl \
+      libssl-dev \
+      autoconf \
+      automake \
+      libtool \
+      libpcre3-dev \
+      pkg-config \
+      unzip \
+    && apt-get autoremove --purge -y \
+    && rm -rf /var/lib/apt/lists/*
+

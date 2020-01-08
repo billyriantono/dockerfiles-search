@@ -1,0 +1,31 @@
+FROM php:7.2.10-apache-stretch
+
+RUN apt-get update -yqq && \
+  apt-get install -y apt-utils zip unzip && \
+  apt-get install -y nano && \
+  apt-get install -y libzip-dev && \
+  a2enmod rewrite && \
+  docker-php-ext-install pdo pdo_mysql && \
+  docker-php-ext-configure zip --with-libzip && \
+  docker-php-ext-install zip && \
+  rm -rf /var/lib/apt/lists/*
+
+RUN php -r "readfile('http://getcomposer.org/installer');" | php -- --install-dir=/usr/bin/ --filename=composer
+
+COPY default.conf /etc/apache2/sites-enabled/000-default.conf
+
+# Set the work directory
+WORKDIR /var/www/app
+
+# Add application files
+COPY . /var/www/app
+
+# Install dependencies
+RUN composer install
+
+# Give read/write access to storage
+RUN chmod -R 777 storage
+
+CMD ["/usr/sbin/apache2ctl", "-D", "FOREGROUND"]
+
+EXPOSE 80

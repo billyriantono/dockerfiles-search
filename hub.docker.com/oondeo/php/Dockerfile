@@ -1,0 +1,120 @@
+FROM php:7.3-fpm
+ARG PHP_VERSION=7.3
+ARG PHALCON_VERSION=v3.4.4
+ARG RUN_DEPS="inotify-tools graphviz"
+ARG PHP_EXTENSIONS="bcmath bz2 calendar ctype curl dom exif fileinfo gettext gmp hash iconv intl json ldap mbstring mysqli pdo pdo_mysql opcache pdo_sqlite phar posix session shmop simplexml snmp sodium soap tidy wddx xml xmlreader xmlrpc xmlwriter xsl zip"
+ARG PHP_PECL_DEPS="git libmagickwand-dev libzip-dev libgraphicsmagick1-dev libtidy-dev libsodium-dev libxslt1-dev libsnmp-dev libreadline-dev libpcre3 libpcre3-dev  libmcrypt-dev imagemagick zlib1g-dev libbz2-dev libgmp-dev libsqlite3-dev libicu-dev libldap2-dev libreadline-dev  libpspell-dev libcurl4-openssl-dev libxml2-dev libssl-dev libpng-dev libfreetype6-dev libjpeg62-turbo-dev"
+ARG PHP_PECL_EXTENSIONS="apcu-5.1.17 redis-5.0.2 xdebug-2.7.2 mcrypt-1.0.3 imagick-3.4.4"
+ 
+# imagick-3.4.3 
+ENV SUMMARY="PHP 7 image with standar modules"	\
+    DESCRIPTION="The image use scripts and configurations compatible \
+        with redhat openshift."
+
+LABEL summary="$SUMMARY" \
+      description="$DESCRIPTION" \
+      io.k8s.description="$DESCRIPTION" \
+      io.k8s.display-name="php 7" \
+      io.openshift.expose-services="9000:fcgi" \
+      io.openshift.tags="builder,php,php7,php72,php7.3,php-cgi,php-fcgi,php-cli" \
+      com.redhat.component="php" \
+      name="oondeo/php" \
+      version="$PHP_VERSION" \
+      release="2" \
+      maintainer="OONDEO <info@oondeo.es>"
+
+ENV \
+    # DEPRECATED: Use above LABEL instead, because this will be removed in future versions.
+    STI_SCRIPTS_URL=image:///usr/libexec/s2i \
+    # Path to be used in other layers to place s2i scripts into
+    STI_SCRIPTS_PATH=/usr/libexec/s2i/bin
+
+ENV \
+    # The $HOME is not set by default, but some applications needs this variable
+    HOME=/opt/app-root/src \
+    PATH=/opt/app-root/src/bin:/opt/app-root/bin:$STI_SCRIPTS_PATH:$PATH 
+
+
+# When bash is started non-interactively, to run a shell script, for example it
+# looks for this variable and source the content of this file. This will enable
+# the SCL for all scripts without need to do 'scl enable'.
+ENV BASH_ENV=/opt/app-root/etc/scl_enable \
+    ENV=/opt/app-root/etc/scl_enable \
+    XDG_DATA_HOME=$HOME/.local/share \
+    DEBIAN_FRONTEND=noninteractive \
+    PROMPT_COMMAND=". /opt/app-root/etc/scl_enable"
+#    MUSL_LOCPATH="/usr/share/i18n/locales/musl" 
+#    LANG=es_ES.UTF-8 LANGUAGE=es_ES.UTF-8 LC_ALL=es_ES.UTF-8 LC_CTYPE=es_ES.UTF-8 
+
+# Copy extra files to the image.
+COPY ./root/root/ /
+# COPY clean.sh /usr/sbin/clean.sh
+RUN /usr/bin/docker-header
+# RUN apk-install bash && /usr/bin/docker-header "https://raw.githubusercontent.com/oondeo/docker-alpine/master/musl-locales-0.2-r0.apk"
+
+# Directory with the sources is set as the working directory so all STI scripts
+# can execute relative to this path.
+WORKDIR ${HOME}
+
+# runDeps="$( \
+# 		scanelf --needed --nobanner --format '%n#p' --recursive /usr/local \
+# 			| tr ',' '\n' \
+# 			| sort -u \
+# 			| awk 'system("[ -e /usr/local/lib/" $1 " ]") == 0 { next } { print "so:" $1 }' \
+# 	)" 
+RUN set -eux; apt-get update && apt-get install -y --no-install-recommends  $RUN_DEPS \
+    && apt-mark showmanual > /tmp/savedAptMark && apt-get install -y --no-install-recommends  $PHP_PECL_DEPS $PHPIZE_DEPS \
+    && ln -s /usr/src/php/ext/ /usr/local/include/php/ext/ext \
+    && docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/ \
+    && docker-php-ext-install -j "$(nproc)" gd \
+    && docker-php-ext-install -j "$(nproc)" ${PHP_EXTENSIONS} \
+    && pecl install $PHP_PECL_EXTENSIONS \  
+    && git clone https://github.com/tideways/php-xhprof-extension.git /usr/src/php/ext/tideways_xhprof && cd /usr/src/php/ext/tideways_xhprof \
+    && docker-php-ext-configure /usr/src/php/ext/tideways_xhprof \
+    && docker-php-ext-install -j "$(nproc)" /usr/src/php/ext/tideways_xhprof \
+    && git clone --branch $PHALCON_VERSION https://github.com/phalcon/cphalcon  /usr/src/php/ext/cphalcon && cd /usr/src/php/ext/cphalcon/build \
+    && ./install \
+    && install-deps /usr/local \
+    && rm -rf /tmp/* /var/tmp/* /usr/src/php/ext/* /usr/local/php/* /usr/local/etc/php/conf.d/* /var/lib/apt/*
+
+#    && mkdir -p  /usr/src/php/ext && cd /usr/src/php/ext \
+#    && curl -sL https://github.com/phpredis/phpredis/archive/$PHPREDIS_VERSION.zip -o phpredis.zip \
+#    && unzip phpredis.zip && rm phpredis.zip \
+#    && docker-php-ext-install "$(nproc)" phpredis-$PHPREDIS_VERSION
+#    && pear install DB MDB2 Mail Mail_Mime Mail_mimeDecode Log  HTTP_Request2 XML_RPC2 Date 
+
+# Install php tools (composer / phpunit)
+RUN cd /tmp && \
+    curl -sL https://getcomposer.org/composer.phar > composer.phar && \
+    chmod +x composer.phar && \
+    mv composer.phar /usr/local/bin/composer && \
+    curl -sL https://phar.phpunit.de/phpunit.phar > phpunit.phar && \
+    chmod +x phpunit.phar && \
+    mv phpunit.phar /usr/local/bin/phpunit && \
+    rm -rf /tmp/* /var/tmp/*
+
+COPY share /usr/local/share
+#COPY yaxgui /opt/app-root/var/lib/yaxgui
+
+#install nodejs
+#RUN apk add --no-cache nodejs npm yarn openssh-client sshfs git curl tzdata
+
+RUN mkdir -p /opt/app-root/var/lib/ /opt/app-root/lib
+
+COPY etc /opt/app-root/etc/
+
+
+RUN mkdir -p /opt/app-root/var/run && /usr/bin/docker-footer
+
+
+COPY s2i/bin $STI_SCRIPTS_PATH
+
+ENV CONFIG_DIR=/opt/app-root/etc/php-fpm.d
+
+EXPOSE 9000
+
+USER 1001
+
+# ENTRYPOINT [ "/usr/libexec/s2i/bin/run" ]
+ENTRYPOINT ["/sbin/tini", "-g" ,"--", "/usr/bin/container-entrypoint"]
+CMD [ "run" ]

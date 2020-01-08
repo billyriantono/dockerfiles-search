@@ -1,0 +1,5 @@
+FROM mysql:5.7
+
+ENV MYSQL_USER="projects"
+ENV MYSQL_PASSWORD="12root34"
+ENV MYSQL_ROOT_PASSWORD="12root34master"

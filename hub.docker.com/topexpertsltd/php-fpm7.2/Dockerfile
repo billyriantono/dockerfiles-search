@@ -1,0 +1,536 @@
+# Compilation of 3 files:
+# https://raw.githubusercontent.com/devilbox/docker-php-fpm/master/Dockerfiles/base/Dockerfile-7.2
+# and
+# https://raw.githubusercontent.com/devilbox/docker-php-fpm/master/Dockerfiles/mods/Dockerfile-7.2
+# and
+# https://raw.githubusercontent.com/devilbox/docker-php-fpm/master/Dockerfiles/prod/Dockerfile-7.2
+# Roman, 27-Dec-2018
+# ####
+FROM php:7.2-fpm
+
+###
+### Labels
+###
+LABEL \
+	name="topexperts PHP-FPM 7.2 Image" \
+	image="topexperts/php-fpm" \
+	tag="7.2" \
+	vendor="topexperts" \
+	license="MIT"
+
+###
+#### Upgrade (install different useful system tools)
+####
+RUN set -x \
+	&& DEBIAN_FRONTEND=noninteractive apt-get update -qq \
+	&& DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends --no-install-suggests procps \
+	net-tools \
+	curl \
+	vim \
+	apt-utils \
+	redis-tools \
+	mlocate \
+	less \
+	&& rm -rf /var/lib/apt/lists/*
+
+###
+### Envs
+###
+ENV BUILD_DEPS \
+	firebird-dev \
+	freetds-dev \
+	libbz2-dev \
+	libc-client-dev \
+	libcurl4-openssl-dev \
+	libenchant-dev \
+	libevent-dev \
+	libfbclient2 \
+	libfreetype6-dev \
+	libgmp-dev \
+	libib-util \
+	libicu-dev \
+	libjpeg-dev \
+	libkrb5-dev \
+	libldap2-dev \
+	libmagickwand-dev \
+	libmcrypt-dev \
+	libmemcached-dev \
+	libnghttp2-dev \
+	libpng-dev \
+	libpq-dev \
+	libpspell-dev \
+	librabbitmq-dev \
+	librdkafka-dev \
+	librecode-dev \
+	libsasl2-dev \
+	libsnmp-dev \
+	libssl-dev \
+	libvpx-dev \
+	libwebp-dev \
+	libxml2-dev \
+	libxpm-dev \
+	libxslt-dev \
+	libzip-dev \
+	snmp \
+	unixodbc-dev \
+	zlib1g-dev \
+	ca-certificates \
+	git
+
+ENV RUN_DEPS \
+	libaspell15 \
+	libc-client2007e \
+	libenchant1c2a \
+	libfbclient2 \
+	libfreetype6 \
+	libicu57 \
+	libjpeg62-turbo \
+	libmagickwand-6.q16-3 \
+	libmcrypt4 \
+	libmemcachedutil2 \
+	libnghttp2-14 \
+	libpng16-16 \
+	libpq5 \
+	librabbitmq4 \
+	librdkafka1 \
+	librecode0 \
+	libsybdb5 \
+	libvpx4 \
+	libwebp6 \
+	libxpm4 \
+	libxslt1.1 \
+	libzip4 \
+	snmp \
+	unixodbc \
+	ca-certificates
+
+###
+### Add wp-cli; https://wp-cli.org/#installing
+###
+RUN curl -O -k https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar \
+	&& chmod +x wp-cli.phar \
+	&& mv wp-cli.phar /usr/local/bin/wp
+
+###
+### Install apt-utils and PHP modules
+###
+RUN set -x \
+	&& DEBIAN_FRONTEND=noninteractive apt-get update -qq \
+	&& DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends --no-install-suggests apt-utils \
+	&& DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends --no-install-suggests \
+		${BUILD_DEPS} \
+	\
+	\
+# ---- Installing PHP Extension: ioncube ----
+	&& EXTENSION_DIR="$( php -i | grep ^extension_dir | awk -F '=>' '{print $2}' | xargs )" \
+&& if [ ! -d "${EXTENSION_DIR}" ]; then mkdir -p "${EXTENSION_DIR}"; fi \
+&& curl https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_x86-64.tar.gz -L -o ioncube.tar.gz \
+&& tar xvfz ioncube.tar.gz \
+&& cd ioncube \
+&& cp "ioncube_loader_lin_7.2.so" "${EXTENSION_DIR}/ioncube.so" \
+&& docker-php-ext-enable ioncube \
+&& cd ../ \
+&& rm -rf ioncube \
+&& rm -rf ioncube.tar.gz \
+ \
+	&& (rm -rf /usr/local/lib/php/test/ioncube || true) \
+	&& (rm -rf /usr/local/lib/php/doc/ioncube || true) \
+	\
+# ---- Installing PHP Extension: bz2 ----
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) bz2 \
+	&& (rm -rf /usr/local/lib/php/test/bz2 || true) \
+	&& (rm -rf /usr/local/lib/php/doc/bz2 || true) \
+	\
+# ---- Installing PHP Extension: calendar ----
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) calendar \
+	&& (rm -rf /usr/local/lib/php/test/calendar || true) \
+	&& (rm -rf /usr/local/lib/php/doc/calendar || true) \
+	\
+# ---- Installing PHP Extension: exif ----
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) exif \
+	&& (rm -rf /usr/local/lib/php/test/exif || true) \
+	&& (rm -rf /usr/local/lib/php/doc/exif || true) \
+	\
+# ---- Installing PHP Extension: gd ----
+	&& ln -s /usr/lib/x86_64-linux-gnu/libXpm.* /usr/lib/ \
+	&& /usr/local/bin/docker-php-ext-configure gd --with-gd --with-webp-dir=/usr --with-jpeg-dir=/usr --with-png-dir=/usr --with-zlib-dir=/usr --with-xpm-dir=/usr --with-freetype-dir=/usr --enable-gd-jis-conv \
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) gd \
+	&& (rm -rf /usr/local/lib/php/test/gd || true) \
+	&& (rm -rf /usr/local/lib/php/doc/gd || true) \
+	\
+# ---- Installing PHP Extension: gettext ----
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) gettext \
+	&& (rm -rf /usr/local/lib/php/test/gettext || true) \
+	&& (rm -rf /usr/local/lib/php/doc/gettext || true) \
+	\
+# ---- Installing PHP Extension: gmp ----
+	&& ln /usr/include/x86_64-linux-gnu/gmp.h /usr/include/ \
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) gmp \
+	&& (rm -rf /usr/local/lib/php/test/gmp || true) \
+	&& (rm -rf /usr/local/lib/php/doc/gmp || true) \
+	\
+# ---- Installing PHP Extension: igbinary ----
+	&& pecl install igbinary \
+	&& docker-php-ext-enable igbinary \
+	&& (rm -rf /usr/local/lib/php/test/igbinary || true) \
+	&& (rm -rf /usr/local/lib/php/doc/igbinary || true) \
+	\
+# ---- Installing PHP Extension: imagick ----
+	&& pecl install imagick \
+	&& docker-php-ext-enable imagick \
+	&& (rm -rf /usr/local/lib/php/test/imagick || true) \
+	&& (rm -rf /usr/local/lib/php/doc/imagick || true) \
+	\
+# ---- Installing PHP Extension: imap ----
+	&& ln -s /usr/lib/x86_64-linux-gnu/libkrb5* /usr/lib/ \
+	&& /usr/local/bin/docker-php-ext-configure imap --with-kerberos --with-imap-ssl --with-imap \
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) imap \
+	&& (rm -rf /usr/local/lib/php/test/imap || true) \
+	&& (rm -rf /usr/local/lib/php/doc/imap || true) \
+	\
+# ---- Installing PHP Extension: intl ----
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) intl \
+	&& (rm -rf /usr/local/lib/php/test/intl || true) \
+	&& (rm -rf /usr/local/lib/php/doc/intl || true) \
+	\
+# ---- Installing PHP Extension: mcrypt ----
+	&& pecl install mcrypt-1.0.1 \
+	&& docker-php-ext-enable mcrypt \
+	&& (rm -rf /usr/local/lib/php/test/mcrypt || true) \
+	&& (rm -rf /usr/local/lib/php/doc/mcrypt || true) \
+	\
+# ---- Installing PHP Extension: mysqli ----
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) mysqli \
+	&& (rm -rf /usr/local/lib/php/test/mysqli || true) \
+	&& (rm -rf /usr/local/lib/php/doc/mysqli || true) \
+	\
+# ---- Installing PHP Extension: opcache ----
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) opcache \
+	&& (rm -rf /usr/local/lib/php/test/opcache || true) \
+	&& (rm -rf /usr/local/lib/php/doc/opcache || true) \
+	\
+# ---- Installing PHP Extension: pcntl ----
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) pcntl \
+	&& (rm -rf /usr/local/lib/php/test/pcntl || true) \
+	&& (rm -rf /usr/local/lib/php/doc/pcntl || true) \
+	\
+# ---- Installing PHP Extension: pdo_dblib ----
+	&& ln -s /usr/lib/x86_64-linux-gnu/libsybdb.* /usr/lib/ \
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) pdo_dblib \
+	&& (rm -rf /usr/local/lib/php/test/pdo_dblib || true) \
+	&& (rm -rf /usr/local/lib/php/doc/pdo_dblib || true) \
+	\
+# ---- Installing PHP Extension: pdo_mysql ----
+	&& /usr/local/bin/docker-php-ext-configure pdo_mysql --with-zlib-dir=/usr \
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) pdo_mysql \
+	&& (rm -rf /usr/local/lib/php/test/pdo_mysql || true) \
+	&& (rm -rf /usr/local/lib/php/doc/pdo_mysql || true) \
+	\
+# ---- Installing PHP Extension: recode ----
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) recode \
+	&& (rm -rf /usr/local/lib/php/test/recode || true) \
+	&& (rm -rf /usr/local/lib/php/doc/recode || true) \
+	\
+# ---- Installing PHP Extension: redis ----
+	&& pecl install redis \
+	&& docker-php-ext-enable redis \
+	&& (rm -rf /usr/local/lib/php/test/redis || true) \
+	&& (rm -rf /usr/local/lib/php/doc/redis || true) \
+	\
+# ---- Installing PHP Extension: shmop ----
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) shmop \
+	&& (rm -rf /usr/local/lib/php/test/shmop || true) \
+	&& (rm -rf /usr/local/lib/php/doc/shmop || true) \
+	\
+# ---- Installing PHP Extension: soap ----
+	&& /usr/local/bin/docker-php-ext-configure soap --with-libxml-dir=/usr \
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) soap \
+	&& (rm -rf /usr/local/lib/php/test/soap || true) \
+	&& (rm -rf /usr/local/lib/php/doc/soap || true) \
+	\
+# ---- Installing PHP Extension: sockets ----
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) sockets \
+	&& (rm -rf /usr/local/lib/php/test/sockets || true) \
+	&& (rm -rf /usr/local/lib/php/doc/sockets || true) \
+	\
+# ---- Installing PHP Extension: sqlsrv ----
+	&& pecl install sqlsrv \
+	&& docker-php-ext-enable sqlsrv \
+	&& (rm -rf /usr/local/lib/php/test/sqlsrv || true) \
+	&& (rm -rf /usr/local/lib/php/doc/sqlsrv || true) \
+	\
+# ---- Installing PHP Extension: swoole ----
+	&& pecl install swoole \
+	&& docker-php-ext-enable swoole \
+	&& (rm -rf /usr/local/lib/php/test/swoole || true) \
+	&& (rm -rf /usr/local/lib/php/doc/swoole || true) \
+	\
+# ---- Installing PHP Extension: sysvmsg ----
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) sysvmsg \
+	&& (rm -rf /usr/local/lib/php/test/sysvmsg || true) \
+	&& (rm -rf /usr/local/lib/php/doc/sysvmsg || true) \
+	\
+# ---- Installing PHP Extension: sysvsem ----
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) sysvsem \
+	&& (rm -rf /usr/local/lib/php/test/sysvsem || true) \
+	&& (rm -rf /usr/local/lib/php/doc/sysvsem || true) \
+	\
+# ---- Installing PHP Extension: sysvshm ----
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) sysvshm \
+	&& (rm -rf /usr/local/lib/php/test/sysvshm || true) \
+	&& (rm -rf /usr/local/lib/php/doc/sysvshm || true) \
+	\
+# ---- Installing PHP Extension: uploadprogress ----
+	&& git clone https://github.com/php/pecl-php-uploadprogress /tmp/uploadprogress \
+	&& cd /tmp/uploadprogress \
+	&& phpize \
+	&& ./configure  --enable-uploadprogress \
+	&& make -j$(getconf _NPROCESSORS_ONLN) \
+	&& make install \
+	&& docker-php-ext-enable uploadprogress \
+	&& (rm -rf /usr/local/lib/php/test/uploadprogress || true) \
+	&& (rm -rf /usr/local/lib/php/doc/uploadprogress || true) \
+	\
+# ---- Installing PHP Extension: wddx ----
+	&& /usr/local/bin/docker-php-ext-configure wddx --with-libxml-dir=/usr \
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) wddx \
+	&& (rm -rf /usr/local/lib/php/test/wddx || true) \
+	&& (rm -rf /usr/local/lib/php/doc/wddx || true) \
+	\
+# ---- Installing PHP Extension: xdebug ----
+	&& pecl install xdebug \
+	&& docker-php-ext-enable xdebug \
+	&& (rm -rf /usr/local/lib/php/test/xdebug || true) \
+	&& (rm -rf /usr/local/lib/php/doc/xdebug || true) \
+	\
+# ---- Installing PHP Extension: xmlrpc ----
+	&& /usr/local/bin/docker-php-ext-configure xmlrpc --with-libxml-dir=/usr --with-iconv-dir=/usr \
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) xmlrpc \
+	&& (rm -rf /usr/local/lib/php/test/xmlrpc || true) \
+	&& (rm -rf /usr/local/lib/php/doc/xmlrpc || true) \
+	\
+# ---- Installing PHP Extension: xsl ----
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) xsl \
+	&& (rm -rf /usr/local/lib/php/test/xsl || true) \
+	&& (rm -rf /usr/local/lib/php/doc/xsl || true) \
+	\
+# ---- Installing PHP Extension: zip ----
+	&& /usr/local/bin/docker-php-ext-configure zip --with-zlib-dir=/usr --with-pcre-dir=/usr --with-libzip \
+	&& /usr/local/bin/docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN) zip \
+	&& (rm -rf /usr/local/lib/php/test/zip || true) \
+	&& (rm -rf /usr/local/lib/php/doc/zip || true) \
+	\
+	&& chmod +x "$(php -r 'echo ini_get("extension_dir");')"/* \
+	&& rm -rf /tmp/* \
+	\
+	&& DEBIAN_FRONTEND=noninteractive apt-get purge -qq -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false ${BUILD_DEPS} \
+	&& DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends --no-install-suggests ${RUN_DEPS} \
+	&& DEBIAN_FRONTEND=noninteractive apt-get purge -qq -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false apt-utils \
+	&& rm -rf /var/lib/apt/lists/* \
+	\
+	&& update-ca-certificates \
+	\
+	&& (find /usr/local/bin -type f -print0 | xargs -n1 -0 strip --strip-all -p 2>/dev/null || true) \
+	&& (find /usr/local/lib -type f -print0 | xargs -n1 -0 strip --strip-all -p 2>/dev/null || true) \
+	&& (find /usr/local/sbin -type f -print0 | xargs -n1 -0 strip --strip-all -p 2>/dev/null || true) \
+	&& (find "$(php -r 'echo ini_get("extension_dir");')" -type f -print0 | xargs -n1 -0 strip --strip-all -p 2>/dev/null || true)
+
+
+# ---- Installing PHP Extension: PDFlib-9.1.2, needs a license to remove watermark, 1000 euro!!! ----
+#RUN set -x \
+#	&& cd /root \
+#	&& EXTENSION_DIR="$( php -i | grep ^extension_dir | awk -F '=>' '{print $2}' | xargs )" \
+#	&& curl -O -k https://www.pdflib.com/binaries/PDFlib/912/PDFlib-9.1.2p1-Linux-x86_64-php.tar.gz \
+#	&& tar xzf PDFlib-9.1.2p1-Linux-x86_64-php.tar.gz \
+#	&& cp -a /root/PDFlib-9.1.2p1-Linux-x86_64-php/bind/php/php-720-nts/php_pdflib.so "${EXTENSION_DIR}" \
+#	&& docker-php-ext-enable php_pdflib \
+#	&& rm -rf /root/PDFlib*
+
+# ---- Installing PHP Extension: PDFlib-4.1.2, PHP module (non-ZTS) from PECL from CentOS7 ----
+RUN set -x \
+	&& cd /root \
+	&& EXTENSION_DIR="$( php -i | grep ^extension_dir | awk -F '=>' '{print $2}' | xargs )" \
+	&& curl -O -k https://s3.eu-central-1.amazonaws.com/working-files-romans/docker/pdf.so \
+	&& curl -O -k https://s3.eu-central-1.amazonaws.com/working-files-romans/docker/libpdf.so.6.0.5 \
+	&& mv pdf.so "${EXTENSION_DIR}"/php_pdf.so \
+	&& mv libpdf.so.6.0.5 /usr/lib/libpdf.so.6 \
+	&& docker-php-ext-enable php_pdf
+
+##
+## Set system and PHP timezone, fix NGINX CGI, Redis as PHP session handler
+##
+RUN set -x \
+	&& ln -sf /usr/share/zoneinfo/Asia/Jerusalem /etc/localtime \
+	&& printf '[PHP]\ndate.timezone = "Asia/Jerusalem"\n' > /usr/local/etc/php/conf.d/tzone.ini \
+	&& printf '[PHP]\ncgi.fix_pathinfo=0' > /usr/local/etc/php/conf.d/nginx_fix.ini \
+	&& printf '[PHP]\nsession.save_handler = redis\n' > /usr/local/etc/php/conf.d/session_redis.ini \
+	&& printf 'session.save_path = tcp://redis-server-topexperts:6379' >> /usr/local/etc/php/conf.d/session_redis.ini
+
+##
+## Add group and users for PHP-FPM; then download PHP-FPM pool definition files to /usr/local/etc/php-fpm.d/
+##
+RUN set -x \
+	&& groupadd -g 555 fpmusers \
+## Next 3 rows just for a case if PHP session.handler and session.path were not set by mistake to redis
+	&& mkdir -p /var/lib/php/session \
+	&& chgrp fpmusers /var/lib/php/session \
+	&& chmod 775 /var/lib/php/session \
+## Here we create users users with their default groups and add them to fpmusers group
+## Don't forget to create the same users on host Linux with the same commands to be able to give them correct permissions
+	&& useradd -u 1005 -G fpmusers priten \
+	&& useradd -u 1000 -G fpmusers pma \
+	&& useradd -u 1014 -G fpmusers ctc \
+	&& useradd -u 1001 -G fpmusers dev \
+## Here we download PHP-FPM pool definition files for each created user
+	&& cd /usr/local/etc/php-fpm.d/ \
+	&& curl -O -k https://s3.eu-central-1.amazonaws.com/working-files-romans/docker/priten.conf \
+	&& curl -O -k https://s3.eu-central-1.amazonaws.com/working-files-romans/docker/pma.conf \
+	&& curl -O -k https://s3.eu-central-1.amazonaws.com/working-files-romans/docker/dev.conf \
+	&& curl -O -k https://s3.eu-central-1.amazonaws.com/working-files-romans/docker/ctc.conf
+
+###
+### Verify
+###
+RUN set -x \
+	&& echo 'date.timezone="Asia/Jerusalem"' > /usr/local/etc/php/php.ini \
+	&& php -v | grep -oE 'PHP\s[.0-9]+' | grep -oE '[.0-9]+' | grep '^7.2' \
+	&& /usr/local/sbin/php-fpm --test \
+	\
+	&& PHP_ERROR="$( php -v 2>&1 1>/dev/null )" \
+	&& if [ -n "${PHP_ERROR}" ]; then echo "${PHP_ERROR}"; false; fi \
+	&& PHP_ERROR="$( php -i 2>&1 1>/dev/null )" \
+	&& if [ -n "${PHP_ERROR}" ]; then echo "${PHP_ERROR}"; false; fi \
+	\
+	&& PHP_FPM_ERROR="$( php-fpm -v 2>&1 1>/dev/null )" \
+	&& if [ -n "${PHP_FPM_ERROR}" ]; then echo "${PHP_FPM_ERROR}"; false; fi \
+	&& PHP_FPM_ERROR="$( php-fpm -i 2>&1 1>/dev/null )" \
+	&& if [ -n "${PHP_FPM_ERROR}" ]; then echo "${PHP_FPM_ERROR}"; false; fi \
+	&& rm -f /usr/local/etc/php/php.ini \
+	\
+	&& php -m | grep -oiE '^bz2$' \
+	&& php-fpm -m | grep -oiE '^bz2$' \
+	&& php -m | grep -oiE '^calendar$' \
+	&& php-fpm -m | grep -oiE '^calendar$' \
+	&& php -m | grep -oiE '^ctype$' \
+	&& php-fpm -m | grep -oiE '^ctype$' \
+	&& php -m | grep -oiE '^curl$' \
+	&& php-fpm -m | grep -oiE '^curl$' \
+	&& php -m | grep -oiE '^dom$' \
+	&& php-fpm -m | grep -oiE '^dom$' \
+	&& php -m | grep -oiE '^exif$' \
+	&& php-fpm -m | grep -oiE '^exif$' \
+	&& php -m | grep -oiE '^fileinfo$' \
+	&& php-fpm -m | grep -oiE '^fileinfo$' \
+	&& php -m | grep -oiE '^filter$' \
+	&& php-fpm -m | grep -oiE '^filter$' \
+	&& php -m | grep -oiE '^ftp$' \
+	&& php-fpm -m | grep -oiE '^ftp$' \
+	&& php -m | grep -oiE '^gd$' \
+	&& php-fpm -m | grep -oiE '^gd$' \
+	&& php -m | grep -oiE '^gettext$' \
+	&& php-fpm -m | grep -oiE '^gettext$' \
+	&& php -m | grep -oiE '^hash$' \
+	&& php-fpm -m | grep -oiE '^hash$' \
+	&& php -m | grep -oiE '^iconv$' \
+	&& php-fpm -m | grep -oiE '^iconv$' \
+	&& php -m | grep -oiE '^igbinary$' \
+	&& php-fpm -m | grep -oiE '^igbinary$' \
+	&& php -m | grep -oiE '^imagick$' \
+	&& php-fpm -m | grep -oiE '^imagick$' \
+	&& php -m | grep -oiE '^imap$' \
+	&& php-fpm -m | grep -oiE '^imap$' \
+	&& php -m | grep -oiE '^intl$' \
+	&& php-fpm -m | grep -oiE '^intl$' \
+	&& php -m | grep -oiE '^json$' \
+	&& php-fpm -m | grep -oiE '^json$' \
+	&& php -m | grep -oiE '^libxml$' \
+	&& php-fpm -m | grep -oiE '^libxml$' \
+	&& php -m | grep -oiE '^mbstring$' \
+	&& php-fpm -m | grep -oiE '^mbstring$' \
+	&& php -m | grep -oiE '^mcrypt$' \
+	&& php-fpm -m | grep -oiE '^mcrypt$' \
+	&& php -m | grep -oiE '^mysqli$' \
+	&& php-fpm -m | grep -oiE '^mysqli$' \
+	&& php -m | grep -oiE '^mysqlnd$' \
+	&& php-fpm -m | grep -oiE '^mysqlnd$' \
+	&& php -m | grep -oiE '^Zend Opcache$' \
+	&& php-fpm -m | grep -oiE '^Zend Opcache$' \
+	&& php -m | grep -oiE '^openssl$' \
+	&& php-fpm -m | grep -oiE '^openssl$' \
+	&& php -m | grep -oiE '^pcntl$' \
+	&& php-fpm -m | grep -oiE '^pcntl$' \
+	&& php -m | grep -oiE '^pcre$' \
+	&& php-fpm -m | grep -oiE '^pcre$' \
+	&& php -m | grep -oiE '^pdo$' \
+	&& php-fpm -m | grep -oiE '^pdo$' \
+	&& php -m | grep -oiE '^pdo_dblib$' \
+	&& php-fpm -m | grep -oiE '^pdo_dblib$' \
+	&& php -m | grep -oiE '^pdo_mysql$' \
+	&& php-fpm -m | grep -oiE '^pdo_mysql$' \
+	&& php -m | grep -oiE '^pdo_sqlite$' \
+	&& php-fpm -m | grep -oiE '^pdo_sqlite$' \
+	&& php -m | grep -oiE '^phar$' \
+	&& php-fpm -m | grep -oiE '^phar$' \
+	&& php -m | grep -oiE '^posix$' \
+	&& php-fpm -m | grep -oiE '^posix$' \
+	&& php -m | grep -oiE '^readline$' \
+	&& php-fpm -m | grep -oiE '^readline$' \
+	&& php -m | grep -oiE '^recode$' \
+	&& php-fpm -m | grep -oiE '^recode$' \
+	&& php -m | grep -oiE '^redis$' \
+	&& php-fpm -m | grep -oiE '^redis$' \
+	&& php -m | grep -oiE '^reflection$' \
+	&& php-fpm -m | grep -oiE '^reflection$' \
+	&& php -m | grep -oiE '^session$' \
+	&& php-fpm -m | grep -oiE '^session$' \
+	&& php -m | grep -oiE '^shmop$' \
+	&& php-fpm -m | grep -oiE '^shmop$' \
+	&& php -m | grep -oiE '^simplexml$' \
+	&& php-fpm -m | grep -oiE '^simplexml$' \
+	&& php -m | grep -oiE '^soap$' \
+	&& php-fpm -m | grep -oiE '^soap$' \
+	&& php -m | grep -oiE '^sockets$' \
+	&& php-fpm -m | grep -oiE '^sockets$' \
+	&& php -m | grep -oiE '^sodium$' \
+	&& php-fpm -m | grep -oiE '^sodium$' \
+	&& php -m | grep -oiE '^sqlsrv$' \
+	&& php-fpm -m | grep -oiE '^sqlsrv$' \
+	&& php -m | grep -oiE '^swoole$' \
+	&& php-fpm -m | grep -oiE '^swoole$' \
+	&& php -m | grep -oiE '^sysvmsg$' \
+	&& php-fpm -m | grep -oiE '^sysvmsg$' \
+	&& php -m | grep -oiE '^sysvsem$' \
+	&& php-fpm -m | grep -oiE '^sysvsem$' \
+	&& php -m | grep -oiE '^sysvshm$' \
+	&& php-fpm -m | grep -oiE '^sysvshm$' \
+	&& php -m | grep -oiE '^tokenizer$' \
+	&& php-fpm -m | grep -oiE '^tokenizer$' \
+	&& php -m | grep -oiE '^uploadprogress$' \
+	&& php-fpm -m | grep -oiE '^uploadprogress$' \
+	&& php -m | grep -oiE '^wddx$' \
+	&& php-fpm -m | grep -oiE '^wddx$' \
+	&& php -m | grep -oiE '^xdebug$' \
+	&& php-fpm -m | grep -oiE '^xdebug$' \
+	&& php -m | grep -oiE '^xml$' \
+	&& php-fpm -m | grep -oiE '^xml$' \
+	&& php -m | grep -oiE '^xmlreader$' \
+	&& php-fpm -m | grep -oiE '^xmlreader$' \
+	&& php -m | grep -oiE '^xmlrpc$' \
+	&& php-fpm -m | grep -oiE '^xmlrpc$' \
+	&& php -m | grep -oiE '^xmlwriter$' \
+	&& php-fpm -m | grep -oiE '^xmlwriter$' \
+	&& php -m | grep -oiE '^xsl$' \
+	&& php-fpm -m | grep -oiE '^xsl$' \
+	&& php -m | grep -oiE '^zip$' \
+	&& php-fpm -m | grep -oiE '^zip$' \
+	&& true
+
+###
+### Mapping a user www-data (Debian default) to a user apache (CentOS default)
+### Change UID and GID for default PHP-FPM user www-data to 48 - default UID/GID for user apache in CentOS
+### and remove 127.0.0.1: from default PHP-FPM file /usr/local/etc/php-fpm.d/www.conf
+### 
+RUN set -x \
+	&& usermod -u 48 www-data \
+	&& groupmod -g 48 www-data \
+	&& sed -i 's/127.0.0.1:9000/9000/g' /usr/local/etc/php-fpm.d/www.conf

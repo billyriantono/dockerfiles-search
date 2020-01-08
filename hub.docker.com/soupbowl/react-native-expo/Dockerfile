@@ -1,0 +1,10 @@
+FROM node:latest
+EXPOSE 19000
+EXPOSE 19001
+EXPOSE 19002
+ARG EXPO_HOST=localhost
+ENV EXPO_HOST=$EXPO_HOST
+VOLUME /app
+WORKDIR /app
+RUN npm install -g expo-cli
+ENTRYPOINT expo start --host $EXPO_HOST
