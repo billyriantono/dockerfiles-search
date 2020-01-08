@@ -1,3 +1,0 @@
-FROM kaggle/python:latest
-
-
