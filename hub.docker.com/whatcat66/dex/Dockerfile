@@ -1,0 +1,1 @@
+FROM quay.io/coreos/dex:v2.10.0

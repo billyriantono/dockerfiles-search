@@ -1,0 +1,1 @@
+FROM apiaryio/drafter:latest

@@ -1,0 +1,1 @@
+FROM gcr.io/kubeflow-images-public/tensorflow-1.8.0-notebook-gpu:v0.3.1

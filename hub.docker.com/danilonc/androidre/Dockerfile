@@ -1,0 +1,16 @@
+FROM danilonc/blackarch
+
+## recommended alias
+# mkdir -p $HOME/.docker/androidre/.android 
+# d_androidre='docker run -v /dev/bus/usb:/dev/bus/usb -v $HOME/.docker/androidre/.android:/home/user/.android -p 58080:58080 --privileged --rm -it danilonc/androidre'
+
+# Install packages
+
+# RUN yay -Suuyy --noconfirm && yay -S mitmproxy drozer qark android-tools python2-twisted tmux python-frida-tools --noconfirm
+RUN yay -Suuyy --noconfirm && yay -S drozer qark android-tools python2-twisted tmux python-frida-tools --noconfirm
+
+# Download mitmproxy - Temporary as the mitmproxy seems to be broken - https://github.com/mitmproxy/mitmproxy/issues/3618
+RUN wget https://snapshots.mitmproxy.org/4.0.4/mitmproxy-4.0.4-linux.tar.gz && sudo tar xzvf mitmproxy-4.0.4-linux.tar.gz -C /usr/local/bin/ && rm mitmproxy-4.0.4-linux.tar.gz
+
+# Download frida server
+RUN wget https://github.com/frida/frida/releases/download/12.7.4/frida-server-12.7.4-android-arm.xz && unxz frida-server-12.7.4-android-arm.xz

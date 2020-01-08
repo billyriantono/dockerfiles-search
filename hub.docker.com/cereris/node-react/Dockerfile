@@ -1,0 +1,32 @@
+FROM node:10.15.3-alpine
+WORKDIR /usr/react
+RUN apk --no-cache add rsync && npm install react \
+  react-redux \
+  redux \
+  antd \
+  react-redux-i18n \
+  redux-devtools-extension \
+  redux-thunk \
+  react-dom \
+  react-scripts \ 
+  react-yandex-metrika \
+  react-app-rewired \
+  customize-cra \
+  less-loader \
+  babel-plugin-import \
+  react-image-lightbox \
+  react-scrollable-anchor \
+  react-icons \
+  react-google-recaptcha \
+  enquire-js \
+  rc-animate \
+  rc-queue-anim \
+  rc-scroll-anim \
+  rc-tween-one \ 
+  less \
+  axios \
+  local-storage \
+  query-string \
+  react-router-dom \
+  react-contexify \
+  reselect

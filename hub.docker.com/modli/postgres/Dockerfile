@@ -1,0 +1,6 @@
+FROM postgres
+
+MAINTAINER TechnologyAdvice
+
+ENV POSTGRES_USER modli
+ENV POSTGRES_PASSWORD modli

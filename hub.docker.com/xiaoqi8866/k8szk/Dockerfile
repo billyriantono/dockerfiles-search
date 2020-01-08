@@ -1,0 +1,1 @@
+FROM gcr.io/google-samples/k8szk:v3

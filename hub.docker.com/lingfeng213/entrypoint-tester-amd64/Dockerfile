@@ -1,0 +1,1 @@
+FROM gcr.io/kubernetes-e2e-test-images/entrypoint-tester-amd64:1.0

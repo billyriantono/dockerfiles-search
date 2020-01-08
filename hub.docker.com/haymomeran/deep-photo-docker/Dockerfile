@@ -1,0 +1,54 @@
+FROM ubuntu:14.04
+
+# Copy source code
+COPY . /build/
+
+WORKDIR /build
+
+# Install build tools
+RUN apt-get update \
+  && apt-get -y install git wget lua5.1 liblua5.1-dev luatex build-essential
+
+# build patched graphicsmagick
+RUN apt-get -y build-dep libgraphicsmagick++3 \
+  && apt-get source libgraphicsmagick++3 \
+  && cd graphicsmagick-* \
+  && patch -p0 < /build/rules.patch \
+  && dpkg-buildpackage -i -us -uc -b \
+  && cd /build \
+  && dpkg --install libgraphicsmagick++3*.deb libgraphicsmagick3*.deb \
+  && dpkg --install libgraphicsmagick++1-dev*.deb libgraphicsmagick1-dev*.deb
+
+# build octave with patched graphicsmagick
+RUN apt-get -y build-dep octave \
+  && apt-get source octave \
+  && cd octave-* \
+  && dpkg-buildpackage -i -us -uc -b \
+  && cd /build \
+  && dpkg --install liboctave*.deb liboctave2*.deb octave_*.deb octave-common*.deb
+
+# install NVIDIA cuda
+RUN dpkg -i cuda-repo-ubuntu1404_8.0.61-1_amd64.deb \
+  && apt-get update \
+  && apt-get -y install cuda \
+  && mv /usr/lib/nvidia-375/libEGL.so.1 /usr/lib/nvidia-375/libEGL.so.1.org \
+  && mv /usr/lib32/nvidia-375/libEGL.so.1 /usr/lib32/nvidia-375/libEGL.so.1.org \
+  && ln -s /usr/lib/nvidia-375/libEGL.so.375.39 /usr/lib/nvidia-375/libEGL.so.1 \
+  && ln -s /usr/lib32/nvidia-375/libEGL.so.375.39 /usr/lib32/nvidia-375/libEGL.so.1 \
+  && dpkg -i libcudnn6_6.0.20-1+cuda8.0_amd64.deb
+
+# install torch
+RUN git clone https://github.com/torch/distro.git torch --recursive \
+  && cd torch \
+  && patch -p0 < /build/install-deps.patch \
+  && bash install-deps \
+  && ./install-deps \
+  && ./install.sh -b\
+  && apt-get clean
+
+# install deep-photo-styletransfer
+RUN cd / \
+  && git clone https://github.com/luanfujun/deep-photo-styletransfer /deep-photo-styletransfer \
+  && cd /deep-photo-styletransfer \
+  && sh models/download_models.sh \
+  && make clean && make

@@ -1,0 +1,4 @@
+FROM node:8.16.0
+
+ARG NPM_VERSION
+RUN npm i -g npm@$NPM_VERSION

@@ -1,0 +1,1 @@
+FROM gcr.io/kubeflow-images-public/jupyter-web-app:be1b766

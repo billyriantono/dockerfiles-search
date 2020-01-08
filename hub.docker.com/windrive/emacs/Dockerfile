@@ -1,0 +1,11 @@
+ARG ALPINE_VERSION=3.8
+ARG EMACS_VERSION=26.1-r0
+
+FROM alpine:${ALPINE_VERSION}
+
+ARG EMACS_VERSION
+
+RUN apk add --no-cache \
+    "emacs=${EMACS_VERSION}"
+
+CMD ["emacs"]

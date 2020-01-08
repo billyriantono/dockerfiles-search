@@ -1,0 +1,11 @@
+FROM zocker160/x2go-xfce:base
+
+MAINTAINER zocker-160
+
+RUN apt-get install -y xfce4 xfce4-goodies xfce4-terminal xfce4-settings \
+	&& apt-get purge -y pm-utils xscreensaver*
+
+# install your desktop application here
+RUN apt-get install -y xarchiver sudo bash-completion exo-utils inxi xterm firefox
+
+ENTRYPOINT /usr/sbin/sshd -D

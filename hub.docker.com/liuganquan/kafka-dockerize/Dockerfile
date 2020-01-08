@@ -1,0 +1,60 @@
+FROM bitnami/minideb-extras:stretch-r204
+LABEL maintainer "Bitnami <containers@bitnami.com>"
+
+ENV BITNAMI_PKG_CHMOD="-R g+rwX" \
+    HOME="/"
+
+# Install required system packages and dependencies
+RUN install_packages libblkid1 libc6 libffi6 libgcc1 libglib2.0-0 libmount1 libpcre3 libselinux1 libuuid1 zlib1g wget
+RUN bitnami-pkg install java-1.8.191-3 --checksum 7d4e5b3392c96451eb5aa9b834713f9ca37580316bc9607bd6da26ec98e7e226
+RUN bitnami-pkg unpack kafka-1.1.1-4 --checksum f08c8f8740d6e464a5c13dc83053a712b16e48d3025890c07681c14be987fae2
+
+ENV DOCKERIZE_VERSION v0.6.1
+RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
+    && tar -C $HOME/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
+    && rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
+
+COPY rootfs /
+ENV ALLOW_PLAINTEXT_LISTENER="no" \
+    BITNAMI_APP_NAME="kafka" \
+    BITNAMI_IMAGE_VERSION="1.1.1-debian-9-r64" \
+    KAFKA_ADVERTISED_LISTENERS="PLAINTEXT://:9092" \
+    KAFKA_BROKER_ID="-1" \
+    KAFKA_BROKER_PASSWORD="bitnami" \
+    KAFKA_BROKER_USER="user" \
+    KAFKA_CERTIFICATE_PASSWORD="" \
+    KAFKA_DELETE_TOPIC_ENABLE="false" \
+    KAFKA_HEAP_OPTS="-Xmx1024m -Xms1024m" \
+    KAFKA_INTER_BROKER_LISTENER_NAME="" \
+    KAFKA_INTER_BROKER_PASSWORD="bitnami" \
+    KAFKA_INTER_BROKER_USER="admin" \
+    KAFKA_LISTENERS="PLAINTEXT://:9092" \
+    KAFKA_LISTENER_SECURITY_PROTOCOL_MAP="PLAINTEXT:PLAINTEXT,SSL:SSL,SASL_PLAINTEXT:SASL_PLAINTEXT,SASL_SSL:SASL_SSL" \
+    KAFKA_LOGS_DIRS="/opt/bitnami/kafka/data" \
+    KAFKA_LOG_FLUSH_INTERVAL_MESSAGES="10000" \
+    KAFKA_LOG_FLUSH_INTERVAL_MS="1000" \
+    KAFKA_LOG_MESSAGE_FORMAT_VERSION="" \
+    KAFKA_LOG_RETENTION_BYTES="1073741824" \
+    KAFKA_LOG_RETENTION_CHECK_INTERVALS_MS="300000" \
+    KAFKA_LOG_RETENTION_HOURS="168" \
+    KAFKA_MAX_MESSAGE_BYTES="1000012" \
+    KAFKA_NUM_IO_THREADS="8" \
+    KAFKA_NUM_NETWORK_THREADS="3" \
+    KAFKA_NUM_PARTITIONS="1" \
+    KAFKA_NUM_RECOVERY_THREADS_PER_DATA_DIR="1" \
+    KAFKA_PORT_NUMBER="9092" \
+    KAFKA_SEGMENT_BYTES="1073741824" \
+    KAFKA_SOCKET_RECEIVE_BUFFER_BYTES="102400" \
+    KAFKA_SOCKET_REQUEST_MAX_BYTES="104857600" \
+    KAFKA_SOCKET_SEND_BUFFER_BYTES="102400" \
+    KAFKA_ZOOKEEPER_CONNECT="localhost:2181" \
+    KAFKA_ZOOKEEPER_CONNECT_TIMEOUT_MS="6000" \
+    KAFKA_ZOOKEEPER_PASSWORD="" \
+    KAFKA_ZOOKEEPER_USER="" \
+    PATH="/opt/bitnami/java/bin:/opt/bitnami/kafka/bin:$PATH"
+
+EXPOSE 9092
+
+USER 1001
+ENTRYPOINT [ "/app-entrypoint.sh" ]
+CMD [ "/run.sh" ]

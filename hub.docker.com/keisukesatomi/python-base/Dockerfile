@@ -1,0 +1,32 @@
+FROM keisukesatomi/ubuntu-base:18.04 
+
+MAINTAINER Keisuke Satomi <satomi@fignny.co.jp>
+
+WORKDIR /root
+
+RUN apt update -y \
+&& apt upgrade -y \
+&& apt install -y make build-essential libssl-dev zlib1g-dev libbz2-dev \
+libreadline-dev libsqlite3-dev wget llvm libncurses5-dev libncursesw5-dev \
+xz-utils libffi-dev liblzma-dev tk-dev
+
+RUN curl -L https://github.com/pyenv/pyenv-installer/raw/master/bin/pyenv-installer -o ./pyenv-installer
+RUN bash ./pyenv-installer
+
+COPY append_bashrc.txt ./append_bashrc.txt
+RUN cat ./append_bashrc.txt >> ~/.bashrc \
+&& . ~/.bashrc \
+&& pyenv update \
+&& pyenv install 3.7.2 \
+&& pyenv global 3.7.2 \
+&& pip install pipenv \
+&& apt install -y libmysqlclient-dev
+
+# nginx unit
+RUN apt install -y gnupg gnupg1 gnupg2 \
+&& curl -sL https://nginx.org/keys/nginx_signing.key | apt-key add - \
+&& echo "deb https://packages.nginx.org/unit/ubuntu/ bionic unit" > /etc/apt/sources.list.d/unit.list \
+&& echo "deb-src https://packages.nginx.org/unit/ubuntu/ bionic unit" >> /etc/apt/sources.list.d/unit.list \
+&& apt update -y \
+&& apt install -y unit \
+&& apt install -y unit-python3.7

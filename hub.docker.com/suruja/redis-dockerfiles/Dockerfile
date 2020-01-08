@@ -1,0 +1,19 @@
+FROM ubuntu:14.04
+
+MAINTAINER Sebastien Azimi "sebstp@gmail.com"
+
+RUN LC_ALL=C DEBIAN_FRONTEND=noninteractive \
+  apt-get update && \
+  apt-get -y install python-software-properties software-properties-common && \
+  add-apt-repository ppa:chris-lea/redis-server && \
+  apt-get update && \
+  apt-get install -y redis-server && \
+  sed -i 's@bind 127.0.0.1@bind 0.0.0.0@' /etc/redis/redis.conf && \
+  sed -i 's@daemonize yes@daemonize no@' /etc/redis/redis.conf && \
+  rm -rf /var/lib/apt/lists/* && \
+  apt-get clean && \
+  rm /usr/sbin/policy-rc.d
+
+ADD start_redis.sh /usr/bin/start_redis.sh
+
+EXPOSE 6379

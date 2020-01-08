@@ -1,0 +1,39 @@
+FROM php:5.6
+MAINTAINER Antoine Hébert <antoine.hebert@gmail.com>
+
+ENV COMPOSER_NO_INTERACTION 1
+
+# Add Node.js repo
+RUN apt-get update \
+ && apt-get install -y \
+ curl \
+ apt-transport-https
+RUN curl -s https://deb.nodesource.com/gpgkey/nodesource.gpg.key | apt-key add -
+RUN echo "deb https://deb.nodesource.com/node_5.x jessie main" > /etc/apt/sources.list.d/nodesource.list
+
+# Install tools
+RUN apt-get update \
+ && apt-get install -y \
+ bzip2 \
+ git \
+# php5-cli \
+ nodejs
+RUN ln -f -s /usr/bin/nodejs /usr/bin/node
+
+# Show versions
+RUN php -v
+RUN node -v
+RUN npm -v
+
+# Install composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+RUN composer selfupdate
+
+# Install node tools
+RUN npm install -g grunt-cli bower
+RUN grunt --version
+RUN bower --allow-root --version
+
+# Slim down image
+RUN apt-get clean \
+ && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /usr/share/man/?? /usr/share/man/??_*

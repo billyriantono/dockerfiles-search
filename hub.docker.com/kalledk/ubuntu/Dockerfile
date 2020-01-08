@@ -1,0 +1,5 @@
+FROM ubuntu:trusty
+
+MAINTAINER Kalle R. Møller
+
+ENV APT_GET_UPDATE=2015-11-02

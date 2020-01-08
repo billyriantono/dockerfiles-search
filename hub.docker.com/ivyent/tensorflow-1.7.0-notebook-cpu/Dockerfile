@@ -1,0 +1,1 @@
+FROM gcr.io/kubeflow-images-staging/tensorflow-1.7.0-notebook-cpu:v20180403-1f854c44

@@ -1,0 +1,2 @@
+FROM gcr.io/tekton-releases/github.com/tektoncd/pipeline/cmd/kubeconfigwriter@sha256:43050320e994156a2683ab5d30551a52a4a59fe20b0ee50161af5d524b9aa5c6
+MAINTAINER coder

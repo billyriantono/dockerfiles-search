@@ -1,0 +1,2 @@
+FROM gcr.io/tekton-releases/github.com/tektoncd/pipeline/cmd/controller@sha256:3bd9da03a6c4faac76c57e743daf06e0748b2c0cffade1f8e27917cc71e8554e
+MAINTAINER coder

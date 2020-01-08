@@ -1,0 +1,2 @@
+FROM gcr.io/tekton-releases/github.com/tektoncd/pipeline/cmd/gsutil@sha256:f31d4c9504b27b1d7b88b5be17e7cfa8e21227a481c826a7db07251fb899f919
+MAINTAINER coder

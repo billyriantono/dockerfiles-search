@@ -1,0 +1,34 @@
+FROM debian:stretch-slim
+MAINTAINER Mattias Wadman mattias.wadman@gmail.com
+RUN \
+  apt-get update && \
+  apt-get dist-upgrade --yes && \
+  apt-get -y install \
+    ca-certificates \
+    postfix \
+    procps \
+    opendkim \
+    opendkim-tools \
+    rsyslog && \
+  apt-get clean && \
+  rm -rf /var/lib/apt/lists/*
+# Default config:
+# Open relay, trust docker links for firewalling.
+# Try to use TLS when sending to other smtp servers.
+# No TLS for connecting clients, trust docker network to be safe
+ENV \
+  POSTFIX_myhostname=hostname \
+  POSTFIX_mydestination=localhost \
+  POSTFIX_mynetworks=0.0.0.0/0 \
+  POSTFIX_smtp_enforce_tls=yes \
+  POSTFIX_smtp_tls_security_level=may \
+  POSTFIX_smtpd_tls_security_level=none
+
+RUN mkdir -p /etc/opendkim/keys
+VOLUME ["/var/lib/postfix", "/var/mail", "/var/spool/postfix", "/etc/opendkim/keys"]
+EXPOSE 25
+CMD ["/root/run"]
+
+COPY run /root/
+COPY rsyslog.conf /etc/rsyslog.conf
+COPY opendkim.conf /etc/opendkim.conf

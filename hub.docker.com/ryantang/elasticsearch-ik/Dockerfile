@@ -1,0 +1,2 @@
+FROM docker.elastic.co/elasticsearch/elasticsearch:7.0.0
+RUN mkdir plugins/ik && cd plugins/ik && wget https://github.com/medcl/elasticsearch-analysis-ik/releases/download/v7.0.0/elasticsearch-analysis-ik-7.0.0.zip && unzip elasticsearch-analysis-ik-7.0.0.zip && rm elasticsearch-analysis-ik-7.0.0.zip

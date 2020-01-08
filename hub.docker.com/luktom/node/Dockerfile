@@ -1,0 +1,2 @@
+FROM node
+USER 1000

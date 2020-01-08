@@ -1,0 +1,14 @@
+FROM alpine:latest
+
+ENV TERRAFORM_VERSION=0.10.7
+ENV TERRAFORM_SHA256SUM=8fb5f587fcf67fd31d547ec53c31180e6ab9972e195905881d3dddb8038c5a37
+
+ENV TERRAFORM_FILENAME=terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+ENV TERRAFORM_URL=https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/${TERRAFORM_FILENAME}
+
+RUN apk add --update git bash wget
+
+RUN wget -q ${TERRAFORM_URL} \
+  && echo "${TERRAFORM_SHA256SUM}  ${TERRAFORM_FILENAME}" | sha256sum -c
+RUN unzip ${TERRAFORM_FILENAME} -d /bin
+RUN rm -f ${TERRAFORM_FILENAME}

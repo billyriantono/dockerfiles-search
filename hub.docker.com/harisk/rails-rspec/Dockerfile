@@ -1,0 +1,18 @@
+FROM ruby:latest
+MAINTAINER Haris Khaliq <haris.zam@gmail.com>
+
+# Dependencies required by Rails and RubyGems
+RUN apt-get update &&\
+ apt-get -y --no-install-recommends install locales apt-utils &&\
+ echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen &&\
+ locale-gen en_US.UTF-8 &&\
+ /usr/sbin/update-locale LANG=en_US.UTF-8 &&\
+ echo "mysql-server mysql-server/root_password password root" | debconf-set-selections &&\
+ echo "mysql-server mysql-server/root_password_again password root" | debconf-set-selections &&\
+ apt-get -y --no-install-recommends install ca-certificates git subversion  imagemagick openssh-client curl software-properties-common gettext zip mysql-server mysql-client apt-transport-https python python3 perl memcached &&\
+ apt-get -y --no-install-recommends install nodejs &&\
+ apt-get autoclean && apt-get clean && apt-get autoremove &&\
+ gem install bundler &&\
+ apt-get install -y \
+      build-essential \
+      nodejs

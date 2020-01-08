@@ -1,0 +1,53 @@
+# adapted from [ williamyeh/ansible:alpine3-onbuild ]
+# "ONBUILD version" because:
+# - updates some SSL stuff everytime is used in another image
+# - copies . to /tmp/ops
+
+FROM ez123/ops-base:alpine38
+MAINTAINER HighSkillz <webdev@highskillz.com>
+
+RUN \
+    echo "===> Updating TLS certificates..."         && \
+    apk --update add \
+            ca-certificates \
+            openssl \
+    && \
+    \
+    \
+    echo "===> Cleaning up ..."  && \
+    echo OFF: apk del build-dependencies            && \
+    rm -rf \
+      "${HOME}/.cache" \
+       /var/cache/apk/* \
+       /var/lib/apt/lists/* \
+    && \
+    \
+    echo "===> Adding hosts for convenience..."  && \
+    mkdir -p /etc/ansible                        && \
+    echo 'localhost' > /etc/ansible/hosts        && \
+    mkdir -p /etc/ansible/host_vars              && \
+    touch                                                  /etc/ansible/host_vars/localhost.yml && \
+    echo "ansible_connection:         local"            >> /etc/ansible/host_vars/localhost.yml && \
+    echo "ansible_python_interpreter: /usr/bin/python3" >> /etc/ansible/host_vars/localhost.yml && \
+    \
+    echo "OK!"
+
+
+COPY ansible-playbook-wrapper /usr/local/bin/
+
+ONBUILD  RUN  \
+              echo "===> Updating TLS certificates..."         && \
+              apk --update add \
+              ca-certificates \
+              openssl \
+              ;
+
+ONBUILD  COPY  .  /tmp/ops
+ONBUILD  WORKDIR  /tmp/ops
+ONBUILD  RUN  \
+              echo "===> Diagnosis: host information..."  && \
+              ansible -m setup localhost
+
+# default command: display Ansible version
+CMD \
+    ansible-playbook --version

@@ -1,0 +1,3 @@
+FROM gcr.io/google_containers/etcd:3.2.18
+MAINTAINER xinyuan
+

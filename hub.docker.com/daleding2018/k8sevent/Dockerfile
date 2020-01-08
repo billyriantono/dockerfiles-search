@@ -1,0 +1,2 @@
+FROM gcr.io/knative-releases/github.com/knative/eventing/pkg/sources/k8sevents@sha256:97486b53b37a605d6e45c2cb9409e33904863a662af09cd063bc20e10791c9d7
+

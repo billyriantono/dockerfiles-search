@@ -1,0 +1,2 @@
+FROM appsvc/php:latest_1708172316
+EXPOSE 80

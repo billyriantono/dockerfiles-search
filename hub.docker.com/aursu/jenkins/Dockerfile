@@ -1,0 +1,31 @@
+FROM aursu/jenkins:2.204-centos-docker-19.03.4-b1
+
+USER root
+
+# Install ruby 2.5
+RUN dnf --setopt=install_weak_deps=False -y install \
+        gcc \
+        make \
+        redhat-rpm-config \
+        ruby \
+        ruby-devel \
+    && dnf clean all && rm -rf /var/cache/dnf /var/lib/rpm/__db*
+
+# upgrade rubygems
+RUN gem install rubygems-update --no-document --install-dir /usr/share/gems \
+    && gem update --system --no-document
+
+# install Capistrano and another dependencies
+RUN gem install --no-document --minimal-deps \
+        capistrano:3.11.2 \
+        bundler \
+        capistrano-composer \
+        capistrano-file-permissions \
+        capistrano-harrow \
+        capistrano-symfony \
+        io-console
+
+USER jenkins
+
+# increase workers count to 5
+COPY init.groovy.d/executors.groovy /usr/share/jenkins/ref/init.groovy.d/executors.groovy

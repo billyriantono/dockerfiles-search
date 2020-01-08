@@ -1,0 +1,25 @@
+FROM golang:1.9.2-alpine
+
+RUN apk add --no-cache --update alpine-sdk
+
+COPY . /go/src/github.com/yoigo-thor/dex-form
+RUN cd /go/src/github.com/yoigo-thor/dex-form && make clean build
+
+FROM alpine:3.4
+# Dex connectors, such as GitHub and Google logins require root certificates.
+# Proper installations should manage those certificates, but it's a bad user
+# experience when this doesn't work out of the box.
+#
+# OpenSSL is required so wget can query HTTPS endpoints for health checking.
+RUN apk add --update ca-certificates openssl
+
+COPY --from=0 /go/src/github.com/yoigo-thor/dex-form/bin/form /usr/local/bin/form
+
+# Import frontend assets and set the correct CWD directory so the assets
+# are in the default path.
+COPY cmd/templates /templates
+WORKDIR /
+
+ENTRYPOINT ["/usr/local/bin/form"]
+
+CMD ["version"]

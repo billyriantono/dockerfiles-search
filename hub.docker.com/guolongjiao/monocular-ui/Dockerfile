@@ -1,0 +1,1 @@
+from quay.io/helmpack/monocular-ui:v1.0.3

@@ -1,0 +1,17 @@
+# Build image with:  docker build -t nanointeractive/nanocassandra:latest .
+
+FROM ubuntu:16.04
+MAINTAINER Zeljko Nedeljkovic <znedeljkovic@nanointeractive.com>
+RUN echo "deb http://www.apache.org/dist/cassandra/debian 39x main" | tee -a /etc/apt/sources.list.d/cassandra.sources.list &&\
+    apt-key adv --keyserver pool.sks-keyservers.net --recv-key A278B781FE4B2BDA &&\
+    apt-get update && \
+    apt-get install -y --no-install-recommends default-jre tzdata &&\
+    apt-get -y --no-install-recommends install cassandra  && \
+    apt-get autoremove &&\
+    apt-get clean &&\
+    sed -i "/cluster_name: /c\cluster_name: 'nano'" /etc/cassandra/cassandra.yaml &&\
+    sed -i "/endpoint_snitch: /c\endpoint_snitch: GossipingPropertyFileSnitch" /etc/cassandra/cassandra.yaml &&\
+    sed -i "/rpc_address: /c\rpc_address: test.cassandra.nano.lan" /etc/cassandra/cassandra.yaml &&\
+    sed -i "/dc=dc1/c\dc=datacenter1" /etc/cassandra/cassandra-rackdc.properties &&\
+    rm -rf /var/lib/apt/lists/* &&\
+    ln -sf /usr/share/zoneinfo/Europe/Berlin /etc/localtime

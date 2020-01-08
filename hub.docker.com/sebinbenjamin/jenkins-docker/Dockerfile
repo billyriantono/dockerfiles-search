@@ -1,0 +1,26 @@
+FROM ubuntu:xenial
+MAINTAINER Sebin Benjamin <sebinbenjamin@gmail.com>
+
+# expose the port
+EXPOSE 8080
+
+# default jenkins home directory
+ENV JENKINS_HOME /var/jenkins
+
+# set our user home to the same location
+ENV HOME /var/jenkins
+
+# for installing openjdk
+RUN apt-get update -qq && apt-get install -qqy openjdk-8-jdk  wget curl git iptables ca-certificates apparmor
+
+# set JAVA_HOME environment variable
+ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
+
+# for jenkins     
+RUN echo deb http://pkg.jenkins.io/debian-stable binary/ >> /etc/apt/sources.list \
+	&& wget -q -O - http://pkg.jenkins.io/debian-stable/jenkins.io.key | apt-key add -
+
+RUN apt-get update -qq && apt-get install -qqy jenkins 
+
+# default command to launch jenkins. specify the JAVA_OPTIONS variable using the “-e” switch.
+CMD java -XX:+PrintFlagsFinal -XX:+PrintGCDetails $JAVA_OPTIONS -jar /usr/share/jenkins/jenkins.war

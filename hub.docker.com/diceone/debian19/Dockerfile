@@ -1,0 +1,11 @@
+FROM quay.io/footloose/debian10
+
+LABEL com.owner="www.dev-ops.de" \
+      com.version="0.1.4"
+
+RUN mkdir -p /www/bin
+COPY config/bashrc /root/.bashrc
+RUN rm -f /etc/localtime
+RUN ln -s /usr/share/zoneinfo/Europe/Berlin /etc/localtime
+
+EXPOSE 80 443

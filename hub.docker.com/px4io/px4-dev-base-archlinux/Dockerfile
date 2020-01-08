@@ -1,0 +1,89 @@
+#
+# PX4 development environment based on Arch Linux
+#
+
+FROM archlinux/base:latest
+LABEL maintainer="Julien Lecoeur <julien.lecoeur@gmail.com>"
+
+RUN pacman -Sy --noconfirm \
+		arm-none-eabi-gcc \
+		arm-none-eabi-newlib \
+		base-devel \
+		bc \
+		ccache \
+		cmake \
+		git \
+		gnutls \
+		jdk11-openjdk \
+		make \
+		nettle \
+		ninja \
+		python-pip \
+		python-setuptools \
+		tar \
+		unzip \
+		vim \
+		wget \
+		zip
+
+# Python 3 dependencies installed by pip
+RUN pip3 install argparse argcomplete coverage cerberus empy jinja2 \
+		matplotlib==3.0.* numpy pkgconfig pyros-genmsg pyulog pyyaml \
+		requests serial toml pyulog wheel
+
+# Install genromfs
+RUN wget https://sourceforge.net/projects/romfs/files/genromfs/0.5.2/genromfs-0.5.2.tar.gz \
+	&& tar zxvf genromfs-0.5.2.tar.gz \
+	&& cd genromfs-0.5.2 && make && make install && cd .. \
+	&& rm genromfs-0.5.2.tar.gz genromfs-0.5.2 -r
+
+# Install gosu
+RUN curl -sSL https://github.com/tianon/gosu/releases/download/1.8/gosu-amd64 > /usr/sbin/gosu \
+	&& chmod +x /usr/sbin/gosu
+
+# Gradle (Required to build Fast-RTPS-Gen)
+RUN wget -q "https://services.gradle.org/distributions/gradle-5.6.2-bin.zip" -O /tmp/gradle-5.6.2-bin.zip \
+	&& mkdir /opt/gradle \
+	&& cd /tmp \
+	&& unzip -d /opt/gradle gradle-5.6.2-bin.zip \
+	&& rm -rf /tmp/*
+
+ENV PATH "/opt/gradle/gradle-5.6.2/bin:$PATH"
+
+# Fast-RTPS
+RUN git clone --recursive https://github.com/eProsima/Fast-RTPS.git -b 1.8.x /tmp/FastRTPS-1.8.2 \
+	&& cd /tmp/FastRTPS-1.8.2 \
+	&& mkdir build && cd build \
+	&& cmake -DTHIRDPARTY=ON -DSECURITY=ON .. \
+	&& cmake --build . --target install \
+	&& rm -rf /tmp/*
+
+# Fast-RTPS-Gen (required since Fast-RTPS-Gen got split from Fast-RTPS repo since 1.8.x)
+RUN git clone --recursive https://github.com/eProsima/Fast-RTPS-Gen.git -b v1.0.2 /tmp/Fast-RTPS-Gen \
+	&& cd /tmp/Fast-RTPS-Gen \
+	&& gradle assemble \
+	&& cp share/fastrtps/fastrtpsgen.jar /usr/local/share/fastrtps/ \
+	&& cp scripts/fastrtpsgen /usr/local/bin/ \
+	&& rm -rf /tmp/*
+
+# Add group dialout
+RUN groupadd dialout
+
+# manual ccache setup
+RUN ln -s /usr/bin/ccache /usr/lib/ccache/bin/arm-none-eabi-gcc \
+	&& ln -s /usr/bin/ccache /usr/lib/ccache/bin/arm-none-eabi-g++
+
+ENV CCACHE_MAXSIZE=1G
+ENV FASTRTPSGEN_DIR="/usr/local/bin/"
+ENV PATH "/usr/lib/ccache/bin:$PATH"
+ENV TERM=xterm
+
+# SITL UDP PORTS
+EXPOSE 14556/udp
+EXPOSE 14557/udp
+
+# create and start as LOCAL_USER_ID
+COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+CMD ["/bin/bash"]

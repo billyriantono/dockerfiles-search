@@ -1,0 +1,25 @@
+FROM gitlab/gitlab-runner:latest
+MAINTAINER geekbuy.cn
+RUN wget -q https://packages.microsoft.com/config/ubuntu/16.04/packages-microsoft-prod.deb
+RUN dpkg -i packages-microsoft-prod.deb
+RUN chmod 777 /etc/apt/sources.list && echo 'deb http://security.ubuntu.com/ubuntu trusty-security main' >> /etc/apt/sources.list
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libc6 \
+        libcurl3 \
+        libgcc1 \
+        libgssapi-krb5-2 \
+        libicu52 \
+        liblttng-ust0 \
+        libssl1.0.0 \
+        libstdc++6 \
+        libunwind8 \
+        libuuid1 \
+        zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get install apt-transport-https \
+       dotnet-runtime-deps-2.1 -y \
+       dotnet-runtime-2.1 \
+       aspnetcore-runtime-2.1 \
+       dotnet-sdk-2.1 

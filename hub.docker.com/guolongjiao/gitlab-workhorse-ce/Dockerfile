@@ -1,0 +1,1 @@
+from registry.gitlab.com/gitlab-org/build/cng/gitlab-workhorse-ce:v11.9.4

@@ -1,0 +1,23 @@
+FROM alpine:edge
+
+RUN apk update && \
+    apk add python3 \
+          python3-dev gcc musl-dev libffi-dev linux-headers openssl-dev \
+          curl unzip && \
+    pip3 install \
+      python-barbicanclient \
+      python-cinderclient \
+      python-designateclient \
+      python-heatclient \
+      python-ironicclient \
+      python-keystoneclient \
+      python-manilaclient \
+      python-mistralclient \
+      python-novaclient \
+      python-openstackclient \
+      python-senlinclient \
+      python-tackerclient \
+      python-troveclient \
+      python-tuskarclient \
+      python-watcherclient \
+      python-zaqarclient

@@ -1,0 +1,6 @@
+FROM openjdk:8-jdk
+
+EXPOSE 8080
+EXPOSE 8443
+
+ENV JAVA_OPTS=""

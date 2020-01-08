@@ -1,0 +1,2 @@
+FROM gcr.io/tekton-releases/github.com/tektoncd/pipeline/cmd/entrypoint@sha256:989288cf9939fe7b098a47192d1a9ce6551e5bd1d2c5b4ddf57cc8e7d9f0d1ef
+MAINTAINER coder

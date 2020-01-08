@@ -1,0 +1,20 @@
+# ESTE ES UN COMENTARIO
+# PRIMERO VA LA IMAGEN BASE
+FROM node:latest
+
+# DIRECTORIO DE LA APP DENTRO DEL CONTENEDOR
+WORKDIR /app
+
+# COPIADO DE ARCHIVOS
+ADD build/default /app/build/default
+ADD server.js /app
+ADD package.json /app
+
+# DEPENDENCIA
+RUN npm install
+
+# PUERTO
+EXPOSE 3000
+
+# COMANDO PARA EJECUTAR
+CMD ["npm","start"]

@@ -1,0 +1,41 @@
+FROM centos:7
+MAINTAINER miko@cafelounge.net
+
+# Packages
+RUN cd /tmp \
+ && yum -y update \
+ && yum -y install epel-release \
+ && yum -y install http://rpms.remirepo.net/enterprise/remi-release-7.rpm \
+ && yum -y --enablerepo=remi,remi-php56 install \
+    php-fpm php-cli php-common php-opcache php-mbstring \
+    php-bcmath php-gd php-mcrypt php-pdo php-mysqlnd \
+    php-process php-pecl-imagick php-xml composer git \
+ && yum -y --enablerepo=remi,remi-php56 clean all \
+ && rm -rf /var/tmp/* /var/lib/yum/* /var/cache/yum/* \
+ && sed -i.dist \
+        -e "s/^expose_php =.*$/expose_php = Off/g" \
+        -e 's,^;date.timezone =.*$,date.timezone = "Asia/Tokyo",g' \
+        /etc/php.ini \
+ && sed -i.dist \
+        -e "s/^daemonize = yes/daemonize = no/g" \
+        /etc/php-fpm.conf \
+ && sed -i.dist \
+        -e 's/^listen = 127.0.0.1:9000/listen = 9000/g' \
+        -e 's/^listen.allowed_clients/;listen.allowed_clients/g' \
+        -e 's,^;ping.path = .*$,ping.path = /ping,g' \
+        -e 's/^;request_slowlog_timeout = .*$/request_slowlog_timeout = 1m/g' \
+        -e 's/^;request_terminate_timeout = .*$/request_terminate_timeout = 30m/g' \
+        /etc/php-fpm.d/www.conf \
+ && systemctl enable php-fpm \
+ && localedef -c -i ja_JP -f UTF-8 ja_JP.UTF-8;
+
+# workdir
+WORKDIR /root
+
+# init
+COPY init /boot/
+ENTRYPOINT ["/boot/init"]
+
+# expose
+EXPOSE 9000
+CMD ["php-fpm"]

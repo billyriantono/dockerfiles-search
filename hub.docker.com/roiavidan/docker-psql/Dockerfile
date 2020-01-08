@@ -1,0 +1,6 @@
+FROM alpine:3.10
+
+RUN apk --no-cache add postgresql-client
+
+ENTRYPOINT [ "/usr/bin/psql" ]
+USER guest

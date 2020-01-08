@@ -1,0 +1,66 @@
+FROM php:5.6-apache
+
+# Install Git & Zip
+RUN apt update && apt -y install git zip unzip
+
+# Install Python
+RUN apt install -y python2.7 python-pip
+
+# install the PHP extensions we need
+RUN set -ex; \
+  \
+  savedAptMark="$(apt-mark showmanual)"; \
+  \
+  apt-get update; \
+  apt-get install -y --no-install-recommends \
+    libjpeg-dev \
+    libpng-dev \
+  ; \
+  \
+  docker-php-ext-configure gd --with-png-dir=/usr --with-jpeg-dir=/usr; \
+  docker-php-ext-install gd mysqli opcache zip; \
+  \
+# reset apt-mark's "manual" list so that "purge --auto-remove" will remove all build dependencies
+  apt-mark auto '.*' > /dev/null; \
+  apt-mark manual $savedAptMark; \
+  ldd "$(php -r 'echo ini_get("extension_dir");')"/*.so \
+    | awk '/=>/ { print $3 }' \
+    | sort -u \
+    | xargs -r dpkg-query -S \
+    | cut -d: -f1 \
+    | sort -u \
+    | xargs -rt apt-mark manual; \
+  \
+  apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false; \
+  rm -rf /var/lib/apt/lists/*
+
+# set recommended PHP.ini settings
+# see https://secure.php.net/manual/en/opcache.installation.php
+RUN { \
+    echo 'opcache.memory_consumption=128'; \
+    echo 'opcache.interned_strings_buffer=8'; \
+    echo 'opcache.max_accelerated_files=4000'; \
+    echo 'opcache.revalidate_freq=2'; \
+    echo 'opcache.fast_shutdown=1'; \
+    echo 'opcache.enable_cli=1'; \
+  } > /usr/local/etc/php/conf.d/opcache-recommended.ini
+
+RUN a2enmod rewrite expires
+
+VOLUME /var/www/html
+
+# Install WP-CLI
+RUN curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && \
+    chmod +x wp-cli.phar && \
+    mv wp-cli.phar /usr/local/bin/wp && \
+    echo 'wp() {' >> /root/.bashrc && \
+    echo '/usr/local/bin/wp "$@" --allow-root' >> /root/.bashrc && \
+    echo '}' >> /root/.bashrc
+
+# Install Composer
+RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php'); if (hash_file('sha384', 'composer-setup.php') === trim(file_get_contents('https://composer.github.io/installer.sig'))) { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); } echo PHP_EOL;" \
+    && php composer-setup.php \
+    && php -r "unlink('composer-setup.php');" \
+    && mv composer.phar /usr/local/bin/composer
+
+CMD ["apache2-foreground"]

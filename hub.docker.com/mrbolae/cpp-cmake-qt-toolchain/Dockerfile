@@ -1,0 +1,27 @@
+FROM ubuntu:17.10
+MAINTAINER mrbolae <michael.burkard@gmx.ch>
+
+# install base tools
+RUN apt-get update
+RUN apt-get install -y git aptitude vim build-essential
+
+# install basic toolchain
+RUN apt-get install -y cmake ninja-build clang
+
+# install test environment sources
+RUN apt-get install -y libgtest-dev
+
+# install optional toolchain
+RUN apt-get install -y doxygen gcovr graphviz cppcheck
+
+# install qt
+RUN apt-get install -y qt5-default qtdeclarative5-dev qml-module-qtquick-controls qtdeclarative5-test-plugin
+
+# create user and mark as sudo user
+RUN useradd -ms /bin/bash developer
+RUN echo 'developer:developer' | chpasswd
+
+USER developer
+
+CMD /bin/bash
+

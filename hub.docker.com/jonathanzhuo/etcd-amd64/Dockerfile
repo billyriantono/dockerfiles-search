@@ -1,0 +1,2 @@
+From gcr.io/google-containers/etcd-amd64@sha256:28cf78933de29fd26d7a879e51ebd39784cd98109568fd3da61b141257fb85a6
+MAINTAINER jonathanzhuo

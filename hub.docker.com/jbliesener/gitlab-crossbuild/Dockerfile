@@ -1,0 +1,3 @@
+FROM jbliesener/crossbuild
+
+ENTRYPOINT []

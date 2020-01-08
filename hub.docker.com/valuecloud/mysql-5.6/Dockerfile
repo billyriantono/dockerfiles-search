@@ -1,0 +1,11 @@
+FROM mysql:5.6
+
+ENV MYSQL_DATABASE data
+ENV MYSQL_USER user
+ENV MYSQL_ROOT_PASSWORD w7fPDUqG5jVB0PQeuJbC
+ENV MYSQL_PASSWORD YLWhnYvXHSRJwKl3xOfR
+
+
+COPY my.cnf /etc/mysql/my.cnf
+
+CMD ["mysqld"]

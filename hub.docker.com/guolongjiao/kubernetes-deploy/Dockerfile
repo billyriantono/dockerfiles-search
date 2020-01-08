@@ -1,0 +1,1 @@
+from registry.gitlab.com/gitlab-examples/kubernetes-deploy:latest

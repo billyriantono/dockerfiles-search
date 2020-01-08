@@ -1,0 +1,1 @@
+FROM gcr.io/kubernetes-e2e-test-images/redis:1.0
