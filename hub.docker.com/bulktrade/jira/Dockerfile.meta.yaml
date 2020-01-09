@@ -1,0 +1,101 @@
+MetaArgs: null
+Stages:
+- BaseName: blacklabelops/alpine:3.3
+  Commands:
+  - Maintainer: Steffen Bleul <sbl@blacklabelops.com>
+    Name: maintainer
+  - Env:
+    - Key: JIRA_VERSION
+      Value: 7.1.2
+    - Key: JIRA_USER
+      Value: jira
+    - Key: JIRA_GROUP
+      Value: jira
+    - Key: JIRA_CONTEXT_PATH
+      Value: ROOT
+    - Key: JIRA_HOME
+      Value: /var/atlassian/jira
+    - Key: JIRA_INSTALL
+      Value: /opt/jira
+    - Key: JIRA_SCRIPTS
+      Value: /usr/local/share/atlassian
+    - Key: MYSQL_DRIVER_VERSION
+      Value: 5.1.38
+    - Key: POSTGRESQL_DRIVER_VERSION
+      Value: 9.4.1207
+    Name: env
+  - Env:
+    - Key: JAVA_HOME
+      Value: $JIRA_INSTALL/jre
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:$JAVA_HOME/bin
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - imagescripts
+    - ${JIRA_SCRIPTS}
+  - CmdLine:
+    - apk add --update                                          ca-certificates                                         gzip                                                    wget                                          &&      apk
+      add xmlstarlet --update-cache                         --repository                                            http://dl-3.alpinelinux.org/alpine/edge/testing/        --allow-untrusted                             &&      export
+      GLIBC_VERSION=2.22-r8 &&     wget --directory-prefix=/tmp https://github.com/andyshinn/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-${GLIBC_VERSION}.apk
+      &&     apk add --allow-untrusted /tmp/glibc-${GLIBC_VERSION}.apk &&     wget
+      --directory-prefix=/tmp https://github.com/andyshinn/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-bin-${GLIBC_VERSION}.apk
+      &&     apk add --allow-untrusted /tmp/glibc-bin-${GLIBC_VERSION}.apk &&     wget
+      --directory-prefix=/tmp https://github.com/andyshinn/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-i18n-${GLIBC_VERSION}.apk
+      &&     apk --allow-untrusted add /tmp/glibc-i18n-${GLIBC_VERSION}.apk &&     /usr/glibc-compat/bin/localedef
+      -i en_US -f UTF-8 en_US.UTF-8 &&     export JIRA_BIN=atlassian-jira-software-${JIRA_VERSION}-jira-${JIRA_VERSION}-x64.bin
+      &&     mkdir -p ${JIRA_HOME}                           &&      mkdir -p ${JIRA_INSTALL}                        &&      wget
+      -O /tmp/jira.bin https://downloads.atlassian.com/software/jira/downloads/${JIRA_BIN}
+      &&     chmod +x /tmp/jira.bin                          &&      /tmp/jira.bin
+      -q -varfile                                 ${JIRA_SCRIPTS}/response.varfile              &&      rm
+      -f                                                     ${JIRA_INSTALL}/lib/mysql-connector-java*.jar
+      &&      wget -O /tmp/mysql-connector-java-${MYSQL_DRIVER_VERSION}.tar.gz                                                    http://dev.mysql.com/get/Downloads/Connector-J/mysql-connector-java-${MYSQL_DRIVER_VERSION}.tar.gz      &&      tar
+      xzf /tmp/mysql-connector-java-${MYSQL_DRIVER_VERSION}.tar.gz                                                    mysql-connector-java-${MYSQL_DRIVER_VERSION}/mysql-connector-java-${MYSQL_DRIVER_VERSION}-bin.jar                 -C
+      /tmp                                                                                                 &&      cp
+      /tmp/mysql-connector-java-${MYSQL_DRIVER_VERSION}/mysql-connector-java-${MYSQL_DRIVER_VERSION}-bin.jar           ${JIRA_INSTALL}/lib/mysql-connector-java-${MYSQL_DRIVER_VERSION}-bin.jar                                &&      rm
+      -f ${JIRA_INSTALL}/lib/postgresql-*.jar                                                                &&      wget
+      -O ${JIRA_INSTALL}/lib/postgresql-${POSTGRESQL_DRIVER_VERSION}.jar                                             https://jdbc.postgresql.org/download/postgresql-${POSTGRESQL_DRIVER_VERSION}.jar                        &&      export
+      CONTAINER_USER=jira                      &&      export CONTAINER_UID=1000                       &&      export
+      CONTAINER_GROUP=jira                     &&      export CONTAINER_GID=1000                       &&      addgroup
+      -g $CONTAINER_GID $CONTAINER_GROUP     &&      adduser -u $CONTAINER_UID                                       -G
+      $CONTAINER_GROUP                                     -h /home/$CONTAINER_USER                                -s
+      /bin/bash                                            -S $CONTAINER_USER                      &&      wget
+      -O /home/${JIRA_USER}/letsencrypt-int.crt https://letsencrypt.org/certs/lets-encrypt-x1-cross-signed.pem.txt
+      &&     keytool -import -alias letsencrypt-int -keystore /opt/jira/jre/lib/security/cacerts
+      -storepass changeit -noprompt -importcert -file /home/${JIRA_USER}/letsencrypt-int.crt
+      &&     rm -f /home/${JIRA_USER}/letsencrypt-int.crt &&     wget -O /home/${JIRA_USER}/SSLPoke.class
+      https://confluence.atlassian.com/kb/files/779355358/SSLPoke.class &&     chown
+      -R $JIRA_USER:$JIRA_GROUP ${JIRA_HOME}    &&      chown -R $JIRA_USER:$JIRA_GROUP
+      ${JIRA_INSTALL} &&      chown -R $JIRA_USER:$JIRA_GROUP ${JIRA_SCRIPTS} &&      chown
+      -R $JIRA_USER:$JIRA_GROUP /home/${JIRA_USER} &&      apk del                                                   ca-certificates                                         gzip                                                    wget                                          &&      rm
+      -rf /var/cache/apk/*                         &&      rm -rf /tmp/*                                   &&      rm
+      -rf /var/log/*
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: jira
+  - Name: workdir
+    Path: ${JIRA_HOME}
+  - Name: volume
+    Volumes:
+    - /var/atlassian/jira
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - /usr/local/share/atlassian/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - jira
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: blacklabelops/alpine:3.3
+  Name: ""
+  Platform: ""
+  SourceCode: FROM blacklabelops/alpine:3.3

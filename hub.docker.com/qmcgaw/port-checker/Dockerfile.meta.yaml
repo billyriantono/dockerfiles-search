@@ -1,0 +1,151 @@
+MetaArgs:
+- DefaultValue: golang
+  Key: BASE_IMAGE_BUILDER
+  ProvidedValue: null
+  Value: golang
+- DefaultValue: "3.10"
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: "3.10"
+- DefaultValue: "1.13"
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: "1.13"
+Stages:
+- As: builder
+  BaseName: ${BASE_IMAGE_BUILDER}:${GO_VERSION}-alpine${ALPINE_VERSION}
+  Commands:
+  - Key: GOARCH
+    Name: arg
+    Value: amd64
+  - Key: GOARM
+    Name: arg
+    Value: null
+  - Key: BINCOMPRESS
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk --update add git build-base upx
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/gobuild
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - go.sum
+    - ./
+  - CmdLine:
+    - go mod download 2>&1
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - main.go
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pkg
+    - ./pkg
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} GOARM=${GOARM} go build -a -ldflags="-s
+      -w" -o app .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '[ "${BINCOMPRESS}" == "" ] || (upx -v --lzma --overlay=strip app && upx -t
+      app)'
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${BASE_IMAGE_BUILDER}:${GO_VERSION}-alpine${ALPINE_VERSION}
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ${BASE_IMAGE_BUILDER}:${GO_VERSION}-alpine${ALPINE_VERSION} AS
+    builder
+- BaseName: scratch
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.opencontainers.image.authors
+      Value: '"quentin.mcgaw@gmail.com"'
+    - Key: org.opencontainers.image.created
+      Value: $BUILD_DATE
+    - Key: org.opencontainers.image.version
+      Value: '""'
+    - Key: org.opencontainers.image.revision
+      Value: $VCS_REF
+    - Key: org.opencontainers.image.url
+      Value: '"https://github.com/qdm12/port-checker"'
+    - Key: org.opencontainers.image.documentation
+      Value: '"https://github.com/qdm12/port-checker/blob/master/README.md"'
+    - Key: org.opencontainers.image.source
+      Value: '"https://github.com/qdm12/port-checker"'
+    - Key: org.opencontainers.image.title
+      Value: '"port-checker"'
+    - Key: org.opencontainers.image.description
+      Value: '"3MB container to check a port works with a Golang server"'
+    - Key: image-size
+      Value: '"2.76MB"'
+    - Key: ram-usage
+      Value: '"8MB"'
+    - Key: cpu-usage
+      Value: '"Very low"'
+    Name: label
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - /port-checker
+    Name: entrypoint
+    PrependShell: false
+  - Env:
+    - Key: PORT
+      Value: "8000"
+    - Key: LOGGING
+      Value: json
+    - Key: NODEID
+      Value: "0"
+    - Key: ROOTURL
+      Value: /
+    Name: env
+  - Health:
+      Interval: 10000000000
+      Retries: 2
+      StartPeriod: 5000000000
+      Test:
+      - CMD
+      - /port-checker
+      - healthcheck
+      Timeout: 5000000000
+    Name: healthcheck
+  - Name: user
+    User: "1000"
+  - Chown: "1000"
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - index.html
+    - /index.html
+  - Chown: "1000"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/gobuild/app
+    - /port-checker
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

@@ -1,0 +1,125 @@
+MetaArgs: null
+Stages:
+- BaseName: zedtux/ruby-1.9.3
+  Commands:
+  - Maintainer: zedtux, zedtux@zedroot.org
+    Name: maintainer
+  - Env:
+    - Key: POSTGRESQL_VERSION
+      Value: "9.3"
+    Name: env
+  - Env:
+    - Key: DB_USERNAME
+      Value: sprintapp
+    Name: env
+  - Env:
+    - Key: DB_PASSWORD
+      Value: sprintapp
+    Name: env
+  - Env:
+    - Key: DATABASE_NAME
+      Value: sprint_app_production
+    Name: env
+  - Env:
+    - Key: RAILS_ENV
+      Value: production
+    Name: env
+  - CmdLine:
+    - apt-key adv --keyserver keyserver.ubuntu.com --recv-keys B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "deb http://apt.postgresql.org/pub/repos/apt/ precise-pgdg main" > /etc/apt/sources.list.d/pgdg.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y python-software-properties   software-properties-common   postgresql-$POSTGRESQL_VERSION   postgresql-client-$POSTGRESQL_VERSION   postgresql-contrib-$POSTGRESQL_VERSION   git   libpq-dev   build-essential
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: postgres
+  - CmdLine:
+    - sed -i -e "s/.*listen_addresses.*/listen_addresses = '*'/g" /etc/postgresql/$POSTGRESQL_VERSION/main/postgresql.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/local   all             all                                     peer/local   all             all                                     md5/'
+      /etc/postgresql/$POSTGRESQL_VERSION/main/pg_hba.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /etc/init.d/postgresql start &&     psql --command "CREATE USER $DB_USERNAME
+      WITH CREATEDB ENCRYPTED PASSWORD '$DB_PASSWORD';"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - 'touch ~/.gemrc && echo "gem: --no-ri --no-rdoc" >> ~/.gemrc'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gem install rubygems-update && update_rubygems
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gem install bundler
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /sprintapp/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /sprintapp/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /sprintapp/
+  - CmdLine:
+    - sed -i "s/config.assets.compile = false/config.assets.compile = true/" config/environments/$RAILS_ENV.rb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'cp config/database.yml.sample config/database.yml &&     echo "\nproduction:"  >>
+      config/database.yml &&     echo "  <<: *pg"  >> config/database.yml &&     echo
+      "  template: template0"  >> config/database.yml &&     echo "  username: <%=
+      ENV[''DB_USERNAME''] %>"  >> config/database.yml &&     echo "  password: <%=
+      ENV[''DB_PASSWORD''] %>" >> config/database.yml &&     echo "  database: <%=
+      ENV[''DATABASE_NAME''] %>\n" >> config/database.yml'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bundle config build.eventmachine "--with-cflags=\"-O2 -pipe -march=native -w\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bundle config build.thin "--with-cflags=\"-O2 -pipe -march=native -w\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bundle --deployment --without development test
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bundle exec rake assets:precompile &&     /etc/init.d/postgresql start &&     bundle
+      exec rake db:create db:setup
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 750 /etc/ssl/private/ &&     chmod 640 /etc/ssl/private/ssl-cert-snakeoil.key
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - /etc/init.d/postgresql start &&            bundle exec rails server thin
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: zedtux/ruby-1.9.3
+  Name: ""
+  Platform: ""
+  SourceCode: FROM zedtux/ruby-1.9.3

@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- As: rust-builder
+  BaseName: rust:1.40.0-buster
+  Commands:
+  - Name: workdir
+    Path: /usr/src/random-service
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - .
+  - Name: workdir
+    Path: /usr/src/random-service/random-service-rs
+  - CmdLine:
+    - cargo build --release
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ls target/release
+    Name: run
+    PrependShell: true
+  From:
+    Image: rust:1.40.0-buster
+  Name: rust-builder
+  Platform: ""
+  SourceCode: FROM rust:1.40.0-buster as rust-builder
+- As: py-builder
+  BaseName: python:3.7
+  Commands:
+  - Name: workdir
+    Path: /usr/src/random-service
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - .
+  - Name: workdir
+    Path: /usr/src/random-service/random-service-py
+  - CmdLine:
+    - pip install nuitka flask pyyaml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python -m nuitka --follow-imports --include-plugin-directory=/usr/local/lib/python3.7/site-packages/jinja2/
+      --standalone random_service
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.7
+  Name: py-builder
+  Platform: ""
+  SourceCode: FROM python:3.7 as py-builder
+- BaseName: debian:buster
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Johann Lee <me@qinka.pro>"'
+    Name: label
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .docker/entrypoint.sh
+    - /usr/local/bin
+  - CmdLine:
+    - apt-get update && apt-get install -y libssl-dev openssl tini
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: rust-builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/random-service/random-service-rs/target/release/random-service-rs
+    - /usr/local/bin/random-service-rs
+  - Chown: ""
+    From: py-builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/random-service/random-service-py/random_service.dist
+    - /usr/local/random_service_py
+  - CmdLine:
+    - entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:buster
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:buster

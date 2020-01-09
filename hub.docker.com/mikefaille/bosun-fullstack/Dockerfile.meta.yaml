@@ -1,0 +1,212 @@
+MetaArgs: null
+Stages:
+- BaseName: centos:7
+  Commands:
+  - Maintainer: michael@faille.io <michael@faille.io>
+    Name: maintainer
+  - Env:
+    - Key: GO_VERSION
+      Value: 1.5.2
+    Name: env
+  - Env:
+    - Key: ARCH
+      Value: amd64
+    Name: env
+  - Env:
+    - Key: HBASE_VERSION
+      Value: 1.1.2
+    Name: env
+  - Env:
+    - Key: HBASE_HOME
+      Value: /hbase/hbase-$HBASE_VERSION
+    Name: env
+  - Env:
+    - Key: HBASE
+      Value: $HBASE_HOME
+    Name: env
+  - Env:
+    - Key: OPENTSDB_TAG
+      Value: v2.2.0RC3
+    Name: env
+  - Env:
+    - Key: OPENTSDB_DIR
+      Value: /tsdb
+    Name: env
+  - Env:
+    - Key: COMPRESSION
+      Value: gz
+    Name: env
+  - CmdLine:
+    - sed -i 's/mirrorlist=/#mirrorlist=/g' /etc/yum.repos.d/*.repo && sed -i 's/#baseurl=/baseurl=/g'
+      /etc/yum.repos.d/*.repo
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "pub  4096R/F4A80EB5 2014-06-23 CentOS-7 Key (CentOS 7 Official Signing
+      Key) <security@centos.org> Key fingerprint = 6341 AB27 53D7 8A78 A7C2  7BB1
+      24C6 A8A7 F4A8 0EB5" | gpg --quiet --with-fingerprint /etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+      && rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "installonlypkgs=procps-ng" >> /etc/yum.conf &&    yum install -y epel-release
+      &&  yum install -y net-utils make wget git tar java-1.8.0-openjdk-headless vim  python-setuptools
+      supervisor; yum clean all
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - conf/supervisord.conf
+    - /etc/supervisord.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/supervisor-bosun.ini
+    - /etc/supervisord.d/bosun.ini
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/supervisor-base.ini
+    - /etc/supervisord.d/base.ini
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/supervisor-hbase.ini
+    - /etc/supervisord.d/hbase.ini
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/supervisor-opentsdb.ini
+    - /etc/supervisord.d/opentsdb.ini
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/supervisor-scollector.ini
+    - /etc/supervisord.d/scollector.ini
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/jre
+    Name: env
+  - Env:
+    - Key: WORKDIR
+      Value: /data
+    Name: env
+  - CmdLine:
+    - mkdir /usr/local/go/
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Env:
+    - Key: GOROOT
+      Value: /usr/local/go/
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:/usr/local/go/bin
+    Name: env
+  - Name: workdir
+    Path: $WORKDIR
+  - CmdLine:
+    - wget https://storage.googleapis.com/golang/go$GO_VERSION.linux-amd64.tar.gz  &&
+      tar -C /usr/local -xzf go$GO_VERSION.linux-$ARCH.tar.gz && rm go$GO_VERSION.linux-$ARCH.tar.gz
+      &&     mkdir /hbase && cd /hbase && wget http://apache.mirror.vexxhost.com/hbase/$HBASE_VERSION/hbase-$HBASE_VERSION-bin.tar.gz  &&
+      tar -xzf hbase-$HBASE_VERSION-bin.tar.gz && rm hbase-$HBASE_VERSION-bin.tar.gz
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data/persistant/hbase
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/hbase-site.xml
+    - /hbase/hbase-$HBASE_VERSION/conf/hbase-site.xml
+  - Name: expose
+    Ports:
+    - "60000"
+  - Name: expose
+    Ports:
+    - "60010"
+  - Name: expose
+    Ports:
+    - "60030"
+  - Env:
+    - Key: TSDB
+      Value: $OPENTSDB_DIR
+    Name: env
+  - CmdLine:
+    - git clone --single-branch  -b $OPENTSDB_TAG --depth 1 git://github.com/OpenTSDB/opentsdb.git
+      /tsdb &&     cd $TSDB && yum install autoconf automake sysconftool.noarch java-1.8.0-openjdk-devel
+      make -y && bash ./build.sh &&     yum remove  autoconf automake sysconftool.noarch
+      java-1.8.0-openjdk-devel  -y && yum autoremove -y && yum clean all
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/opentsdb.conf
+    - $TSDB/opentsdb.conf
+  - Name: expose
+    Ports:
+    - "4242"
+  - CmdLine:
+    - go get bosun.org/cmd/bosun; mkdir /bosun; ln -s /go/bin/bosun /bosun/bosun
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/bosun.conf
+    - /data/bosun.conf
+  - CmdLine:
+    - go get bosun.org/cmd/scollector; mkdir /scollector; ln -s /go/bin/scollector  /scollector/scollector
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8070"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/create_table.sh
+    - /data/create_table.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/start-hbase.sh
+    - /data/start-hbase.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/create_tsdb_tables.sh
+    - /data/create_tsdb_tables.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/start-opentsdb.sh
+    - /data/start-opentsdb.sh
+  - CmdLine:
+    - /usr/bin/supervisord
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos:7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:7

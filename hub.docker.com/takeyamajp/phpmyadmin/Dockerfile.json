@@ -1,0 +1,213 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "",
+      "BaseName": "centos:centos8",
+      "SourceCode": "FROM centos:centos8",
+      "Platform": "",
+      "From": {
+        "Image": "centos:centos8"
+      },
+      "Commands": [
+        {
+          "Maintainer": "\"Hiroki Takeyama\"",
+          "Name": "maintainer"
+        },
+        {
+          "CmdLine": [
+            "mkdir /cert;     dnf -y install openssl;     openssl genrsa -aes256 -passout pass:dummy -out \"/cert/key.pass.pem\" 2048;     openssl rsa -passin pass:dummy -in \"/cert/key.pass.pem\" -out \"/cert/key.pem\";     rm -f /cert/key.pass.pem;     dnf clean all;"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "dnf -y install httpd mod_ssl;     sed -i 's/^#\\(ServerName\\) .*/\\1 ${HOSTNAME}/' /etc/httpd/conf/httpd.conf;     sed -i 's/\\(DocumentRoot\\) \"\\/var\\/www\\/html\"/\\1 \"\\/usr\\/share\\/phpMyAdmin\"/' /etc/httpd/conf/httpd.conf;     sed -i '/^\u003cDirectory \"\\/var\\/www\\/html\"\u003e$/,/^\u003cIfModule dir_module\u003e$/ s/\\(AllowOverride\\) None/\\1 All/' /etc/httpd/conf/httpd.conf;     sed -i 's/\\(\u003cDirectory\\) \"\\/var\\/www\\/html\"\u003e/\\1 \"\\/usr\\/share\\/phpMyAdmin\"\u003e/' /etc/httpd/conf/httpd.conf;     sed -i 's/^\\s*\\(CustomLog\\) .*/\\1 \\/dev\\/stdout \"%{X-Forwarded-For}i %h %l %u %t \\\\\"%r\\\\\" %\u003es %b \\\\\"%{Referer}i\\\\\" \\\\\"%{User-Agent}i\\\\\" %I %O\"/' /etc/httpd/conf/httpd.conf;     sed -i 's/^\\(ErrorLog\\) .*/\\1 \\/dev\\/stderr/' /etc/httpd/conf/httpd.conf;     sed -i 's/^\\s*\\(CustomLog\\) .*/\\1 \\/dev\\/stdout \"%{X-Forwarded-For}i %h %l %u %t \\\\\"%r\\\\\" %\u003es %b \\\\\"%{Referer}i\\\\\" \\\\\"%{User-Agent}i\\\\\" %I %O\"/' /etc/httpd/conf.d/ssl.conf;     sed -i 's/^\\(ErrorLog\\) .*/\\1 \\/dev\\/stderr/' /etc/httpd/conf.d/ssl.conf;     sed -i 's/^\\s*\"%t %h %{SSL_PROTOCOL}x %{SSL_CIPHER}x \\\\\"%r\\\\\" %b\"//' /etc/httpd/conf.d/ssl.conf;     sed -i 's/^\\(LoadModule lbmethod_heartbeat_module .*\\)/#\\1/' /etc/httpd/conf.modules.d/00-proxy.conf;     rm -f /usr/sbin/suexec;     dnf clean all;"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir /run/php-fpm;     dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm;     dnf -y install https://rpms.remirepo.net/enterprise/remi-release-8.rpm;     dnf -y module enable php:remi-7.4;     dnf -y install php php-mbstring php-curl php-mysqlnd php-opcache php-pecl-apcu;     sed -i 's/^;\\(listen.owner\\) .*/\\1 = apache/' /etc/php-fpm.d/www.conf;     sed -i 's/^;\\(listen.group\\) .*/\\1 = apache/' /etc/php-fpm.d/www.conf;     sed -i 's/^\\(listen.acl_users .*\\)/;\\1/' /etc/php-fpm.d/www.conf;     dnf clean all;"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir /export;     dnf -y install --enablerepo=remi phpMyAdmin;     sed -i '/^\u003cDirectory \\/usr\\/share\\/phpMyAdmin\\/\u003e$/,/^\u003cDirectory \\/usr\\/share\\/phpMyAdmin\\/setup\\/\u003e$/ s/\\(Require\\) local/\\1 all granted/' /etc/httpd/conf.d/phpMyAdmin.conf;     dnf clean all;"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir /run/supervisor;     dnf -y install supervisor;     sed -i 's/^\\(nodaemon\\)=false/\\1=true/' /etc/supervisord.conf;     sed -i 's/^;\\(user\\)=chrism/\\1=root/' /etc/supervisord.conf;     sed -i '/^\\[unix_http_server\\]$/a username=dummy\\npassword=dummy' /etc/supervisord.conf;     sed -i '/^\\[supervisorctl\\]$/a username=dummy\\npassword=dummy' /etc/supervisord.conf;     {     echo '[program:httpd]';     echo 'command=/usr/sbin/httpd -DFOREGROUND';     echo 'priority=3';     echo 'stdout_logfile=/dev/fd/1';     echo 'stdout_logfile_maxbytes=0';     echo 'stderr_logfile=/dev/fd/2';     echo 'stderr_logfile_maxbytes=0';     } \u003e /etc/supervisord.d/httpd.ini;     {     echo '[program:php-fpm]';     echo 'command=/usr/sbin/php-fpm --nodaemonize';     echo 'priority=2';     echo 'stdout_logfile=/dev/fd/1';     echo 'stdout_logfile_maxbytes=0';     echo 'stderr_logfile=/dev/fd/2';     echo 'stderr_logfile_maxbytes=0';     } \u003e /etc/supervisord.d/php-fpm.ini;     {     echo '[program:tail]';     echo 'command=/usr/bin/tail -F /var/log/php-fpm/www-error.log';     echo 'priority=1';     echo 'stdout_logfile=/dev/fd/1';     echo 'stdout_logfile_maxbytes=0';     } \u003e /etc/supervisord.d/tail.ini;     dnf clean all;"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "{     echo '#!/bin/bash -eu';     echo 'ln -fs /usr/share/zoneinfo/${TIMEZONE} /etc/localtime';     echo 'ESC_TIMEZONE=`echo ${TIMEZONE} | sed \"s/\\//\\\\\\\\\\\\\\\\\\//g\"`';     echo 'sed -i \"s/^;\\?\\(date\\.timezone\\) .*/\\1 =${ESC_TIMEZONE}/\" /etc/php.ini';     echo 'rm -f /var/log/php-fpm/www-error.log';     echo 'touch /var/log/php-fpm/www-error.log';     echo 'openssl req -new -sha384 -key \"/cert/key.pem\" -subj \"/CN=${HOSTNAME}\" -out \"/cert/csr.pem\"';     echo 'openssl x509 -req -days 36500 -in \"/cert/csr.pem\" -signkey \"/cert/key.pem\" -out \"/cert/cert.pem\" \u0026\u003e/dev/null';     echo 'sed -i \"s/^\\(SSLCertificateFile\\) .*/\\1 \\/cert\\/cert.pem/\" /etc/httpd/conf.d/ssl.conf';     echo 'sed -i \"s/^\\(SSLCertificateKeyFile\\) .*/\\1 \\/cert\\/key.pem/\" /etc/httpd/conf.d/ssl.conf';     echo 'if [ -e /export/cert.pem ] \u0026\u0026 [ -e /export/key.pem ]; then';     echo '  sed -i \"s/^\\(SSLCertificateFile\\) .*/\\1 \\/export\\/cert.pem/\" /etc/httpd/conf.d/ssl.conf';     echo '  sed -i \"s/^\\(SSLCertificateKeyFile\\) .*/\\1 \\/export\\/key.pem/\" /etc/httpd/conf.d/ssl.conf';     echo 'fi';     echo 'sed -i \"s/^\\(LogLevel\\) .*/\\1 ${HTTPD_LOG_LEVEL}/\" /etc/httpd/conf/httpd.conf';     echo 'sed -i \"s/^\\(LogLevel\\) .*/\\1 ${HTTPD_LOG_LEVEL}/\" /etc/httpd/conf.d/ssl.conf';     echo 'sed -i \"s/^\\(CustomLog .*\\)/#\\1/\" /etc/httpd/conf/httpd.conf';     echo 'sed -i \"s/^\\(ErrorLog .*\\)/#\\1/\" /etc/httpd/conf/httpd.conf';     echo 'sed -i \"s/^\\(CustomLog .*\\)/#\\1/\" /etc/httpd/conf.d/ssl.conf';     echo 'sed -i \"s/^\\(ErrorLog .*\\)/#\\1/\" /etc/httpd/conf.d/ssl.conf';     echo 'if [ ${HTTPD_LOG,,} = \"true\" ]; then';     echo '  sed -i \"s/^#\\(CustomLog .*\\)/\\1/\" /etc/httpd/conf/httpd.conf';     echo '  sed -i \"s/^#\\(ErrorLog .*\\)/\\1/\" /etc/httpd/conf/httpd.conf';     echo '  sed -i \"s/^#\\(CustomLog .*\\)/\\1/\" /etc/httpd/conf.d/ssl.conf';     echo '  sed -i \"s/^#\\(ErrorLog .*\\)/\\1/\" /etc/httpd/conf.d/ssl.conf';     echo 'fi';     echo 'sed -i \"s/^\\(php_admin_flag\\[log_errors\\]\\) = .*/\\1 = off/\" /etc/php-fpm.d/www.conf';     echo 'if [ ${HTTPD_PHP_ERROR_LOG,,} = \"true\" ]; then';     echo '  sed -i \"s/^\\(php_admin_flag\\[log_errors\\]\\) = .*/\\1 = on/\" /etc/php-fpm.d/www.conf';     echo 'fi';     echo 'if [ -e /usr/share/phpMyAdmin/.htaccess ]; then';     echo '  sed -i '\\''/^# BEGIN REQUIRE SSL$/,/^# END REQUIRE SSL$/d'\\'' /usr/share/phpMyAdmin/.htaccess';     echo '  sed -i '\\''/^# BEGIN GZIP COMPRESSION$/,/^# END GZIP COMPRESSION$/d'\\'' /usr/share/phpMyAdmin/.htaccess';     echo 'fi';     echo 'if [ ${REQUIRE_SSL,,} = \"true\" ]; then';     echo '  {';     echo '  echo \"# BEGIN REQUIRE SSL\"';     echo '  echo \"\u003cIfModule mod_rewrite.c\u003e\"';     echo '  echo \"  RewriteEngine On\"';     echo '  echo \"  RewriteCond %{HTTPS} off\"';     echo '  echo \"  RewriteCond %{HTTP:X-Forwarded-Proto} !https [NC]\"';     echo '  echo \"  RewriteRule ^.*$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]\"';     echo '  echo \"\u003c/IfModule\u003e\"';     echo '  echo \"# END REQUIRE SSL\"';     echo '  } \u003e\u003e /usr/share/phpMyAdmin/.htaccess';     echo 'fi';     echo 'if [ ${GZIP_COMPRESSION,,} = \"true\" ]; then';     echo '  {';     echo '  echo \"# BEGIN GZIP COMPRESSION\"';     echo '  echo \"\u003cIfModule mod_deflate.c\u003e\"';     echo '  echo \"\u003cIfModule mod_filter.c\u003e\"';     echo '  echo \"  SetOutputFilter DEFLATE\"';     echo '  echo \"  SetEnvIfNoCase Request_URI \\.(?:gif|jpe?g|png)$ no-gzip dont-vary\"';     echo '  echo \"\u003c/IfModule\u003e\"';     echo '  echo \"\u003c/IfModule\u003e\"';     echo '  echo \"# END GZIP COMPRESSION\"';     echo '  } \u003e\u003e /usr/share/phpMyAdmin/.htaccess';     echo 'fi';     echo 'sed -i '\\''/^# BEGIN DB SETTINGS$/,/^# END DB SETTINGS$/d'\\'' /etc/phpMyAdmin/config.inc.php';     echo '{';     echo 'echo \"# BEGIN DB SETTINGS\"';     echo 'echo \"\\$cfg['\\''Servers'\\''][\\$i]['\\''auth_type'\\''] = '\\''config'\\'';\"';     echo 'echo \"\\$cfg['\\''Servers'\\''][\\$i]['\\''host'\\''] = '\\''${PMA_HOST}'\\'';\"';     echo 'echo \"\\$cfg['\\''Servers'\\''][\\$i]['\\''port'\\''] = '\\''${PMA_PORT}'\\'';\"';     echo 'echo \"\\$cfg['\\''Servers'\\''][\\$i]['\\''user'\\''] = '\\''${PMA_USER}'\\'';\"';     echo 'echo \"\\$cfg['\\''Servers'\\''][\\$i]['\\''password'\\''] = '\\''${PMA_PASSWORD}'\\'';\"';     echo 'echo \"\\$cfg['\\''UploadDir'\\''] = '\\''/export'\\'';\"';     echo 'echo \"\\$cfg['\\''SaveDir'\\''] = '\\''/export'\\'';\"';     echo 'echo \"# END DB SETTINGS\"';     echo '} \u003e\u003e /etc/phpMyAdmin/config.inc.php';     echo 'if [ -e /usr/share/phpMyAdmin/.htpasswd ]; then';     echo '  sed -i '\\''/^# BEGIN BASIC AUTH$/,/^# END BASIC AUTH$/d'\\'' /etc/httpd/conf.d/phpMyAdmin.conf';     echo '  rm -f /usr/share/phpMyAdmin/.htpasswd';     echo 'fi';     echo 'if [ ${BASIC_AUTH,,} = \"true\" ]; then';     echo '  {';     echo '  echo \"# BEGIN BASIC AUTH\"';     echo '  echo \"\u003cDirectory /usr/share/phpMyAdmin/\u003e\"';     echo '  echo \"  AuthType Basic\"';     echo '  echo \"  AuthName '\\''Basic Authentication'\\''\"';     echo '  echo \"  AuthUserFile /usr/share/phpMyAdmin/.htpasswd\"';     echo '  echo \"  Require valid-user\"';     echo '  echo \"\u003c/Directory\u003e\"';     echo '  echo \"# END BASIC AUTH\"';     echo '  } \u003e\u003e /etc/httpd/conf.d/phpMyAdmin.conf';     echo '  htpasswd -bmc /usr/share/phpMyAdmin/.htpasswd ${BASIC_AUTH_USER} ${BASIC_AUTH_PASSWORD} \u0026\u003e/dev/null';     echo 'fi';     echo 'chown -R apache:apache /export';     echo 'exec \"$@\"';     } \u003e /usr/local/bin/entrypoint.sh;     chmod +x /usr/local/bin/entrypoint.sh;"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "TIMEZONE",
+              "Value": "Asia/Tokyo"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "REQUIRE_SSL",
+              "Value": "true"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "GZIP_COMPRESSION",
+              "Value": "true"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "BASIC_AUTH",
+              "Value": "false"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "BASIC_AUTH_USER",
+              "Value": "user"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "BASIC_AUTH_PASSWORD",
+              "Value": "password"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "HTTPD_LOG",
+              "Value": "true"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "HTTPD_LOG_LEVEL",
+              "Value": "warn"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "HTTPD_PHP_ERROR_LOG",
+              "Value": "true"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PMA_HOST",
+              "Value": "mysql"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PMA_PORT",
+              "Value": "3306"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PMA_USER",
+              "Value": "root"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PMA_PASSWORD",
+              "Value": "password"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/export"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "80"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "443"
+          ]
+        },
+        {
+          "CmdLine": [
+            "entrypoint.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "CmdLine": [
+            "supervisord",
+            "-c",
+            "/etc/supervisord.conf"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

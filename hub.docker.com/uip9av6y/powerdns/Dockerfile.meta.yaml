@@ -1,0 +1,159 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:3.10
+  Commands:
+  - Key: FLAVOUR
+    Name: arg
+    Value: null
+  - Key: PDNS_VERSION
+    Name: arg
+    Value: 4.2.0
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - set -xe;   case "${FLAVOUR}" in     mysql) build_deps='mariadb-dev' ;;     pgsql)
+      build_deps='postgresql-dev' ;;     sqlite3) build_deps='sqlite-dev' ;;     *)
+      echo "unsupported flavour ${FLAVOUR}"; exit 1 ;;   esac   && apk add --no-cache     build-base     gnupg     curl     file     libsodium-dev     libressl-dev     boost-dev     p11-kit-dev     ${build_deps}
+      && curl -sSLO https://downloads.powerdns.com/releases/pdns-${PDNS_VERSION}.tar.bz2
+      && curl -sSLO https://downloads.powerdns.com/releases/pdns-${PDNS_VERSION}.tar.bz2.asc
+      && keys='16E12866B7738C73976A57436FFC33439B0D04DF   FBAE0323821C7706A5CA151BDCF513FA7EED19F3   162890D0689DD12DD33E46961C5EE990D2E71575   B76CD4671C0968BAA87DE61C5E50715BF2FFE1A7'
+      && export GNUPGHOME="$(mktemp -d)" && gpg --keyserver hkp://p80.pool.sks-keyservers.net:80
+      --recv-keys $keys || gpg --keyserver hkp://ipv4.pool.sks-keyservers.net --recv-keys
+      $keys || gpg --keyserver hkp://pgp.mit.edu:80 --recv-keys $keys && gpg --batch
+      --verify pdns-${PDNS_VERSION}.tar.bz2.asc pdns-${PDNS_VERSION}.tar.bz2 && rm
+      -rf "$GNUPGHOME" pdns-${PDNS_VERSION}.tar.bz2.asc && tar -xjf pdns-${PDNS_VERSION}.tar.bz2
+      && rm pdns-${PDNS_VERSION}.tar.bz2 && cd pdns-${PDNS_VERSION} && LDFLAGS='-Wl,--as-needed'
+      && CFLAGS='-Os -fomit-frame-pointer' && CPPFLAGS="$CFLAGS" && CXXFLAGS="$CFLAGS"
+      && ./configure --prefix=/usr   --sysconfdir=/etc/pdns   --mandir=/usr/share/man   --infodir=/usr/share/info   --localstatedir=/var   --libdir=/usr/lib   --with-modules="g${FLAVOUR}"   --with-dynmodules=""   --enable-static   --disable-shared   --enable-tools   --enable-experimental-pkcs11   --disable-dependency-tracking   --disable-silent-rules   --disable-lua-records   --enable-reproducible   'CC=gcc'   "LDFLAGS=${LDFLAGS}"   "CFLAGS=${CFLAGS}"   "CPPFLAGS=${CPPFLAGS}"   "CXXFLAGS=${CXXFLAGS}"
+      && make -j$(nproc) && make DESTDIR="/app" install-strip
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.10 AS builder
+- BaseName: alpine:3.10
+  Commands:
+  - Key: FLAVOUR
+    Name: arg
+    Value: null
+  - Key: PDNS_VERSION
+    Name: arg
+    Value: 4.2.0
+  - Env:
+    - Key: PDNS_VERSION
+      Value: ${PDNS_VERSION}
+    Name: env
+  - Env:
+    - Key: PDNS_HOME
+      Value: /etc/pdns
+    Name: env
+  - CmdLine:
+    - set -xe;   addgroup -S pdns   && adduser -S -D -H -h ${PDNS_HOME} -s /sbin/nologin
+      -G pdns pdns   && case "${FLAVOUR}" in     mysql) run_deps='mariadb-client mariadb-connector-c'
+      ;;     pgsql) run_deps='postgresql-client postgresql-libs' ;;     sqlite3) run_deps='sqlite
+      sqlite-libs' ;;     *) echo "unsupported flavour ${FLAVOUR}"; exit 1 ;;   esac   &&
+      apk add --no-cache     boost-program_options     libsodium     libressl     libstdc++     libgcc     p11-kit     ${run_deps}   &&
+      mkdir -p     ${PDNS_HOME}/conf.d
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${PDNS_HOME}
+  - Name: expose
+    Ports:
+    - "53"
+    - 53/udp
+    - "53000"
+    - "8081"
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/usr/sbin/
+    - /usr/sbin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/usr/bin/
+    - /usr/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/usr/share/doc/pdns/
+    - /usr/share/doc/pdns/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pdns.conf
+    - ${PDNS_HOME}/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ${FLAVOUR}.bin/
+    - /usr/local/bin/
+  - Name: volume
+    Volumes:
+    - ${PDNS_HOME}/conf.d
+    - /var/run/pdns
+  - Health:
+      Interval: 60000000000
+      StartPeriod: 10000000000
+      Test:
+      - CMD-SHELL
+      - /usr/bin/pdns_control --config-dir=${PDNS_HOME} rping || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - /usr/local/bin/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - pdns_server
+    Name: cmd
+    PrependShell: false
+  - Key: BUILD_DATE
+    Name: arg
+    Value: '"1970-01-01T00:00:00Z"'
+  - Key: REVISION
+    Name: arg
+    Value: '"0"'
+  - Key: VCS_URL
+    Name: arg
+    Value: '"http://localhost/"'
+  - Key: VCS_REF
+    Name: arg
+    Value: '"master"'
+  - Labels:
+    - Key: org.opencontainers.image.created
+      Value: $BUILD_DATE
+    - Key: org.opencontainers.image.title
+      Value: '"PowerDNS Authoritative Nameserver (${FLAVOUR} Backend)"'
+    - Key: org.opencontainers.image.description
+      Value: '"The PowerDNS Authoritative Server is a versatile nameserver which supports
+        a large number of backends."'
+    - Key: org.opencontainers.image.url
+      Value: '"https://www.powerdns.com/"'
+    - Key: org.opencontainers.image.source
+      Value: $VCS_URL
+    - Key: org.opencontainers.image.revision
+      Value: $VCS_REF
+    - Key: org.opencontainers.image.vendor
+      Value: '"PowerDNS.COM BV"'
+    - Key: org.opencontainers.image.version
+      Value: '"${PDNS_VERSION}-${REVISION}"'
+    - Key: com.microscaling.docker.dockerfile
+      Value: '"/powerdns/Dockerfile"'
+    - Key: org.opencontainers.image.licenses
+      Value: '"GPL-2.0"'
+    Name: label
+  From:
+    Image: alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10

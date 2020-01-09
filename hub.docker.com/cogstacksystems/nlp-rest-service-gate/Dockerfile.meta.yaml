@@ -1,0 +1,143 @@
+MetaArgs: null
+Stages:
+- As: jdk-11-base
+  BaseName: openjdk:11-jdk-slim
+  Commands:
+  - CmdLine:
+    - "apt-get update && \tapt-get install -y curl && \tapt-get clean autoclean &&
+      \tapt-get autoremove -y && \trm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:11-jdk-slim
+  Name: jdk-11-base
+  Platform: ""
+  SourceCode: FROM openjdk:11-jdk-slim AS jdk-11-base
+- As: service-builder
+  BaseName: jdk-11-base
+  Commands:
+  - CmdLine:
+    - mkdir -p /devel
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /devel
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./gradle/wrapper
+    - /devel/gradle/wrapper
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./gradlew
+    - /devel/
+  - CmdLine:
+    - ./gradlew --version
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./settings.gradle
+    - /devel/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /devel/
+  - CmdLine:
+    - ./gradlew :app:bootJar --no-daemon
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: jdk-11-base
+  Name: service-builder
+  Platform: ""
+  SourceCode: FROM jdk-11-base AS service-builder
+- As: jre-11-base
+  BaseName: openjdk:11-jre-slim
+  Commands:
+  - CmdLine:
+    - "apt-get update && \tapt-get install -y curl unzip && \tapt-get clean autoclean
+      && \tapt-get autoremove -y && \trm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:11-jre-slim
+  Name: jre-11-base
+  Platform: ""
+  SourceCode: FROM openjdk:11-jre-slim AS jre-11-base
+- As: service-runner
+  BaseName: jre-11-base
+  Commands:
+  - CmdLine:
+    - mkdir -p /app/nlp-service
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/nlp-service
+  - Chown: ""
+    From: service-builder
+    Name: copy
+    SourcesAndDest:
+    - /devel/app/build/libs/app-*.jar
+    - ./
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: true
+  From:
+    Stage:
+      Index: 2
+      Named: jre-11-base
+  Name: service-runner
+  Platform: ""
+  SourceCode: FROM jre-11-base AS service-runner
+- As: service-runner-gate
+  BaseName: service-runner
+  Commands:
+  - Name: workdir
+    Path: /gate/
+  - CmdLine:
+    - "curl -L 'https://github.com/GateNLP/gate-core/releases/download/v8.5/gate-developer-8.5-distro.zip'
+      > gate-developer-8.5-distro.zip && \tunzip gate-developer-8.5-distro.zip &&
+      \tmv gate-developer-8.5 home && \trm gate-developer-8.5-distro.zip"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GATE_HOME
+      Value: /gate/home
+    Name: env
+  - CmdLine:
+    - "curl -L 'https://github.com/GateNLP/gcp/releases/download/v3.0/gcp-dist-3.0-distro.zip'
+      > gcp-dist-3.0-distro.zip && \tunzip gcp-dist-3.0-distro.zip && \tmv gcp-dist-3.0
+      gcp && \trm gcp-dist-3.0-distro.zip"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/nlp-service
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./scripts/*.sh
+    - ./
+  - CmdLine:
+    - /bin/bash
+    - run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 3
+      Named: service-runner
+  Name: service-runner-gate
+  Platform: ""
+  SourceCode: FROM service-runner AS service-runner-gate

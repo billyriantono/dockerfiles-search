@@ -1,0 +1,125 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: node:8-alpine
+  Commands:
+  - Key: GO_VERSION
+    Name: arg
+    Value: 1.10.2
+  - Key: DEP_VERSION
+    Name: arg
+    Value: 0.4.1
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz
+    - /tmp/golang.tar.gz
+  - CmdLine:
+    - set -ex     && apk -U --no-cache add         alpine-sdk         git         tar     &&
+      tar -C /usr/local -xzf /tmp/golang.tar.gz     && mkdir /lib64     && ln -s /lib/libc.musl-x86_64.so.1
+      /lib64/ld-linux-x86-64.so.2     && mkdir -p /opt/agw/src/github.com/chrootLogin/agw
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/golang/dep/releases/download/v${DEP_VERSION}/dep-linux-amd64
+    - /usr/local/go/bin/dep
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - /opt/agw/src/github.com/chrootLogin/agw
+  - Name: workdir
+    Path: /opt/agw/src/github.com/chrootLogin/agw
+  - CmdLine:
+    - set -ex     && chmod +x /usr/local/go/bin/dep     && export PATH="${PATH}:/usr/local/go/bin:/usr/local/node-v${NODE_VERSION}-linux-x64/bin"     &&
+      export GOPATH="/opt/agw"     && go get -u github.com/nicksnyder/go-i18n/v2/goi18n     &&
+      go get -u github.com/jteeuwen/go-bindata/go-bindata     && sync     && GOOS=linux
+      GOARCH=amd64 CGO_ENABLED=1 make
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:8-alpine as builder
+- BaseName: alpine:3.7
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: maintainer
+      Value: '"Simon Erhardt <hello@rootlogin.ch>"'
+    - Key: org.label-schema.name
+      Value: '"AGW"'
+    - Key: org.label-schema.description
+      Value: '"Another wiki software written in Go."'
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/chrootLogin/agw"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - CmdLine:
+    - set -ex     && apk -U --no-cache add         tini
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DB_TYPE
+      Value: '"sqlite"'
+    - Key: DB_PATH
+      Value: '"/db/data.sqlite"'
+    - Key: GIN_MODE
+      Value: '"release"'
+    Name: env
+  - CmdLine:
+    - mkdir -p /opt/agw
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-run.sh
+    - /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/agw/src/github.com/chrootLogin/agw/agw
+    - /opt/agw/agw
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/agw/src/github.com/chrootLogin/agw/frontend/dist
+    - /opt/agw/frontend
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: volume
+    Volumes:
+    - /db
+  - CmdLine:
+    - /sbin/tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /docker-run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

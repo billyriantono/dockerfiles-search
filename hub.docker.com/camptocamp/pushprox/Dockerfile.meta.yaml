@@ -1,0 +1,71 @@
+MetaArgs: null
+Stages:
+- As: certificates
+  BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk update && apk add --no-cache ca-certificates && update-ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: certificates
+  Platform: ""
+  SourceCode: FROM alpine:latest as certificates
+- As: builder
+  BaseName: golang:1.12
+  Commands:
+  - CmdLine:
+    - go get github.com/robustperception/pushprox/proxy
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH/src/github.com/robustperception/pushprox/proxy
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/robustperception/pushprox/client
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH/src/github.com/robustperception/pushprox/client
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12 as builder
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: certificates
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/robustperception/pushprox/proxy
+    - /app
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/robustperception/pushprox/client
+    - /app
+  - CmdLine:
+    - /app/proxy
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

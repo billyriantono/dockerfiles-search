@@ -1,0 +1,152 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:buster-slim
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"slothofanarchy1@gmail.com"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.name
+      Value: '"slothofanarchy/trump-mapnik"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.description
+      Value: '"OSM Mapnik tile server with carto style rendering"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/trump-fmi/trump-docker"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.docker.cmd
+      Value: '"docker run --name trump-mapnik --network=trump-docker_default -v trump-docker_cache:/var/lib/mod_tile
+        --env-file=./mapnik/env -itd slothofanarchy/trump-mapnik"'
+    Name: label
+  - Env:
+    - Key: CARTO_VERSION
+      Value: 4.23.0
+    Name: env
+  - Env:
+    - Key: POSTGRES_PASSWORD
+      Value: nieVooghee9fioSheicaizeiQueeyi2KaCh7boh2lei7xoo9CohtaeTe3mum
+    Name: env
+  - CmdLine:
+    - apt update   && apt install -y -q --no-install-recommends     wget git sudo
+      ca-certificates postgresql-client-11     libmapnik-dev apache2-dev apache2 npm
+      mapnik-utils g++ fonts-noto     golang   && apt autoremove -y   && apt clean   &&
+      rm -rf rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/openstreetmap/mod_tile.git /tmp/mod_tile
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/mod_tile
+  - CmdLine:
+    - ./autogen.sh   && ./configure   && make -j$(nproc)   && make -j$(nproc) install   &&
+      make -j$(nproc) install-mod_tile   && rm -rf /tmp/mod_tile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "LoadModule tile_module /usr/lib/apache2/modules/mod_tile.so" > /etc/apache2/mods-available/mod_tile.load
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /etc/apache2/mods-available/mod_tile.load /etc/apache2/mods-enabled/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./apache-000-default.conf
+    - /etc/apache2/sites-enabled/000-default.conf
+  - CmdLine:
+    - useradd -mg users -s /bin/bash osm
+    Name: run
+    PrependShell: true
+  - Chown: osm:users
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./renderd.conf
+    - /etc/renderd.conf
+  - CmdLine:
+    - 'mkdir -p /var/run/renderd   && chown -R osm: /var/run/renderd'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/lib/mod_tile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown osm:users /var/lib/mod_tile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install -g carto
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: osm
+  - CmdLine:
+    - git clone -b v$CARTO_VERSION https://github.com/gravitystorm/openstreetmap-carto.git
+      /home/osm/openstreetmap-carto-$CARTO_VERSION
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/osm/openstreetmap-carto-$CARTO_VERSION
+  - CmdLine:
+    - 'sed -i ''/placenames.mss/d'' project.mml   && sed -i ''/text-fill: @placenames;/d;/text-fill:
+      @placenames-light;/d'' amenity-points.mss   && sed -i ''/Datasource:/a \ \ \
+      \ \ \ host: trump-postgis'' project.mml   && sed -i "/Datasource:/a \ \ \ \
+      \ \ password: $POSTGRES_PASSWORD" project.mml'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./scripts/get-shapefiles.py  && carto project.mml > style.xml  && rm -rf data  &&
+      ln -s /home/osm/openstreetmap-carto-$CARTO_VERSION/style.xml /home/osm/current-style.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/trump-fmi/mapnik-tile-api.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ./mapnik-tile-api
+  - CmdLine:
+    - GOPATH=/home/osm/go go get -u github.com/trump-fmi/mapnik-tile-api
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - GOPATH=/home/osm/go go build
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - apt purge -y libmapnik-dev apache2-dev make python libcairo2-dev g++   && apt
+      autoremove -y   && apt clean
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/local/sbin/entrypoint.sh
+  - Name: expose
+    Ports:
+    - "80"
+    - "8081"
+  - CmdLine:
+    - /usr/local/sbin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:buster-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:buster-slim

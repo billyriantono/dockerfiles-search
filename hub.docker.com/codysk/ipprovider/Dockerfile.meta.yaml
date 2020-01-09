@@ -1,0 +1,87 @@
+MetaArgs: null
+Stages:
+- As: frontend-builder
+  BaseName: node:12.7-alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app/src
+  - Name: workdir
+    Path: /app/src/frontend
+  - CmdLine:
+    - npm i
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -r dist/* ../public/
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12.7-alpine
+  Name: frontend-builder
+  Platform: ""
+  SourceCode: FROM node:12.7-alpine AS frontend-builder
+- As: build-env
+  BaseName: golang:1.12
+  Commands:
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app/src
+  - Name: workdir
+    Path: /app/src
+  - CmdLine:
+    - go build -a -ldflags '-extldflags "-static"' -mod=vendor ipprovider.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM golang:1.12 AS build-env
+- BaseName: alpine:3.9
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"me@iskywind.com"'
+    Name: label
+  - CmdLine:
+    - apk add --update iptables && rm -rf /vat/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /app/src/ipprovider
+    - /app/
+  - Chown: ""
+    From: frontend-builder
+    Name: copy
+    SourcesAndDest:
+    - /app/src/public
+    - /app/public
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - ./ipprovider
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

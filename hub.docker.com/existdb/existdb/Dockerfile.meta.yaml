@@ -1,0 +1,190 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: openjdk:8-jdk-slim
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Key: BRANCH
+    Name: arg
+    Value: master
+  - Env:
+    - Key: EXIST_MIN
+      Value: '"/exist"'
+    Name: env
+  - Env:
+    - Key: EXIST_MAX
+      Value: '"/usr/local/exist"'
+    Name: env
+  - Name: workdir
+    Path: /usr/local
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends   xmlstarlet   expat   fontconfig   git   libfreetype6   liblcms2-2   libpng16-16   ttf-dejavu-core   &&
+      if [ -n "${VERSION}" ] ; then export BRANCH=eXist-${VERSION}; fi   && echo "
+      - cloning eXist"   && if [ -n "${COMMIT}" ] ; then git clone --depth=2000 --progress
+      https://github.com/exist-db/exist.git   && cd $EXIST_MAX   && git checkout ${COMMIT};   else
+      git clone --depth=1 --branch ${BRANCH} --progress https://github.com/exist-db/exist.git
+      ; fi   && cd $EXIST_MAX   && ./build.sh   && cd $EXIST_MAX && ./build.sh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $EXIST_MAX
+  - CmdLine:
+    - mkdir -p $EXIST_MIN   && echo ' - copy sundries'   && for i in   'LICENSE'   'collection.xconf.init'   'client.properties';   do
+      cp $i $EXIST_MIN; done  && echo ' - copy base folders'   && cp -r autodeploy
+      $EXIST_MIN   && echo ' - copy base libs'   && for i in   'exist-optional.jar'  'exist.jar'   'start.jar';   do
+      cp $i $EXIST_MIN; done   && mkdir $EXIST_MIN/lib   && for i in   'lib/core'   'lib/endorsed'   'lib/extensions'   'lib/optional'   'lib/test'   'lib/user';   do
+      cp -r $i $EXIST_MIN/lib  ; done   && echo ' - symlink root config files'   &&
+      mkdir $EXIST_MIN/config   && for i in   'conf.xml'  'descriptor.xml'   'log4j2.xml'   'mime-types.xml';   do
+      mv $i $EXIST_MIN/config;  ln -s -v -T $EXIST_MIN/config/$i $EXIST_MIN/$i; done   &&
+      echo ' - copy tools'   && mkdir $EXIST_MIN/tools   && for i in   'tools/ant'   'tools/aspectj'   'tools/jetty';   do
+      cp -r $i $EXIST_MIN/tools; done   && echo ' - copy extension libs'   && mkdir
+      -p $EXIST_MIN/extensions/exquery/restxq   && mkdir -p $EXIST_MIN/extensions/betterform/main   &&
+      mkdir -p $EXIST_MIN/extensions/contentextraction   && mkdir -p $EXIST_MIN/extensions/expath   &&
+      mkdir -p $EXIST_MIN/extensions/indexes/lucene   && mkdir -p $EXIST_MIN/extensions/webdav   &&
+      mkdir -p $EXIST_MIN/extensions/xqdoc   && cp -r extensions/betterform/main/lib
+      $EXIST_MIN/extensions/betterform/main   && cp -r extensions/contentextraction/lib
+      $EXIST_MIN/extensions/contentextraction   && cp -r extensions/expath/lib $EXIST_MIN/extensions/expath   &&
+      cp -r extensions/exquery/lib $EXIST_MIN/extensions/exquery   && cp -r extensions/exquery/restxq/lib
+      $EXIST_MIN/extensions/exquery/restxq   && cp -r extensions/indexes/lucene/lib
+      $EXIST_MIN/extensions/indexes/lucene   && cp -r extensions/webdav/lib $EXIST_MIN/extensions/webdav   &&
+      cp -r extensions/xqdoc/lib $EXIST_MIN/extensions/xqdoc   && echo ' - copy ivy
+      libs'   && for dir in extensions/modules/**/lib;   do mkdir -p $EXIST_MIN/$dir;
+      done   && for f in extensions/modules/**/lib/*;   do cp -r $f $EXIST_MIN/$f;
+      done   && echo ' - copy webapp'   && cp -r webapp  $EXIST_MIN   && echo ' -
+      move and symlink webapp config files'   && mv $EXIST_MIN/tools/jetty/webapps/exist-webapp-context.xml
+      $EXIST_MIN/config   && ln -s -v -T   $EXIST_MIN/config/exist-webapp-context.xml   $EXIST_MIN/tools/jetty/webapps/exist-webapp-context.xml   &&
+      echo 'move and symlink jetty config files'   && mv $EXIST_MIN/webapp/WEB-INF/controller-config.xml
+      $EXIST_MIN/config   && ln -s -v -T   $EXIST_MIN/config/controller-config.xml   $EXIST_MIN/webapp/WEB-INF/controller-config.xml   &&
+      cd ../ && rm -r $EXIST_MAX
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'modifying conf files'&& cd $EXIST_MIN/config && xmlstarlet ed  -L -s '/Configuration/Loggers/Root'
+      -t elem -n 'AppenderRefTMP' -v ''  -i //AppenderRefTMP -t attr -n 'ref' -v 'STDOUT'
+      -r //AppenderRefTMP -v AppenderRef  log4j2.xml
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8-jdk-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-slim as builder
+- BaseName: gcr.io/distroless/java
+  Commands:
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: ${BUILD_DATE}
+    - Key: org.label-schema.description
+      Value: '"Minimal exist-db docker image with FO support"'
+    - Key: org.label-schema.name
+      Value: '"existdb"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.url
+      Value: '"https://exist-db.org"'
+    - Key: org.label-schema.vcs-ref
+      Value: ${VCS_REF}
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/exist-db/docker-existdb"'
+    - Key: org.label-schema.vendor
+      Value: '"exist-db"'
+    Name: label
+  - Env:
+    - Key: EXIST_HOME
+      Value: '"/exist"'
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $EXIST_HOME
+    - $EXIST_HOME
+  - Name: workdir
+    Path: $EXIST_HOME
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/x86_64-linux-gnu/libfreetype.so.6
+    - /usr/lib/x86_64-linux-gnu/libfreetype.so.6
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/x86_64-linux-gnu/liblcms2.so.2
+    - /usr/lib/x86_64-linux-gnu/liblcms2.so.2
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/x86_64-linux-gnu/libpng16.so.16
+    - /usr/lib/x86_64-linux-gnu/libpng16.so.16
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/fonts
+    - /etc/fonts
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /lib/x86_64-linux-gnu/libexpat.so.1
+    - /lib/x86_64-linux-gnu/libexpat.so.1
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/x86_64-linux-gnu/libfontconfig.so.1
+    - /usr/lib/x86_64-linux-gnu/libfontconfig.so.1
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/fontconfig
+    - /usr/share/fontconfig
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/fonts/truetype/dejavu
+    - /usr/share/fonts/truetype/dejavu
+  - Key: CACHE_MEM
+    Name: arg
+    Value: null
+  - Key: MAX_BROKER
+    Name: arg
+    Value: null
+  - Env:
+    - Key: JAVA_TOOL_OPTIONS
+      Value: -Dfile.encoding=UTF8   -Dsun.jnu.encoding=UTF-8   -Djava.awt.headless=true   -Dorg.exist.db-connection.cacheSize=${CACHE_MEM:-256}M   -Dorg.exist.db-connection.pool.max=${MAX_BROKER:-20}   -XX:+UnlockExperimentalVMOptions   -XX:+UseCGroupMemoryLimitForHeap   -XX:+UseG1GC   -XX:+UseStringDeduplication   -XX:MaxRAMFraction=1
+    Name: env
+  - Name: expose
+    Ports:
+    - "8080"
+    - "8443"
+  - Health:
+      Test:
+      - CMD
+      - java
+      - -jar
+      - start.jar
+      - client
+      - --no-gui
+      - --xpath
+      - system:get-version()
+    Name: healthcheck
+  - CmdLine:
+    - java
+    - -jar
+    - start.jar
+    - jetty
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: gcr.io/distroless/java
+  Name: ""
+  Platform: ""
+  SourceCode: FROM gcr.io/distroless/java

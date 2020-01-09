@@ -1,0 +1,165 @@
+MetaArgs: null
+Stages:
+- As: framework
+  BaseName: overview/overview-convert-framework:0.0.17
+  Commands: null
+  From:
+    Image: overview/overview-convert-framework:0.0.17
+  Name: framework
+  Platform: ""
+  SourceCode: FROM overview/overview-convert-framework:0.0.17 as framework
+- As: os
+  BaseName: alpine:3.10
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: os
+  Platform: ""
+  SourceCode: FROM alpine:3.10 AS os
+- As: test-base
+  BaseName: alpine:3.10
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache bats
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  From:
+    Image: alpine:3.10
+  Name: test-base
+  Platform: ""
+  SourceCode: FROM alpine:3.10 AS test-base
+- As: build
+  BaseName: os
+  Commands:
+  - CmdLine:
+    - true     && apk add --update --no-cache         ca-certificates         curl         bash         meson         glib-dev         glib-static         libidn-dev         musl-dev         util-linux-dev         gcc         gnu-libiconv         gnu-libiconv-dev         make         tar         xz     &&
+      mkdir -p /build && cd /build     && curl -o - --location https://download.gnome.org/sources/gmime/3.2/gmime-3.2.3.tar.xz
+      | tar -Jx     && cd gmime-*     && ./configure && make -j4 install     && cd
+      /build     && curl -o - --location https://download.gnome.org/sources/json-glib/1.4/json-glib-1.4.4.tar.xz
+      | tar -Jx     && cd json-glib-*     && sed -ie 's/json_lib = library/json_lib
+      = static_library/' json-glib/meson.build     && echo "#!/bin/sh\nexec meson
+      test \"$@\"" >/usr/bin/mesontest     && chmod +x /usr/bin/mesontest     && ./configure
+      && make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build/convert-email
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Makefile
+    - Makefile
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/
+    - src/
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: os
+  Name: build
+  Platform: ""
+  SourceCode: FROM os AS build
+- As: base
+  BaseName: os
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: framework
+    Name: copy
+    SourcesAndDest:
+    - /app/run
+    - /app/
+  - Chown: ""
+    From: framework
+    Name: copy
+    SourcesAndDest:
+    - /app/convert-stream-to-mime-multipart
+    - /app/convert
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/convert-email/do-convert-stream-to-mime-multipart
+    - /app/
+  - CmdLine:
+    - /app/run
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: os
+  Name: base
+  Platform: ""
+  SourceCode: FROM os AS base
+- As: dev
+  BaseName: base
+  Commands: null
+  From:
+    Stage:
+      Index: 4
+      Named: base
+  Name: dev
+  Platform: ""
+  SourceCode: FROM base AS dev
+- As: test
+  BaseName: test-base
+  Commands:
+  - Chown: ""
+    From: framework
+    Name: copy
+    SourcesAndDest:
+    - /app/convert-stream-to-mime-multipart
+    - /app/convert
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/convert-email/do-convert-stream-to-mime-multipart
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /test/
+    - /app/test/
+  - CmdLine:
+    - ./test/suite.bats
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "true"
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 2
+      Named: test-base
+  Name: test
+  Platform: ""
+  SourceCode: FROM test-base AS test
+- As: production
+  BaseName: base
+  Commands: null
+  From:
+    Stage:
+      Index: 4
+      Named: base
+  Name: production
+  Platform: ""
+  SourceCode: FROM base AS production

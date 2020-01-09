@@ -1,0 +1,181 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:18.04
+  Commands:
+  - Env:
+    - Key: TZ
+      Value: UTC
+    Name: env
+  - Env:
+    - Key: AUTOVACUUM
+      Value: "on"
+    Name: env
+  - CmdLine:
+    - ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "deb [ allow-insecure=yes ] http://apt.postgresql.org/pub/repos/apt/ bionic-pgdg
+      main" >> /etc/apt/sources.list.d/pgdg.list   && apt-get update   && apt-get
+      install -y apt-transport-https ca-certificates   && apt-get install -y --no-install-recommends
+      --allow-unauthenticated   apache2   apache2-dev   autoconf   build-essential   bzip2   cmake   fonts-noto-cjk   fonts-noto-hinted   fonts-noto-unhinted   clang   gdal-bin   git-core   libagg-dev   libboost-all-dev   libbz2-dev   libcairo-dev   libcairomm-1.0-dev   libexpat1-dev   libfreetype6-dev   libgdal-dev   libgeos++-dev   libgeos-dev   libgeotiff-epsg   libicu-dev   liblua5.3-dev   libmapnik-dev   libpq-dev   libproj-dev   libprotobuf-c0-dev   libtiff5-dev   libtool   libxml2-dev   lua5.3   make   mapnik-utils   nodejs   npm   postgis   postgresql-10   postgresql-10-postgis-2.5   postgresql-10-postgis-2.5-scripts   postgresql-contrib-10   protobuf-c-compiler   python-mapnik   sudo   tar   ttf-unifont   unzip   wget   zlib1g-dev
+      && apt-get clean autoclean && apt-get autoremove --yes && rm -rf /var/lib/{apt,dpkg,cache,log}/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser --disabled-password --gecos "" renderer
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: renderer
+  - CmdLine:
+    - mkdir /home/renderer/src
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/renderer/src
+  - CmdLine:
+    - git clone https://github.com/openstreetmap/osm2pgsql.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/renderer/src/osm2pgsql
+  - CmdLine:
+    - mkdir build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/renderer/src/osm2pgsql/build
+  - CmdLine:
+    - cmake ..   && make -j $(nproc)
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: renderer
+  - CmdLine:
+    - python -c 'import mapnik'
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/renderer/src
+  - CmdLine:
+    - git clone -b switch2osm https://github.com/SomeoneElseOSM/mod_tile.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/renderer/src/mod_tile
+  - CmdLine:
+    - ./autogen.sh   && ./configure   && make -j $(nproc)
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - make -j $(nproc) install   && make -j $(nproc) install-mod_tile   && ldconfig
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: renderer
+  - Name: workdir
+    Path: /home/renderer/src
+  - CmdLine:
+    - git clone https://github.com/gravitystorm/openstreetmap-carto.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/renderer/src/openstreetmap-carto
+  - Name: user
+    User: root
+  - CmdLine:
+    - npm install -g carto
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: renderer
+  - CmdLine:
+    - carto project.mml > mapnik.xml
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/renderer/src/openstreetmap-carto
+  - CmdLine:
+    - scripts/get-shapefiles.py
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - sed -i 's/renderaccount/renderer/g' /usr/local/etc/renderd.conf   && sed -i
+      's/hot/tile/g' /usr/local/etc/renderd.conf
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: renderer
+  - Name: user
+    User: root
+  - CmdLine:
+    - mkdir /var/lib/mod_tile   && chown renderer /var/lib/mod_tile   && mkdir /var/run/renderd   &&
+      chown renderer /var/run/renderd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "LoadModule tile_module /usr/lib/apache2/modules/mod_tile.so" >> /etc/apache2/conf-available/mod_tile.conf   &&
+      a2enconf mod_tile
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - apache.conf
+    - /etc/apache2/sites-available/000-default.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - leaflet-demo.html
+    - /var/www/html/index.html
+  - CmdLine:
+    - ln -sf /proc/1/fd/1 /var/log/apache2/access.log   && ln -sf /proc/1/fd/2 /var/log/apache2/error.log
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - postgresql.custom.conf.tmpl
+    - /etc/postgresql/10/main/
+  - CmdLine:
+    - chown -R postgres:postgres /var/lib/postgresql   && chown postgres:postgres
+      /etc/postgresql/10/main/postgresql.custom.conf.tmpl   && echo "\ninclude 'postgresql.custom.conf'"
+      >> /etc/postgresql/10/main/postgresql.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - /
+  - CmdLine:
+    - /run.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine: []
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "5432"
+    - "80"
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

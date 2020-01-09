@@ -1,0 +1,123 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: perlur/centos-base
+  Commands:
+  - Env:
+    - Key: JORMUNGANDR_VERSION
+      Value: '"v0.8.5"'
+    Name: env
+  - CmdLine:
+    - yum update -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y &&     source
+      $HOME/.cargo/env &&     rustup install stable &&     rustup default stable
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum install -y git gcc openssl-devel
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src
+  - CmdLine:
+    - git clone --recurse-submodules https://github.com/input-output-hk/jormungandr
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: jormungandr
+  - CmdLine:
+    - git fetch --tags
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git checkout $JORMUNGANDR_VERSION
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git submodule update --init --recursive
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - source $HOME/.cargo/env && cargo install --root /usr/local --path jormungandr
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - source $HOME/.cargo/env && cargo install --root /usr/local --path jcli
+    Name: run
+    PrependShell: true
+  From:
+    Image: perlur/centos-base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM perlur/centos-base AS builder
+- BaseName: perlur/centos-base
+  Commands:
+  - Maintainer: '"Mark Stopka <mark.stopka@perlur.cloud>"'
+    Name: maintainer
+  - Env:
+    - Key: SERVICE_NAME
+      Value: '"cardano-jormungandr"'
+    Name: env
+  - CmdLine:
+    - yum update -y &&     yum clean all &&     dnf clean all &&     rm -rf /var/cache/yum
+      &&     rm -rf /var/cache/dnf
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3000"
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/jormungandr
+    - /usr/local/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/jcli
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - usr/local/bin/*
+    - /usr/local/bin/
+  - CmdLine:
+    - mkdir -p /srv/cardano/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -c "Jormungandr node user"             -d /srv/cardano/jormungandr/             -m             -r             -s
+      /bin/nologin             jormungandr
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: jormungandr
+  - CmdLine:
+    - mkdir /srv/cardano/jormungandr/{etc,log,storage}/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /srv/cardano/jormungandr/etc/secrets/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /srv/cardano/jormungandr/
+  - CmdLine:
+    - jcli auto-completion bash ~/etc/ && echo '. ~/etc/jcli.bash' >> .bash_profile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: perlur/centos-base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM perlur/centos-base

@@ -1,0 +1,199 @@
+MetaArgs: null
+Stages:
+- As: dl-pandoc
+  BaseName: alpine
+  Commands:
+  - Name: workdir
+    Path: /work
+  - CmdLine:
+    - apk update && apk add jq wget unzip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://api.github.com/repos/jgm/pandoc/releases/latest -O - | jq -r '.assets[]
+      | select(.name | index("amd64.deb")) | .browser_download_url' | wget -i - --quiet
+      -O pandoc.deb
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: dl-pandoc
+  Platform: ""
+  SourceCode: FROM alpine as dl-pandoc
+- As: dl-wkhtmltopdf
+  BaseName: alpine
+  Commands:
+  - Name: workdir
+    Path: /work
+  - CmdLine:
+    - apk update && apk add jq wget unzip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://api.github.com/repos/wkhtmltopdf/wkhtmltopdf/releases/latest -O
+      - | jq -r '.assets[] | select(.name | index("stretch_amd64.deb")) | .browser_download_url'
+      | wget -i - --quiet -O wkhtmltopdf.deb
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: dl-wkhtmltopdf
+  Platform: ""
+  SourceCode: FROM alpine as dl-wkhtmltopdf
+- As: dl-plantuml
+  BaseName: alpine
+  Commands:
+  - Name: workdir
+    Path: /work
+  - CmdLine:
+    - apk update && apk add jq wget unzip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget "https://downloads.sourceforge.net/project/plantuml/plantuml.jar?r=http%3A%2F%2Fplantuml.com%2Fstarting&ts=1538667739&use_mirror=jaist"
+      -O plantuml.jar
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: dl-plantuml
+  Platform: ""
+  SourceCode: FROM alpine as dl-plantuml
+- As: dl-notofont
+  BaseName: alpine
+  Commands:
+  - Name: workdir
+    Path: /work
+  - CmdLine:
+    - apk update && apk add jq wget unzip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://noto-website.storage.googleapis.com/pkgs/Noto-unhinted.zip   &&
+      unzip -d NotoSansJapanese Noto-unhinted.zip   && rm Noto-unhinted.zip
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: dl-notofont
+  Platform: ""
+  SourceCode: FROM alpine as dl-notofont
+- As: dl-pip
+  BaseName: alpine
+  Commands:
+  - Name: workdir
+    Path: /work
+  - CmdLine:
+    - apk update && apk add jq wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://bootstrap.pypa.io/get-pip.py
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: dl-pip
+  Platform: ""
+  SourceCode: FROM alpine as dl-pip
+- BaseName: debian:stretch
+  Commands:
+  - CmdLine:
+    - mkdir -p /usr/share/man/man1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y   gcc   python3   graphviz   default-jdk   libfontconfig   fontconfig   fonts-ipafont   task-japanese   libssl1.0-dev   libxrender1   libxtst6   libjpeg62-turbo   make   openssh-client   rsync   locales   xz-utils   xfonts-75dpi   xfonts-base   &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: dl-pandoc
+    Name: copy
+    SourcesAndDest:
+    - /work
+    - /root
+  - CmdLine:
+    - dpkg -i /root/pandoc.deb  && rm /root/pandoc.deb
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: dl-wkhtmltopdf
+    Name: copy
+    SourcesAndDest:
+    - /work
+    - /root
+  - CmdLine:
+    - dpkg -i /root/wkhtmltopdf.deb   && rm -rf /root/wkhtmltopdf.deb
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: dl-plantuml
+    Name: copy
+    SourcesAndDest:
+    - /work
+    - /root
+  - CmdLine:
+    - cp /root/plantuml.jar /usr/local/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "#!/bin/bash\n  export LANG=ja_JP.UTF-8; \n  /usr/bin/java -Djava.io.tmpdir=/var/tmp
+      -Djava.awt.headless=true -jar /usr/local/bin/plantuml.jar -charset UTF-8 \${@}\n  "
+      >> /usr/bin/plantuml   && chmod +x /usr/bin/plantuml
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: dl-pip
+    Name: copy
+    SourcesAndDest:
+    - /work
+    - /root
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pandoc-plantuml.py
+    - /root
+  - CmdLine:
+    - python3 /root/get-pip.py   && pip install pandocfilters   && rm /root/get-pip.py   &&
+      ln -s /usr/bin/python3 /usr/bin/python
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: dl-notofont
+    Name: copy
+    SourcesAndDest:
+    - /work/NotoSansJapanese
+    - /usr/share/fonts/opentype/NotoSansJapanese
+  - CmdLine:
+    - fc-cache -fv
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "ja_JP.UTF-8 UTF-8" > /etc/locale.gen   && locale-gen ja_JP.UTF-8
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: ja_JP.UTF-8
+    Name: env
+  - Env:
+    - Key: LANGUAGE
+      Value: ja_JP:en
+    Name: env
+  - Env:
+    - Key: LC_ALL
+      Value: ja_JP.UTF-8
+    Name: env
+  - Name: workdir
+    Path: /source
+  - CmdLine:
+    - ""
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch

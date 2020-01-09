@@ -1,0 +1,88 @@
+MetaArgs: null
+Stages:
+- BaseName: python:3.5-alpine
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - requirements/
+    - /requirements/
+  - CmdLine:
+    - "set -ex \t&& apk add --no-cache --virtual .build-deps \t\tgcc \t\tg++ \t\tmake
+      \t\tlibc-dev \t\tmusl-dev \t\tlinux-headers \t\tpcre-dev \t\tpostgresql-dev
+      \t\tlibjpeg-turbo-dev \t&& pyvenv /venv \t&& /venv/bin/pip install -U pip \t&&
+      LIBRARY_PATH=/lib:/usr/lib /bin/sh -c \"/venv/bin/pip install -r /requirements/production.txt\"
+      \t&& runDeps=\"$( \t\tscanelf --needed --nobanner --recursive /venv \t\t\t|
+      awk '{ gsub(/,/, \"\\nso:\", $2); print \"so:\" $2 }' \t\t\t| sort -u \t\t\t|
+      xargs -r apk info --installed \t\t\t| sort -u \t)\" \t&& apk add --virtual .python-rundeps
+      $runDeps \t&& apk del .build-deps"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache postgresql-client
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /code/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /code/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /code/
+  - Name: expose
+    Ports:
+    - "8000"
+  - Env:
+    - Key: DJANGO_SETTINGS_MODULE
+      Value: bakerydemo.settings.production
+    - Key: DJANGO_DEBUG
+      Value: "off"
+    Name: env
+  - Env:
+    - Key: UWSGI_VIRTUALENV
+      Value: /venv
+    - Key: UWSGI_WSGI_FILE
+      Value: bakerydemo/wsgi_production.py
+    - Key: UWSGI_HTTP
+      Value: :8000
+    - Key: UWSGI_MASTER
+      Value: "1"
+    - Key: UWSGI_WORKERS
+      Value: "2"
+    - Key: UWSGI_THREADS
+      Value: "8"
+    - Key: UWSGI_UID
+      Value: "1000"
+    - Key: UWSGI_GID
+      Value: "2000"
+    Name: env
+  - CmdLine:
+    - DATABASE_URL=postgres://none REDIS_URL=none /venv/bin/python manage.py collectstatic
+      --noinput
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R 1000:2000 /code/bakerydemo/media
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /code/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /venv/bin/uwsgi
+    - --http-auto-chunked
+    - --http-keepalive
+    - --static-map
+    - /media/=/code/bakerydemo/media/
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3.5-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.5-alpine

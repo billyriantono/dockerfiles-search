@@ -1,0 +1,127 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: python:3.7-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Justin Mayer <https://justinmayer.com/>"'
+    Name: label
+  From:
+    Image: python:3.7-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM python:3.7-alpine as base
+- As: pydeps
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - mkdir /install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /install
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - /requirements.txt
+  - CmdLine:
+    - apk add --no-cache libpq postgresql-libs &&     apk add --no-cache --virtual
+      .build-deps gcc libffi-dev musl-dev postgresql-dev &&     python3 -m pip install
+      --install-option="--prefix=/install" -r /requirements.txt --no-cache-dir &&     apk
+      --purge del .build-deps
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: pydeps
+  Platform: ""
+  SourceCode: FROM base as pydeps
+- As: assets
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apk add --no-cache make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /assets/static
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /assets
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Makefile
+    - /assets/Makefile
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts
+    - /assets/scripts
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - _static
+    - /assets/_static
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: assets
+  Platform: ""
+  SourceCode: FROM base as assets
+- BaseName: base
+  Commands:
+  - Chown: ""
+    From: pydeps
+    Name: copy
+    SourcesAndDest:
+    - /install
+    - /usr/local
+  - CmdLine:
+    - apk --no-cache add libpq
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /app
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: assets
+    Name: copy
+    SourcesAndDest:
+    - /assets/static
+    - /app/static
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - gunicorn
+    - app:app
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

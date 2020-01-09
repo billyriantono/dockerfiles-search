@@ -1,0 +1,155 @@
+MetaArgs:
+- DefaultValue: https://sourceforge.net/projects/lportal/files/Liferay%20Portal/7.2.1%20GA2/liferay-ce-portal-tomcat-7.2.1-ga2-20191111141448326.7z
+  Key: LIFERAY_URL
+  ProvidedValue: null
+  Value: https://sourceforge.net/projects/lportal/files/Liferay%20Portal/7.2.1%20GA2/liferay-ce-portal-tomcat-7.2.1-ga2-20191111141448326.7z
+- DefaultValue: https://github.com/AdoptOpenJDK/openjdk11-binaries/releases/download/jdk-11.0.3%2B7/OpenJDK11U-jdk_x64_linux_hotspot_11.0.3_7.tar.gz
+  Key: JDK_URL
+  ProvidedValue: null
+  Value: https://github.com/AdoptOpenJDK/openjdk11-binaries/releases/download/jdk-11.0.3%2B7/OpenJDK11U-jdk_x64_linux_hotspot_11.0.3_7.tar.gz
+- DefaultValue: /opt/script
+  Key: SCRIPT_HOME
+  ProvidedValue: null
+  Value: /opt/script
+- DefaultValue: /opt/tls
+  Key: TLS_HOME
+  ProvidedValue: null
+  Value: /opt/tls
+- DefaultValue: changeit
+  Key: TLS_PWD
+  ProvidedValue: null
+  Value: changeit
+Stages:
+- As: liferay-setup
+  BaseName: debian:stable-slim
+  Commands:
+  - Maintainer: Cristiano Toncelli <ct.livorno@gmail.com>
+    Name: maintainer
+  - Key: LIFERAY_URL
+    Name: arg
+    Value: null
+  - Key: JDK_URL
+    Name: arg
+    Value: null
+  - Key: SCRIPT_HOME
+    Name: arg
+    Value: null
+  - Key: TLS_HOME
+    Name: arg
+    Value: null
+  - CmdLine:
+    - "apt-get update && \tapt-get install -y curl dtrx && \tapt-get clean"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd /tmp && \trm -fr * && \tcurl -o \"${LIFERAY_URL##*/}\" -k -L -C - \"${LIFERAY_URL}\"
+      && \tdtrx -n \"${LIFERAY_URL##*/}\" && \trm \"${LIFERAY_URL##*/}\" && \tmv $(ls
+      -d /tmp/liferay*/liferay*) /opt && \tln -s $(ls -d /opt/liferay*) /var/liferay
+      && \tln -s $(ls -d /opt/liferay*/tomcat*) /var/tomcat && \tmkdir -p /var/liferay/deploy
+      && \tmkdir -p ${SCRIPT_HOME} && \tmkdir -p ${TLS_HOME}"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf
+    - tmp/conf
+  - CmdLine:
+    - "mv /tmp/conf/liferay/* /var/liferay && \tmv /tmp/conf/log4j/* /var/tomcat/webapps/ROOT/WEB-INF/classes/META-INF/
+      && \tmv /tmp/conf/tomcat/* /var/tomcat/conf"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - script/*
+    - ${SCRIPT_HOME}/
+  - CmdLine:
+    - chmod -R +x ${SCRIPT_HOME}/*.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd /tmp && \trm -fr * && \tcurl -o \"${JDK_URL##*/}\" -k -L -C - \"${JDK_URL}\"
+      && \tdtrx -n \"${JDK_URL##*/}\" && \trm \"${JDK_URL##*/}\" && \tmkdir -p /usr/lib/jvm
+      && \tmv */* /usr/lib/jvm"
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stable-slim
+  Name: liferay-setup
+  Platform: ""
+  SourceCode: FROM debian:stable-slim as liferay-setup
+- BaseName: debian:stable-slim
+  Commands:
+  - CmdLine:
+    - "mkdir -p /usr/share/man/man1 && \tapt-get update && \tapt-get install -y openssh-server
+      libfontconfig1 cron && \tapt-get clean"
+    Name: run
+    PrependShell: true
+  - Chown: root:root
+    From: liferay-setup
+    Name: copy
+    SourcesAndDest:
+    - /opt/
+    - /opt/
+  - Chown: root:root
+    From: liferay-setup
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/jvm/
+    - /usr/lib/jvm/
+  - Key: SCRIPT_HOME
+    Name: arg
+    Value: null
+  - Key: TLS_HOME
+    Name: arg
+    Value: null
+  - Key: TLS_PWD
+    Name: arg
+    Value: null
+  - CmdLine:
+    - "echo \"root:Docker!\" | chpasswd &&     echo -e \"\\nexport TERM=xterm\" >>
+      ~/.bashrc && \techo >> /etc/profile && \techo \"export LIFERAY_HOME=$(ls -d
+      /opt/liferay*)\" >> /etc/profile && \techo \"export TOMCAT_HOME=$(ls -d /opt/liferay*/tomcat*)\"
+      >> /etc/profile && \techo \"export SCRIPT_HOME=$SCRIPT_HOME\" >> /etc/profile
+      && \techo \"export TLS_HOME=$TLS_HOME\" >> /etc/profile && \techo \"export TLS_PWD=$TLS_PWD\"
+      >> /etc/profile && \tln -s $(ls -d /opt/liferay*) /var/liferay && \tln -s $(ls
+      -d /opt/liferay*/tomcat*) /var/tomcat && \tfor x in $(ls -d /usr/lib/jvm/*)/bin/*;
+      do update-alternatives --install /usr/bin/$(basename $x) $(basename $x) $x 100;
+      done && \tfor x in $(ls -d /usr/lib/jvm/*)/bin/*; do update-alternatives --set
+      $(basename $x) $x; done && \tcrontab /opt/script/crontab.txt"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "echo \"liferay.home=$(ls -d /opt/liferay*)\" >> /var/liferay/portal-ext.properties
+      && \tsed -i 's@${TLS_HOME}@'\"${TLS_HOME}\"'@' /var/tomcat/conf/server.xml &&
+      \tsed -i 's@${TLS_PWD}@'\"${TLS_PWD}\"'@' /var/tomcat/conf/server.xml && \tkeytool
+      -genkey -alias tomcat -keyalg RSA -storepass ${TLS_PWD} -keypass ${TLS_PWD}
+      -dname \"CN=CT, OU=Dev, O=CtLiv, L=LI, ST=LI, C=IT\" -keystore ${TLS_HOME}/.keystore
+      -storetype pkcs12"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "1099"
+    - "11311"
+    - "22"
+    - "8080"
+    - "8443"
+    - "8999"
+  - CmdLine:
+    - /opt/script/wait-for-it.sh
+    - lep-db:3306
+    - -t
+    - "30"
+    - --
+    - /opt/script/run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stable-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stable-slim

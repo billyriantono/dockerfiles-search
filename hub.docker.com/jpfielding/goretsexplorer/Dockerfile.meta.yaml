@@ -1,0 +1,112 @@
+MetaArgs: null
+Stages:
+- As: golangbuilder
+  BaseName: golang:1.10
+  Commands:
+  - CmdLine:
+    - curl https://glide.sh/get | sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/jpfielding/gorets
+  - Name: workdir
+    Path: /go/src/github.com/jpfielding/gorets
+  - CmdLine:
+    - make vendor build-explorer-svc
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10
+  Name: golangbuilder
+  Platform: ""
+  SourceCode: FROM golang:1.10 as golangBuilder
+- As: nodebuilder
+  BaseName: node:8.9
+  Commands:
+  - Key: HEADERS_CONFIG
+    Name: arg
+    Value: '{}'
+  - Key: CONFIG_ENV
+    Name: arg
+    Value: docker
+  - Key: CONFIG_DOCKER
+    Name: arg
+    Value: '"module.exports = {   staticAssetPath: ''.'',   api: '''', };"'
+  - CmdLine:
+    - echo ${CONFIG_ENV} "\n" ${CONFIG_DOCKER} "\n" ${HEADERS_CONFIG}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /gorets
+  - Name: workdir
+    Path: /gorets/
+  - CmdLine:
+    - echo ${CONFIG_DOCKER} >> web/explorer/client/config/docker.js
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make build-explorer-client
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo ${HEADERS_CONFIG} >> bin/explorer/config.json
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8.9
+  Name: nodebuilder
+  Platform: ""
+  SourceCode: FROM node:8.9 as nodeBuilder
+- BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk --update add ca-certificates
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - mkdir -p /opt/explorer
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: golangBuilder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/jpfielding/gorets/bin/explorer/
+    - /opt/explorer/
+  - Chown: ""
+    From: nodeBuilder
+    Name: copy
+    SourcesAndDest:
+    - /gorets/bin/explorer/
+    - /opt/explorer/
+  - CmdLine:
+    - chmod +x /opt/explorer/explorer
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/explorer
+  - CmdLine:
+    - /bin/sh
+    - -c
+    - ./explorer -port 8080 -config ./config.json -react /opt/explorer
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine: []
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

@@ -1,0 +1,88 @@
+MetaArgs: null
+Stages:
+- As: build-gosu
+  BaseName: alpine:3.9.4
+  Commands:
+  - CmdLine:
+    - apk --no-cache add "curl=7.64.0-r2"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --location --silent --show-error --out /gosu     https://github.com/tianon/gosu/releases/download/1.11/gosu-amd64
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /gosu
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9.4
+  Name: build-gosu
+  Platform: ""
+  SourceCode: FROM alpine:3.9.4 AS build-gosu
+- As: build-app
+  BaseName: golang:1.12.5-alpine3.9
+  Commands:
+  - Env:
+    - Key: SINGULARITY_VERESION
+      Value: v3.2.1
+    Name: env
+  - CmdLine:
+    - apk --no-cache add "build-base=0.5-r1" "linux-headers=4.18.13-r1"        "openssl-dev=1.1.1b-r1"
+      "util-linux-dev=2.33-r0" "gawk=4.2.1-r0"        "git=2.20.1-r0"     && mkdir
+      -p /go/src/github.com/sylabs     && cd /go/src/github.com/sylabs     && git
+      clone --depth=1 -b "${SINGULARITY_VERESION}" https://github.com/sylabs/singularity.git     &&
+      cd singularity     && ./mconfig     && cd builddir     && make "-j$(grep -c
+      ^processor /proc/cpuinfo 2>/dev/null || 1)"     && make install     && rm -rf
+      /usr/local/go /usr/local/etc/bash_completion.d
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.5-alpine3.9
+  Name: build-app
+  Platform: ""
+  SourceCode: FROM golang:1.12.5-alpine3.9 AS build-app
+- BaseName: alpine:3.9.4
+  Commands:
+  - CmdLine:
+    - apk --no-cache add "bash=4.4.19-r1" "ca-certificates=20190108-r0"        "squashfs-tools=4.3-r5"
+      "libseccomp=2.3.3-r1"     && rm -rf /usr/share/terminfo /lib/apk /etc/apk /etc/terminfo
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-app
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /usr/local
+  - Chown: ""
+    From: build-gosu
+    Name: copy
+    SourcesAndDest:
+    - /gosu
+    - /usr/local/bin/gosu
+  - Name: workdir
+    Path: /work
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /
+  - CmdLine:
+    - chmod +x /entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9.4
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9.4

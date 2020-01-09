@@ -1,0 +1,104 @@
+MetaArgs: null
+Stages:
+- BaseName: python:3.7-slim
+  Commands:
+  - CmdLine:
+    - set -ex     && RUN_DEPS="         libexpat1         libjpeg62-turbo         libpcre3         libpq5         mime-support         postgresql-client         procps         zlib1g     "     &&
+      seq 1 8 | xargs -I{} mkdir -p /usr/share/man/man{}     && apt-get update &&
+      apt-get install -y --no-install-recommends $RUN_DEPS     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - requirements/
+    - /requirements/
+  - CmdLine:
+    - set -ex     && BUILD_DEPS="         build-essential         git         libexpat1-dev         libjpeg62-turbo-dev         libpcre3-dev         libpq-dev         zlib1g-dev     "     &&
+      apt-get update && apt-get install -y --no-install-recommends $BUILD_DEPS     &&
+      python3.7 -m venv /venv     && /venv/bin/pip install -U pip     && /venv/bin/pip
+      install --no-cache-dir -r /requirements/production.txt     && apt-get purge
+      -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false $BUILD_DEPS     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /code/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /code/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /code/
+  - Name: expose
+    Ports:
+    - "8000"
+  - Env:
+    - Key: DJANGO_SETTINGS_MODULE
+      Value: bakerydemo.settings.production
+    - Key: DJANGO_DEBUG
+      Value: "off"
+    Name: env
+  - Env:
+    - Key: UWSGI_WSGI_FILE
+      Value: bakerydemo/wsgi_production.py
+    Name: env
+  - Env:
+    - Key: UWSGI_VIRTUALENV
+      Value: /venv
+    - Key: UWSGI_HTTP
+      Value: :8000
+    - Key: UWSGI_MASTER
+      Value: "1"
+    - Key: UWSGI_HTTP_AUTO_CHUNKED
+      Value: "1"
+    - Key: UWSGI_HTTP_KEEPALIVE
+      Value: "1"
+    - Key: UWSGI_UID
+      Value: "1000"
+    - Key: UWSGI_GID
+      Value: "2000"
+    - Key: UWSGI_LAZY_APPS
+      Value: "1"
+    - Key: UWSGI_WSGI_ENV_BEHAVIOR
+      Value: holy
+    Name: env
+  - Env:
+    - Key: UWSGI_WORKERS
+      Value: "2"
+    - Key: UWSGI_THREADS
+      Value: "4"
+    Name: env
+  - Env:
+    - Key: UWSGI_STATIC_MAP
+      Value: '"/media/=/code/bakerydemo/media/"'
+    Name: env
+  - CmdLine:
+    - DATABASE_URL=postgres://none REDIS_URL=none /venv/bin/python manage.py collectstatic
+      --noinput
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /code/bakerydemo/media/images && chown -R 1000:2000 /code/bakerydemo/media
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /code/bakerydemo/media/images/
+  - CmdLine:
+    - /code/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /venv/bin/uwsgi
+    - --show-config
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3.7-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.7-slim

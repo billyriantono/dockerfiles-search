@@ -1,0 +1,13 @@
+FROM resin/raspberry-pi-alpine-node:9.11-slim
+
+WORKDIR /usr/src/app
+
+COPY package*.json ./
+
+RUN npm install
+
+COPY . .
+
+RUN npm run build
+
+CMD [ "node",  "./dist/inpie.js"]

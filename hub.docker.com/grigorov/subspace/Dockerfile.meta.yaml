@@ -1,0 +1,116 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.13.3
+  Commands:
+  - CmdLine:
+    - apt-get update     && apt-get install -y git     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/grigorov/subspace
+  - CmdLine:
+    - go get -v     github.com/go-bindata/go-bindata/...
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.sum
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.go'
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - static
+    - ./static
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates
+    - ./templates
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - email
+    - ./email
+  - Key: BUILD_VERSION
+    Name: arg
+    Value: unknown
+  - Env:
+    - Key: GODEBUG
+      Value: '"netdns=go http2server=0"'
+    Name: env
+  - Env:
+    - Key: GOPATH
+      Value: '"/go"'
+    Name: env
+  - CmdLine:
+    - go-bindata --pkg main static/... templates/... email/...     && go fmt     &&
+      go vet --all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64     go build -v --compiler gc --ldflags
+      "-extldflags -static -s -w -X main.version=${BUILD_VERSION}" -o /usr/bin/subspace-linux-amd64
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13.3
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.13.3 AS builder
+- BaseName: phusion/baseimage:0.11
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/subspace-linux-amd64
+    - /usr/bin/subspace
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/local/bin/entrypoint.sh
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - chmod +x /usr/bin/subspace /usr/local/bin/entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update     && apt-get install -y iproute2 iptables socat
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /sbin/my_init
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: phusion/baseimage:0.11
+  Name: ""
+  Platform: ""
+  SourceCode: FROM phusion/baseimage:0.11

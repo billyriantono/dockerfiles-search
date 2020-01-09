@@ -1,0 +1,69 @@
+MetaArgs: null
+Stages:
+- As: buildtrigger
+  BaseName: grafana/loki
+  Commands: null
+  From:
+    Image: grafana/loki
+  Name: buildtrigger
+  Platform: ""
+  SourceCode: FROM grafana/loki as buildtrigger
+- As: gobuild
+  BaseName: i386/golang:1.13-buster
+  Commands:
+  - Env:
+    - Key: GOPATH
+      Value: /go/src/app
+    Name: env
+  - Name: workdir
+    Path: /go/src/app
+  - CmdLine:
+    - go get github.com/grafana/loki; exit 0
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/app/src/github.com/grafana/loki
+  - CmdLine:
+    - go build ./cmd/loki
+    Name: run
+    PrependShell: true
+  From:
+    Image: i386/golang:1.13-buster
+  Name: gobuild
+  Platform: ""
+  SourceCode: FROM i386/golang:1.13-buster as gobuild
+- As: loki
+  BaseName: i386/debian:stretch-slim
+  Commands:
+  - CmdLine:
+    - groupadd -g 3100 loki && useradd -u 3100 --no-create-home -s /bin/false --no-log-init
+      -g loki loki
+    Name: run
+    PrependShell: true
+  - Chown: 3100:3100
+    From: gobuild
+    Name: copy
+    SourcesAndDest:
+    - /go/src/app/src/github.com/grafana/loki/loki
+    - /loki/loki
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - loki-local-config.yaml
+    - /loki/loki-local-config.yaml
+  - Name: user
+    User: 3100:3100
+  - Name: expose
+    Ports:
+    - "3100"
+  - CmdLine:
+    - /loki/loki
+    - -config.file=/loki/loki-local-config.yaml
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: i386/debian:stretch-slim
+  Name: loki
+  Platform: ""
+  SourceCode: FROM i386/debian:stretch-slim as loki

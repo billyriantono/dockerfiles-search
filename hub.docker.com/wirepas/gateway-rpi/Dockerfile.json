@@ -1,0 +1,454 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "DOCKER_BASE",
+      "DefaultValue": "wirepas/base:1.1-ubuntu",
+      "ProvidedValue": null,
+      "Value": "wirepas/base:1.1-ubuntu"
+    },
+    {
+      "Key": "CROSS_BUILD_START_CMD",
+      "DefaultValue": ":",
+      "ProvidedValue": null,
+      "Value": ":"
+    },
+    {
+      "Key": "CROSS_BUILD_END_CMD",
+      "DefaultValue": ":",
+      "ProvidedValue": null,
+      "Value": ":"
+    },
+    {
+      "Key": "GIT_MANIFEST_FILE",
+      "DefaultValue": "gateway.xml",
+      "ProvidedValue": null,
+      "Value": "gateway.xml"
+    },
+    {
+      "Key": "GIT_MANIFEST_URL",
+      "DefaultValue": "https://github.com/wirepas/manifest.git",
+      "ProvidedValue": null,
+      "Value": "https://github.com/wirepas/manifest.git"
+    },
+    {
+      "Key": "GIT_MANIFEST_BRANCH",
+      "DefaultValue": "master",
+      "ProvidedValue": null,
+      "Value": "master"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "${DOCKER_BASE}",
+      "SourceCode": "FROM ${DOCKER_BASE} as builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "${DOCKER_BASE}"
+      },
+      "Commands": [
+        {
+          "Key": "DOCKER_BASE",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "GIT_MANIFEST_FILE",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "GIT_MANIFEST_URL",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "GIT_MANIFEST_BRANCH",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "CmdLine": [
+            "${CROSS_BUILD_START_CMD}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app_build"
+        },
+        {
+          "CmdLine": [
+            "apt-get update      \u0026\u0026 apt-get install -y --no-install-recommends git curl python ssh     \u0026\u0026 rm -rf /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "curl https://storage.googleapis.com/git-repo-downloads/repo \u003e /usr/local/bin/repo     \u0026\u0026 chmod a+x /usr/local/bin/repo     \u0026\u0026 repo init -u ${GIT_MANIFEST_URL}                  -m ${GIT_MANIFEST_FILE}                  -b ${GIT_MANIFEST_BRANCH}                  --no-clone-bundle     \u0026\u0026 repo sync"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "echo \"DOCKER_BASE=${DOCKER_BASE}\" \u003e\u003e /app_build/manifest"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd /app_build/sink_service/     \u0026\u0026 make clean     \u0026\u0026 make     \u0026\u0026 cd c-mesh-api     \u0026\u0026 echo \"LXGW_BUILD=$(date -u +'%Y-%m-%dT%H:%M:%SZ')\"  \u003e\u003e /app_build/manifest     \u0026\u0026 echo \"LXGW_C_MESH_API_HASH=$(git log -n1 --pretty=%h)\" \u003e\u003e /app_build/manifest"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd /app_build/python_transport/     \u0026\u0026 echo \"LXGW_SERVICES_HASH=$(git log -n1 --pretty=%h)\" \u003e\u003e /app_build/manifest     \u0026\u0026 echo \"LXGW_VERSION=$(\u003c wirepas_gateway/__about__.py awk '/__version__/{print $NF}'| tr -d '\\\"')\" \u003e\u003e /app_build/manifest     \u0026\u0026 bash ./utils/generate_wheel.sh"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "${CROSS_BUILD_END_CMD}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "wm-lxgw",
+      "BaseName": "${DOCKER_BASE}",
+      "SourceCode": "FROM ${DOCKER_BASE} as wm-lxgw",
+      "Platform": "",
+      "As": "wm-lxgw",
+      "From": {
+        "Image": "${DOCKER_BASE}"
+      },
+      "Commands": [
+        {
+          "Name": "user",
+          "User": "root"
+        },
+        {
+          "CmdLine": [
+            "${CROSS_BUILD_START_CMD}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "SERVICE_HOME",
+              "Value": "\"${WM_HOME}/gateway\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "SINK_SERVICE",
+              "Value": "\"${SERVICE_HOME}/sink_service\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "TRANSPORT_SERVICE",
+              "Value": "\"${SERVICE_HOME}/transport_service\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Key": "WM_TRANSPORT_PKG",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Env": [
+            {
+              "Key": "WM_TRANSPORT_PKG",
+              "Value": "${WM_TRANSPORT_PKG:-\"${TRANSPORT_SERVICE}/wirepas_gateway-*.tar.gz\"}"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app_build/python_transport/requirements.txt",
+            "\"${TRANSPORT_SERVICE}/\""
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app_build/python_transport/dist/*",
+            "\"${TRANSPORT_SERVICE}/\""
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app_build/python_transport/wirepas_gateway/wirepas_certs/extwirepas.pem",
+            "/etc/extwirepas.pem"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app_build/sink_service/build/sinkService",
+            "/usr/local/bin/sinkService"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app_build/sink_service/com.wirepas.sink.conf",
+            "/etc/dbus-1/system.d/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app_build/manifest",
+            "\"${SERVICE_HOME}/manifest\""
+          ]
+        },
+        {
+          "CmdLine": [
+            "pip3 install --upgrade pip"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "pip3 install --no-cache-dir -r \"${TRANSPORT_SERVICE}/requirements.txt\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "pip3 install --no-cache-dir ${WM_TRANSPORT_PKG}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "rm -rf \"${WM_HOME}\"/.cache \u0026\u0026 chown \"${WM_USER}\":\"${WM_USER}\" -R \"${WM_HOME}\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app_build/container/common/docker-entrypoint.sh",
+            "/usr/local/bin/docker-entrypoint.sh"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app_build/container/common/generate_settings.sh",
+            "\"${TRANSPORT_SERVICE}/generate_settings.sh\""
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app_build/container/common/wm_transport_service.template",
+            "\"${TRANSPORT_SERVICE}/wm_transport_service.template\""
+          ]
+        },
+        {
+          "CmdLine": [
+            "${CROSS_BUILD_END_CMD}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "${WM_HOME}"
+        },
+        {
+          "Name": "user",
+          "User": "${WM_USER}"
+        },
+        {
+          "Key": "BUILD_DATE",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "DOCKER_BASE",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "IMAGE_NAME",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "GIT_MANIFEST_FILE",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "GIT_MANIFEST_URL",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "GIT_MANIFEST_BRANCH",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "VERSION",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Labels": [
+            {
+              "Key": "com.wirepas.image.base",
+              "Value": "\"${DOCKER_BASE}\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "com.wirepas.source.manifest",
+              "Value": "\"${GIT_MANIFEST_URL}/${GIT_MANIFEST_FILE}#${GIT_MANIFEST_BRANCH}\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "org.opencontainers.image.created",
+              "Value": "\"${BUILD_DATE}\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "org.opencontainers.image.licenses",
+              "Value": "\"Apache-2.0\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "org.opencontainers.image.ref.name",
+              "Value": "\"${IMAGE_NAME}\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "org.opencontainers.image.schema-version",
+              "Value": "\"1.0\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "org.opencontainers.image.title",
+              "Value": "\"Wirepas gateway\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "org.opencontainers.image.url",
+              "Value": "\"https://github.com/wirepas/gateway\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "org.opencontainers.image.vendor",
+              "Value": "\"Wirepas Ltd\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "org.opencontainers.image.version",
+              "Value": "\"${VERSION}\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "CmdLine": [
+            "docker-entrypoint.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "CmdLine": [
+            "sink"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

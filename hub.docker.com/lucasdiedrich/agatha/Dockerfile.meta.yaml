@@ -1,0 +1,144 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: alpine:3.8
+  Commands:
+  - Name: workdir
+    Path: /
+  - Env:
+    - Key: MASTER
+      Value: '"https://softwarepublico.gov.br/gitlab/agatha/agatha/repository/archive.zip?ref=master"'
+    Name: env
+  - CmdLine:
+    - apk add --update --no-cache unzip curl &&     curl $MASTER --output archive.zip
+      &&     unzip archive.zip
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.8
+  Name: base
+  Platform: ""
+  SourceCode: FROM alpine:3.8 AS base
+- As: frontend
+  BaseName: node:6-alpine
+  Commands:
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: base
+    Name: copy
+    SourcesAndDest:
+    - /agatha.git
+    - /agatha.git
+  - CmdLine:
+    - apk add --update --no-cache make gcc g++ python git &&     cd /agatha.git/codigo-fonte/cliente/     &&
+      mkdir bower_components &&     npm install &&     npm install -g bower && bower
+      install --allow-root &&     npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:6-alpine
+  Name: frontend
+  Platform: ""
+  SourceCode: FROM node:6-alpine AS frontend
+- As: backend
+  BaseName: maven:3-jdk-8-alpine
+  Commands:
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: base
+    Name: copy
+    SourcesAndDest:
+    - /agatha.git
+    - /agatha.git
+  - CmdLine:
+    - cd /agatha.git/codigo-fonte/servico/ &&     mvn -Dmaven.test.failure.ignore
+      -U clean package && ls -lah
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3-jdk-8-alpine
+  Name: backend
+  Platform: ""
+  SourceCode: FROM maven:3-jdk-8-alpine AS backend
+- BaseName: openjdk:8-jdk-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Lucas G. Diedrich <lucas.diedrich@gmail.com>"'
+    Name: label
+  - Name: workdir
+    Path: /
+  - Env:
+    - Key: JAVA_OPTS
+      Value: '"-server -Xmx2G -XX:MinHeapFreeRatio=20 -XX:MaxHeapFreeRatio=40 -XX:+UseConcMarkSweepGC
+        -XX:+CMSParallelRemarkEnabled -XX:+UseCMSInitiatingOccupancyOnly -XX:CMSInitiatingOccupancyFraction=70"'
+    - Key: CONF_CHECK
+      Value: '"1"'
+    - Key: DB_CHECK
+      Value: '"1"'
+    - Key: DB_HOST
+      Value: '"agathadb"'
+    - Key: DB_NAME
+      Value: '"agatha"'
+    - Key: DB_USER
+      Value: '"gestaoriscos"'
+    - Key: DB_PASSWORD
+      Value: '"gestaoriscos"'
+    - Key: ECIDADAO_ENV
+      Value: '"PROD"'
+    - Key: ECIDADAO_SERVER
+      Value: '"MINHAINSTITUICAO.EDU.BR"'
+    - Key: ECIDADAO_ID
+      Value: '"MINHAID"'
+    - Key: ECIDADAO_SECRET
+      Value: '"MINHAKEY"'
+    - Key: SIORG
+      Value: '"2981"'
+    Name: env
+  - Chown: ""
+    From: frontend
+    Name: copy
+    SourcesAndDest:
+    - /agatha.git/codigo-fonte/cliente/dist/
+    - /usr/share/nginx/html/
+  - Chown: ""
+    From: backend
+    Name: copy
+    SourcesAndDest:
+    - /agatha.git/codigo-fonte/servico/target/app.jar
+    - /app.jar
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/
+    - /
+  - CmdLine:
+    - apk add --update --no-cache openssl bash nginx supervisor postgresql-client     msttcorefonts-installer
+      fontconfig &&     mkdir -p /etc/nginx/certificates/ /run/nginx/ /run/supervisord/
+      &&     openssl req -x509 -nodes -newkey rsa:4096 -keyout /etc/nginx/certificates/key.pem
+      -out /etc/nginx/certificates/cert.pem -subj '/CN=localhost' -days 365 &&     chmod
+      +x /usr/bin/pre-init /usr/bin/create-admin &&     rm -rf /var/cache/apk/* &&     update-ms-fonts
+      &&     fc-cache -f
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /config
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - CmdLine:
+    - /usr/bin/supervisord
+    - -c
+    - /etc/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jdk-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-alpine

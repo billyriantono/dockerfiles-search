@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:stretch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Matthew Vance"'
+    Name: label
+  - Env:
+    - Key: VERSION_OPENSSL
+      Value: openssl-1.1.0h
+    - Key: SHA256_OPENSSL
+      Value: 5835626cde9e99656585fc7aaa2302a73a7e1340bf8c14fd635a62c66802a517
+    - Key: SOURCE_OPENSSL
+      Value: https://www.openssl.org/source/
+    - Key: GPG_OPENSSL
+      Value: 8657ABB260F056B1E5190839D9C4D26D0E604491
+    Name: env
+  - Name: workdir
+    Path: /tmp/src
+  - CmdLine:
+    - set -e -x &&     BUILD_DEPS='build-essential ca-certificates curl dirmngr gnupg
+      libidn2-0-dev libssl-dev' &&     DEBIAN_FRONTEND=noninteractive apt-get update
+      && apt-get install -y --no-install-recommends       $BUILD_DEPS &&     curl
+      -L $SOURCE_OPENSSL$VERSION_OPENSSL.tar.gz -o openssl.tar.gz &&     echo "${SHA256_OPENSSL}
+      ./openssl.tar.gz" | sha256sum -c - &&     curl -L $SOURCE_OPENSSL$VERSION_OPENSSL.tar.gz.asc
+      -o openssl.tar.gz.asc &&     export GNUPGHOME="$(mktemp -d)" &&     gpg --keyserver
+      ha.pool.sks-keyservers.net --recv-keys "$GPG_OPENSSL" &&     gpg --batch --verify
+      openssl.tar.gz.asc openssl.tar.gz &&     tar xzf openssl.tar.gz &&     cd $VERSION_OPENSSL
+      &&     make clean &&     ./config --prefix=/opt/openssl no-weak-ssl-ciphers
+      no-ssl3 no-shared enable-ec_nistp_64_gcc_128 -DOPENSSL_NO_HEARTBEATS -fstack-protector-strong
+      &&     make depend &&     make &&     make install_sw &&     apt-get purge -y
+      --auto-remove       $BUILD_DEPS &&     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:stretch as builder
+- BaseName: debian:stretch
+  Commands:
+  - Name: expose
+    Ports:
+    - 8053/udp
+  - Name: workdir
+    Path: /tmp/src
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/openssl
+    - /opt/openssl
+  - CmdLine:
+    - set -e -x &&     BUILD_DEPS='autoconf build-essential ca-certificates dh-autoreconf
+      git libssl-dev libtool-bin libyaml-dev make m4' &&     DEBIAN_FRONTEND=noninteractive
+      apt-get update && apt-get install -y --no-install-recommends       $BUILD_DEPS       dns-root-data       dnsutils       libev4       libevent-core-2.0.5       libidn11       libuv1       libyaml-0-2
+      &&     git clone https://github.com/getdnsapi/getdns.git --branch master &&     cd
+      getdns &&     git submodule update --init &&     libtoolize -ci &&     autoreconf
+      -fi &&     mkdir build &&     cd build &&     ../configure --prefix=/opt/stubby
+      --without-libidn --without-libidn2 --enable-stub-only --with-ssl=/opt/openssl
+      --with-stubby &&     make &&     make install &&     groupadd -r stubby &&     useradd
+      --no-log-init -r -g stubby stubby &&     apt-get purge -y --auto-remove       $BUILD_DEPS
+      &&     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/stubby
+  - Env:
+    - Key: PATH
+      Value: /opt/stubby/bin:$PATH
+    Name: env
+  - Name: user
+    User: stubby:stubby
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - stubby.yml
+    - /opt/stubby/etc/stubby/stubby.yml
+  - Health:
+      Test:
+      - CMD-SHELL
+      - dig @127.0.0.1 -p 8053 google.com || exit 1
+    Name: healthcheck
+  - CmdLine:
+    - /opt/stubby/bin/stubby
+    - -l
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch

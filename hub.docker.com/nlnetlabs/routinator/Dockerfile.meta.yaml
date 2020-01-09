@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: alpine:3.10.3
+  Commands:
+  - CmdLine:
+    - apk add rust cargo
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/routinator
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - cargo build --target x86_64-alpine-linux-musl --release --locked
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10.3
+  Name: build
+  Platform: ""
+  SourceCode: FROM alpine:3.10.3 as build
+- BaseName: alpine:3.10.3
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/routinator/target/x86_64-alpine-linux-musl/release/routinator
+    - /usr/local/bin/
+  - Key: RUN_USER
+    Name: arg
+    Value: routinator
+  - Key: RUN_USER_UID
+    Name: arg
+    Value: "1012"
+  - Key: RUN_USER_GID
+    Name: arg
+    Value: "1012"
+  - CmdLine:
+    - apk add --no-cache rsync libgcc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - addgroup -g ${RUN_USER_GID} ${RUN_USER} &&     adduser -D -u ${RUN_USER_UID}
+      -G ${RUN_USER} ${RUN_USER}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /home/${RUN_USER}/.rpki-cache/repository /home/${RUN_USER}/.rpki-cache/tals
+      &&     chown -R ${RUN_USER_UID}:${RUN_USER_GID} /usr/local/bin/routinator /home/${RUN_USER}/.rpki-cache
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $RUN_USER_UID
+  - Name: expose
+    Ports:
+    - 3323/tcp
+  - Name: expose
+    Ports:
+    - 9556/tcp
+  - CmdLine:
+    - routinator
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - server
+    - --rtr
+    - 0.0.0.0:3323
+    - --http
+    - 0.0.0.0:9556
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.10.3
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10.3

@@ -1,0 +1,144 @@
+MetaArgs: null
+Stages:
+- BaseName: kerberos/base:linux-amd64
+  Commands:
+  - Key: APP_ENV
+    Name: arg
+    Value: master
+  - Env:
+    - Key: APP_ENV
+      Value: ${APP_ENV}
+    Name: env
+  - Maintainer: '"Cédric Verstraeten" <hello@cedric.ws>'
+    Name: maintainer
+  - CmdLine:
+    - dpkg-divert --local --rename --add /sbin/initctl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sf /bin/true /sbin/initctl
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y libcurl4-openssl-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/quelqundev/machinery -b develop /tmp/machinery
+      &&     cd /tmp/machinery && git checkout ${APP_ENV} &&     mkdir build && cd
+      build &&     cmake .. && make && make check && make install &&     rm -rf /tmp/machinery
+      &&     chown -Rf www-data.www-data /etc/opt/kerberosio &&     chmod -Rf 777
+      /etc/opt/kerberosio/config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL https://deb.nodesource.com/setup_9.x | sudo -E bash - && apt-get install
+      -y nodejs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/baudev/web -b develop /var/www/web && cd /var/www/web
+      && git checkout ${APP_ENV} && chown -Rf www-data.www-data /var/www/web && curl
+      -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin
+      --filename=composer && cd /var/www/web && composer install --prefer-source &&
+      npm install -g bower && cd public && nodejs /usr/lib/node_modules/bower/bin/bower
+      --allow-root install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /var/www/web/public/capture && ln -s /etc/opt/kerberosio/capture/ /var/www/web/public/capture
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e "s/'insideDocker'/'insideDocker' => false,\/\//" /var/www/web/app/Http/Controllers/SystemController.php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e "s/service kerberosio status/supervisorctl status machinery \| grep
+      \"RUNNING\"';\/\//" /var/www/web/app/Http/Repositories/System/OSSystem.php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -Rf /etc/nginx/conf.d/* && rm -Rf /etc/nginx/sites-available/default && mkdir
+      -p /etc/nginx/ssl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./web.conf
+    - /etc/nginx/sites-available/default.conf
+  - CmdLine:
+    - ln -s /etc/nginx/sites-available/default.conf /etc/nginx/sites-enabled/default.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/"GPCS"/"EGPCS"/g' /etc/php/7.0/fpm/php.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/"--daemonize/"--daemonize --allow-to-run-as-root/g' /etc/init.d/php7.0-fpm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/www-data/root/g' /etc/php/7.0/fpm/pool.d/www.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/www-data/root/g' /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./supervisord.conf
+    - /etc/supervisord.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./run.sh
+    - /runny.sh
+  - CmdLine:
+    - chmod 755 /runny.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /runny.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/\r$//' /runny.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8889"
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: volume
+    Volumes:
+    - /etc/opt/kerberosio/capture
+  - Name: volume
+    Volumes:
+    - /etc/opt/kerberosio/config
+  - Name: volume
+    Volumes:
+    - /etc/opt/kerberosio/logs
+  - Name: volume
+    Volumes:
+    - /var/www/web/config
+  - CmdLine:
+    - /bin/bash
+    - /runny.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: kerberos/base:linux-amd64
+  Name: ""
+  Platform: ""
+  SourceCode: FROM kerberos/base:linux-amd64

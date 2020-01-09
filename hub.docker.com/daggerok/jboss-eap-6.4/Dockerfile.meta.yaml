@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8u212-jdk-alpine3.9
+  Commands:
+  - Labels:
+    - Key: MAINTAINER
+      Value: '"Maksim Kostromin <daggerok@gmail.com>"'
+    Name: label
+  - Env:
+    - Key: PRODUCT
+      Value: '"jboss-eap-6.4"'
+    - Key: JBOSS_USER
+      Value: '"jboss"'
+    Name: env
+  - Env:
+    - Key: ADMIN_USER
+      Value: '"admin"'
+    - Key: ADMIN_PASSWORD
+      Value: '"Admin.123"'
+    - Key: JBOSS_USER_HOME
+      Value: '"/home/${JBOSS_USER}"'
+    - Key: DOWNLOAD_BASE_URL
+      Value: '"https://github.com/daggerok/${PRODUCT}/releases/download"'
+    - Key: JBOSS_EAP_PATCH
+      Value: '"6.4.22"'
+    Name: env
+  - Env:
+    - Key: JBOSS_HOME
+      Value: '"${JBOSS_USER_HOME}/${PRODUCT}"'
+    - Key: ARCHIVES_BASE_URL
+      Value: '"${DOWNLOAD_BASE_URL}/archives"'
+    - Key: PATCHES_BASE_URL
+      Value: '"${DOWNLOAD_BASE_URL}/${JBOSS_EAP_PATCH}"'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"${JBOSS_HOME}/bin:/tmp:${PATH}"'
+    - Key: JAVA_OPTS
+      Value: '"-Djava.io.tmpdir=/tmp -Djava.net.preferIPv4Stack=true -Djboss.bind.address=0.0.0.0
+        -Djboss.bind.address.management=0.0.0.0"'
+    Name: env
+  - Name: user
+    User: root
+  - CmdLine:
+    - '( apk fix     --no-cache || echo "cannot fix."         )                                    &&     (
+      apk upgrade --no-cache || echo "cannot upgrade."     )                                    &&     (
+      apk cache    -v  clean || echo "cannot clean cache." )                                    &&       apk
+      add     --no-cache --update --upgrade                                                                busybox-suid
+      bash wget ca-certificates unzip sudo openssh-client shadow curl        &&     echo
+      "${JBOSS_USER} ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers                                &&     sed
+      -i "s/.*requiretty$/Defaults !requiretty/" /etc/sudoers                                 &&     addgroup
+      --system -g 1001 -S ${JBOSS_USER}                                                  &&     adduser
+      --system -h ${JBOSS_USER_HOME} -s /bin/ash -D -u 1001 ${JBOSS_USER} ${JBOSS_USER}   &&     usermod
+      -a -G ${JBOSS_USER} ${JBOSS_USER}'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${JBOSS_USER}
+  - Name: expose
+    Ports:
+    - "8080"
+    - "8443"
+    - "9990"
+  - CmdLine:
+    - /bin/ash
+    - -c
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - ${JBOSS_HOME}/bin/standalone.sh -b 0.0.0.0
+    Name: cmd
+    PrependShell: false
+  - Name: workdir
+    Path: /tmp
+  - Chown: jboss
+    Name: add
+    SourcesAndDest:
+    - ./install.sh
+    - .
+  - CmdLine:
+    - wget ${ARCHIVES_BASE_URL}/jboss-eap-6.4.0.zip                                                            -q
+      --no-cookies --no-check-certificate -O /tmp/jboss-eap-6.4.0.zip                    &&     unzip
+      -q /tmp/jboss-eap-6.4.0.zip -d ${JBOSS_USER_HOME}                                     &&     add-user.sh
+      ${ADMIN_USER} ${ADMIN_PASSWORD} --silent                                        &&     echo
+      'JAVA_OPTS="-Djava.io.tmpdir=/tmp -Djava.net.preferIPv4Stack=true -Djboss.bind.address=0.0.0.0
+      -Djboss.bind.address.management=0.0.0.0"            ' >> ${JBOSS_HOME}/bin/standalone.conf                                                 &&     (
+      standalone.sh --admin-only                                                                         &
+      ( sudo chmod +x /tmp/install.sh                                                         &&           install.sh                                                                            &&           sudo
+      apk del --no-cache --no-network --purge busybox-suid unzip openssh-client shadow
+      &&           ( sudo rm -rf /tmp/* /var/cache/apk /var/lib/apk /etc/apk/cache
+      || echo "cleanup!" ) ) )
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${JBOSS_USER_HOME}
+  From:
+    Image: openjdk:8u212-jdk-alpine3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8u212-jdk-alpine3.9

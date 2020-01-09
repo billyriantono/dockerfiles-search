@@ -1,0 +1,129 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stretch
+  Commands:
+  - Maintainer: maugin.thomas@gmail.com
+    Name: maintainer
+  - CmdLine:
+    - apt-get update &&     apt-get install -y wget libusb-1.0-0-dev pkg-config ca-certificates
+      git-core cmake build-essential --no-install-recommends &&     apt-get clean
+      &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - mkdir /etc/modprobe.d && echo 'blacklist dvb_usb_rtl28xxu' > /etc/modprobe.d/raspi-blacklist.conf
+      &&     git clone git://git.osmocom.org/rtl-sdr.git &&     mkdir rtl-sdr/build
+      &&     cd rtl-sdr/build &&     cmake ../ -DINSTALL_UDEV_RULES=ON -DDETACH_KERNEL_DRIVER=ON
+      &&     make &&     make install &&     ldconfig &&     rm -rf /tmp/rtl-sdr
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - apt-get update &&     apt-get install sudo build-essential debhelper librtlsdr-dev
+      pkg-config dh-systemd libncurses5-dev libbladerf-dev -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/flightaware/dump1090 &&     cd dump1090 &&     make
+      && mkdir /usr/lib/fr24 && cp dump1090 /usr/lib/fr24/ && cp -r public_html /usr/lib/fr24/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.js
+    - /usr/lib/fr24/public_html/
+  - CmdLine:
+    - mkdir /usr/lib/fr24/public_html/data
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - apt-get update &&     apt-get install sudo build-essential debhelper tcl8.6-dev
+      autoconf python3-dev python-virtualenv libz-dev dh-systemd net-tools tclx8.4
+      tcllib tcl-tls itcl3 python3-venv dh-systemd init-system-helpers  libboost-system-dev
+      libboost-program-options-dev libboost-regex-dev libboost-filesystem-dev -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/flightaware/piaware_builder.git piaware_builder
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/piaware_builder
+  - CmdLine:
+    - ./sensible-build.sh stretch && cd package-stretch && dpkg-buildpackage -b &&
+      cd .. && dpkg -i piaware_*_*.deb
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - piaware.conf
+    - /etc/
+  - Name: workdir
+    Path: /fr24feed
+  - CmdLine:
+    - wget https://repo-feed.flightradar24.com/linux_x86_64_binaries/fr24feed_1.0.18-5_amd64.tgz     &&
+      tar -xvzf *amd64.tgz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - fr24feed.ini
+    - /etc/
+  - CmdLine:
+    - apt-get update && apt-get install -y supervisor
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/supervisor/conf.d/supervisord.conf
+  - Env:
+    - Key: TINI_VERSION
+      Value: v0.18.0
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini
+    - /tini
+  - CmdLine:
+    - chmod +x /tini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "30001"
+    - "30002"
+    - "30003"
+    - "30004"
+    - "30005"
+    - "30104"
+    - "8080"
+    - "8754"
+  - CmdLine:
+    - /usr/bin/supervisord
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch

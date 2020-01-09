@@ -1,0 +1,101 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:latest
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: AMAVIS
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: OPEN_DKIM
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends       locales       netcat       rsyslog       ssl-cert       postfix       dovecot-imapd       dovecot-sieve       dovecot-managesieved       dovecot-ldap       jq     &&
+      apt-get clean     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - locale-gen en_US en_US.UTF-8 && dpkg-reconfigure locales
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./config/postfix
+    - /etc/postfix/
+  - CmdLine:
+    - cat /etc/postfix/master-additional.cf >> /etc/postfix/master.cf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/dovecot
+    - /etc/dovecot/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/rsyslog.conf
+    - /etc/rsyslog.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./boot.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./boot.d
+    - /boot.d
+  - CmdLine:
+    - chmod 755 /boot.sh /boot.d/*
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /mail_settings
+  - Name: volume
+    Volumes:
+    - /vmail
+  - Name: volume
+    Volumes:
+    - /sieve
+  - CmdLine:
+    - groupadd -g 5000 vmail
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -g vmail -u 5000 vmail -d /vmail -m
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "143"
+    - "25"
+    - "587"
+    - "993"
+  - CmdLine:
+    - /boot.sh; service postfix start; service dovecot start; rsyslogd -n
+    Name: cmd
+    PrependShell: true
+  - Health:
+      Test:
+      - CMD-SHELL
+      - nc -z localhost 25 && nc -z localhost 143 && nc -z localhost 587 && nc -z
+        localhost 993 && nc -z localhost 4190 && echo "" | openssl s_client -starttls
+        smtp -connect localhost:25 | openssl x509 -noout -checkend 86400 || exit 1
+    Name: healthcheck
+  From:
+    Image: ubuntu:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:latest

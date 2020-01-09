@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- As: zstd-builder
+  BaseName: ubuntu
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get update -y && apt-get install -y make gcc libc-dev
+      git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/facebook/zstd src
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /pkg && cd /src && make MOREFLAGS="-static" zstd && make DESTDIR=/pkg
+      install
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu
+  Name: zstd-builder
+  Platform: ""
+  SourceCode: FROM ubuntu as zstd-builder
+- As: tcp-info-builder
+  BaseName: golang:1.12
+  Commands:
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/m-lab/tcp-info
+  - Name: workdir
+    Path: /go/src/github.com/m-lab/tcp-info
+  - CmdLine:
+    - go get -v       -ldflags "-X github.com/m-lab/go/prometheusx.GitShortCommit=$(git
+      log -1 --format=%h)"       .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12
+  Name: tcp-info-builder
+  Platform: ""
+  SourceCode: FROM golang:1.12 as tcp-info-builder
+- BaseName: alpine
+  Commands:
+  - Chown: ""
+    From: zstd-builder
+    Name: copy
+    SourcesAndDest:
+    - /pkg/usr/local/bin/zstd
+    - /bin/zstd
+  - CmdLine:
+    - mkdir -p /licenses/zstd
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: zstd-builder
+    Name: copy
+    SourcesAndDest:
+    - /src/LICENSE
+    - /licences/zstd/
+  - Chown: ""
+    From: tcp-info-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/tcp-info
+    - /bin/tcp-info
+  - Name: workdir
+    Path: /home
+  - CmdLine:
+    - /bin/tcp-info
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

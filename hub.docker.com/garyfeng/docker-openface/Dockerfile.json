@@ -1,0 +1,236 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "model_data",
+      "BaseName": "alpine",
+      "SourceCode": "FROM alpine as model_data",
+      "Platform": "",
+      "As": "model_data",
+      "From": {
+        "Image": "alpine"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk --no-cache --update-cache add wget"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/data/patch_experts"
+        },
+        {
+          "CmdLine": [
+            "wget -q https://www.dropbox.com/s/7na5qsjzz8yfoer/cen_patches_0.25_of.dat \u0026\u0026    wget -q https://www.dropbox.com/s/k7bj804cyiu474t/cen_patches_0.35_of.dat \u0026\u0026    wget -q https://www.dropbox.com/s/ixt4vkbmxgab1iu/cen_patches_0.50_of.dat \u0026\u0026    wget -q https://www.dropbox.com/s/2t5t1sdpshzfhpj/cen_patches_1.00_of.dat"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "ubuntu_base",
+      "BaseName": "ubuntu:18.04",
+      "SourceCode": "FROM ubuntu:18.04 as ubuntu_base",
+      "Platform": "",
+      "As": "ubuntu_base",
+      "From": {
+        "Image": "ubuntu:18.04"
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"Michael McDermott \u003cmikemcdermott23@gmail.com\u003e\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Key": "DEBIAN_FRONTEND",
+          "Name": "arg",
+          "Value": "noninteractive"
+        },
+        {
+          "CmdLine": [
+            "apt-get update -qq \u0026\u0026    apt-get install -qq curl \u0026\u0026    apt-get install -qq --no-install-recommends         libopenblas-dev liblapack-dev         libavcodec-dev libavformat-dev libswscale-dev         libtbb2 libtbb-dev libjpeg-dev         libpng-dev libtiff-dev \u0026\u0026    rm -rf /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "cv_deps",
+      "BaseName": "ubuntu_base",
+      "SourceCode": "FROM ubuntu_base as cv_deps",
+      "Platform": "",
+      "As": "cv_deps",
+      "From": {
+        "Stage": {
+          "Named": "ubuntu_base",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/root/build-dep"
+        },
+        {
+          "Key": "DEBIAN_FRONTEND",
+          "Name": "arg",
+          "Value": "noninteractive"
+        },
+        {
+          "CmdLine": [
+            "apt-get update -qq \u0026\u0026 apt-get install -qq -y         cmake ninja-build pkg-config build-essential checkinstall        g++-8 \u0026\u0026    rm -rf /var/lib/apt/lists/* \u0026\u0026    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 800 --slave /usr/bin/g++ g++ /usr/bin/g++-8"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "curl http://dlib.net/files/dlib-19.13.tar.bz2 -LO \u0026\u0026    tar xf dlib-19.13.tar.bz2 \u0026\u0026     rm dlib-19.13.tar.bz2 \u0026\u0026    mv dlib-19.13 dlib \u0026\u0026    mkdir -p dlib/build \u0026\u0026    cd dlib/build \u0026\u0026    cmake -DCMAKE_BUILD_TYPE=Release -G Ninja .. \u0026\u0026    ninja \u0026\u0026     ninja install \u0026\u0026     DESTDIR=/root/diff ninja install \u0026\u0026    ldconfig"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "OPENCV_VERSION",
+              "Value": "4.1.0"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "curl https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.tar.gz -LO \u0026\u0026    tar xf ${OPENCV_VERSION}.tar.gz \u0026\u0026     rm ${OPENCV_VERSION}.tar.gz \u0026\u0026    mv opencv-${OPENCV_VERSION} opencv \u0026\u0026     mkdir -p opencv/build \u0026\u0026     cd opencv/build \u0026\u0026     cmake -D CMAKE_BUILD_TYPE=RELEASE         -D CMAKE_INSTALL_PREFIX=/usr/local         -D WITH_TBB=ON -D WITH_CUDA=OFF         -DWITH_QT=OFF -DWITH_GTK=OFF        -G Ninja .. \u0026\u0026     ninja \u0026\u0026     ninja install \u0026\u0026    DESTDIR=/root/diff ninja install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "openface_download",
+      "BaseName": "cv_deps",
+      "SourceCode": "FROM cv_deps as openface_download",
+      "Platform": "",
+      "As": "openface_download",
+      "From": {
+        "Stage": {
+          "Named": "cv_deps",
+          "Index": 2
+        }
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/root/openface"
+        },
+        {
+          "Env": [
+            {
+              "Key": "OPENFACE_VERSION",
+              "Value": "2.2.0"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "curl https://github.com/TadasBaltrusaitis/OpenFace/archive/OpenFace_${OPENFACE_VERSION}.tar.gz -LO \u0026\u0026    tar xf OpenFace_${OPENFACE_VERSION}.tar.gz \u0026\u0026     rm OpenFace_${OPENFACE_VERSION}.tar.gz"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "openface",
+      "BaseName": "openface_download",
+      "SourceCode": "FROM openface_download as openface",
+      "Platform": "",
+      "As": "openface",
+      "From": {
+        "Stage": {
+          "Named": "openface_download",
+          "Index": 3
+        }
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/root/openface"
+        },
+        {
+          "Chown": "",
+          "From": "model_data",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/data/patch_experts/*",
+            "/root/openface/OpenFace-OpenFace_${OPENFACE_VERSION}/lib/local/LandmarkDetector/model/patch_experts/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "cd OpenFace-OpenFace_${OPENFACE_VERSION} \u0026\u0026     mkdir -p build \u0026\u0026 cd build \u0026\u0026     cmake -D CMAKE_BUILD_TYPE=RELEASE -G Ninja .. \u0026\u0026     ninja \u0026\u0026    DESTDIR=/root/diff ninja install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "final",
+      "BaseName": "ubuntu_base",
+      "SourceCode": "FROM ubuntu_base as final",
+      "Platform": "",
+      "As": "final",
+      "From": {
+        "Stage": {
+          "Named": "ubuntu_base",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"Gary Feng \u003cgary.feng@gmail.com\u003e\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Name": "workdir",
+          "Path": "/root"
+        },
+        {
+          "Chown": "",
+          "From": "openface",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/root/diff",
+            "/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "ldconfig"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    }
+  ]
+}

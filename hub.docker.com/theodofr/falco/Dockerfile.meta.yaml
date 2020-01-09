@@ -1,0 +1,120 @@
+MetaArgs: null
+Stages:
+- As: node
+  BaseName: node:12.14-alpine
+  Commands:
+  - Name: workdir
+    Path: /code
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./frontend/package.json
+    - ./frontend/yarn.lock
+    - /code/
+  - CmdLine:
+    - yarn install --pure-lockfile --ignore-scripts
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./frontend/
+    - /code/
+  - CmdLine:
+    - yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12.14-alpine
+  Name: node
+  Platform: ""
+  SourceCode: FROM node:12.14-alpine AS node
+- As: backend
+  BaseName: python:3.7-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache curl postgresql-dev openssh bash
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./.profile.d
+    - /app/.profile.d
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./sh-wrapper.sh
+    - /bin/sh-wrapper.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./*.sh
+    - /code/
+  - CmdLine:
+    - chmod a+x /app/.profile.d/heroku-exec.sh &&   chmod a+x /bin/sh-wrapper.sh &&   chmod
+      a+x /code/*.sh &&   rm /bin/sh &&   ln -s /bin/sh-wrapper.sh /bin/sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DJANGO_SETTINGS_MODULE
+      Value: root.settings.prod
+    Name: env
+  - Env:
+    - Key: PYTHONPATH
+      Value: /code
+    Name: env
+  - Env:
+    - Key: PIP_NO_CACHE_DIR
+      Value: "true"
+    Name: env
+  - CmdLine:
+    - pip3 install --no-cache-dir pipenv gunicorn
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /code
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./backend/Pipfile*
+    - /code/
+  - CmdLine:
+    - apk add --no-cache --virtual build-dependencies gcc musl-dev libffi-dev curl-dev
+      openssl-dev libressl-dev &&     pipenv install --system --deploy &&     apk
+      del build-dependencies
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - addgroup -S pythongroup &&   adduser -S pythonuser -G pythongroup --uid 2000
+      &&   chown -R pythonuser:pythongroup /code
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: pythonuser
+  - Chown: ""
+    From: node
+    Name: copy
+    SourcesAndDest:
+    - /code/build
+    - /code/front/static/front
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./backend
+    - /code/
+  - CmdLine:
+    - mkdir -p /code/static && SECRET_KEY=notused python ./manage.py collectstatic
+      --no-input
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.7-alpine
+  Name: backend
+  Platform: ""
+  SourceCode: FROM python:3.7-alpine AS backend

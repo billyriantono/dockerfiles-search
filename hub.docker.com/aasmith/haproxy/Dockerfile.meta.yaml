@@ -1,0 +1,205 @@
+MetaArgs:
+- DefaultValue: debian:buster-slim
+  Key: OS
+  ProvidedValue: null
+  Value: debian:buster-slim
+- DefaultValue: 1.1.1c
+  Key: OPENSSL_VERSION
+  ProvidedValue: null
+  Value: 1.1.1c
+- DefaultValue: f6fb3079ad15076154eda9413fed42877d668e7069d9b87396d0804fdb3f4c90
+  Key: OPENSSL_SHA256
+  ProvidedValue: null
+  Value: f6fb3079ad15076154eda9413fed42877d668e7069d9b87396d0804fdb3f4c90
+- DefaultValue: "10.33"
+  Key: PCRE2_VERSION
+  ProvidedValue: null
+  Value: "10.33"
+- DefaultValue: e2e2899a97489fc6ad1b0cc3da7952c7cca991b4a0f7db6649b75d9721025d31
+  Key: PCRE2_SHA256
+  ProvidedValue: null
+  Value: e2e2899a97489fc6ad1b0cc3da7952c7cca991b4a0f7db6649b75d9721025d31
+- DefaultValue: 1.1.0
+  Key: LIBSLZ_VERSION
+  ProvidedValue: null
+  Value: 1.1.0
+- DefaultValue: "2.0"
+  Key: HAPROXY_MAJOR
+  ProvidedValue: null
+  Value: "2.0"
+- DefaultValue: 2.0.5
+  Key: HAPROXY_VERSION
+  ProvidedValue: null
+  Value: 2.0.5
+- DefaultValue: 497c716adf4b056484601a887f34d152
+  Key: HAPROXY_MD5
+  ProvidedValue: null
+  Value: 497c716adf4b056484601a887f34d152
+Stages:
+- As: runtime
+  BaseName: $OS
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install --no-install-recommends -y curl ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Image: $OS
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM $OS as runtime
+- As: builder
+  BaseName: runtime
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install --no-install-recommends -y gcc make file
+      libc6-dev perl libtext-template-perl
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: runtime
+  Name: builder
+  Platform: ""
+  SourceCode: FROM runtime as builder
+- As: ssl
+  BaseName: builder
+  Commands:
+  - Key: OPENSSL_VERSION
+    Name: arg
+    Value: null
+  - Key: OPENSSL_SHA256
+    Name: arg
+    Value: null
+  - CmdLine:
+    - curl -OJ https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz &&     echo
+      ${OPENSSL_SHA256} openssl-${OPENSSL_VERSION}.tar.gz | sha256sum -c &&     tar
+      zxvf openssl-${OPENSSL_VERSION}.tar.gz &&     cd openssl-${OPENSSL_VERSION}
+      &&     ./config no-shared --prefix=/tmp/openssl &&     make &&     make TESTS='-40'
+      test &&     make install_sw
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: builder
+  Name: ssl
+  Platform: ""
+  SourceCode: FROM builder as ssl
+- As: pcre2
+  BaseName: builder
+  Commands:
+  - Key: PCRE2_VERSION
+    Name: arg
+    Value: null
+  - Key: PCRE2_SHA256
+    Name: arg
+    Value: null
+  - CmdLine:
+    - curl -OJ "https://ftp.pcre.org/pub/pcre/pcre2-${PCRE2_VERSION}.tar.gz" &&     echo
+      ${PCRE2_SHA256} pcre2-${PCRE2_VERSION}.tar.gz | sha256sum -c &&     tar zxvf
+      pcre2-${PCRE2_VERSION}.tar.gz &&     cd pcre2-${PCRE2_VERSION} &&     LDFLAGS="-fPIE
+      -pie -Wl,-z,relro -Wl,-z,now"     CFLAGS="-pthread -g -O2 -fPIE -fstack-protector-strong
+      -Wformat -Werror=format-security -Wall -fvisibility=hidden"     ./configure
+      --prefix=/tmp/pcre2 --disable-shared --enable-utf8 --enable-jit --enable-unicode-properties
+      --disable-cpp &&     make check &&     make install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: builder
+  Name: pcre2
+  Platform: ""
+  SourceCode: FROM builder as pcre2
+- As: slz
+  BaseName: builder
+  Commands:
+  - Key: LIBSLZ_VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - curl -OJ "http://git.1wt.eu/web?p=libslz.git;a=snapshot;h=v${LIBSLZ_VERSION};sf=tgz"
+      &&     tar zxvf libslz-v${LIBSLZ_VERSION}.tar.gz &&     make -C libslz static
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: builder
+  Name: slz
+  Platform: ""
+  SourceCode: FROM builder as slz
+- As: haproxy
+  BaseName: builder
+  Commands:
+  - Chown: ""
+    From: ssl
+    Name: copy
+    SourcesAndDest:
+    - /tmp/openssl
+    - /tmp/openssl
+  - Chown: ""
+    From: pcre2
+    Name: copy
+    SourcesAndDest:
+    - /tmp/pcre2
+    - /tmp/pcre2
+  - Chown: ""
+    From: slz
+    Name: copy
+    SourcesAndDest:
+    - /libslz
+    - /libslz
+  - Key: HAPROXY_MAJOR
+    Name: arg
+    Value: null
+  - Key: HAPROXY_VERSION
+    Name: arg
+    Value: null
+  - Key: HAPROXY_MD5
+    Name: arg
+    Value: null
+  - CmdLine:
+    - curl -OJL "http://www.haproxy.org/download/${HAPROXY_MAJOR}/src/haproxy-${HAPROXY_VERSION}.tar.gz"
+      &&     echo "${HAPROXY_MD5} haproxy-${HAPROXY_VERSION}.tar.gz" | md5sum -c &&     tar
+      zxvf haproxy-${HAPROXY_VERSION}.tar.gz &&     make -C haproxy-${HAPROXY_VERSION}       TARGET=linux-glibc       USE_SLZ=1
+      SLZ_INC=../libslz/src SLZ_LIB=../libslz       USE_STATIC_PCRE2=1 USE_PCRE2_JIT=1
+      PCRE2DIR=/tmp/pcre2       USE_OPENSSL=1 SSL_INC=/tmp/openssl/include SSL_LIB=/tmp/openssl/lib       EXTRA_OBJS="contrib/prometheus-exporter/service-prometheus.o"       DESTDIR=/tmp/haproxy
+      PREFIX=       all       install-bin &&     mkdir -p /tmp/haproxy/etc/haproxy
+      &&     cp -R haproxy-${HAPROXY_VERSION}/examples/errorfiles /tmp/haproxy/etc/haproxy/errors
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: builder
+  Name: haproxy
+  Platform: ""
+  SourceCode: FROM builder as haproxy
+- BaseName: runtime
+  Commands:
+  - Chown: ""
+    From: haproxy
+    Name: copy
+    SourcesAndDest:
+    - /tmp/haproxy
+    - /usr/local/
+  - CmdLine:
+    - rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - haproxy
+    - -f
+    - /usr/local/etc/haproxy/haproxy.cfg
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: runtime
+  Name: ""
+  Platform: ""
+  SourceCode: FROM runtime

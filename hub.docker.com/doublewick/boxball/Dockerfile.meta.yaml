@@ -1,0 +1,183 @@
+MetaArgs: null
+Stages:
+- As: build-common
+  BaseName: python:3.7.3-alpine3.9
+  Commands:
+  - CmdLine:
+    - apk add --no-cache     libtool     wget     unzip     pigz     gcc     g++     make     autoconf     automake     clang     postgresql-libs     musl-dev     postgresql-dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - .
+  - CmdLine:
+    - pip install -r requirements.txt
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PYTHONPATH
+      Value: '"/"'
+    Name: env
+  From:
+    Image: python:3.7.3-alpine3.9
+  Name: build-common
+  Platform: ""
+  SourceCode: FROM python:3.7.3-alpine3.9 AS build-common
+- As: build-retrosheet-download
+  BaseName: build-common
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - triggers/retrosheet.sha1
+    - .
+  - CmdLine:
+    - wget https://github.com/chadwickbureau/retrosheet/archive/master.zip -O retrosheet.zip
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build-common
+  Name: build-retrosheet-download
+  Platform: ""
+  SourceCode: FROM build-common as build-retrosheet-download
+- As: build-retrosheet
+  BaseName: build-common
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - triggers/chadwick.sha1
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - code_tables/
+    - /code_tables
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - parsers/
+    - /parsers
+  - CmdLine:
+    - wget https://github.com/chadwickbureau/chadwick/archive/master.zip -O chadwick.zip
+      &&     unzip chadwick.zip &&     mv chadwick-master chadwick
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd chadwick &&     autoreconf --install &&     ./configure &&     make &&     make
+      install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-retrosheet-download
+    Name: copy
+    SourcesAndDest:
+    - retrosheet.zip
+    - .
+  - CmdLine:
+    - unzip retrosheet.zip &&     mv retrosheet-master retrosheet
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python -u /parsers/parse_retrosheet.py
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build-common
+  Name: build-retrosheet
+  Platform: ""
+  SourceCode: FROM build-common as build-retrosheet
+- As: build-baseballdatabank
+  BaseName: build-common
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - triggers/baseballdatabank.sha1
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - parsers/
+    - /parsers
+  - CmdLine:
+    - wget https://github.com/chadwickbureau/baseballdatabank/archive/master.zip -O
+      baseballdatabank.zip &&     unzip baseballdatabank.zip &&     mv baseballdatabank-master
+      baseballdatabank
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python -u /parsers/parse_baseballdatabank.py
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build-common
+  Name: build-baseballdatabank
+  Platform: ""
+  SourceCode: FROM build-common as build-baseballdatabank
+- As: build-ddl
+  BaseName: build-common
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ddl_generators
+    - /ddl_generators
+  - CmdLine:
+    - python -u /ddl_generators/ddl_maker.py
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build-common
+  Name: build-ddl
+  Platform: ""
+  SourceCode: FROM build-common as build-ddl
+- BaseName: alpine:3.9.3
+  Commands:
+  - CmdLine:
+    - apk add zstd
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: data
+  - Chown: ""
+    From: build-ddl
+    Name: copy
+    SourcesAndDest:
+    - /ddl
+    - /ddl
+  - Chown: ""
+    From: build-baseballdatabank
+    Name: copy
+    SourcesAndDest:
+    - /parsed
+    - ./baseballdatabank
+  - Chown: ""
+    From: build-retrosheet
+    Name: copy
+    SourcesAndDest:
+    - /parsed
+    - ./retrosheet
+  From:
+    Image: alpine:3.9.3
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9.3

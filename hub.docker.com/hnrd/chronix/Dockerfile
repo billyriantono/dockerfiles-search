@@ -1,0 +1,23 @@
+FROM openjdk:8-jre-alpine
+
+RUN apk add --no-cache bash curl &&\
+  cd / &&\
+  curl -LO https://github.com/ChronixDB/chronix.server/releases/download/v0.4/chronix-0.4.zip && \
+  echo '23b5c0b18b522bdab5cbc0b90bc9f4c5d7692fa0a096a375df0cd27f02e766f2  /chronix-0.4.zip' | sha256sum -c - &&\
+  unzip chronix-0.4.zip &&\
+  rm chronix-0.4.zip &&\
+  cd chronix-solr-6.3.0 &&\
+  chmod +x bin/solr &&\
+  adduser -Du 1000 chronix &&\
+  chown -R chronix /chronix-solr-6.3.0 &&\
+  mv /chronix-solr-6.3.0/server/solr/chronix/data /data &&\
+  mv /chronix-solr-6.3.0/server/solr/chronix/conf /conf &&\
+  ln -s /data /chronix-solr-6.3.0/server/solr/chronix/data &&\
+  ln -s /conf /chronix-solr-6.3.0/server/solr/chronix/conf &&\
+  apk del curl
+
+USER chronix
+WORKDIR /chronix-solr-6.3.0
+EXPOSE 8983
+VOLUME /data /conf
+CMD ["./bin/solr", "start", "-f" ] 

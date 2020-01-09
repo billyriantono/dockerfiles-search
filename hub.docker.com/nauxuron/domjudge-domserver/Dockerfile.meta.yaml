@@ -1,0 +1,92 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: debian:jessie
+  Commands:
+  - Env:
+    - Key: DOMJUDGE_VERSION
+      Value: 5.1.3
+    Name: env
+  - Env:
+    - Key: BUILDDEPS
+      Value: "\"gcc g++ make bsdmainutils patch unzip zip \tlinuxdoc-tools linuxdoc-tools-text
+        ca-certificates \tgroff texlive-latex-recommended texlive-latex-extra \ttexlive-fonts-recommended
+        texlive-lang-dutch curl autoconf automake\""
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - apache.conf.in
+    - /tmp/apache.conf.in
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - patches
+    - /tmp/patches
+  - CmdLine:
+    - "export DEBIAN_FRONTEND=noninteractive && \tapt-get update && apt-get install
+      -y --no-install-recommends $BUILDDEPS && \tmkdir -p /src && \tcurl -L -o /src/domjudge-${DOMJUDGE_VERSION}.zip
+      https://github.com/DOMjudge/domjudge/archive/${DOMJUDGE_VERSION}.zip && \tunzip
+      /src/domjudge-${DOMJUDGE_VERSION}.zip -d /src && \tcd /src/domjudge-${DOMJUDGE_VERSION}
+      && \tmv /tmp/apache.conf.in etc/apache.conf.in && \tfor patch in /tmp/patches/*.patch;
+      do patch -p1 -i $patch; done && \tmake configure && /src/domjudge-${DOMJUDGE_VERSION}/configure
+      --disable-submitclient && make domserver && make install-domserver"
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:jessie
+  Name: build
+  Platform: ""
+  SourceCode: FROM debian:jessie as build
+- BaseName: debian:jessie
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /opt/domjudge
+    - /opt/domjudge
+  - Env:
+    - Key: RUNDEPS
+      Value: "\"apache2 php5 php5-cli libapache2-mod-php5 \tphp5-gd php5-curl php5-mysql
+        php5-json \tntp mysql-client ca-certificates unzip zip\""
+    Name: env
+  - CmdLine:
+    - "export DEBIAN_FRONTEND=noninteractive && \tapt-get update && apt-get install
+      -y --no-install-recommends $RUNDEPS && \tapt-get autoremove -y && apt-get clean
+      && rm -rf /var/lib/apt/lists/* && \tcd /opt/domjudge/domserver && \tchgrp -R
+      www-data /opt/domjudge && chmod -R g+w /opt/domjudge && \tcp /opt/domjudge/domserver/etc/apache.conf
+      /etc/apache2/sites-available/domjudge.conf && a2dissite 000-default && a2ensite
+      domjudge"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - /usr/local/bin/start.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - apache2-foreground.sh
+    - /usr/local/bin/apache2-foreground.sh
+  - CmdLine:
+    - start.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - apache2-foreground.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

@@ -1,0 +1,145 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stretch-slim
+  Commands:
+  - Maintainer: SJ Chou <sj@toright.com>
+    Name: maintainer
+  - Env:
+    - Key: HAPROXY_VERSION
+      Value: 1.9.8
+    Name: env
+  - Env:
+    - Key: HAPROXY_URL
+      Value: https://www.haproxy.org/download/1.9/src/haproxy-1.9.8.tar.gz
+    Name: env
+  - Env:
+    - Key: HAPROXY_SHA256
+      Value: 2d9a3300dbd871bc35b743a83caaf50fecfbf06290610231ca2d334fd04c2aee
+    Name: env
+  - CmdLine:
+    - "set -x \t\t&& savedAptMark=\"$(apt-mark showmanual)\" \t&& apt-get update &&
+      apt-get install -y --no-install-recommends \t\tca-certificates \t\tgcc \t\tlibc6-dev
+      \t\tliblua5.3-dev \t\tlibpcre3-dev \t\tlibssl-dev \t\tmake \t\twget \t\tzlib1g-dev
+      \t&& rm -rf /var/lib/apt/lists/* \t\t&& wget -O haproxy.tar.gz \"$HAPROXY_URL\"
+      \t&& echo \"$HAPROXY_SHA256 *haproxy.tar.gz\" | sha256sum -c \t&& mkdir -p /usr/src/haproxy
+      \t&& tar -xzf haproxy.tar.gz -C /usr/src/haproxy --strip-components=1 \t&& rm
+      haproxy.tar.gz \t\t&& makeOpts=' \t\tTARGET=linux2628 \t\tUSE_LUA=1 LUA_INC=/usr/include/lua5.3
+      \t\tUSE_GETADDRINFO=1 \t\tUSE_OPENSSL=1 \t\tUSE_PCRE=1 PCREDIR= \t\tUSE_ZLIB=1
+      \t' \t&& make -C /usr/src/haproxy -j \"$(nproc)\" all $makeOpts \t&& make -C
+      /usr/src/haproxy install-bin $makeOpts \t\t&& mkdir -p /usr/local/etc/haproxy
+      \t&& cp -R /usr/src/haproxy/examples/errorfiles /usr/local/etc/haproxy/errors
+      \t&& rm -rf /usr/src/haproxy \t\t&& apt-mark auto '.*' > /dev/null \t&& { [
+      -z \"$savedAptMark\" ] || apt-mark manual $savedAptMark; } \t&& find /usr/local
+      -type f -executable -exec ldd '{}' ';' \t\t| awk '/=>/ { print $(NF-1) }' \t\t|
+      sort -u \t\t| xargs -r dpkg-query --search \t\t| cut -d: -f1 \t\t| sort -u \t\t|
+      xargs -r apt-mark manual"
+    Name: run
+    PrependShell: true
+  - Name: stopsignal
+    Signal: SIGUSR1
+  - CmdLine:
+    - apt-get -y update &&     apt-get -y install supervisor curl openssl cron
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -qL https://github.com/kelseyhightower/confd/releases/download/v0.16.0/confd-0.16.0-linux-amd64
+      -o /confd &&     chmod +x /confd &&     mv /confd /usr/sbin &&     mkdir -p
+      /etc/confd/conf.d &&     mkdir -p /etc/confd/templates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://get.acme.sh -o /tmp/acme.sh && chmod 755 /tmp/acme.sh && /tmp/acme.sh
+      --install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ~/.acme.sh/acme.sh --install-cronjob
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://github.com/coreos/etcd/releases/download/v2.0.10/etcd-v2.0.10-linux-amd64.tar.gz
+      &&     tar xzvf etcd-v2.0.10-linux-amd64.tar.gz &&     mv etcd-v2.0.10-linux-amd64/etcd*
+      /bin/ &&     rm -Rf etcd-v2.0.10-linux-amd64*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./etcd/run-etcd.sh
+    - /bin/
+  - CmdLine:
+    - apt-get -y install lighttpd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd lighttpd
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./lighttpd/*
+    - /etc/lighttpd/
+  - CmdLine:
+    - "apt-get remove --purge -y software-properties-common &&     apt-get autoremove
+      -y  -o APT::AutoRemove::RecommendsImportant=false &&     apt-get clean &&     apt-get
+      autoclean &&     echo -n > /var/lib/apt/extended_states &&     rm -rf /usr/share/man/??
+      &&     rm -rf /usr/share/man/??_* && \trm -rf /var/cache/apk/*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./docker-entrypoint.sh
+    - /
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./haproxy/supervisord.conf
+    - /etc/supervisor/supervisord.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./haproxy/default.pem
+    - /usr/local/etc/haproxy/default.pem
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./haproxy/haproxy.cfg
+    - /etc/haproxy/haproxy.cfg
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./haproxy/haproxy.cfg.toml
+    - /etc/confd/conf.d/haproxy.cfg.toml
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./haproxy/haproxy.cfg.tmpl
+    - /etc/confd/templates/haproxy.cfg.tmpl
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./haproxy/acme-issue.sh.toml
+    - /etc/confd/conf.d/acme-issue.sh.toml
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./haproxy/acme-issue.sh.tmpl
+    - /etc/confd/templates/acme-issue.sh.tmpl
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - haproxy
+    - -f
+    - /usr/local/etc/haproxy/haproxy.cfg
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

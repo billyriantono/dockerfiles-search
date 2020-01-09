@@ -1,0 +1,147 @@
+MetaArgs:
+- DefaultValue: golang
+  Key: BASE_IMAGE_BUILDER
+  ProvidedValue: null
+  Value: golang
+- DefaultValue: "3.10"
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: "3.10"
+- DefaultValue: 1.12.6
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: 1.12.6
+Stages:
+- As: builder
+  BaseName: ${BASE_IMAGE_BUILDER}:${GO_VERSION}-alpine${ALPINE_VERSION}
+  Commands:
+  - Key: GOARCH
+    Name: arg
+    Value: amd64
+  - Key: GOARM
+    Name: arg
+    Value: null
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Name: workdir
+    Path: /tmp/gobuild
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - .
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} GOARM=${GOARM}     go build -a -mod=vendor     -ldflags="-s
+      -w     -X main.commit=${VCS_REF}     -X main.version=${VERSION}     -X main.buildSource=Docker"
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${BASE_IMAGE_BUILDER}:${GO_VERSION}-alpine${ALPINE_VERSION}
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ${BASE_IMAGE_BUILDER}:${GO_VERSION}-alpine${ALPINE_VERSION} AS
+    builder
+- As: docker-builder
+  BaseName: ${BASE_IMAGE_BUILDER}:${GO_VERSION}-alpine${ALPINE_VERSION}
+  Commands:
+  - Key: GOARCH
+    Name: arg
+    Value: amd64
+  - Key: GOARM
+    Name: arg
+    Value: null
+  - Key: DOCKER_VERSION
+    Name: arg
+    Value: v18.09.7
+  - CmdLine:
+    - apk add -U -q --progress --no-cache git bash coreutils gcc musl-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/docker/cli
+  - CmdLine:
+    - git clone --branch ${DOCKER_VERSION} --single-branch --depth 1 https://github.com/docker/cli.git
+      . > /dev/null 2>&1
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    - Key: GOARCH
+      Value: ${GOARCH}
+    - Key: GOARM
+      Value: ${GOARM}
+    - Key: DISABLE_WARN_OUTSIDE_CONTAINER
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - ./scripts/build/binary
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm build/docker && mv build/docker-linux-* build/docker
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${BASE_IMAGE_BUILDER}:${GO_VERSION}-alpine${ALPINE_VERSION}
+  Name: docker-builder
+  Platform: ""
+  SourceCode: FROM ${BASE_IMAGE_BUILDER}:${GO_VERSION}-alpine${ALPINE_VERSION} AS
+    docker-builder
+- BaseName: scratch
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.opencontainers.image.authors
+      Value: '"jessedduffield@gmail.com"'
+    - Key: org.opencontainers.image.created
+      Value: $BUILD_DATE
+    - Key: org.opencontainers.image.version
+      Value: $VERSION
+    - Key: org.opencontainers.image.revision
+      Value: $VCS_REF
+    - Key: org.opencontainers.image.url
+      Value: '"https://github.com/jesseduffield/lazydocker"'
+    - Key: org.opencontainers.image.documentation
+      Value: '"https://github.com/jesseduffield/lazydocker"'
+    - Key: org.opencontainers.image.source
+      Value: '"https://github.com/jesseduffield/lazydocker"'
+    - Key: org.opencontainers.image.title
+      Value: '"lazydocker"'
+    - Key: org.opencontainers.image.description
+      Value: '"The lazier way to manage everything docker"'
+    Name: label
+  - CmdLine:
+    - /bin/lazydocker
+    Name: entrypoint
+    PrependShell: false
+  - Chown: ""
+    From: docker-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/docker/cli/build/docker
+    - /bin/docker
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/gobuild/lazydocker
+    - /bin/lazydocker
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

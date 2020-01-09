@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine
+  Commands:
+  - Maintainer: LaoGao <noreply@phpgao.com>
+    Name: maintainer
+  - Key: SS_VER
+    Name: arg
+    Value: 3.1.1
+  - Key: SS_URL
+    Name: arg
+    Value: https://github.com/shadowsocks/shadowsocks-libev/releases/download/v$SS_VER/shadowsocks-libev-$SS_VER.tar.gz
+  - Key: KCP_VER
+    Name: arg
+    Value: "20171201"
+  - Key: KCP_URL
+    Name: arg
+    Value: https://github.com/xtaci/kcptun/releases/download/v$KCP_VER/kcptun-linux-amd64-$KCP_VER.tar.gz
+  - CmdLine:
+    - set -ex &&     apk add --no-cache --virtual .build-deps                                 autoconf                                 build-base                                 curl                                 libev-dev                                 libtool                                 linux-headers                                 udns-dev                                 libsodium-dev                                 mbedtls-dev                                 pcre-dev                                 tar                                 tzdata                                  c-ares-dev
+      &&     cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime &&     cd /tmp &&     curl
+      -sSL $KCP_URL | tar xz server_linux_amd64 &&     mv server_linux_amd64 /usr/bin/
+      &&     curl -sSL $SS_URL | tar xz --strip 1 &&     ./configure --prefix=/usr
+      --disable-documentation &&     make install &&     cd .. &&     runDeps="$(         scanelf
+      --needed --nobanner /usr/bin/ss-*             | awk '{ gsub(/,/, "\nso:", $2);
+      print "so:" $2 }'             | xargs -r apk info --installed             |
+      sort -u     )" &&     apk add --no-cache --virtual .run-deps $runDeps &&     apk
+      del .build-deps &&     rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SERVER_ADDR
+      Value: 0.0.0.0
+    - Key: SERVER_PORT
+      Value: "19980"
+    - Key: PASSWORD
+      Value: this@mysite!
+    - Key: METHOD
+      Value: chacha20
+    - Key: TIMEOUT
+      Value: "300"
+    - Key: FASTOPEN
+      Value: --fast-open
+    - Key: UDP_RELAY
+      Value: -u
+    - Key: USER
+      Value: nobody
+    - Key: DNS_ADDR
+      Value: 8.8.8.8
+    - Key: DNS_ADDR_2
+      Value: 8.8.4.4
+    Name: env
+  - Env:
+    - Key: KCP_LISTEN
+      Value: "4000"
+    - Key: KCP_ENCRYPT
+      Value: salsa20
+    - Key: KCP_MODE
+      Value: fast
+    - Key: KCP_MUT
+      Value: "1350"
+    - Key: KCP_NOCOMP
+      Value: ''' --nocomp --dscp 46'''
+    Name: env
+  - Name: expose
+    Ports:
+    - $SERVER_PORT/tcp
+    - $SERVER_PORT/udp
+  - Name: expose
+    Ports:
+    - $KCP_LISTEN/udp
+  - CmdLine:
+    - ss-server -s $SERVER_ADDR               -p $SERVER_PORT               -k $PASSWORD               -m
+      $METHOD               -t $TIMEOUT               -a $USER               $FASTOPEN               -d
+      $DNS_ADDR               -d $DNS_ADDR_2               $UDP_RELAY               -f
+      /tmp/ss.pid               && server_linux_amd64 -t "127.0.0.1:$SERVER_PORT"               -l
+      ":$KCP_LISTEN"               -key $PASSWORD               --mode $KCP_MODE               --crypt
+      $KCP_ENCRYPT               --mtu $KCP_MUT               $KCP_NOCOMP
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

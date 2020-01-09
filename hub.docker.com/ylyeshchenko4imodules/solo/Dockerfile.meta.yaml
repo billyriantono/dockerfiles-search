@@ -1,0 +1,140 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: microsoft/aspnetcore:2.0
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Name: expose
+    Ports:
+    - "80"
+  From:
+    Image: microsoft/aspnetcore:2.0
+  Name: base
+  Platform: ""
+  SourceCode: FROM microsoft/aspnetcore:2.0 AS base
+- As: build
+  BaseName: microsoft/aspnetcore-build:2.0
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Env:
+    - Key: NODE_VERSION
+      Value: 8.5.0
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.sln'
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - DockerRegistryViewer/DockerRegistryViewer.csproj
+    - ./DockerRegistryViewer
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - DockerRegistryViewerTests/DockerRegistryViewerTests.csproj
+    - ./DockerRegistryViewerTests
+  - CmdLine:
+    - dotnet restore
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Name: workdir
+    Path: ./DockerRegistryViewer
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  From:
+    Image: microsoft/aspnetcore-build:2.0
+  Name: build
+  Platform: ""
+  SourceCode: FROM microsoft/aspnetcore-build:2.0 as build
+- As: test
+  BaseName: build
+  Commands:
+  - Name: workdir
+    Path: ./DockerRegistryViewerTests
+  - CmdLine:
+    - dotnet test
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build
+  Name: test
+  Platform: ""
+  SourceCode: FROM build as test
+- As: publish
+  BaseName: build
+  Commands:
+  - Name: workdir
+    Path: /app/DockerRegistryViewerHealthChecker
+  - CmdLine:
+    - dotnet build -c RELEASE
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/DockerRegistryViewer
+  - CmdLine:
+    - dotnet publish -c RELEASE -o /builtapp
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build as publish
+- As: production
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /builtapp
+    - .
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app/DockerRegistryViewerHealthChecker/bin/RELEASE/netcoreapp2.0/
+    - ./health/
+  - Health:
+      Interval: 60000000000
+      Retries: 1
+      StartPeriod: 5000000000
+      Test:
+      - CMD
+      - dotnet
+      - ./health/DockerRegistryViewerHealthChecker.dll
+      Timeout: 10000000000
+    Name: healthcheck
+  - CmdLine:
+    - dotnet
+    - DockerRegistryViewer.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: production
+  Platform: ""
+  SourceCode: FROM base AS production

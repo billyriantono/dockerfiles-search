@@ -1,0 +1,110 @@
+MetaArgs: null
+Stages:
+- As: stage1
+  BaseName: ubuntu:18.04
+  Commands:
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - set -xe;     apt-get -qq update && apt-get install -y --no-install-recommends         apt-transport-https         git-core         make         software-properties-common         gcc         python3-dev         libffi-dev         python3-pip         python3-setuptools     &&
+      apt-get autoremove -y && apt-get clean     && rm -rf /var/lib/apt/lists/* /tmp/*     &&
+      mkdir -p /app     && pip3 install virtualenv     && virtualenv -p python3 --prompt
+      "(cloudlaunch)" /app/venv
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - requirements.txt
+    - /app
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - setup.py
+    - /app
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - README.rst
+    - /app
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - HISTORY.rst
+    - /app
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - django-cloudlaunch/cloudlaunchserver/__init__.py
+    - /app/django-cloudlaunch/cloudlaunchserver/__init__.py
+  - CmdLine:
+    - /app/venv/bin/pip3 install -U pip && /app/venv/bin/pip3 install --no-cache-dir
+      -r requirements.txt
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: stage1
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as stage1
+- BaseName: ubuntu:18.04
+  Commands:
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - useradd -ms /bin/bash cloudlaunch     && mkdir -p /app     && chown cloudlaunch:cloudlaunch
+      /app -R     && apt-get -qq update && apt-get install -y --no-install-recommends         git-core         python3-pip         python3-setuptools         locales
+      locales-all     && apt remove -y python     && apt-get autoremove -y && apt-get
+      clean     && rm -rf /var/lib/apt/lists/* /tmp/*     && update-alternatives --install
+      /usr/bin/python python /usr/bin/python3.6 1
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    Name: env
+  - Name: workdir
+    Path: /app/
+  - Chown: cloudlaunch:cloudlaunch
+    From: stage1
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /app
+  - Chown: cloudlaunch:cloudlaunch
+    Name: add
+    SourcesAndDest:
+    - .
+    - /app
+  - Name: user
+    User: cloudlaunch
+  - CmdLine:
+    - chmod a+x /app/venv/bin/*     && cd django-cloudlaunch     && /app/venv/bin/python
+      manage.py collectstatic --no-input
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - /bin/bash -c "source /app/venv/bin/activate && /app/venv/bin/gunicorn -k gevent
+      -b :8000 --access-logfile - --error-logfile - --log-level info cloudlaunchserver.wsgi"
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

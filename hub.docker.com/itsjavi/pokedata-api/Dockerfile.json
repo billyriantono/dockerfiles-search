@@ -1,0 +1,179 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "pokedata_db",
+      "BaseName": "python:2.7-slim",
+      "SourceCode": "FROM python:2.7-slim as pokedata_db",
+      "Platform": "",
+      "As": "pokedata_db",
+      "From": {
+        "Image": "python:2.7-slim"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update \u003e /dev/null \u0026\u0026     apt-get upgrade -y \u003e /dev/null \u0026\u0026     apt-get install -y --no-install-recommends git gcc libpq-dev python-dev python-distribute \u003e /dev/null \u0026\u0026     pip install --upgrade pip \u0026\u0026     pip install --no-cache-dir virtualenv psycopg2 pymysql \u003e /dev/null"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "CmdLine": [
+            "git clone https://github.com/veekun/pokedex.git /app;     cd /app \u0026\u0026 git checkout 18925edcd3ad71dd912a94ce4b1bc1435943937a"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "echo \"Building the bin/pokedex executable ...\";     virtualenv /app --python=python2;     cd /app;     bin/python setup.py develop;"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "bin/pokedex load"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "bin/pokedex",
+            "help"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    },
+    {
+      "Name": "pokedata_generator",
+      "BaseName": "php:7.3.0-cli-stretch",
+      "SourceCode": "FROM php:7.3.0-cli-stretch as pokedata_generator",
+      "Platform": "",
+      "As": "pokedata_generator",
+      "From": {
+        "Image": "php:7.3.0-cli-stretch"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update -qq \u0026\u0026 apt-get install -qqy --no-install-recommends     apt-utils gettext-base pandoc     build-essential make     apt-transport-https ca-certificates     curl git unzip sqlite sqlite3 libsqlite3-dev     libzip-dev zip     libfreetype6-dev libjpeg62-turbo-dev libpng-dev     \u0026\u0026 docker-php-ext-install -j$(nproc) iconv     \u0026\u0026 docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/     \u0026\u0026 docker-php-ext-configure zip --with-libzip     \u0026\u0026 docker-php-ext-install -j$(nproc) gd     \u0026\u0026 docker-php-ext-install zip"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            ".",
+            "/app"
+          ]
+        },
+        {
+          "CmdLine": [
+            "curl -sS https://getcomposer.org/installer -o composer-setup.php     \u0026\u0026 php composer-setup.php --install-dir=/usr/local/bin --filename=composer     \u0026\u0026 composer --version     \u0026\u0026 mkdir -p /app/var/data/pokedata"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "pokedata_db",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/pokedex/data/pokedex.sqlite",
+            "/app/var/data/pokedata"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "pokedata_db",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/pokedex/data/csv",
+            "/app/var/data/pokedata/csv"
+          ]
+        },
+        {
+          "CmdLine": [
+            "mv /app/var/data/pokedata/pokedex.sqlite /app/var/data/pokedata/db.sqlite \u0026\u0026     ls -lh /app/var/data/pokedata"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd /app \u0026\u0026 make install \u0026\u0026 make api \u0026\u0026 make api-docs"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "echo \"\u003c!DOCTYPE html\u003e\u003chtml lang=\\\"en\\\"\u003e\" \u003e /app/build/index.html \u0026\u0026     echo \"\u003chead\u003e\u003cmeta charset=\\\"UTF-8\\\"\u003e\u003ctitle\u003ePokéData\u003c/title\u003e\u003c/head\u003e\u003cbody\u003e\" \u003e\u003e /app/build/index.html \u0026\u0026     pandoc -f markdown /app/README.md \u003e\u003e /app/build/index.html \u0026\u0026     echo \"\u003c/body\u003e\u003c/html\u003e\" \u003e\u003e /app/build/index.html"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "pokedata_api",
+      "BaseName": "nginx:1.15-alpine",
+      "SourceCode": "FROM nginx:1.15-alpine as pokedata_api",
+      "Platform": "",
+      "As": "pokedata_api",
+      "From": {
+        "Image": "nginx:1.15-alpine"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/usr/share/nginx/html"
+        },
+        {
+          "CmdLine": [
+            "rm -rf /usr/share/nginx/html/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "pokedata_generator",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/build",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "ls -lh ./ \u0026\u0026 ls -lh ./api \u0026\u0026 ls -lh ./docs"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "80"
+          ]
+        }
+      ]
+    }
+  ]
+}

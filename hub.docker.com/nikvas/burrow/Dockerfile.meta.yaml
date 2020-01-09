@@ -1,0 +1,64 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.11-alpine
+  Commands:
+  - Env:
+    - Key: DEP_VERSION
+      Value: '"0.5.0"'
+    - Key: BU_VERSION
+      Value: '"v1.2.2"'
+    Name: env
+  - CmdLine:
+    - "apk add --no-cache git curl gcc libc-dev && \tcurl -L -s https://github.com/golang/dep/releases/download/v${DEP_VERSION}/dep-linux-amd64
+      -o $GOPATH/bin/dep && \tchmod +x $GOPATH/bin/dep && \tmkdir -p $GOPATH/src/github.com/linkedin/Burrow
+      &&         git clone https://github.com/linkedin/Burrow $GOPATH/src/github.com/linkedin/Burrow
+      &&         cd $GOPATH/src/github.com/linkedin/Burrow &&         git checkout
+      tags/${BU_VERSION}"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - $GOPATH/src/github.com/linkedin/Burrow/
+  - CmdLine:
+    - "cd $GOPATH/src/github.com/linkedin/Burrow && \tdep ensure && \tgo build -o
+      /tmp/burrow ."
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine as builder
+- BaseName: iron/go
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"LinkedIn Burrow https://github.com/linkedin/Burrow"'
+    Name: label
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/burrow
+    - /app/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - /docker-config/burrow.toml
+    - /etc/burrow/
+  - CmdLine:
+    - /app/burrow
+    - --config-dir
+    - /etc/burrow
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: iron/go
+  Name: ""
+  Platform: ""
+  SourceCode: FROM iron/go

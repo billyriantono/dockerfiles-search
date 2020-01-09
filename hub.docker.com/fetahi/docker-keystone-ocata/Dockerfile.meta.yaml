@@ -1,0 +1,62 @@
+MetaArgs: null
+Stages:
+- BaseName: python:2-alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk add git build-base openssl-dev libffi-dev linux-headers
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/local/src/
+  - CmdLine:
+    - git clone -b stable/ocata  https://git.openstack.org/openstack/keystone.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i '/Babel/d /pbr/d' /usr/local/src/keystone/requirements.txt && pip install
+      /usr/local/src/keystone/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install uwsgi python-openstackclient
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk del git build-base openssl-dev linux-headers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /etc/keystone/fernet-keys
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /usr/local/src/keystone/etc/keystone-paste.ini /etc/keystone && cp /usr/local/src/keystone/etc/keystone.conf.sample
+      /etc/keystone/keystone.conf && cp /usr/local/src/keystone/etc/policy.json /etc/keystone/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - keystone-manage fernet_setup --keystone-user root --keystone-group root
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - keystone-manage db_sync && keystone-manage bootstrap --bootstrap-password password
+      --bootstrap-username admin --bootstrap-project-name admin --bootstrap-role-name
+      admin --bootstrap-service-name keystone --bootstrap-region-id RegionOne --bootstrap-admin-url
+      http://localhost:35357 --bootstrap-public-url http://localhost:5000 --bootstrap-internal-url
+      http://localhost:5000
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "35357"
+    - "5000"
+  - CmdLine:
+    - uwsgi --http localhost:35357 --wsgi-file /usr/local/bin/keystone-wsgi-admin
+      & uwsgi --http localhost:5000 --wsgi-file /usr/local/bin/keystone-wsgi-public
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: python:2-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:2-alpine

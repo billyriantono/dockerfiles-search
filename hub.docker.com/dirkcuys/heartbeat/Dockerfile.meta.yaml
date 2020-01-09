@@ -1,0 +1,94 @@
+MetaArgs: null
+Stages:
+- BaseName: python:3.6-alpine3.8
+  Commands:
+  - Name: workdir
+    Path: /opt/app/
+  - CmdLine:
+    - addgroup -S appgroup && adduser -S appuser -G appgroup
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - /opt/app/
+  - CmdLine:
+    - apk --no-cache add --virtual .python-rundeps         libpq         postgresql-libs     &&
+      apk --no-cache add --virtual .build-deps         gcc         musl-dev         postgresql-dev     &&
+      python3 -m venv /opt/django-venv     && /opt/django-venv/bin/pip install -r
+      /opt/app/requirements.txt --no-cache-dir    && apk --purge del .build-deps
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DOCKERIZE_VERSION
+      Value: v0.6.0
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/docker-entry.sh
+    - /docker-entry.sh
+  - CmdLine:
+    - wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz     &&
+      tar -C /usr/local/bin -xzvf dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz     &&
+      rm dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R appuser:appgroup /opt/app
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /opt/app/
+  - Env:
+    - Key: DATABASE_URL
+      Value: '"sqlite:////var/app/db.sqlite3"'
+    - Key: ADMIN_EMAIL
+      Value: '""'
+    - Key: SECRET_KEY
+      Value: '""'
+    - Key: EMAIL_HOST
+      Value: '""'
+    - Key: EMAIL_HOST_USER
+      Value: '""'
+    - Key: EMAIL_HOST_PASSWORD
+      Value: '""'
+    Name: env
+  - Name: user
+    User: appuser
+  - Name: expose
+    Ports:
+    - "8000"
+  - Name: volume
+    Volumes:
+    - /var/app/static_serve
+  - Name: volume
+    Volumes:
+    - /var/app/upload
+  - Name: volume
+    Volumes:
+    - /var/lib/celery/
+  - CmdLine:
+    - /docker-entry.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /opt/django-venv/bin/gunicorn
+    - heartbeat.wsgi:application
+    - --bind
+    - 0.0.0.0:8000
+    - --workers=1
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3.6-alpine3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.6-alpine3.8

@@ -1,0 +1,135 @@
+MetaArgs: null
+Stages:
+- As: wireshark
+  BaseName: ubuntu:18.04
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"don@agilicus.com"'
+    Name: label
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pause.c
+    - /pause.c
+  - CmdLine:
+    - echo deb-src http://archive.ubuntu.com/ubuntu/ bionic-updates universe >> /etc/apt/sources.list     &&
+      apt-get update     && apt-get -y install --no-install-recommends git build-essential
+      ca-certificates libncurses5-dev     && apt-get -y build-dep wireshark-common     &&
+      gcc -o /usr/local/bin/pause /pause.c
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/donbowman/liboping     && cd liboping     && git
+      checkout reset-count     && ./autogen.sh     && ./configure --enable-static
+      --disable-shared --with-ncurses --prefix=/usr     && make     && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p wireshark/build     && cd wireshark     && git init     && git remote
+      add origin https://github.com/wireshark/wireshark     && git fetch origin 1b3cedbc5fe5b9d8b454a10fcd2046f0d38a9f19     &&
+      git reset --hard FETCH_HEAD
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd wireshark/build     && cmake -DENABLE_STATIC=1 -DBUILD_dumpcap=ON              -DENABLE_LUA=OFF              -DENABLE_GNUTLS=OFF              -DENABLE_NGHTTP2=OFF              -DENABLE_SMI=OFF              -DENABLE_KERBEROS=OFF              -DENABLE_SBC=OFF              -DENABLE_SPANDSP=OFF              -DENABLE_BCG729=OFF              -DENABLE_LIBXML2=OFF              -DBUILD_wireshark=OFF              -DBUILD_tshark=OFF              -DBUILD_tfshark=OFF              -DBUILD_rawshark=OFF              -DBUILD_text2pcap=OFF              -DBUILD_mergecap=OFF              -DBUILD_reordercap=OFF              -DBUILD_editcap=OFF              -DBUILD_capinfos=OFF              -DBUILD_captype=OFF              -DBUILD_randpkt=OFF              -DBUILD_dftest=OFF              -DBUILD_corbaidl2wrs=OFF              -DBUILD_dcerpcidl2wrs=OFF              -DBUILD_xxx2deb=OFF              -DBUILD_androiddump=OFF              -DBUILD_sshdump=OFF              -DBUILD_ciscodump=OFF              -DBUILD_dpauxmon=OFF              -DBUILD_randpktdump=OFF              -DBUILD_udpdump=OFF              -DBUILD_sharkd=OFF  ..     &&
+      make -j $(getconf _NPROCESSORS_ONLN) dumpcap     && cp -r run/dumpcap /usr/local/bin/dumpcap     &&
+      chmod a=rx /usr/local/bin/dumpcap     && strip /usr/local/bin/dumpcap
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: wireshark
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as wireshark
+- As: crictl
+  BaseName: golang:1.10-stretch
+  Commands:
+  - CmdLine:
+    - mkdir -p /go/bin /go/src/github.com/kubernetes-incubator     && cd /go/src/github.com/kubernetes-incubator     &&
+      git clone https://github.com/kubernetes-incubator/cri-tools     && cd cri-tools     &&
+      git checkout 3df9c005e3e812dfb933867ae31843bc61969f63     && make     && make
+      install
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10-stretch
+  Name: crictl
+  Platform: ""
+  SourceCode: FROM golang:1.10-stretch as crictl
+- BaseName: ubuntu:18.04
+  Commands:
+  - Chown: ""
+    From: wireshark
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/dumpcap
+    - /usr/local/bin/dumpcap
+  - Chown: ""
+    From: wireshark
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/pause
+    - /usr/local/bin/pause
+  - Chown: ""
+    From: wireshark
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/oping
+    - /usr/bin/oping
+  - Chown: ""
+    From: wireshark
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/noping
+    - /usr/bin/noping
+  - Chown: ""
+    From: crictl
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/crictl
+    - /usr/local/bin/crictl
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sha256sums
+    - sha256sums
+  - Env:
+    - Key: LANG
+      Value: en_CA.UTF-8
+    Name: env
+  - Env:
+    - Key: LC_ALL
+      Value: en_CA.UTF-8
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update     && apt-get -y install --no-install-recommends         locales
+      util-linux python3 hping3 fping ca-certificates build-essential python3-dev
+      python3-distutils         inetutils-ping iproute2 curl tcpdump libpcap0.8 libglib2.0-0
+      libnl-3-200 libnl-genl-3-200 libpcre3         zlib1g libcap2 gdb strace iptables
+      tcpflow net-tools lsof vim gawk netcat-openbsd     && curl -fLs https://bootstrap.pypa.io/3.3/get-pip.py
+      > get-pip.py     && sha256sum -c sha256sums     && python3 get-pip.py     &&
+      rm -rf /var/lib/apt/lists/*     && locale-gen en_CA.UTF-8
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/pause
+    Name: cmd
+    PrependShell: true
+  - Name: workdir
+    Path: /root
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

@@ -1,0 +1,205 @@
+MetaArgs: null
+Stages:
+- As: mozjpeg
+  BaseName: alpine:edge
+  Commands:
+  - CmdLine:
+    - echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache alpine-sdk nasm autoconf automake libtool pkgconfig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -s /bin/sh -D -G abuild abuild
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo "%abuild ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/abuild'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: abuild
+  - CmdLine:
+    - abuild-keygen -a -i -n -q
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/mozjpeg
+  - Chown: abuild:abuild
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - alpine/mozjpeg/APKBUILD
+    - ./
+  - CmdLine:
+    - sudo chown abuild:abuild ./
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - abuild -r -i || abuild -r -i
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/tiff
+  - Chown: abuild:abuild
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - alpine/tiff/*
+    - ./
+  - CmdLine:
+    - sudo chown abuild:abuild ./
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - abuild -r -i || abuild -r -i
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/lcms2
+  - Chown: abuild:abuild
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - alpine/lcms2/*
+    - ./
+  - CmdLine:
+    - sudo chown abuild:abuild ./
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - abuild -r -i || abuild -r -i
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/vips
+  - Chown: abuild:abuild
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - alpine/vips/APKBUILD
+    - ./
+  - CmdLine:
+    - sudo chown abuild:abuild ./
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - abuild -r || abuild -r
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: mozjpeg
+  Platform: ""
+  SourceCode: FROM alpine:edge AS mozjpeg
+- As: go
+  BaseName: alpine:edge
+  Commands:
+  - Name: workdir
+    Path: /go/src/reImage
+  - CmdLine:
+    - echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: mozjpeg
+    Name: copy
+    SourcesAndDest:
+    - /home/abuild/packages/tmp/x86_64/*.apk
+    - /tmp/
+  - CmdLine:
+    - apk add --allow-untrusted /tmp/*.apk && apk add --no-cache go git fftw-dev musl-dev
+      dep
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - CmdLine:
+    - go get github.com/ultimate-guitar/go-imagequant
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gopkg.*
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.go'
+    - ./
+  - CmdLine:
+    - dep ensure
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -o reImage *.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: go
+  Platform: ""
+  SourceCode: FROM alpine:edge AS go
+- As: release
+  BaseName: alpine:edge
+  Commands:
+  - Name: workdir
+    Path: /usr/local/bin/
+  - CmdLine:
+    - echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: mozjpeg
+    Name: copy
+    SourcesAndDest:
+    - /home/abuild/packages/tmp/x86_64/mozjpeg*.apk
+    - /tmp/
+  - Chown: ""
+    From: mozjpeg
+    Name: copy
+    SourcesAndDest:
+    - /home/abuild/packages/tmp/x86_64/vips*.apk
+    - /tmp/
+  - Chown: ""
+    From: mozjpeg
+    Name: copy
+    SourcesAndDest:
+    - /home/abuild/packages/tmp/x86_64/lcms2*.apk
+    - /tmp/
+  - Chown: ""
+    From: mozjpeg
+    Name: copy
+    SourcesAndDest:
+    - /home/abuild/packages/tmp/x86_64/tiff*.apk
+    - /tmp/
+  - CmdLine:
+    - apk add --allow-untrusted /tmp/*.apk && apk add --no-cache ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: go
+    Name: copy
+    SourcesAndDest:
+    - /go/src/reImage/reImage
+    - .
+  - Env:
+    - Key: CFG_LISTEN
+      Value: '":7075"'
+    Name: env
+  - CmdLine:
+    - ./reImage
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:edge
+  Name: release
+  Platform: ""
+  SourceCode: FROM alpine:edge AS release

@@ -1,0 +1,199 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "git",
+      "BaseName": "alpine/git:1.0.4",
+      "SourceCode": "FROM alpine/git:1.0.4 as git",
+      "Platform": "",
+      "As": "git",
+      "From": {
+        "Image": "alpine/git:1.0.4"
+      },
+      "Commands": [
+        {
+          "Key": "KUBEAWS_VERSION",
+          "Name": "arg",
+          "Value": "v0.14.X"
+        },
+        {
+          "Key": "KUBEAWS_HASH",
+          "Name": "arg",
+          "Value": "9732bc9ad88431392941ca126a1cb76e3df8478d"
+        },
+        {
+          "Name": "workdir",
+          "Path": "/"
+        },
+        {
+          "CmdLine": [
+            "git clone https://github.com/kubernetes-incubator/kube-aws.git    \u0026\u0026 cd /kube-aws     \u0026\u0026 git checkout -b tag refs/tags/$KUBEAWS_VERSION || git checkout $(echo $KUBEAWS_HASH) -b $KUBEAWS_VERSION"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "dep",
+      "BaseName": "instrumentisto/dep:0.5.0",
+      "SourceCode": "FROM instrumentisto/dep:0.5.0 as dep",
+      "Platform": "",
+      "As": "dep",
+      "From": {
+        "Image": "instrumentisto/dep:0.5.0"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/go/src/github.com/kubernetes-incubator/kube-aws"
+        },
+        {
+          "Chown": "",
+          "From": "git",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/kube-aws",
+            "/go/src/github.com/kubernetes-incubator/kube-aws"
+          ]
+        },
+        {
+          "CmdLine": [
+            "dep ensure"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "builder",
+      "BaseName": "golang:1.11.1-alpine",
+      "SourceCode": "FROM golang:1.11.1-alpine as builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "golang:1.11.1-alpine"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "GOOS",
+              "Value": "linux"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "GOARCH",
+              "Value": "amd64"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "dep",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/go/src/github.com/kubernetes-incubator/kube-aws",
+            "/go/src/github.com/kubernetes-incubator/kube-aws"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/go/src/github.com/kubernetes-incubator/kube-aws"
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache bash gcc libc-dev make git ca-certificates \u0026\u0026 make build"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "alpine:3.10.0",
+      "SourceCode": "FROM alpine:3.10.0",
+      "Platform": "",
+      "From": {
+        "Image": "alpine:3.10.0"
+      },
+      "Commands": [
+        {
+          "Key": "KUBEAWS_VERSION",
+          "Name": "arg",
+          "Value": "v0.14.X"
+        },
+        {
+          "Key": "KUBEAWS_HASH",
+          "Name": "arg",
+          "Value": "-9732bc9ad88431392941ca126a1cb76e3df8478d"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "version",
+              "Value": "\"${KUBEAWS_VERSION}${KUBEAWS_HASH}\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"sakamoto@chatwork.com\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache ca-certificates"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/go/src/github.com/kubernetes-incubator/kube-aws/bin/kube-aws",
+            "/usr/local/bin/kube-aws"
+          ]
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/kube-aws"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/kube-aws"
+        },
+        {
+          "CmdLine": [
+            "/usr/local/bin/kube-aws"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "CmdLine": [
+            "help"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

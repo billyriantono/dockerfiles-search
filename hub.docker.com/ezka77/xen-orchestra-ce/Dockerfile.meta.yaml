@@ -1,0 +1,172 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: mhart/alpine-node:8
+  Commands:
+  - Name: workdir
+    Path: /home/node
+  - CmdLine:
+    - apk add --no-cache git python g++ make bash
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b master https://github.com/vatesfr/xen-orchestra/ &&     rm -rf
+      /home/node/xen-orchestra/.git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - xo-server.config.yaml
+    - xen-orchestra/packages/xo-server/.xo-server.yaml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - patches
+    - /home/node/xen-orchestra/patches
+  - CmdLine:
+    - git clone https://git.savannah.nongnu.org/git/quilt.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache diffutils gawk gettext patch perl sed
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd quilt &&    ./configure &&    make &&    make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /home/node/xen-orchestra &&    quilt push gh_issue_redirect &&    yarn &&    yarn
+      build
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - link_plugins.sh
+    - /home/node/xen-orchestra/packages/xo-server/link_plugins.sh
+  - CmdLine:
+    - /home/node/xen-orchestra/packages/xo-server/link_plugins.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: mhart/alpine-node:8
+  Name: build
+  Platform: ""
+  SourceCode: FROM mhart/alpine-node:8 as build
+- As: build-libvhdi
+  BaseName: alpine:3.8
+  Commands:
+  - Name: workdir
+    Path: /home/node
+  - CmdLine:
+    - apk add --no-cache git g++ make bash automake autoconf libtool gettext-dev pkgconf
+      fuse-dev fuse
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/libyal/libvhdi.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd libvhdi && ./synclibs.sh &&     ./autogen.sh &&     ./configure &&     make
+      &&     make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.8
+  Name: build-libvhdi
+  Platform: ""
+  SourceCode: FROM alpine:3.8 as build-libvhdi
+- BaseName: alpine:3.8
+  Commands:
+  - Env:
+    - Key: USER
+      Value: node
+    - Key: XOA_PLAN
+      Value: "5"
+    - Key: DEBUG
+      Value: xo:main
+    Name: env
+  - CmdLine:
+    - adduser -D -u 1000 node
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/node
+  - CmdLine:
+    - apk add --no-cache tini su-exec bash util-linux nfs-utils lvm2 fuse gettext
+      cifs-utils
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /storage &&     chown node:node /storage
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /home/node/xen-orchestra
+    - /home/node/xen-orchestra
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/node
+    - /usr/bin/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/libgcc*
+    - /usr/lib/libstdc*
+    - /usr/lib/
+  - Chown: ""
+    From: build-libvhdi
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/vhdimount
+    - /usr/local/bin/
+  - Chown: ""
+    From: build-libvhdi
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/vhdiinfo
+    - /usr/local/bin/
+  - Chown: ""
+    From: build-libvhdi
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/libvhdi*
+    - /usr/local/lib/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - xo-entry.sh
+    - /entrypoint.sh
+  - Name: expose
+    Ports:
+    - "8000"
+  - Name: workdir
+    Path: /home/node/xen-orchestra/packages/xo-server/
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - ./bin/xo-server
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

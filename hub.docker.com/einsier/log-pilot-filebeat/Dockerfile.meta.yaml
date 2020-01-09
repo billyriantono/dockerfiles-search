@@ -1,0 +1,107 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.9-alpine3.6
+  Commands:
+  - Env:
+    - Key: PILOT_DIR
+      Value: /go/src/github.com/AliyunContainerService/log-pilot
+    Name: env
+  - Key: GOOS
+    Name: arg
+    Value: linux
+  - Key: GOARCH
+    Name: arg
+    Value: amd64
+  - CmdLine:
+    - set -ex && apk add --no-cache make git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $PILOT_DIR
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $PILOT_DIR
+  - CmdLine:
+    - go install
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.9-alpine3.6
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.9-alpine3.6 as builder
+- BaseName: alpine:3.6
+  Commands:
+  - Env:
+    - Key: FILEBEAT_VERSION
+      Value: 6.5.4
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/glibc/glibc-2.26-r0.apk
+    - /tmp/
+  - CmdLine:
+    - apk update &&     apk add python &&     apk add ca-certificates &&     apk add
+      wget &&     update-ca-certificates &&     wget https://artifacts.elastic.co/downloads/beats/filebeat/filebeat-${FILEBEAT_VERSION}-linux-x86_64.tar.gz
+      -P /tmp/ &&     mkdir -p /etc/filebeat /var/lib/filebeat /var/log/filebeat &&     tar
+      zxf /tmp/filebeat-${FILEBEAT_VERSION}-linux-x86_64.tar.gz -C /tmp/ &&     cp
+      -rf /tmp/filebeat-${FILEBEAT_VERSION}-linux-x86_64/filebeat /usr/bin/ &&     cp
+      -rf /tmp/filebeat-${FILEBEAT_VERSION}-linux-x86_64/fields.yml /etc/filebeat/
+      &&     cp -rf /tmp/filebeat-${FILEBEAT_VERSION}-linux-x86_64/kibana /etc/filebeat/
+      &&     cp -rf /tmp/filebeat-${FILEBEAT_VERSION}-linux-x86_64/module /etc/filebeat/
+      &&     cp -rf /tmp/filebeat-${FILEBEAT_VERSION}-linux-x86_64/modules.d /etc/filebeat/
+      &&     apk add --allow-untrusted /tmp/glibc-2.26-r0.apk &&     rm -rf /var/cache/apk/*
+      /tmp/filebeat-${FILEBEAT_VERSION}-linux-x86_64.tar.gz /tmp/filebeat-${FILEBEAT_VERSION}-linux-x86_64
+      /tmp/glibc-2.26-r0.apk
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/log-pilot
+    - /pilot/pilot
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/entrypoint
+    - assets/filebeat/
+    - assets/healthz
+    - /pilot/
+  - CmdLine:
+    - chmod +x /pilot/pilot /pilot/entrypoint /pilot/healthz /pilot/config.filebeat
+    Name: run
+    PrependShell: true
+  - Health:
+      Test:
+      - CMD-SHELL
+      - /pilot/healthz
+    Name: healthcheck
+  - Name: volume
+    Volumes:
+    - /var/log/filebeat
+  - Name: volume
+    Volumes:
+    - /var/lib/filebeat
+  - Name: workdir
+    Path: /pilot/
+  - Env:
+    - Key: PILOT_TYPE
+      Value: filebeat
+    Name: env
+  - CmdLine:
+    - /pilot/entrypoint
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.6
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.6

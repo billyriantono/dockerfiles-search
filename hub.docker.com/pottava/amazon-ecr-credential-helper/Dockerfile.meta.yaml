@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: certs
+  BaseName: alpine:3.10
+  Commands:
+  - CmdLine:
+    - apk --no-cache add "ca-certificates=20190108-r0"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: certs
+  Platform: ""
+  SourceCode: FROM alpine:3.10 AS certs
+- As: build
+  BaseName: golang:1.12.7-alpine3.10
+  Commands:
+  - CmdLine:
+    - apk --no-cache add "git=2.22.0-r0" gcc g++ musl-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -u github.com/awslabs/amazon-ecr-credential-helper/...
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/awslabs/amazon-ecr-credential-helper
+  - CmdLine:
+    - git checkout "v0.3.1"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    - Key: GOOS
+      Value: linux
+    - Key: GOARCH
+      Value: amd64
+    Name: env
+  - CmdLine:
+    - go build -ldflags "-s -w" -installsuffix cgo -a -o /ecr-login     ./ecr-login/cli/docker-credential-ecr-login
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.7-alpine3.10
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.12.7-alpine3.10 AS build
+- BaseName: alpine:3.10
+  Commands:
+  - Env:
+    - Key: REGISTRY
+      Value: 123457689012.dkr.ecr.us-east-1.amazonaws.com
+    - Key: METHOD
+      Value: get
+    Name: env
+  - Chown: ""
+    From: certs
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /ecr-login
+    - /usr/bin/docker-credential-ecr-login
+  - CmdLine:
+    - /bin/sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -c
+    - echo $REGISTRY | /usr/bin/docker-credential-ecr-login $METHOD
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10

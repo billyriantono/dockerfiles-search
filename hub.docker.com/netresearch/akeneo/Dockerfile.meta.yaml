@@ -1,0 +1,79 @@
+MetaArgs: null
+Stages:
+- BaseName: php:5.6-apache
+  Commands:
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends libicu-dev
+      libmcrypt-dev libpng-dev libcurl3-dev libxml2-dev libjpeg-dev libpng-dev libssl-dev
+      mysql-client     && docker-php-ext-configure intl     && docker-php-ext-configure
+      gd --enable-gd-native-ttf --with-jpeg-dir=/usr/lib/x86_64-linux-gnu --with-png-dir=/usr/lib/x86_64-linux-gnu     &&
+      docker-php-ext-install mbstring pdo_mysql mysqli intl mcrypt gd exif curl soap
+      zip opcache bcmath     && pecl install -f mongo     && pecl install apcu-4.0.11     &&
+      docker-php-ext-enable mongo apcu     && apt-get autoremove     && apt-get clean
+      -y     && rm -rf /tmp/*     && rm -rf /var/tmp/*     && for logs in `find /var/log
+      -type f`; do > $logs; done     && rm -rf /usr/share/locale/*     && rm -rf /usr/share/man/*     &&
+      rm -rf /usr/share/doc/*     && rm -rf /var/lib/apt/lists/*     && rm -f /var/cache/apt/*.bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sS https://getcomposer.org/installer | php     && mv composer.phar /usr/local/bin/composer
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - setup/
+    - /
+  - CmdLine:
+    - a2enmod rewrite     && a2ensite akeneo_pim     && a2dissite 000-default.conf
+    Name: run
+    PrependShell: true
+  - Key: AKENEO_VERSION
+    Name: arg
+    Value: 1.7.6
+  - CmdLine:
+    - mkdir -p /src/packages/akeneo/pim-community-dev     && cd /src/packages/akeneo/pim-community-dev     &&
+      curl -sL https://github.com/akeneo/pim-community-dev/archive/v${AKENEO_VERSION}.tar.gz
+      | tar -xz --strip-components=1     && php -r '        $json = json_decode(file_get_contents("composer.json"),
+      true);         $json["version"] = getenv("AKENEO_VERSION");         file_put_contents("composer.json",
+      json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+      . "\n");'
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/www/html
+  - CmdLine:
+    - chmod +x /usr/local/bin/akeneo-entrypoint
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - composer create-project --no-install akeneo/pim-community-standard . $AKENEO_VERSION     &&
+      composer config preferred-install 'dist'     && php -r '        $json = json_decode(file_get_contents("composer.json"),
+      true);         $json["repositories"] = [["type" => "path", "url" => "/src/packages/*/*"]];         file_put_contents("composer.json",
+      json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+      . "\n");'     && composer require doctrine/mongodb-odm-bundle
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL "https://raw.githubusercontent.com/netresearch/retry/master/retry"
+      -o /usr/local/bin/retry     && chmod +x /usr/local/bin/retry
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 777 /usr/local/bin/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - akeneo-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - apache2-foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:5.6-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:5.6-apache

@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:latest
+  Commands:
+  - Key: GOST_ENGINE_VERSION
+    Name: arg
+    Value: 1.1.0.3
+  - Key: OPENDNSSEC_VERSION
+    Name: arg
+    Value: 2.1.4
+  - Key: SOFTHSM_VERSION
+    Name: arg
+    Value: 2.5.0
+  - Key: LDNS_VERSION
+    Name: arg
+    Value: 1.7.0
+  - Key: USER
+    Name: arg
+    Value: opendnssec
+  - Name: workdir
+    Path: /opendnssec
+  - CmdLine:
+    - apk add --update     cmake     g++     gcc     git     libxml2-dev     openssl-dev     make     perl     sqlite-dev     tar     wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opendnssec/build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opendnssec/build &&     git clone https://github.com/gost-engine/engine.git
+      &&     mkdir -p engine/build && cd engine/build &&     git checkout v${GOST_ENGINE_VERSION}
+      &&     cmake -DCMAKE_BUILD_TYPE=Release .. &&     cmake --build . --config Release
+      &&     mkdir -p /usr/lib/engines-1.1/ &&     cp ../bin/gost.so /usr/lib/engines-1.1/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opendnssec/build &&     wget https://www.nlnetlabs.nl/downloads/ldns/ldns-${LDNS_VERSION}.tar.gz
+      &&     tar zxf ldns-${LDNS_VERSION}.tar.gz &&     cd ldns-${LDNS_VERSION} &&     ./configure
+      --disable-dane-ta-usage &&     make && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opendnssec/build &&     wget https://dist.opendnssec.org/source/softhsm-${SOFTHSM_VERSION}.tar.gz
+      &&     tar zxf softhsm-${SOFTHSM_VERSION}.tar.gz &&     cd softhsm-${SOFTHSM_VERSION}
+      &&     ./configure &&     make && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opendnssec/build &&     wget https://dist.opendnssec.org/source/opendnssec-${OPENDNSSEC_VERSION}.tar.gz
+      &&     tar zxf opendnssec-${OPENDNSSEC_VERSION}.tar.gz &&     cd opendnssec-${OPENDNSSEC_VERSION}
+      &&     ./configure &&     make && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -fr /opendnssec/build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk del     cmake     g++     git     make     perl     tar     wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -D -u 1000 ${USER}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R ${USER}:${USER}     /etc/opendnssec     /var/lib/softhsm     /var/log     /var/opendnssec     /var/run/opendnssec     /opendnssec
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - su - ${USER} -c     'softhsm2-util --init-token --slot 0 --label OpenDNSSEC
+      --pin 1234 --so-pin 1234'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - su - ${USER} -c     'yes | ods-enforcer-db-setup'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker-entrypoint.sh
+    - /opendnssec/
+  - CmdLine:
+    - /opendnssec/docker-entrypoint.sh
+    - syslogd
+    - -n
+    - -O
+    - '-'
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

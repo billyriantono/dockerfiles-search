@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- BaseName: php:7.3-fpm-alpine
+  Commands:
+  - Key: roundcube_ver
+    Name: arg
+    Value: 1.4.2
+  - CmdLine:
+    - curl -fL -o /tmp/s6-overlay.tar.gz          https://github.com/just-containers/s6-overlay/releases/download/v1.22.1.0/s6-overlay-amd64.tar.gz  &&
+      tar -xzf /tmp/s6-overlay.tar.gz -C /  && rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: S6_KEEP_ENV
+      Value: "1"
+    - Key: S6_CMD_WAIT_FOR_SERVICES
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - apk update  && apk upgrade  && update-ca-certificates  && apk add --no-cache
+      --virtual .plugin-deps         gnupg  && apk add --no-cache --virtual .php-ext-deps         libpq
+      unixodbc freetds         aspell-libs         icu-libs         libldap         libjpeg-turbo
+      libpng freetype         libzip         zlib      && apk add --no-cache --virtual
+      .build-deps         postgresql-dev unixodbc-dev freetds-dev         aspell-dev         icu-dev         openldap-dev         libjpeg-turbo-dev
+      libpng-dev freetype-dev         libzip-dev         zlib-dev      && docker-php-ext-configure
+      gd --with-jpeg-dir=/usr/include/                                 --with-png-dir=/usr/include/                                 --with-freetype-dir=/usr/include/  &&
+      docker-php-ext-configure pdo_odbc --with-pdo-odbc=unixODBC,/usr  && docker-php-ext-install            exif            gd            intl            ldap            opcache            pdo_mysql
+      pdo_pgsql pdo_odbc pdo_dblib            pspell            sockets            zip      &&
+      apk del .build-deps  && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fL -o /tmp/roundcube.tar.gz          https://github.com/roundcube/roundcubemail/releases/download/${roundcube_ver}/roundcubemail-${roundcube_ver}.tar.gz  &&
+      tar -xzf /tmp/roundcube.tar.gz -C /tmp/  && rm -rf /app  && mv /tmp/roundcubemail-${roundcube_ver}
+      /app      && curl -fL -o /tmp/composer-setup.php           https://getcomposer.org/installer  &&
+      curl -fL -o /tmp/composer-setup.sig           https://composer.github.io/installer.sig  &&
+      php -r "if (hash('SHA384', file_get_contents('/tmp/composer-setup.php')) !==
+      trim(file_get_contents('/tmp/composer-setup.sig'))) { echo 'Invalid installer'
+      . PHP_EOL; exit(1); }"  && php /tmp/composer-setup.php --install-dir=/tmp --filename=composer      &&
+      apk add --update --no-cache --virtual .tool-deps         git         file      &&
+      mv /app/composer.json-dist /app/composer.json  && cd /app/  && (/tmp/composer
+      suggests | xargs -i /tmp/composer require {})  && /tmp/composer install --no-dev
+      --optimize-autoloader --no-progress      && /app/bin/install-jsdeps.sh      &&
+      sed -i -r 's/^([^\s]{9}log_driver[^\s]{2} =) [^\s]+$/\1 "syslog";/g'         /app/config/defaults.inc.php      &&
+      cd /app/  && ln -sn ./public_html /app/html  && rm -rf /var/www  && ln -s /app
+      /var/www      && chown -R www-data:www-data /app /var/www      && (find /app/
+      -name .travis.yml -type f -prune |         while read d; do rm -rf $d; done)  &&
+      (find /app/ -name .gitignore -type f -prune |         while read d; do rm -rf
+      $d; done)  && (find /app/ -name .git -type d -prune |         while read d;
+      do rm -rf $d; done)  && apk del .tool-deps  && rm -rf /var/cache/apk/*            /app/temp/*            /root/.composer            /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs
+    - /
+  - CmdLine:
+    - chmod +x /etc/services.d/*/run              /docker-entrypoint.sh      && mkdir
+      -p /var/db  && chown -R www-data:www-data /var/db
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_OPCACHE_REVALIDATION
+      Value: "0"
+    - Key: SHARE_APP
+      Value: "0"
+    Name: env
+  - Name: workdir
+    Path: /var/www
+  - CmdLine:
+    - /init
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - php-fpm
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:7.3-fpm-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.3-fpm-alpine

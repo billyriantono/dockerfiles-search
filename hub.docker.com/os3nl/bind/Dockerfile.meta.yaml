@@ -1,0 +1,226 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache   alpine-sdk   bash   bsd-compat-headers   curl   gnupg   libcap-dev   libressl-dev   libxml2-dev   linux-headers   openssl   perl   perl-dev   perl-utils   json-c-dev
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ISC_PUB_KEY
+      Value: https://ftp.isc.org/isc/pgpkeys/codesign2017.txt
+    Name: env
+  - Env:
+    - Key: BIND_TAR_URL
+      Value: https://www.isc.org/downloads/file/bind-9-12-2-p1/?version=tar-gz
+    Name: env
+  - Env:
+    - Key: BIND_SHA_URL
+      Value: https://ftp.isc.org/isc/bind9/9.12.2-P1/bind-9.12.2-P1.tar.gz.sha512.asc
+    Name: env
+  - CmdLine:
+    - curl --silent -o /tmp/isc.key $ISC_PUB_KEY
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --silent -o /tmp/bind.tgz $BIND_TAR_URL
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --silent -o /tmp/bind.sha512.asc $BIND_SHA_URL
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gpg --import /tmp/isc.key
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gpg --verify /tmp/bind.sha512.asc /tmp/bind.tgz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp; tar xfz /tmp/bind.tgz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /tmp/bind-9* /bindsrc
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /bindsrc
+  - Env:
+    - Key: OS3_SPECIFIC_PATH_01
+      Value: /usr/local
+    Name: env
+  - Env:
+    - Key: OS3_SPECIFIC_PATH_02
+      Value: /usr/local/etc/bind
+    Name: env
+  - Env:
+    - Key: OS3_SPECIFIC_PATH_03
+      Value: /var/run
+    Name: env
+  - CmdLine:
+    - "./configure \t\t--prefix=$OS3_SPECIFIC_PATH_01 \t\t--sysconfdir=$OS3_SPECIFIC_PATH_02
+      \t\t--localstatedir=$OS3_SPECIFIC_PATH_03 \t\t--with-openssl=/usr \t\t--enable-linux-caps
+      \t\t--with-libxml2 \t\t--with-libjson \t\t--enable-threads \t\t--enable-filter-aaaa
+      \t\t--enable-ipv6 \t\t--enable-shared \t\t--enable-static \t\t--with-libtool
+      \t\t--with-randomdev=/dev/random \t\t--mandir=/usr/share/man \t\t--infodir=/usr/share/info
+      \    1> /dev/null"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make 1> /dev/null
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install 1> /dev/null
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s $OS3_SPECIFIC_PATH_02 /etc/bind
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - named.conf
+    - /etc/
+  - CmdLine:
+    - ln -s /etc/named.conf $OS3_SPECIFIC_PATH_02/named.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --silent -o $OS3_SPECIFIC_PATH_02/named.cache   ftp://ftp.rs.internic.net/domain/named.cache
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - named.local
+    - /etc
+  - CmdLine:
+    - ln -s /etc/named.local $OS3_SPECIFIC_PATH_02/named.local
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - named-checkconf /usr/local/etc/bind/named.conf   || (echo named.conf has an
+      error! && exit 1)
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "53"
+  - CmdLine:
+    - /usr/local/sbin/named
+    - -d2
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -g
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - rndc-confgen -r /dev/urandom -a
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $OS3_SPECIFIC_PATH_02
+  - CmdLine:
+    - cat rndc.key > rndc.conf;   echo 'options { default-port 953; default-key "rndc-key";
+      default-server 127.0.0.1;};' >> rndc.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cat rndc.key >> named.conf;   echo 'controls { inet 127.0.0.1 port 953 allow
+      {127.0.0.1; 172/8; 0/0;} keys {"rndc-key";}; };' >> named.conf
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "953"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - apk add --no-cache sipcalc
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: FIRST3OCT
+      Value: 145.100.111
+    Name: env
+  - Env:
+    - Key: LASTOCTET
+      Value: "0"
+    Name: env
+  - Env:
+    - Key: SERVER_RANGE
+      Value: $FIRST3OCT.$LASTOCTET/28
+    Name: env
+  - CmdLine:
+    - sipcalc $SERVER_RANGE|grep range
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MYZONEDB
+      Value: $OS3_SPECIFIC_PATH_02/myzone.db
+    Name: env
+  - CmdLine:
+    - echo "subnet-network-ip IN A $FIRST3OCT.$LASTOCTET" > $MYZONEDB
+    Name: run
+    PrependShell: true
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -c
+  - CmdLine:
+    - for i in {1..14}; do echo "host$i IN A $FIRST3OCT."$((LASTOCTET + i)) >> $MYZONEDB;
+      done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "subnet-broadc IN A $FIRST3OCT."$((LASTOCTET + 15)) >> $MYZONEDB
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'zone "111.100.145.in-addr.arpa" IN { type master; file "myzone.conf";};'   >>
+      $OS3_SPECIFIC_PATH_02/named.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'zone "nevers.prac.os3.nl" IN { type master; file "myprac.conf";};'   >>
+      $OS3_SPECIFIC_PATH_02/named.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - myzone.conf
+    - $OS3_SPECIFIC_PATH_02/
+  - CmdLine:
+    - /usr/local/sbin/named
+    - -f
+    - -p
+    - "53"
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - "-4"
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

@@ -1,0 +1,99 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:precise
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Maintainer: Paul <@ismisepaul>
+    Name: maintainer
+  - Env:
+    - Key: keystorePwd
+      Value: CowSaysMoo
+    - Key: mysqlRootPwd
+      Value: CowSaysMoo
+    Name: env
+  - Env:
+    - Key: homeDirectory
+      Value: '"/home/shepherd/"'
+    - Key: keyStoreFileName
+      Value: '"shepherdKeystore.jks"'
+    Name: env
+  - Env:
+    - Key: serverXml
+      Value: '"https://raw.githubusercontent.com/OWASP/SecurityShepherd/master/SecurityShepherdCore/setupFiles/tomcatShepherdSampleServer.xml"'
+    - Key: webXml
+      Value: '"https://raw.githubusercontent.com/OWASP/SecurityShepherd/master/SecurityShepherdCore/setupFiles/tomcatShepherdSampleWeb.xml"'
+    - Key: shepherdManualPackLocation
+      Value: '"https://sourceforge.net/projects/owaspshepherd/files/owaspSecurityShepherd_V3.0%20Manual%20Pack.zip/download"'
+    Name: env
+  - CmdLine:
+    - "apt-get update -y &&\tapt-get install -y software-properties-common python-software-properties
+      &&\tadd-apt-repository -y ppa:webupd8team/java &&\tapt-key adv --keyserver hkp://keyserver.ubuntu.com:80
+      --recv 7F0CEB10 &&\techo 'deb http://downloads-distro.mongodb.org/repo/ubuntu-upstart
+      dist 10gen' | tee /etc/apt/sources.list.d/mongodb.list &&\tapt-get update -y
+      &&\tapt-get install -y mongodb-org=2.6.9 mongodb-org-server=2.6.9 mongodb-org-shell=2.6.9
+      mongodb-org-mongos=2.6.9 mongodb-org-tools=2.6.9 &&\techo debconf shared/accepted-oracle-license-v1-1
+      select true | debconf-set-selections &&\tapt-get install -y oracle-java7-installer
+      --force-yes &&\techo \"mysql-server mysql-server/root_password password $mysqlRootPwd\"
+      | debconf-set-selections &&\techo \"mysql-server mysql-server/root_password_again
+      password $mysqlRootPwd\" | debconf-set-selections &&\tapt-get install -y tomcat7
+      tomcat7-common tomcat7-admin mysql-server-5.5 authbind unzip tofrodos wget less
+      vim &&\tmkdir $homeDirectory"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/shepherd
+  - CmdLine:
+    - "wget --quiet $shepherdManualPackLocation -O manualPack.zip &&\tmkdir manualPack
+      &&\tunzip manualPack.zip -d manualPack &&\tfromdos manualPack/*.sql &&\tchmod
+      775 manualPack/*.war &&\trm -rf /var/lib/tomcat7/webapps/* &&\tmv manualPack/ROOT.war
+      /var/lib/tomcat7/webapps/ &&\tchown -R mysql /var/lib/mysql"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/shepherd/manualPack
+  - CmdLine:
+    - "/bin/bash -c \"/usr/bin/mysqld_safe &\" &&\tsleep 5 &&\tmysql -u root -e \"source
+      coreSchema.sql\" --force -p$mysqlRootPwd &&\tmysql -u root -e \"source moduleSchemas.sql\"
+      --force -p$mysqlRootPwd"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir -p /data/db/ &&\tchown `id -u` /data/db &&\t/bin/bash -c \"/usr/bin/mongod
+      &\" &&\tsleep 10 &&\tmongo shepherdGames mongoSchema.js &&\tsleep 15"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/shepherd
+  - CmdLine:
+    - "echo \"JAVA_HOME=/usr/lib/jvm/java-7-oracle\" >> /etc/default/tomcat7 && \techo
+      \"AUTHBIND=yes\" >> /etc/default/tomcat7 && \tkeytool -genkey -alias tomcat
+      -keyalg RSA -keystore $keyStoreFileName -dname \"cn=OwaspShepherd, ou=Security
+      Shepherd, o=OWASP, L=Baile Átha Cliath, ST=Laighin, C=IE\" -storepass $keystorePwd
+      -keypass $keystorePwd -deststoretype JKS && \tcd /var/lib/tomcat7/conf/ && \trm
+      -f web.xml && \trm -f server.xml &&\twget --quiet $webXml -O web.xml && \twget
+      --quiet $serverXml  -O server.xml && \tescapedFileName=$(echo \"$homeDirectory$keyStoreFileName\"
+      | sed 's/\\//\\\\\\//g') && \tsed -i \"s/____.*____/$escapedFileName/g\" server.xml
+      && \tsed -i \"s/___.*___/$keystorePwd/g\" server.xml && \ttouch /etc/authbind/byport/80
+      && \ttouch /etc/authbind/byport/443 && \tchmod 500 /etc/authbind/byport/80 &&
+      \tchmod 500 /etc/authbind/byport/443 && \tchown tomcat7 /etc/authbind/byport/80
+      && \tchown tomcat7 /etc/authbind/byport/443"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "27017"
+    - "3306"
+    - "443"
+    - "80"
+  - CmdLine:
+    - "/usr/bin/mysqld_safe & \t/usr/bin/mongod & \tservice tomcat7 start;"
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:precise
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:precise

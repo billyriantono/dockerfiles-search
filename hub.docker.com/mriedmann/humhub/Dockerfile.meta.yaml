@@ -1,0 +1,185 @@
+MetaArgs:
+- DefaultValue: 1.3.17
+  Key: HUMHUB_VERSION
+  ProvidedValue: null
+  Value: 1.3.17
+Stages:
+- As: builder-composer
+  BaseName: composer:1.8.6
+  Commands: null
+  From:
+    Image: composer:1.8.6
+  Name: builder-composer
+  Platform: ""
+  SourceCode: FROM composer:1.8.6 as builder-composer
+- As: builder
+  BaseName: alpine:3.10
+  Commands:
+  - Key: HUMHUB_VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache     ca-certificates     tzdata     wget
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/
+  - CmdLine:
+    - wget https://github.com/humhub/humhub/archive/v${HUMHUB_VERSION}.tar.gz -q -O
+      humhub.tar.gz &&     tar xzf humhub.tar.gz &&     mv humhub-${HUMHUB_VERSION}
+      humhub &&     rm humhub.tar.gz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/humhub
+  - Chown: ""
+    From: builder-composer
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/composer
+    - /usr/bin/composer
+  - CmdLine:
+    - chmod +x /usr/bin/composer
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache     php7     php7-gd     php7-ldap     php7-json     php7-phar     php7-iconv     php7-openssl     php7-curl     php7-ctype     php7-dom     php7-mbstring     php7-simplexml     php7-xml     php7-xmlreader     php7-xmlwriter     php7-zip     php7-fileinfo
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - composer install --no-ansi --no-dev --no-interaction --no-progress --no-scripts
+      --optimize-autoloader &&     chmod +x protected/yii &&     chmod +x protected/yii.bat
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache     nodejs     npm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install grunt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install -g grunt-cli
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache     php7-pdo_mysql
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - grunt build-assets
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf ./node_modules
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.10 as builder
+- BaseName: alpine:3.8
+  Commands:
+  - Key: HUMHUB_VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk add --no-cache     curl     ca-certificates     tzdata     php7     php7-fpm     php7-pdo_mysql     php7-gd     php7-ldap     php7-json     php7-phar     php7-iconv     php7-openssl     php7-curl     php7-ctype     php7-dom     php7-mbstring     php7-simplexml     php7-xml     php7-xmlreader     php7-xmlwriter     php7-zip     php7-sqlite3     php7-intl     php7-apcu     php7-exif     php7-fileinfo     php7-session     supervisor     nginx     sqlite     &&
+      rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - BUILD_DEPS="gettext"      RUNTIME_DEPS="libintl" &&     set -x &&     apk add
+      --no-cache --update $RUNTIME_DEPS &&     apk add --no-cache --virtual build_deps
+      $BUILD_DEPS &&     cp /usr/bin/envsubst /usr/local/bin/envsubst &&     apk del
+      build_deps
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_POST_MAX_SIZE
+      Value: 16M
+    Name: env
+  - Env:
+    - Key: PHP_UPLOAD_MAX_FILESIZE
+      Value: 10M
+    Name: env
+  - Env:
+    - Key: PHP_MAX_EXECUTION_TIME
+      Value: "60"
+    Name: env
+  - Env:
+    - Key: PHP_MEMORY_LIMIT
+      Value: 1G
+    Name: env
+  - CmdLine:
+    - chown -R nginx:nginx /var/lib/nginx/ &&     touch /var/run/supervisor.sock &&     chmod
+      777 /var/run/supervisor.sock
+    Name: run
+    PrependShell: true
+  - Chown: nginx:nginx
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/humhub
+    - /var/www/localhost/htdocs/
+  - Chown: nginx:nginx
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - humhub/
+    - /var/www/localhost/htdocs/
+  - CmdLine:
+    - mkdir -p /usr/src/humhub/protected/config/ &&     cp -R /var/www/localhost/htdocs/protected/config/*
+      /usr/src/humhub/protected/config/ &&     echo "v${HUMHUB_VERSION}" >  /usr/src/humhub/.version
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/
+    - /etc/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/docker-entrypoint.sh
+  - CmdLine:
+    - chmod 600 /etc/crontabs/nginx &&     chmod +x /usr/local/bin/docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/www/localhost/htdocs/uploads
+  - Name: volume
+    Volumes:
+    - /var/www/localhost/htdocs/protected/config
+  - Name: volume
+    Volumes:
+    - /var/www/localhost/htdocs/protected/modules
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /usr/local/bin/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - supervisord
+    - -n
+    - -c
+    - /etc/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

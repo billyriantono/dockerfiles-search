@@ -1,0 +1,107 @@
+MetaArgs: null
+Stages:
+- BaseName: jlesage/baseimage-gui:alpine-3.8-v3.4.0
+  Commands:
+  - Key: HANDBRAKE_VERSION
+    Name: arg
+    Value: 1.1.1
+  - Key: INTEL_MEDIA_SDK_VERSION
+    Name: arg
+    Value: 2018-Q2.1
+  - Key: HANDBRAKE_URL
+    Name: arg
+    Value: https://download.handbrake.fr/releases/${HANDBRAKE_VERSION}/HandBrake-${HANDBRAKE_VERSION}-source.tar.bz2
+  - Key: INTEL_MEDIA_SDK_URL
+    Name: arg
+    Value: https://github.com/Intel-Media-SDK/MediaSDK/archive/MediaSDK-${INTEL_MEDIA_SDK_VERSION}.tar.gz
+  - Key: HANDBRAKE_DEBUG_MODE
+    Name: arg
+    Value: none
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - add-pkg --virtual build-dependencies         curl         build-base         yasm         autoconf         cmake         automake         libtool         m4         patch         coreutils         tar         file         python         linux-headers         intltool         git         diffutils         jansson-dev         libxml2-dev         libva-dev         libsamplerate-dev         libass-dev         libtheora-dev         x264-dev         lame-dev         opus-dev         libvorbis-dev         gtk+3.0-dev         dbus-glib-dev         libnotify-dev         libgudev-dev         &&     if
+      echo "${HANDBRAKE_URL}" | grep -q '\.git$'; then         git clone ${HANDBRAKE_URL}
+      HandBrake &&         git -C HandBrake checkout "${HANDBRAKE_VERSION}";     else         mkdir
+      HandBrake &&         curl -# -L ${HANDBRAKE_URL} | tar xj --strip 1 -C HandBrake;     fi
+      &&     curl -# -L -o /tmp/run_cmd https://raw.githubusercontent.com/jlesage/docker-mgmt-tools/master/run_cmd
+      &&     chmod +x /tmp/run_cmd &&     curl -# -L -o HandBrake/contrib/ffmpeg/A20-flac-encoder-crash.patch
+      https://raw.githubusercontent.com/jlesage/docker-handbrake/master/A20-flac-encoder-crash.patch
+      &&     curl -# -L -o HandBrake/contrib/libdvdread/A02-libdvdread-crash.patch
+      https://raw.githubusercontent.com/jlesage/docker-handbrake/master/A02-libdvdread-crash.patch
+      &&     curl -# -L -o HandBrake/A00-hb-video-preset.patch https://raw.githubusercontent.com/jlesage/docker-handbrake/master/A00-hb-video-preset.patch
+      &&     cd HandBrake &&     patch -p1 < A00-hb-video-preset.patch &&     ./configure
+      --prefix=/usr                 --debug=$HANDBRAKE_DEBUG_MODE                 --disable-gtk-update-checks                 --enable-fdk-aac                 --enable-x265                 --enable-qsv                 --launch-jobs=$(nproc)                 --launch                 &&     /tmp/run_cmd
+      -i 600 -m "HandBrake still compiling..." make --directory=build install &&     if
+      [ "${HANDBRAKE_DEBUG_MODE}" = "none" ]; then         strip /usr/bin/ghb               /usr/bin/HandBrakeCLI;     fi
+      &&     cd .. &&     del-pkg build-dependencies &&     rm -rf /tmp/* /tmp/.[!.]*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - add-pkg --virtual build-dependencies         curl         build-base         cmake         libva-dev         &&     mkdir
+      MediaSDK &&     curl -# -L ${INTEL_MEDIA_SDK_URL} | tar xz --strip 1 -C MediaSDK
+      &&     cd MediaSDK &&     mkdir build &&     cd build &&     if [ "${HANDBRAKE_DEBUG_MODE}"
+      = "none" ]; then         INTEL_MEDIA_SDK_BUILD_TYPE=RELEASE;     else         INTEL_MEDIA_SDK_BUILD_TYPE=DEBUG;     fi
+      &&     cmake -DCMAKE_BUILD_TYPE=$INTEL_MEDIA_SDK_BUILD_TYPE .. &&     make -j$(nproc)
+      install &&     cd .. &&     cd .. &&     rm -r /opt/intel/mediasdk/include           /opt/intel/mediasdk/lib64/pkgconfig           /opt/intel/mediasdk/lib64/*.a           /opt/intel/mediasdk/plugins/plugins_eval.cfg           /opt/intel/mediasdk/samples           &&     if
+      [ "${HANDBRAKE_DEBUG_MODE}" = "none" ]; then         strip -s /opt/intel/mediasdk/*/*.so;     fi
+      &&     del-pkg build-dependencies &&     rm -rf /tmp/* /tmp/.[!.]*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - add-pkg         gtk+3.0         libgudev         dbus-glib         libnotify         libsamplerate         libass         jansson         libva         libva-intel-driver         libtheora         x264-libs         lame         opus         libvorbis         libdvdcss         librsvg         adwaita-icon-theme         lsscsi         findutils         expect
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed-patch 's/<application type="normal">/<application type="normal" title="HandBrake">/'         /etc/xdg/openbox/rc.xml
+      &&     sed-patch '/<application type="normal" title="HandBrake">/a \    <layer>below</layer>'         /etc/xdg/openbox/rc.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - APP_ICON_URL=https://raw.githubusercontent.com/jlesage/docker-templates/master/jlesage/images/handbrake-icon.png
+      &&     install_app_icon.sh "$APP_ICON_URL"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs/
+    - /
+  - Env:
+    - Key: APP_NAME
+      Value: '"HandBrake"'
+    - Key: AUTOMATED_CONVERSION_PRESET
+      Value: '"Very Fast 1080p30"'
+    - Key: AUTOMATED_CONVERSION_FORMAT
+      Value: '"mp4"'
+    Name: env
+  - Name: volume
+    Volumes:
+    - /config
+  - Name: volume
+    Volumes:
+    - /storage
+  - Name: volume
+    Volumes:
+    - /output
+  - Name: volume
+    Volumes:
+    - /watch
+  - Labels:
+    - Key: org.label-schema.name
+      Value: '"handbrake"'
+    - Key: org.label-schema.description
+      Value: '"Docker container for HandBrake"'
+    - Key: org.label-schema.version
+      Value: '"unknown"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/jlesage/docker-handbrake"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  From:
+    Image: jlesage/baseimage-gui:alpine-3.8-v3.4.0
+  Name: ""
+  Platform: ""
+  SourceCode: FROM jlesage/baseimage-gui:alpine-3.8-v3.4.0

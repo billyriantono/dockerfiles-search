@@ -1,0 +1,224 @@
+MetaArgs: null
+Stages:
+- As: base-python
+  BaseName: python:3.7-alpine
+  Commands:
+  - Env:
+    - Key: PATH
+      Value: '"/root/.local/bin:${PATH}"'
+    Name: env
+  - Env:
+    - Key: PYTHONDONTWRITEBYTECODE
+      Value: "1"
+    Name: env
+  From:
+    Image: python:3.7-alpine
+  Name: base-python
+  Platform: ""
+  SourceCode: FROM python:3.7-alpine AS base-python
+- As: npm-assets-builder
+  BaseName: node:alpine
+  Commands:
+  - Name: workdir
+    Path: /khetha-django
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package-lock.json
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build-assets.sh
+    - .
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./build-assets.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:alpine
+  Name: npm-assets-builder
+  Platform: ""
+  SourceCode: FROM node:alpine AS npm-assets-builder
+- As: khetha-wheels-builder
+  BaseName: pidelport/python-c-package-builder:latest
+  Commands:
+  - Name: workdir
+    Path: /khetha-django
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements-pipenv.txt
+    - .
+  - CmdLine:
+    - pip wheel --no-cache-dir --no-deps --wheel-dir=/wheels -r requirements-pipenv.txt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .git
+    - .git
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - README.md
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - setup.cfg
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - setup.py
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - src
+  - CmdLine:
+    - pip wheel --no-cache-dir --no-deps --wheel-dir=/wheels .
+    Name: run
+    PrependShell: true
+  From:
+    Image: pidelport/python-c-package-builder:latest
+  Name: khetha-wheels-builder
+  Platform: ""
+  SourceCode: FROM pidelport/python-c-package-builder:latest AS khetha-wheels-builder
+- As: khetha-site-builder
+  BaseName: base-python
+  Commands:
+  - Chown: ""
+    From: npm-assets-builder
+    Name: copy
+    SourcesAndDest:
+    - /khetha-django/build/assets/
+    - /khetha-django/build/assets/
+  - Chown: ""
+    From: khetha-wheels-builder
+    Name: copy
+    SourcesAndDest:
+    - /wheels/
+    - /wheels/
+  - CmdLine:
+    - pip install --no-cache-dir --no-deps --no-index --user /wheels/*.whl
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DJANGO_STATICFILES_DIRS
+      Value: '''assets:/khetha-django/build/assets'''
+    Name: env
+  - Env:
+    - Key: DJANGO_SETTINGS_MODULE
+      Value: khetha.settings_env
+    Name: env
+  - Env:
+    - Key: DJANGO_STATIC_URL
+      Value: '''/static/'''
+    Name: env
+  - Env:
+    - Key: DJANGO_STATIC_ROOT
+      Value: '''/static_root/'''
+    Name: env
+  - Key: DJANGO_STATICFILES_STORAGE
+    Name: arg
+    Value: null
+  - Env:
+    - Key: DJANGO_STATICFILES_STORAGE
+      Value: '"${DJANGO_STATICFILES_STORAGE}"'
+    Name: env
+  - Key: WHITENOISE_KEEP_ONLY_HASHED_FILES
+    Name: arg
+    Value: null
+  - Env:
+    - Key: WHITENOISE_KEEP_ONLY_HASHED_FILES
+      Value: '"${WHITENOISE_KEEP_ONLY_HASHED_FILES}"'
+    Name: env
+  - Env:
+    - Key: DJANGO_SECRET_KEY
+      Value: dummy-secret-key-for-collectstatic
+    Name: env
+  - CmdLine:
+    - django-admin collectstatic --verbosity 2
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base-python
+  Name: khetha-site-builder
+  Platform: ""
+  SourceCode: FROM base-python AS khetha-site-builder
+- As: khetha-django
+  BaseName: base-python
+  Commands:
+  - CmdLine:
+    - apk add --no-cache libpq
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: khetha-site-builder
+    Name: copy
+    SourcesAndDest:
+    - /root/.local
+    - /root/.local
+  - Chown: ""
+    From: khetha-site-builder
+    Name: copy
+    SourcesAndDest:
+    - /static_root
+    - /static_root
+  - Env:
+    - Key: DJANGO_SETTINGS_MODULE
+      Value: khetha.settings_env
+    Name: env
+  - Env:
+    - Key: DJANGO_STATIC_URL
+      Value: '''/static/'''
+    Name: env
+  - Env:
+    - Key: DJANGO_STATIC_ROOT
+      Value: '''/static_root/'''
+    Name: env
+  - Key: DJANGO_STATICFILES_STORAGE
+    Name: arg
+    Value: null
+  - Env:
+    - Key: DJANGO_STATICFILES_STORAGE
+      Value: '"${DJANGO_STATICFILES_STORAGE}"'
+    Name: env
+  - Key: WHITENOISE_KEEP_ONLY_HASHED_FILES
+    Name: arg
+    Value: null
+  - Env:
+    - Key: WHITENOISE_KEEP_ONLY_HASHED_FILES
+      Value: '"${WHITENOISE_KEEP_ONLY_HASHED_FILES}"'
+    Name: env
+  From:
+    Stage:
+      Index: 0
+      Named: base-python
+  Name: khetha-django
+  Platform: ""
+  SourceCode: FROM base-python AS khetha-django

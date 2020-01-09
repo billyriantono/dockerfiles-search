@@ -1,0 +1,151 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: centos:7
+  Commands:
+  - Env:
+    - Key: HAPROXY_MAJOR_VER
+      Value: "1.8"
+    Name: env
+  - Env:
+    - Key: HAPROXY_VER
+      Value: 1.8.15
+    Name: env
+  - Env:
+    - Key: OPENSSL_VER
+      Value: 1.0.2o
+    Name: env
+  - Env:
+    - Key: OPENSSL_FIPS_VER
+      Value: 2.0.16
+    Name: env
+  - CmdLine:
+    - yum -y update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum install -y gcc wget gpg perl make patch pcre-static pcre-devel zlib-devel
+      curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://www.openssl.org/source/openssl-fips-${OPENSSL_FIPS_VER}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar oxvfm openssl-fips-${OPENSSL_FIPS_VER}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd openssl-fips-${OPENSSL_FIPS_VER} && ./config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd openssl-fips-${OPENSSL_FIPS_VER} && make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd openssl-fips-${OPENSSL_FIPS_VER} && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://www.openssl.org/source/openssl-${OPENSSL_VER}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar oxvfm openssl-${OPENSSL_VER}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd openssl-${OPENSSL_VER} && ./config fips shared --openssldir=/usr/local/ssl
+      --with-fipsdir=/usr/local/ssl/fips-2.0 --with-fipslibdir=/usr/local/ssl/fips-2.0/lib/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd openssl-${OPENSSL_VER} && make depend
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd openssl-${OPENSSL_VER} && make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd openssl-${OPENSSL_VER} && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /usr/local/ssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget http://www.haproxy.org/download/${HAPROXY_MAJOR_VER}/src/haproxy-${HAPROXY_VER}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar oxvmf haproxy-${HAPROXY_VER}.tar.gz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - haproxy.patch
+    - /tmp
+  - CmdLine:
+    - cd haproxy-${HAPROXY_VER} && patch -p0 < /tmp/haproxy.patch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd haproxy-${HAPROXY_VER} && bash -c "export LD_LIBRARY_PATH=/usr/local/ssl/lib;
+      make TARGET=linux2628 USE_LIBCRYPT= USE_PCRE=1 USE_STATIC_PCRE=1 USE_OPENSSL=1
+      USE_ZLIB=1 SSL_INC=/usr/local/ssl/include SSL_LIB=/usr/local/ssl/lib CC=/usr/local/ssl/fips-2.0/bin/fipsld
+      FIPSLD_CC=gcc LDFLAGS=-Wl,-rpath=/usr/local/ssl/lib -j4"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd haproxy-${HAPROXY_VER} && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /  | grep -i haproxy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum clean all && rm -rf /var/cache/yum
+    Name: run
+    PrependShell: true
+  From:
+    Image: centos:7
+  Name: builder
+  Platform: ""
+  SourceCode: FROM centos:7 as builder
+- BaseName: rancher/lb-service-haproxy:v0.9.6
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/ssl/
+    - /usr/local/ssl/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/sbin/haproxy
+    - /usr/local/sbin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/doc/haproxy
+    - /usr/local/doc/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/share/man/man1/haproxy.1
+    - /usr/local/share/man/man1/
+  From:
+    Image: rancher/lb-service-haproxy:v0.9.6
+  Name: ""
+  Platform: ""
+  SourceCode: FROM rancher/lb-service-haproxy:v0.9.6

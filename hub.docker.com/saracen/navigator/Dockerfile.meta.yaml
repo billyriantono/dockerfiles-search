@@ -1,0 +1,174 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.10-alpine3.7
+  Commands:
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps upx curl git &&     curl -fsSL -o /usr/local/bin/dep
+      https://github.com/golang/dep/releases/download/v0.4.1/dep-linux-amd64 &&     chmod
+      +x /usr/local/bin/dep
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/saracen/navigator
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gopkg.toml
+    - Gopkg.lock
+    - ./
+  - CmdLine:
+    - dep ensure -vendor-only
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/itchio/gothub
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - CmdLine:
+    - go test -coverprofile coverage.txt -covermode atomic ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -a -installsuffix
+      cgo -o navigator-darwin-amd64 .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -a -installsuffix
+      cgo -o navigator-linux-amd64 .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -a -installsuffix
+      cgo -o navigator-windows-amd64.exe .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - upx ./navigator-*
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10-alpine3.7
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.10-alpine3.7 as builder
+- As: releaser
+  BaseName: golang:1.10-alpine3.7
+  Commands:
+  - Key: GITHUB_TOKEN
+    Name: arg
+    Value: null
+  - Key: GIT_USERNAME
+    Name: arg
+    Value: null
+  - Key: GIT_REPOSITORY
+    Name: arg
+    Value: null
+  - Key: SOURCE_BRANCH
+    Name: arg
+    Value: null
+  - Key: CODECOV_TOKEN
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps curl bash git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./.git
+    - ./
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/saracen/navigator/coverage.txt
+    - ./
+  - CmdLine:
+    - curl -s -o ./.codecov https://codecov.io/bash &&     chmod +x ./.codecov &&     ./.codecov
+      -X gcov -X coveragepy -X xcode -X fix -X search -f coverage.txt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/gothub
+    - ./
+  - CmdLine:
+    - ./gothub release --user $GIT_USERNAME --repo $GIT_REPOSITORY --tag $SOURCE_BRANCH
+      --name $SOURCE_BRANCH --draft
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/saracen/navigator/navigator-darwin-amd64
+    - ./
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/saracen/navigator/navigator-linux-amd64
+    - ./
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/saracen/navigator/navigator-windows-amd64.exe
+    - ./
+  - CmdLine:
+    - ./gothub upload --user $GIT_USERNAME --repo $GIT_REPOSITORY --tag $SOURCE_BRANCH
+      --name "navigator-darwin-amd64" --file ./navigator-darwin-amd64 --replace
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./gothub upload --user $GIT_USERNAME --repo $GIT_REPOSITORY --tag $SOURCE_BRANCH
+      --name "navigator-linux-amd64" --file ./navigator-linux-amd64 --replace
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./gothub upload --user $GIT_USERNAME --repo $GIT_REPOSITORY --tag $SOURCE_BRANCH
+      --name "navigator-windows-amd64.exe" --file ./navigator-windows-amd64.exe --replace
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10-alpine3.7
+  Name: releaser
+  Platform: ""
+  SourceCode: FROM golang:1.10-alpine3.7 as releaser
+- As: dockerimage
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/saracen/navigator/navigator-linux-amd64
+    - ./navigator
+  - CmdLine:
+    - ./navigator
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: dockerimage
+  Platform: ""
+  SourceCode: FROM scratch as dockerimage

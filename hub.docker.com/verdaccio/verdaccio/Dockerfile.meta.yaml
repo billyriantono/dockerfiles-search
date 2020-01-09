@@ -1,0 +1,111 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: node:12.13.1-alpine
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    - Key: VERDACCIO_BUILD_REGISTRY
+      Value: https://registry.verdaccio.org
+    Name: env
+  - CmdLine:
+    - apk --no-cache add openssl ca-certificates wget &&     apk --no-cache add g++
+      gcc libgcc libstdc++ linux-headers make python &&     wget -q -O /etc/apk/keys/sgerrand.rsa.pub
+      https://alpine-pkgs.sgerrand.com/sgerrand.rsa.pub &&     wget -q https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.25-r0/glibc-2.25-r0.apk
+      &&     apk add glibc-2.25-r0.apk
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/verdaccio-build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - yarn config set registry $VERDACCIO_BUILD_REGISTRY &&     yarn install --production=false
+      &&     yarn lint &&     yarn code:docker-build &&     yarn cache clean &&     yarn
+      install --production=true
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12.13.1-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:12.13.1-alpine as builder
+- BaseName: node:12.13.1-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"https://github.com/verdaccio/verdaccio"'
+    Name: label
+  - Env:
+    - Key: VERDACCIO_APPDIR
+      Value: /opt/verdaccio
+    - Key: VERDACCIO_USER_NAME
+      Value: verdaccio
+    - Key: VERDACCIO_USER_UID
+      Value: "10001"
+    - Key: VERDACCIO_PORT
+      Value: "4873"
+    - Key: VERDACCIO_PROTOCOL
+      Value: http
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $VERDACCIO_APPDIR/docker-bin:$PATH
+    - Key: HOME
+      Value: $VERDACCIO_APPDIR
+    Name: env
+  - Name: workdir
+    Path: $VERDACCIO_APPDIR
+  - CmdLine:
+    - apk --no-cache add openssl dumb-init
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /verdaccio/storage /verdaccio/plugins /verdaccio/conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/verdaccio-build
+    - .
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - conf/docker.yaml
+    - /verdaccio/conf/config.yaml
+  - CmdLine:
+    - adduser -u $VERDACCIO_USER_UID -S -D -h $VERDACCIO_APPDIR -g "$VERDACCIO_USER_NAME
+      user" -s /sbin/nologin $VERDACCIO_USER_NAME &&     chmod -R +x $VERDACCIO_APPDIR/bin
+      $VERDACCIO_APPDIR/docker-bin &&     chown -R $VERDACCIO_USER_UID:root /verdaccio/storage
+      &&     chmod -R g=u /verdaccio/storage /etc/passwd
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $VERDACCIO_USER_UID
+  - Name: expose
+    Ports:
+    - $VERDACCIO_PORT
+  - Name: volume
+    Volumes:
+    - /verdaccio/storage
+  - CmdLine:
+    - uid_entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - $VERDACCIO_APPDIR/bin/verdaccio --config /verdaccio/conf/config.yaml --listen
+      $VERDACCIO_PROTOCOL://0.0.0.0:$VERDACCIO_PORT
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: node:12.13.1-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:12.13.1-alpine

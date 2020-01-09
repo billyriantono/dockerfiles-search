@@ -1,0 +1,104 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12-alpine3.9
+  Commands:
+  - CmdLine:
+    - apk update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add dep git
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOOS
+      Value: linux
+    Name: env
+  - Env:
+    - Key: GOARCH
+      Value: "386"
+    Name: env
+  - Name: workdir
+    Path: /go/src/github.com/ipedrazas/drone-helm
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - dep ensure
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12-alpine3.9
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12-alpine3.9 as builder
+- As: final
+  BaseName: alpine:3.9
+  Commands:
+  - Maintainer: Ivan Pedrazas <ipedrazas@gmail.com>
+    Name: maintainer
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/ipedrazas/drone-helm/drone-helm
+    - /bin/
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: VERSION
+      Value: ${VERSION:-v2.14.1}
+    Name: env
+  - Env:
+    - Key: FILENAME
+      Value: helm-${VERSION}-linux-amd64.tar.gz
+    Name: env
+  - Key: KUBECTL
+    Name: arg
+    Value: null
+  - Env:
+    - Key: KUBECTL
+      Value: ${KUBECTL:-v1.14.3}
+    Name: env
+  - CmdLine:
+    - set -ex   && apk add --no-cache curl ca-certificates   && curl -o /tmp/${FILENAME}
+      http://storage.googleapis.com/kubernetes-helm/${FILENAME}   && curl -o /tmp/kubectl
+      https://storage.googleapis.com/kubernetes-release/release/${KUBECTL}/bin/linux/amd64/kubectl   &&
+      curl -o /tmp/aws-iam-authenticator https://amazon-eks.s3-us-west-2.amazonaws.com/1.10.3/2018-07-26/bin/linux/amd64/aws-iam-authenticator   &&
+      tar -zxvf /tmp/${FILENAME} -C /tmp   && mv /tmp/linux-amd64/helm /bin/helm   &&
+      chmod +x /tmp/kubectl   && mv /tmp/kubectl /bin/kubectl   && chmod +x /tmp/aws-iam-authenticator   &&
+      mv /tmp/aws-iam-authenticator /bin/aws-iam-authenticator   && rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Labels:
+    - Key: description
+      Value: '"Kubectl and Helm."'
+    Name: label
+  - Labels:
+    - Key: base
+      Value: '"alpine"'
+    Name: label
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - kubeconfig
+    - /root/.kube/kubeconfig
+  - CmdLine:
+    - /bin/drone-helm
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: final
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as final

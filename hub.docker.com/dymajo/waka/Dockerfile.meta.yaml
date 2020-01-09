@@ -1,0 +1,124 @@
+MetaArgs: null
+Stages:
+- As: build-client
+  BaseName: node:lts-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /package.json
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /package-lock.json
+    - ./
+  - CmdLine:
+    - apk add --no-cache git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm ci
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /
+    - ./
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:lts-alpine
+  Name: build-client
+  Platform: ""
+  SourceCode: FROM node:lts-alpine as build-client
+- As: build-server
+  BaseName: golang:1.12-alpine
+  Commands:
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Env:
+    - Key: GOBIN
+      Value: $GOPATH/bin
+    Name: env
+  - CmdLine:
+    - apk add --no-cache git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /server
+    - ./
+  - CmdLine:
+    - go get -v ./
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -o waka
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12-alpine
+  Name: build-server
+  Platform: ""
+  SourceCode: FROM golang:1.12-alpine as build-server
+- BaseName: alpine:3.9
+  Commands:
+  - Name: expose
+    Ports:
+    - "80"
+  - Env:
+    - Key: ENDPOINT
+      Value: https://waka.app
+    Name: env
+  - Env:
+    - Key: ASSETSPREFIX
+      Value: /
+    Name: env
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apk add --no-cache ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-client
+    Name: copy
+    SourcesAndDest:
+    - /app/dist
+    - ./dist
+  - Chown: ""
+    From: build-server
+    Name: copy
+    SourcesAndDest:
+    - /app/waka
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /server/templates
+    - ./templates
+  - CmdLine:
+    - ./waka -p 80 -af ./dist/assets.json -sp ./dist -e $ENDPOINT -ap $ASSETSPREFIX
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

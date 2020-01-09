@@ -1,0 +1,64 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: openjdk:11
+  Commands:
+  - Name: workdir
+    Path: /cloudwatch_exporter
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /cloudwatch_exporter
+  - CmdLine:
+    - apt-get update -qq && apt-get install -qq maven && mvn -DskipTests package &&     mv
+      target/cloudwatch_exporter-*-with-dependencies.jar /cloudwatch_exporter.jar
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:11
+  Name: builder
+  Platform: ""
+  SourceCode: FROM openjdk:11 as builder
+- As: runner
+  BaseName: openjdk:11-jre-slim
+  Commands:
+  - Maintainer: Prometheus Team <prometheus-developers@googlegroups.com>
+    Name: maintainer
+  - Name: expose
+    Ports:
+    - "9106"
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - mkdir /config
+    Name: run
+    PrependShell: true
+  - Expression: ADD config.yml /config/
+    Name: onbuild
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /cloudwatch_exporter.jar
+    - /cloudwatch_exporter.jar
+  - CmdLine:
+    - apt-get update && apt-get install -y wget && apt-get clean && rm -rf /var/lib/{apt,dpkg,cache,log}/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - java
+    - -jar
+    - /cloudwatch_exporter.jar
+    - "9106"
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /config/config.yml
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:11-jre-slim
+  Name: runner
+  Platform: ""
+  SourceCode: FROM openjdk:11-jre-slim as runner

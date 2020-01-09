@@ -1,0 +1,136 @@
+MetaArgs: null
+Stages:
+- BaseName: frolvlad/alpine-oraclejdk8:latest
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Cheewai Lai <clai@csir.co.za>"'
+    Name: label
+  - Key: TOMCAT_VERSION
+    Name: arg
+    Value: 8.5.37
+  - Key: SUEXEC_VERSION
+    Name: arg
+    Value: "0.2"
+  - Key: DOCKERIZE_VERSION
+    Name: arg
+    Value: 0.6.1
+  - Key: GEOSERVER_VERSION
+    Name: arg
+    Value: "2.14"
+  - Key: GEOSERVER_PLUGINS
+    Name: arg
+    Value: '"cas feature-pregeneralized imagemosaic-jdbc monitor mysql pyramid wps"'
+  - Key: GEOSERVER_CPLUGINS
+    Name: arg
+    Value: '""'
+  - Key: GEOSERVER_BASE_URL
+    Name: arg
+    Value: '"http://build.geoserver.org/geoserver/${GEOSERVER_VERSION}.x"'
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/default-jvm
+    Name: env
+  - Env:
+    - Key: CATALINA_HOME
+      Value: /usr/tomcat
+    Name: env
+  - Env:
+    - Key: JMX
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: JMX_PORT
+      Value: "9004"
+    Name: env
+  - Env:
+    - Key: JMX_HOSTNAME
+      Value: localhost
+    Name: env
+  - Env:
+    - Key: DEBUG_PORT
+      Value: "8000"
+    Name: env
+  - Env:
+    - Key: PERM
+      Value: 128m
+    Name: env
+  - Env:
+    - Key: MAXPERM
+      Value: 256m
+    Name: env
+  - Env:
+    - Key: MINMEM
+      Value: 128m
+    Name: env
+  - Env:
+    - Key: MAXMEM
+      Value: 512m
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:/usr/bin:/usr/local/bin:$CATALINA_HOME/bin
+    Name: env
+  - CmdLine:
+    - buildDeps='unzip ca-certificates openssl g++ make' HOME='/root'  && set -x  &&
+      apk add --update curl $buildDeps  && wget -O- https://github.com/ncopa/su-exec/archive/v${SUEXEC_VERSION}.tar.gz
+      | tar zxvf -  && cd su-exec-${SUEXEC_VERSION}  && make  && mv su-exec /usr/bin  &&
+      cd .. && rm -rf su-exec-${SUEXEC_VERSION}  && chmod +x /usr/bin/su-exec  &&
+      curl -fsSL "https://github.com/jwilder/dockerize/releases/download/v${DOCKERIZE_VERSION}/dockerize-alpine-linux-amd64-v${DOCKERIZE_VERSION}.tar.gz"
+      | tar -C /usr/bin -xzvf -  && curl --silent --location --retry 3 --cacert /etc/ssl/certs/ca-certificates.crt
+      "https://archive.apache.org/dist/tomcat/tomcat-8/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz"     |
+      gunzip     | tar x -C /usr/  && mv /usr/apache-tomcat* /usr/tomcat  && mkdir
+      -p /tmp/gs/plugins  && cd /tmp/gs  && wget "${GEOSERVER_BASE_URL}/geoserver-${GEOSERVER_VERSION}.x-latest-war.zip"
+      -O geoserver.zip  && for _p in $GEOSERVER_CPLUGINS ; do wget -c "${GEOSERVER_BASE_URL}/community-latest/geoserver-${GEOSERVER_VERSION}-SNAPSHOT-${_p}-plugin.zip"
+      -O plugins/${_p}.zip; done  && for _p in $GEOSERVER_PLUGINS ; do wget -c "${GEOSERVER_BASE_URL}/ext-latest/geoserver-${GEOSERVER_VERSION}-SNAPSHOT-${_p}-plugin.zip"
+      -O plugins/${_p}.zip; done  && unzip geoserver.zip geoserver.war  && unzip geoserver.war
+      -d $CATALINA_HOME/webapps/geoserver  && find plugins -type f -name "*.zip" |
+      xargs -i unzip -o {} -d $CATALINA_HOME/webapps/geoserver/WEB-INF/lib/  && cd
+      /  && rm -rf $CATALINA_HOME/webapps/geoserver/data  && rm -rf /tmp/geoserver  &&
+      apk del --purge $buildDeps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - local_policy.jar
+    - /usr/lib/jvm/default-jvm/jre/lib/security/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - US_export_policy.jar
+    - /usr/lib/jvm/default-jvm/jre/lib/security/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - setenv.sh
+    - $CATALINA_HOME/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - Name: expose
+    Ports:
+    - "8080"
+  - Health:
+      Interval: 300000000000
+      StartPeriod: 120000000000
+      Test:
+      - CMD-SHELL
+      - curl -f "http://localhost:8080/geoserver/ows?service=wfs&version=1.1.0&request=GetCapabilities"
+        || exit 1
+      Timeout: 5000000000
+    Name: healthcheck
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: frolvlad/alpine-oraclejdk8:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM frolvlad/alpine-oraclejdk8:latest

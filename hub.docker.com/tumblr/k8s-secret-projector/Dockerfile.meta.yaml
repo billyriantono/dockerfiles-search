@@ -1,0 +1,88 @@
+MetaArgs:
+- DefaultValue: 1.11.5
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: 1.11.5
+Stages:
+- As: builder
+  BaseName: golang:${GO_VERSION}-alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache add ca-certificates make git openssl-dev libcrypto1.0 gcc libc-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - go.sum
+    - Makefile
+    - ./
+  - CmdLine:
+    - make vendor
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - make all test
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:${GO_VERSION}-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:${GO_VERSION}-alpine as builder
+- BaseName: alpine:latest
+  Commands:
+  - Name: volume
+    Volumes:
+    - /output
+    - /credentials/development
+    - /credentials/staging
+    - /credentials/production
+    - /manifests
+  - CmdLine:
+    - apk --no-cache add ca-certificates bash curl openssl-dev libcrypto1.0
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /src/bin/k8s-secret-projector
+    - /bin/k8s-secret-projector
+  - Env:
+    - Key: KUBECTL_VERSION
+      Value: 1.9.8
+    - Key: KUBECTL_CHECKSUM
+      Value: dd7cdde8b7bc4ae74a44bf90f3f0f6e27206787b27a84df62d8421db24f36acd
+    Name: env
+  - CmdLine:
+    - curl -L https://storage.googleapis.com/kubernetes-release/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl
+      |     tee /usr/bin/kubectl | bash -c 'sha256sum -c <(echo -n "${KUBECTL_CHECKSUM}  -"
+      ) && chmod +x /usr/bin/kubectl'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - k8s-secret-projector
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --creds-repo=staging=/credentials/staging,production=/credentials/production,development=/credentials/development
+    - --manifests=/manifests
+    - --output=/output
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

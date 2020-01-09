@@ -1,0 +1,162 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "build",
+      "BaseName": "alpine:3.10",
+      "SourceCode": "FROM alpine:3.10 as build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Image": "alpine:3.10"
+      },
+      "Commands": [
+        {
+          "Name": "shell",
+          "Shell": [
+            "/bin/ash",
+            "-eo",
+            "pipefail",
+            "-c"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "BUNDLE_SILENCE_ROOT_WARNING",
+              "Value": "1"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache    build-base    git    ruby    ruby-bundler    ruby-dev    ruby-ffi"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "Gemfile",
+            "Gemfile.lock",
+            "./"
+          ]
+        },
+        {
+          "CmdLine": [
+            "bundle install --frozen -j4 -r3 --no-cache --without development test  \u0026\u0026 bundle clean --force  \u0026\u0026 rm -rf /usr/lib/ruby/gems/*/cache  \u0026\u0026 scanelf --needed --nobanner --recursive /usr/lib/ruby/gems       | awk '{ gsub(/,/, \"\\nso:\", $2); print \"so:\" $2 }'       | sort -u       | xargs -r ash -c 'apk info --installed \"$@\" || true'       | sort -u \u003e .rundeps"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "rm -rf       .git       /usr/lib/ruby/gems/*/cache       Dockerfile       coverage       log       spec       tmp"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "alpine:3.10",
+      "SourceCode": "FROM alpine:3.10",
+      "Platform": "",
+      "From": {
+        "Image": "alpine:3.10"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "WEB_CONCURRENCY",
+              "Value": "4"
+            },
+            {
+              "Key": "WEB_MAX_THREADS",
+              "Value": "4"
+            },
+            {
+              "Key": "RACK_ENV",
+              "Value": "production"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/.rundeps",
+            "./"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache       $(cat .rundeps)       libcurl       ruby"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/lib/ruby/gems/",
+            "/usr/lib/ruby/gems/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/",
+            "."
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "9292"
+          ]
+        },
+        {
+          "Name": "user",
+          "User": "nobody"
+        },
+        {
+          "Name": "stopsignal",
+          "Signal": "SIGINT"
+        },
+        {
+          "CmdLine": [
+            "bin/puma"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

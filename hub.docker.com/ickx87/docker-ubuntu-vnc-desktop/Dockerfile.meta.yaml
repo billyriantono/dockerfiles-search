@@ -1,0 +1,135 @@
+MetaArgs: null
+Stages:
+- As: system
+  BaseName: ubuntu:18.10
+  Commands:
+  - CmdLine:
+    - ln -fs /usr/share/zoneinfo/Europe/Berlin /etc/localtime
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends software-properties-common
+      curl apache2-utils     && curl https://packages.microsoft.com/keys/microsoft.asc
+      | gpg --dearmor > microsoft.gpg     && install -o root -g root -m 644 microsoft.gpg
+      /etc/apt/trusted.gpg.d/     && sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/vscode
+      stable main" > /etc/apt/sources.list.d/vscode.list'     && apt-get update     &&
+      apt-get install -y --no-install-recommends --allow-unauthenticated     supervisor
+      nginx sudo vim-tiny net-tools zenity xz-utils     dbus-x11 x11-utils     mesa-utils
+      libgl1-mesa-dri     lxde xvfb x11vnc     gtk2-engines-murrine gnome-themes-standard
+      gtk2-engines-pixbuf gtk2-engines-murrine arc-theme     firefox     ttf-ubuntu-font-family     apt-transport-https
+      nano git ssh rsync php7.2 php7.2-mbstring php7.2-gd     php7.2-bz2 php7.2-zip
+      php7.2-bz2 php7.2-zip php-gmagick iputils-ping     gnupg libgconf-2-4 apache2
+      php-xdebug libapache2-mod-xsendfile php7.2-mysql     mysql-workbench mysql-client
+      unzip code mongo-tools     && apt-get autoclean     && apt-get autoremove     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Key: TINI_VERSION
+    Name: arg
+    Value: v0.18.0
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini
+    - /bin/tini
+  - CmdLine:
+    - chmod +x /bin/tini
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - image/usr/local/lib/web/backend/requirements.txt
+    - /tmp/
+  - CmdLine:
+    - apt-get update     && dpkg-query -W -f='${Package}\n' > /tmp/a.txt     && apt-get
+      install -y python-pip python-dev build-essential     && pip install setuptools
+      wheel && pip install -r /tmp/requirements.txt     && dpkg-query -W -f='${Package}\n'
+      > /tmp/b.txt     && apt-get remove -y `diff --changed-group-format='%>' --unchanged-group-format=''
+      /tmp/a.txt /tmp/b.txt | xargs`     && apt-get autoclean -y     && apt-get autoremove
+      -y     && rm -rf /var/lib/apt/lists/*     && rm -rf /var/cache/apt/* /tmp/a.txt
+      /tmp/b.txt
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.10
+  Name: system
+  Platform: ""
+  SourceCode: FROM ubuntu:18.10 as system
+- As: builder
+  BaseName: ubuntu:16.04
+  Commands:
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends curl ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL https://deb.nodesource.com/setup_8.x | bash -     && apt-get install
+      -y nodejs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -     && echo
+      "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list     &&
+      apt-get update     && apt-get install -y yarn
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - web
+    - /src/web
+  - CmdLine:
+    - cd /src/web     && yarn     && npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.04
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04 as builder
+- BaseName: system
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/web/dist/
+    - /usr/local/lib/web/frontend/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - image
+    - /
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: workdir
+    Path: /root
+  - Env:
+    - Key: HOME
+      Value: /home/ubuntu
+    - Key: SHELL
+      Value: /bin/bash
+    Name: env
+  - Health:
+      Interval: 30000000000
+      Test:
+      - CMD-SHELL
+      - curl --fail http://127.0.0.1:6079/api/health
+      Timeout: 5000000000
+    Name: healthcheck
+  - CmdLine:
+    - /startup.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: system
+  Name: ""
+  Platform: ""
+  SourceCode: FROM system

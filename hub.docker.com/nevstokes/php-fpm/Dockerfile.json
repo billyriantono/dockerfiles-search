@@ -1,0 +1,285 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "PHP_VERSION",
+      "DefaultValue": "latest",
+      "ProvidedValue": null,
+      "Value": "latest"
+    },
+    {
+      "Key": "FINAL_BASE_IMAGE",
+      "DefaultValue": "nevstokes/busybox",
+      "ProvidedValue": null,
+      "Value": "nevstokes/busybox"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "src",
+      "BaseName": "nevstokes/php-src:${PHP_VERSION}",
+      "SourceCode": "FROM nevstokes/php-src:${PHP_VERSION} AS src",
+      "Platform": "",
+      "As": "src",
+      "From": {
+        "Image": "nevstokes/php-src:${PHP_VERSION}"
+      },
+      "Commands": null
+    },
+    {
+      "Name": "build",
+      "BaseName": "alpine:3.6",
+      "SourceCode": "FROM alpine:3.6 AS build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Image": "alpine:3.6"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "github-releases.xsl",
+            "/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "src",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/php.tar.xz",
+            "."
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "PHP_INI_DIR",
+              "Value": "/usr/local/etc/php"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "apk --update add         autoconf         ca-certificates         file         g++         gcc         libc-dev         make         libressl         pkgconf         re2c         xz         curl-dev         libedit-dev         libressl-dev         libxml2-dev         libxslt-dev         postgresql-dev         \u0026\u0026 mkdir -p $PHP_INI_DIR/conf.d     \u0026\u0026 mkdir -p /usr/src/php     \u0026\u0026 tar -Jxf php.tar.xz -C /usr/src/php --strip-components=1"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "export CFLAGS=\"-fstack-protector-strong -fpic -fpie -Os\"     CPPFLAGS=\"-fstack-protector-strong -fpic -fpie -Os\"     LDFLAGS=\"-Wl,-O1 -Wl,--hash-style=both -pie\"         \u0026\u0026 cd /usr/src/php         \u0026\u0026 ./configure         --with-config-file-path=\"$PHP_INI_DIR\"         --with-config-file-scan-dir=\"$PHP_INI_DIR/conf.d\"                 --disable-cgi                 --enable-bcmath         --enable-calendar         --enable-fpm --with-fpm-user=www-data --with-fpm-group=www-data         --enable-mbstring         --enable-opcache                 --with-curl         --with-openssl         --with-pdo_pgsql         --with-zlib                 --without-iconv         --without-ldap         --without-pdo-sqlite         --without-pear         --without-sqlite3         \u0026\u0026 for REPO in igbinary/igbinary krakjoe/apcu php-ds/extension phpredis/phpredis     ; do         export EXT_DIR=\"ext/`basename ${REPO}`\"         \u0026\u0026 mkdir -p ${EXT_DIR}                 \u0026\u0026 export TAG=`wget -q https://github.com/${REPO}/releases.atom -O - | xsltproc /github-releases.xsl - | awk -F/ '{ print $NF; }' \u003e versions.$$ \u0026\u0026 grep -E \"^(v|release-)?\\`sed -E 's/^(v|release-)//' versions.$$ | grep -E '^[0-9]+(\\.[0-9]+){1,2}$' | sort -rg -t. -k1,1 -k2,2 -k3,3 | head -1\\`$\" versions.$$ \u0026\u0026 rm versions.$$`         \u0026\u0026 wget -qO- https://github.com/${REPO}/archive/${TAG}.tar.gz | tar xz -C ${EXT_DIR} --strip-components=1;     done         \u0026\u0026 rm configure \u0026\u0026 ./buildconf --force     \u0026\u0026 ./config.nice --enable-apcu --enable-ds --enable-igbinary --enable-redis --enable-redis-igbinary         \u0026\u0026 make -j \"$(getconf _NPROCESSORS_ONLN)\"     \u0026\u0026 make install     \u0026\u0026 make clean     \u0026\u0026 { find /usr/local/bin /usr/local/sbin -type f -perm +0111 -exec strip --strip-all '{}' + || true; }"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd /usr/local/etc     \u0026\u0026 sed 's!=NONE/!=!g' php-fpm.conf.default | tee php-fpm.conf \u003e /dev/null"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "libs",
+      "BaseName": "alpine:3.6",
+      "SourceCode": "FROM alpine:3.6 as libs",
+      "Platform": "",
+      "As": "libs",
+      "From": {
+        "Image": "alpine:3.6"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/sbin/php-fpm",
+            "/usr/local/sbin/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/var/cache/apk",
+            "/var/cache/apk/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "echo '@community http://dl-cdn.alpinelinux.org/alpine/edge/community' \u003e\u003e /etc/apk/repositories     \u0026\u0026 apk --update add upx@community     \u0026\u0026 scanelf --nobanner --needed usr/local/sbin/php-fpm | awk '{ gsub(/,/, \"\\nso:\", $2); print \"so:\" $2 }' | xargs apk add     \u0026\u0026 upx -9 /usr/local/sbin/php-fpm"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "apk del --purge alpine-keys apk-tools libc-utils musl-utils scanelf upx"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "rm /lib/libc.musl-x86_64.so.1     \u0026\u0026 for lib_dir in $(find / -name lib*.so.* -type f -print | xargs -n 1 dirname | sort -u)     ; do         find $lib_dir -type l -name lib*.so -maxdepth 1 -print | xargs -rn 1 rm         \u0026\u0026 find $lib_dir -type f -name lib*.so.* -maxdepth 1 -print \u003e libs.$$         \u0026\u0026 find $lib_dir -type l -name lib*.so.* -maxdepth 1 -exec sh -c 'LINK=$(readlink -f $0) \u0026\u0026 ln -f $LINK $0' {} \\;         \u0026\u0026 cat libs.$$ | xargs rm         \u0026\u0026 find $lib_dir -type l -maxdepth 1 -print | xargs -rn 1 rm;     done"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "${FINAL_BASE_IMAGE}",
+      "SourceCode": "FROM ${FINAL_BASE_IMAGE}",
+      "Platform": "",
+      "From": {
+        "Image": "${FINAL_BASE_IMAGE}"
+      },
+      "Commands": [
+        {
+          "Key": "BUILD_DATE",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "VCS_REF",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "VCS_URL",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Env": [
+            {
+              "Key": "PHP_INI_DIR",
+              "Value": "/usr/local/etc/php"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "libs",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/sbin/php-fpm",
+            "/usr/local/sbin/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/etc/php-fpm.conf",
+            "/usr/local/etc/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/etc/php-fpm.d/www.conf.default",
+            "/usr/local/etc/php-fpm.d/www.conf"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "conf/zz-docker.conf",
+            "/usr/local/etc/php-fpm.d/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "libs",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/lib/ld-musl-x86_64.so.1",
+            "/lib/libz.so.1",
+            "/lib/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "libs",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/lib/*.so.*",
+            "/usr/lib/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "libs",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/lib/sasl2/*.so.*",
+            "/usr/lib/sasl2/"
+          ]
+        },
+        {
+          "Name": "user",
+          "User": "www-data"
+        },
+        {
+          "CmdLine": [
+            "php-fpm"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "9000"
+          ]
+        },
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"Nev Stokes \u003cmail@nevstokes.com\u003e\""
+            },
+            {
+              "Key": "description",
+              "Value": "\"PHP FPM\""
+            },
+            {
+              "Key": "org.label-schema.build-date",
+              "Value": "$BUILD_DATE"
+            },
+            {
+              "Key": "org.label-schema.schema-version",
+              "Value": "\"1.0\""
+            },
+            {
+              "Key": "org.label-schema.vcs-ref",
+              "Value": "$VCS_REF"
+            },
+            {
+              "Key": "org.label-schema.vcs-url",
+              "Value": "$VCS_URL"
+            }
+          ],
+          "Name": "label"
+        }
+      ]
+    }
+  ]
+}

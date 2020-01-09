@@ -1,0 +1,144 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "gocompile",
+      "BaseName": "golang:1.10.0-alpine",
+      "SourceCode": "FROM golang:1.10.0-alpine as gocompile",
+      "Platform": "",
+      "As": "gocompile",
+      "From": {
+        "Image": "golang:1.10.0-alpine"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add --no-cache git"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "GOPATH",
+              "Value": "/go"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "go get -u github.com/googlecloudplatform/gcsfuse"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "alpine:3.7",
+      "SourceCode": "FROM alpine:3.7",
+      "Platform": "",
+      "From": {
+        "Image": "alpine:3.7"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add --no-cache ca-certificates fuse \u0026\u0026 rm -rf /tmp/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache ca-certificates bash \u0026\u0026 rm -rf /tmp/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "gocompile",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/go/bin/gcsfuse",
+            "/usr/local/bin"
+          ]
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /workspace"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/workspace"
+        },
+        {
+          "Env": [
+            {
+              "Key": "GOOGLE_APPLICATION_CREDENTIALS",
+              "Value": "\"/gcscredentials\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "GOOGLE_APPLICATION_CREDENTIALS_JSON",
+              "Value": "\"\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "GCSFUSE_MOUNT",
+              "Value": "\"/workspace\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "GCSFUSE_BUCKET",
+              "Value": "\"\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "GCSFUSE_ARGS",
+              "Value": "\"--limit-ops-per-sec 100 --limit-bytes-per-sec 100 --stat-cache-ttl 60s --type-cache-ttl 60s\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /entrypoint/ \u0026\u0026 \techo '#!/bin/bash' \u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo ''                                                              \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo '# Configuration checks'                                        \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo 'if [ -z \"${GCSFUSE_BUCKET}\" ]; then'                           \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo '    echo \"Error: GCSFUSE_BUCKET is not specified\"'             \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo '    exit 128'                                                  \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo 'fi'                                                            \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo ''                                                              \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo '# Write auth file if it does not exist'                        \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo 'if [ ! -f \"${GOOGLE_APPLICATION_CREDENTIALS}\" ]; then'         \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo '    if [ -z \"${GOOGLE_APPLICATION_CREDENTIALS_JSON}\" ]; then'  \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo '        echo \"Error: Missing GOOGLE_APPLICATION_CREDENTIALS_JSON or ${GOOGLE_APPLICATION_CREDENTIALS} not provided\"'  \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo '        exit 128'                                              \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo '    fi'                                                        \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo '    echo \"${GOOGLE_APPLICATION_CREDENTIALS_JSON}\" \u003e ${GOOGLE_APPLICATION_CREDENTIALS}'  \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo 'fi'                                                            \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo ''                                                              \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo 'echo \"==\u003e [picoded/gcsfuse] : Mounting GCS Filesystem\"'        \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo 'mkdir -p ${GCSFUSE_MOUNT}'                                     \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo 'gcsfuse $GCSFUSE_ARGS ${GCSFUSE_BUCKET} ${GCSFUSE_MOUNT}'      \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo ''                                                              \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo 'echo \"==\u003e [picoded/gcsfuse] : Entrypoint Chain\"'               \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \techo 'exec \"$@\"'                                                     \u003e\u003e /entrypoint/gcsfuse.sh \u0026\u0026 \tchmod +x /entrypoint/gcsfuse.sh;"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "/entrypoint/gcsfuse.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

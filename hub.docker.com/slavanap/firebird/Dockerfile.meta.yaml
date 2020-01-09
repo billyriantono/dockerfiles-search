@@ -1,0 +1,77 @@
+MetaArgs:
+- DefaultValue: debian:buster
+  Key: image
+  ProvidedValue: null
+  Value: debian:buster
+Stages:
+- As: result
+  BaseName: $image
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Vyacheslav Napadovsky" <napadovskiy@gmail.com>'
+    Name: label
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    - Key: LC_ALL
+      Value: C.UTF-8
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get -qq update && apt-get -qqy upgrade  && apt-get install -qqy firebird3.0-server  &&
+      gsec -modify sysdba -pw masterke  && echo "UserManager = Legacy_UserManager"
+      > /etc/firebird/3.0/firebird.conf  && echo "WireCrypt = Enabled" >> /etc/firebird/3.0/firebird.conf  &&
+      echo "AuthServer = Legacy_Auth, Srp, WinSspi" >> /etc/firebird/3.0/firebird.conf  &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - 3050/tcp
+  - CmdLine:
+    - /usr/sbin/fbguard
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: $image
+  Name: result
+  Platform: ""
+  SourceCode: FROM $image as result
+- As: build
+  BaseName: result
+  Commands:
+  - CmdLine:
+    - apt-get -qq update && apt-get install -qq --no-install-recommends         build-essential
+      subversion ca-certificates firebird-dev uuid-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - svn co https://svn.code.sf.net/p/rfunc/code rfunc  && cd rfunc/trunk/source/  &&
+      echo "GDS_NAME = fbclient" >> rfunc.conf  && sed -i 's/\/usr\/lib\/\(.*\).so/\/usr\/lib\/x86_64-linux-gnu\/\1.so/'
+      makefile.linux  && make -f makefile.linux rfunc
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: result
+  Name: build
+  Platform: ""
+  SourceCode: FROM result as build
+- BaseName: result
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /rfunc/trunk/source/rfunc
+    - /usr/lib/x86_64-linux-gnu/firebird/3.0/UDF/rfunc.so
+  From:
+    Stage:
+      Index: 0
+      Named: result
+  Name: ""
+  Platform: ""
+  SourceCode: FROM result

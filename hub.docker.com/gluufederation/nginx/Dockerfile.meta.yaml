@@ -1,0 +1,191 @@
+MetaArgs: null
+Stages:
+- BaseName: nginx:stable-alpine
+  Commands:
+  - CmdLine:
+    - apk update     && apk add --no-cache openssl py-pip shadow     && apk add --no-cache
+      --virtual build-deps git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /etc/certs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl dhparam -out /etc/certs/dhparams.pem 2048
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "daemon off;" >> /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: expose
+    Ports:
+    - "443"
+  - Env:
+    - Key: CONSUL_TEMPLATE_VERSION
+      Value: 0.20.0
+    Name: env
+  - CmdLine:
+    - wget -q https://releases.hashicorp.com/consul-template/${CONSUL_TEMPLATE_VERSION}/consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.tgz
+      -O /tmp/consul-template.tgz     && tar xf /tmp/consul-template.tgz -C /usr/bin/     &&
+      chmod +x /usr/bin/consul-template     && rm /tmp/consul-template.tgz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q https://github.com/krallin/tini/releases/download/v0.18.0/tini-static
+      -O /usr/bin/tini     && chmod +x /usr/bin/tini
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - /tmp/
+  - CmdLine:
+    - pip install -U pip     && pip install -r /tmp/requirements.txt --no-cache-dir
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk del build-deps     && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /licenses
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - LICENSE
+    - /licenses/
+  - Env:
+    - Key: GLUU_CONFIG_ADAPTER
+      Value: consul
+    - Key: GLUU_CONFIG_CONSUL_HOST
+      Value: localhost
+    - Key: GLUU_CONFIG_CONSUL_PORT
+      Value: "8500"
+    - Key: GLUU_CONFIG_CONSUL_CONSISTENCY
+      Value: stale
+    - Key: GLUU_CONFIG_CONSUL_SCHEME
+      Value: http
+    - Key: GLUU_CONFIG_CONSUL_VERIFY
+      Value: "false"
+    - Key: GLUU_CONFIG_CONSUL_CACERT_FILE
+      Value: /etc/certs/consul_ca.crt
+    - Key: GLUU_CONFIG_CONSUL_CERT_FILE
+      Value: /etc/certs/consul_client.crt
+    - Key: GLUU_CONFIG_CONSUL_KEY_FILE
+      Value: /etc/certs/consul_client.key
+    - Key: GLUU_CONFIG_CONSUL_TOKEN_FILE
+      Value: /etc/certs/consul_token
+    - Key: GLUU_CONFIG_KUBERNETES_NAMESPACE
+      Value: default
+    - Key: GLUU_CONFIG_KUBERNETES_CONFIGMAP
+      Value: gluu
+    - Key: GLUU_CONFIG_KUBERNETES_USE_KUBE_CONFIG
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: GLUU_SECRET_ADAPTER
+      Value: vault
+    - Key: GLUU_SECRET_VAULT_SCHEME
+      Value: http
+    - Key: GLUU_SECRET_VAULT_HOST
+      Value: localhost
+    - Key: GLUU_SECRET_VAULT_PORT
+      Value: "8200"
+    - Key: GLUU_SECRET_VAULT_VERIFY
+      Value: "false"
+    - Key: GLUU_SECRET_VAULT_ROLE_ID_FILE
+      Value: /etc/certs/vault_role_id
+    - Key: GLUU_SECRET_VAULT_SECRET_ID_FILE
+      Value: /etc/certs/vault_secret_id
+    - Key: GLUU_SECRET_VAULT_CERT_FILE
+      Value: /etc/certs/vault_client.crt
+    - Key: GLUU_SECRET_VAULT_KEY_FILE
+      Value: /etc/certs/vault_client.key
+    - Key: GLUU_SECRET_VAULT_CACERT_FILE
+      Value: /etc/certs/vault_ca.crt
+    - Key: GLUU_SECRET_KUBERNETES_NAMESPACE
+      Value: default
+    - Key: GLUU_SECRET_KUBERNETES_SECRET
+      Value: gluu
+    - Key: GLUU_SECRET_KUBERNETES_USE_KUBE_CONFIG
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: GLUU_WAIT_MAX_TIME
+      Value: "300"
+    - Key: GLUU_WAIT_SLEEP_DURATION
+      Value: "10"
+    Name: env
+  - Labels:
+    - Key: name
+      Value: '"NGINX"'
+    - Key: maintainer
+      Value: '"Gluu Inc. <support@gluu.org>"'
+    - Key: vendor
+      Value: '"Gluu Federation"'
+    - Key: version
+      Value: '"4.1.0"'
+    - Key: release
+      Value: '"dev"'
+    - Key: summary
+      Value: '"Gluu NGINX"'
+    - Key: description
+      Value: '"Customized NGINX server for Gluu Server"'
+    Name: label
+  - CmdLine:
+    - mkdir -p /app/scripts /app/templates /deploy
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - static/custom_404.html
+    - /usr/share/nginx/html/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - static/custom_50x.html
+    - /usr/share/nginx/html/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates/gluu_https.conf.ctmpl
+    - /app/templates/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts
+    - /app/scripts/
+  - CmdLine:
+    - chmod +x /app/scripts/entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tini
+    - -g
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /app/scripts/entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginx:stable-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx:stable-alpine

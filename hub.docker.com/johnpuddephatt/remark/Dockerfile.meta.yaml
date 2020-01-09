@@ -1,0 +1,245 @@
+MetaArgs: null
+Stages:
+- As: build-backend
+  BaseName: umputun/baseimage:buildgo-latest
+  Commands:
+  - Key: COVERALLS_TOKEN
+    Name: arg
+    Value: null
+  - Key: CI
+    Name: arg
+    Value: null
+  - Key: TRAVIS
+    Name: arg
+    Value: null
+  - Key: TRAVIS_BRANCH
+    Name: arg
+    Value: null
+  - Key: TRAVIS_COMMIT
+    Name: arg
+    Value: null
+  - Key: TRAVIS_JOB_ID
+    Name: arg
+    Value: null
+  - Key: TRAVIS_JOB_NUMBER
+    Name: arg
+    Value: null
+  - Key: TRAVIS_OS_NAME
+    Name: arg
+    Value: null
+  - Key: TRAVIS_PULL_REQUEST
+    Name: arg
+    Value: null
+  - Key: TRAVIS_PULL_REQUEST_SHA
+    Name: arg
+    Value: null
+  - Key: TRAVIS_REPO_SLUG
+    Name: arg
+    Value: null
+  - Key: TRAVIS_TAG
+    Name: arg
+    Value: null
+  - Key: DRONE
+    Name: arg
+    Value: null
+  - Key: DRONE_TAG
+    Name: arg
+    Value: null
+  - Key: DRONE_COMMIT
+    Name: arg
+    Value: null
+  - Key: DRONE_BRANCH
+    Name: arg
+    Value: null
+  - Key: DRONE_PULL_REQUEST
+    Name: arg
+    Value: null
+  - Key: SKIP_BACKEND_TEST
+    Name: arg
+    Value: null
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - backend
+    - /build/backend
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .git
+    - /build/.git
+  - Name: workdir
+    Path: /build/backend
+  - Env:
+    - Key: GOFLAGS
+      Value: '"-mod=vendor"'
+    Name: env
+  - CmdLine:
+    - cd app &&     if [ -z "$SKIP_BACKEND_TEST" ] ; then         go test -p 1 -timeout=30s
+      -covermode=count -coverprofile=/profile.cov_tmp ./... &&         cat /profile.cov_tmp
+      | grep -v "_mock.go" > /profile.cov ;     else echo "skip backend test" ; fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ -z "$SKIP_BACKEND_TEST" ] ; then         golangci-lint run --out-format=tab
+      --disable-all --tests=false --enable=unconvert         --enable=megacheck --enable=structcheck
+      --enable=gas --enable=gocyclo --enable=dupl --enable=misspell         --enable=unparam
+      --enable=varcheck --enable=deadcode --enable=typecheck         --enable=ineffassign
+      --enable=varcheck ./... ;     else echo "skip backend linters" ; fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ -z "$COVERALLS_TOKEN" ] ; then     echo "coverall not enabled" ;     else
+      goveralls -coverprofile=/profile.cov -service=travis-ci -repotoken $COVERALLS_TOKEN
+      || echo "coverall failed!"; fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ -z "$DRONE" ] ; then echo "runs outside of drone" && version="local";     else
+      version=${DRONE_TAG}${DRONE_BRANCH}${DRONE_PULL_REQUEST}-${DRONE_COMMIT:0:7}-$(date
+      +%Y%m%d-%H:%M:%S); fi &&     echo "version=$version" &&     go build -o remark42
+      -ldflags "-X main.revision=${version} -s -w" ./app
+    Name: run
+    PrependShell: true
+  From:
+    Image: umputun/baseimage:buildgo-latest
+  Name: build-backend
+  Platform: ""
+  SourceCode: FROM umputun/baseimage:buildgo-latest as build-backend
+- As: build-frontend-deps
+  BaseName: node:10.11-alpine
+  Commands:
+  - Key: CI
+    Name: arg
+    Value: null
+  - Env:
+    - Key: HUSKY_SKIP_INSTALL
+      Value: "true"
+    Name: env
+  - CmdLine:
+    - apk add --no-cache --update git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - frontend/package.json
+    - /srv/frontend/package.json
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - frontend/package-lock.json
+    - /srv/frontend/package-lock.json
+  - CmdLine:
+    - cd /srv/frontend && CI=true npm ci
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.11-alpine
+  Name: build-frontend-deps
+  Platform: ""
+  SourceCode: FROM node:10.11-alpine as build-frontend-deps
+- As: build-frontend
+  BaseName: node:10.11-alpine
+  Commands:
+  - Key: CI
+    Name: arg
+    Value: null
+  - Key: SKIP_FRONTEND_TEST
+    Name: arg
+    Value: null
+  - Key: NODE_ENV
+    Name: arg
+    Value: production
+  - Chown: ""
+    From: build-frontend-deps
+    Name: copy
+    SourcesAndDest:
+    - /srv/frontend/node_modules
+    - /srv/frontend/node_modules
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - frontend
+    - /srv/frontend
+  - CmdLine:
+    - cd /srv/frontend &&     if [ -z "$SKIP_FRONTEND_TEST" ] ; then npx run-p lint
+      test build ;     else echo "skip frontend tests and lint" ; npm run build ;
+      fi &&     rm -rf ./node_modules
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.11-alpine
+  Name: build-frontend
+  Platform: ""
+  SourceCode: FROM node:10.11-alpine as build-frontend
+- BaseName: umputun/baseimage:app-latest
+  Commands:
+  - Name: workdir
+    Path: /srv
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - entrypoint.sh
+    - /entrypoint.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - backend/scripts/backup.sh
+    - /usr/local/bin/backup
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - backend/scripts/restore.sh
+    - /usr/local/bin/restore
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - backend/scripts/import.sh
+    - /usr/local/bin/import
+  - CmdLine:
+    - chmod +x /entrypoint.sh /usr/local/bin/backup /usr/local/bin/restore /usr/local/bin/import
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-backend
+    Name: copy
+    SourcesAndDest:
+    - /build/backend/remark42
+    - /srv/remark42
+  - Chown: ""
+    From: build-frontend
+    Name: copy
+    SourcesAndDest:
+    - /srv/frontend/public/
+    - /srv/web
+  - CmdLine:
+    - chown -R app:app /srv
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /srv/remark42 /usr/bin/remark42
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+  - Health:
+      Interval: 30000000000
+      Test:
+      - CMD-SHELL
+      - curl --fail http://localhost:8080/ping || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - server
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: umputun/baseimage:app-latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM umputun/baseimage:app-latest

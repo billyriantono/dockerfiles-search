@@ -1,0 +1,128 @@
+MetaArgs:
+- DefaultValue: 3.0.9
+  Key: VALHALLA_VERSION
+  ProvidedValue: null
+  Value: 3.0.9
+- DefaultValue: https://github.com/valhalla/valhalla.git
+  Key: VALHALLA_REPO
+  ProvidedValue: null
+  Value: https://github.com/valhalla/valhalla.git
+- DefaultValue: 0.6.5
+  Key: PRIME_SERVER_TAG
+  ProvidedValue: null
+  Value: 0.6.5
+Stages:
+- BaseName: ubuntu:18.04
+  Commands:
+  - Key: VALHALLA_VERSION
+    Name: arg
+    Value: null
+  - Key: VALHALLA_REPO
+    Name: arg
+    Value: null
+  - Key: PRIME_SERVER_TAG
+    Name: arg
+    Value: null
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y     autoconf     automake     build-essential     cmake     curl     g++     gcc     git     jq     lcov     libboost-all-dev     libboost-python-dev     libbz2-dev     libcurl4-openssl-dev     libczmq-dev     libexpat1-dev     libgeos++-dev     libgeos-dev     liblua5.2-dev     liblz4-dev     libspatialite-dev     libsqlite3-dev     libsqlite3-mod-spatialite     libprotobuf-dev     libprotobuf-lite10     libtool     libzmq3-dev     lua5.2     make     osmctools     osmosis     parallel     pkg-config     protobuf-compiler     python-all-dev     python-pip     python-virtualenv     software-properties-common     spatialite-bin     vim-common     wget     zlib1g-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /src && cd /src
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -v --branch ${PRIME_SERVER_TAG} https://github.com/kevinkreiser/prime_server.git
+      && (cd prime_server && git submodule update --init --recursive && mkdir -p build
+      && cd build && cmake .. && make -j2 install)
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/valhalla/valhalla.git && (cd valhalla && git checkout
+      tags/${VALHALLA_VERSION} -b build && git submodule update --init --recursive
+      && mkdir -p build && cd build && cmake .. -DPKG_CONFIG_PATH=/usr/local/lib/pkgconfig
+      -DCMAKE_BUILD_TYPE=Release -DENABLE_NODE_BINDINGS=OFF && make -j2 install) &&
+      rm -rf /src
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04
+- BaseName: ubuntu:18.04
+  Commands:
+  - Key: VALHALLA_VERSION
+    Name: arg
+    Value: null
+  - Key: VALHALLA_CONCURRENCY
+    Name: arg
+    Value: "1"
+  - Env:
+    - Key: VALHALLA_VERSION
+      Value: ${VALHALLA_VERSION}
+    Name: env
+  - Env:
+    - Key: VALHALLA_CONCURRENCY
+      Value: ${VALHALLA_CONCURRENCY}
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install --no-install-recommends -y apt-transport-https
+      curl libcurl4 ca-certificates gnupg && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install --no-install-recommends -y     libboost-python1.65.1     libboost-filesystem1.65.1     libboost-iostreams1.65.1     libboost-regex1.65.1     libboost-thread1.65.1     libboost-program-options1.65.1     liblua5.2-0     libprotoc10     libprotobuf-lite10     libzmq5     libczmq4     libsqlite3-mod-spatialite     python-pip     python-virtualenv     spatialite-bin     jo     jq     wget     unzip     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /usr/local
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: '"${LD_LIBRARY_PATH}:/usr/local/lib"'
+    Name: env
+  - CmdLine:
+    - ln -s /usr/lib/x86_64-linux-gnu/mod_spatialite.so.7.1.0 /usr/lib/x86_64-linux-gnu/mod_spatialite
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - Env:
+    - Key: WORKDIR
+      Value: /build
+    - Key: DATADIR
+      Value: /data
+    - Key: VALHALLA_CONFIG
+      Value: /build/valhalla.json
+    Name: env
+  - CmdLine:
+    - mkdir -p ${WORKDIR} ${DATADIR}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - valhalla_build_config > ${VALHALLA_CONFIG}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - alias_tz.csv
+    - ${WORKDIR}
+  - CmdLine:
+    - valhalla_service ${VALHALLA_CONFIG} ${VALHALLA_CONCURRENCY}
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

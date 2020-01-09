@@ -1,0 +1,92 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: centos/devtoolset-7-toolchain-centos7
+  Commands:
+  - Maintainer: Piotr Tylenda <tylenda.piotr@gmail.com>
+    Name: maintainer
+  - Key: KIMCHI_VERSION
+    Name: arg
+    Value: 2.5.0
+  - Key: WOK_VERSION
+    Name: arg
+    Value: 2.5.0
+  - Name: workdir
+    Path: /src
+  - Name: user
+    User: "0"
+  - CmdLine:
+    - yum update -y &&     yum install -y gcc make autoconf automake gettext-devel
+      git                    rpm-build libxslt python-lxml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --single-branch -b $WOK_VERSION https://github.com/kimchi-project/wok.git
+      &&     cd wok &&     ./autogen.sh --system &&     make &&     make rpm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --single-branch -b $KIMCHI_VERSION https://github.com/kimchi-project/kimchi.git
+      &&     cd kimchi &&     ./autogen.sh --system &&     make &&     make rpm
+    Name: run
+    PrependShell: true
+  From:
+    Image: centos/devtoolset-7-toolchain-centos7
+  Name: builder
+  Platform: ""
+  SourceCode: FROM centos/devtoolset-7-toolchain-centos7 as builder
+- BaseName: centos/systemd
+  Commands:
+  - Maintainer: Piotr Tylenda <tylenda.piotr@gmail.com>
+    Name: maintainer
+  - Key: KIMCHI_VERSION
+    Name: arg
+    Value: 2.5.0
+  - Key: WOK_VERSION
+    Name: arg
+    Value: 2.5.0
+  - Name: workdir
+    Path: /tmp
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/wok/rpm/RPMS/noarch/wok-$WOK_VERSION-0.el7.noarch.rpm
+    - wok.el7.noarch.rpm
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/kimchi/rpm/RPMS/noarch/kimchi-$WOK_VERSION-0.el7.noarch.rpm
+    - kimchi.el7.noarch.rpm
+  - CmdLine:
+    - yum update -y &&     yum install -y epel-release &&     yum update -y &&     yum
+      install -y python-cherrypy python-cheetah PyPAM m2crypto                    python-jsonschema
+      python-psutil python-ldap                    python-lxml nginx openssl python-websockify                    logrotate
+      fontawesome-fonts python-websockify                    python-jsonschema nginx
+      python-psutil &&     yum install -y libvirt-python libvirt libvirt-daemon-config-network                    qemu-kvm
+      python-ethtool sos python-ipaddr nfs-utils                    iscsi-initiator-utils
+      pyparted python-libguestfs                    libguestfs-tools novnc spice-html5                    python-configobj
+      python-magic python-paramiko                    python-pillow novnc python-jsonschema
+      python-psutil spice-html5 &&     yum clean all -y &&     rm -rf /var/cache/yum
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum install -y wok.el7.noarch.rpm &&     yum install -y kimchi.el7.noarch.rpm
+      &&     rm -f wok.el7.noarch.rpm kimchi.el7.noarch.rpm &&     systemctl enable
+      wokd.service
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8001"
+    - "8010"
+  - CmdLine:
+    - /usr/sbin/init
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos/systemd
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos/systemd

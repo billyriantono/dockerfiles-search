@@ -1,0 +1,314 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "node",
+      "BaseName": "node:8.9.4-alpine",
+      "SourceCode": "FROM node:8.9.4-alpine as node",
+      "Platform": "",
+      "As": "node",
+      "From": {
+        "Image": "node:8.9.4-alpine"
+      },
+      "Commands": null
+    },
+    {
+      "Name": "builder",
+      "BaseName": "ruby:2.5.3-alpine",
+      "SourceCode": "FROM ruby:2.5.3-alpine as builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "ruby:2.5.3-alpine"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk --update --no-cache add bash bash-completion"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "shell",
+          "Shell": [
+            "bash",
+            "-c"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apk --update --no-cache add shadow sudo busybox-suid postgresql-dev tzdata alpine-sdk"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "Gemfile",
+            "Gemfile.lock",
+            "/opt/rebacklogs/"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/opt/rebacklogs"
+        },
+        {
+          "Chown": "",
+          "From": "node",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/bin/node",
+            "/usr/local/bin/node"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "node",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/include/node",
+            "/usr/local/include/node"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "node",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/lib/node_modules",
+            "/usr/local/lib/node_modules"
+          ]
+        },
+        {
+          "CmdLine": [
+            "ln -s /usr/local/bin/node /usr/local/bin/nodejs \u0026\u0026     ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "gem install bundler --version 1.17.3 \u0026\u0026     bundle install --without development test --path vendor/bundle \u0026\u0026     find vendor/bundle/ruby -path '*/gems/*/ext/*/Makefile' -exec dirname {} \\; | xargs -n1 -P$(nproc) -I{} make -C {} clean"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd /opt/rebacklogs \u0026\u0026 \tbundle install -j$(nproc) --deployment --without development test"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "npm install -g yarn"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "package.json",
+            "yarn.lock",
+            "/opt/rebacklogs/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "yarn install --pure-lockfile"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "/opt/rebacklogs/"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "RAILS_ENV",
+              "Value": "\"production\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "NODE_ENV",
+              "Value": "\"production\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "cd /opt/rebacklogs \u0026\u0026   SECRET_KEY_BASE=precompile_placeholder bin/rails assets:precompile"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "ruby:2.5.3-alpine",
+      "SourceCode": "FROM ruby:2.5.3-alpine",
+      "Platform": "",
+      "From": {
+        "Image": "ruby:2.5.3-alpine"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk --update --no-cache add     shadow sudo busybox-suid     execline tzdata postgresql-dev openssl \u0026\u0026     echo \"Etc/UTC\" \u003e /etc/localtime"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "DOCKERIZE_VERSION",
+              "Value": "v0.6.1"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz     \u0026\u0026 tar -C /usr/local/bin -xzvf dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz     \u0026\u0026 rm dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Key": "UID",
+          "Name": "arg",
+          "Value": "991"
+        },
+        {
+          "Key": "GID",
+          "Name": "arg",
+          "Value": "991"
+        },
+        {
+          "CmdLine": [
+            "apk update \u0026\u0026   apk --update --no-cache add bash bash-completion tini \u0026\u0026 \taddgroup --gid $GID rebacklogs \u0026\u0026 \tuseradd -m -u $UID -g $GID -d /opt/rebacklogs rebacklogs \u0026\u0026 \techo \"rebacklogs:`head /dev/urandom | tr -dc A-Za-z0-9 | head -c 24 | mkpasswd -s -m sha-256`\" | chpasswd"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "3000"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/opt/rebacklogs"
+        },
+        {
+          "Chown": "rebacklogs:rebacklogs",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/opt/rebacklogs/vendor/bundle",
+            "vendor/bundle"
+          ]
+        },
+        {
+          "Chown": "rebacklogs:rebacklogs",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/bundle",
+            "/usr/local/bundle"
+          ]
+        },
+        {
+          "Chown": "rebacklogs:rebacklogs",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/opt/rebacklogs/public/assets/",
+            "/opt/rebacklogs/public/assets/"
+          ]
+        },
+        {
+          "Chown": "rebacklogs:rebacklogs",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/opt/rebacklogs/public/packs/",
+            "/opt/rebacklogs/public/packs/"
+          ]
+        },
+        {
+          "Chown": "rebacklogs:rebacklogs",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "/opt/rebacklogs"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "RAILS_ENV",
+              "Value": "\"production\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "RAILS_SERVE_STATIC_FILES",
+              "Value": "\"true\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "BIND",
+              "Value": "\"0.0.0.0\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Name": "user",
+          "User": "rebacklogs"
+        },
+        {
+          "CmdLine": [
+            "/sbin/tini",
+            "--"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

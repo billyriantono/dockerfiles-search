@@ -1,0 +1,34 @@
+FROM ubuntu:trusty
+ENV LC_ALL C
+ENV DEBIAN_FRONTEND noninteractive
+ENV DEBCONF_NONINTERACTIVE_SEEN true
+
+RUN apt-get update && \
+    apt-get install -y software-properties-common && \
+    apt-get install -y binutils libproj-dev gdal-bin \
+                       libgeos-dev libgeos-3.4.2 \
+                       build-essential \
+                       libyaml-dev \
+                       python \
+                       python-dev \
+                       python-setuptools \
+                       supervisor \
+                       libpq-dev \
+                       curl \
+                       postgresql-client-9.3 \
+                       git \
+                       libcurl4-openssl-dev \
+                       libtiff4-dev \
+                       libjpeg8-dev \
+                       libfreetype6-dev \
+                       liblcms2-dev \
+                       libwebp-dev \
+                       tor \
+                       zlib1g-dev && \
+    curl --silent --show-error --retry 5 https://bootstrap.pypa.io/get-pip.py | python
+
+RUN ["/bin/bash", "-c", "for file in libjpeg.so libfreetype.so libz.so; do \
+                            [[ -f /usr/lib/x86_64-linux-gnu/${file} ]] && ln -s /usr/lib/x86_64-linux-gnu/${file} /usr/lib ;\
+                         done"]
+
+RUN ["/bin/bash", "-c", "[[ -d /usr/include/freetype2 ]] && ln -s /usr/include/freetype2 /usr/include/freetype2/freetype"]

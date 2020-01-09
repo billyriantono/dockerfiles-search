@@ -1,0 +1,78 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: node:alpine
+  Commands:
+  - Labels:
+    - Key: stage
+      Value: intermediate
+    Name: label
+  - Key: elmpackages
+    Name: arg
+    Value: '"elm"'
+  - Name: shell
+    Shell:
+    - ash
+    - -o
+    - pipefail
+    - -c
+  - CmdLine:
+    - echo $elmpackages |    xargs -n1 echo |    xargs -n1 -I{} npm install --only=production
+      --unsafe-perm=true --allow-root -g {}@latest &&    npm cache clean --force
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache rsync &&    mkdir /target &&    DEPS=$(which env node busybox
+      ash sh |           xargs -n1 ldd |           awk '/statically/{next;} /=>/ {
+      print $3; next; } { print $1 }' |           sort | uniq) &&    rsync -R --links
+      /bin/busybox                     /bin/ash /bin/sh                     /usr/bin/env                     /usr/local/bin/node                     $DEPS                     $(echo
+      $DEPS | xargs -n1 readlink -f)                     /usr/local/bin/elm*                     /target
+      &&    rsync -Rr --links /etc/ssl             /usr/local/lib/node_modules/elm*             /target
+      &&    apk del rsync
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:alpine as builder
+- BaseName: scratch
+  Commands:
+  - Key: vcsref
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: stage
+      Value: final
+    - Key: org.label-schema.name
+      Value: '"tiny-elm"'
+    - Key: org.label-schema.description
+      Value: '"Ultra-slim dockerized Elm compiler and tools."'
+    - Key: org.label-schema.url
+      Value: '"https://hub.docker.com/r/semenovp/tiny-elm/"'
+    - Key: org.label-schema.vcs-ref
+      Value: '"$vcsref"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/piotr-semenov/elm-docker.git"'
+    - Key: maintainer
+      Value: '''Piotr Semenov <piotr.k.semenov@gmail.com>'''
+    Name: label
+  - Env:
+    - Key: PATH
+      Value: /bin:/usr/bin:/usr/local/bin
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /target
+    - /
+  - CmdLine:
+    - elm
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

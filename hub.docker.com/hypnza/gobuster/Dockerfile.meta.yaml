@@ -1,0 +1,80 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: golang:alpine
+  Commands:
+  - Name: workdir
+    Path: /go/src/app
+  - CmdLine:
+    - apk add --no-cache git ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/leonjza/gobuster.git .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s/OJ\/gobuster/leonjza\/gobuster/" main.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o gobuster
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM golang:alpine AS build-env
+- As: pack-env
+  BaseName: alpine:edge
+  Commands:
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - apk add --no-cache upx
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /go/src/app/gobuster
+    - /
+  - CmdLine:
+    - upx --brute gobuster -ogobuster.upx
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: pack-env
+  Platform: ""
+  SourceCode: FROM alpine:edge AS pack-env
+- As: scratch-packed
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/ca-certificates.crt
+  - Chown: ""
+    From: pack-env
+    Name: copy
+    SourcesAndDest:
+    - /gobuster.upx
+    - /gobuster
+  - CmdLine:
+    - /gobuster
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: scratch-packed
+  Platform: ""
+  SourceCode: FROM scratch as scratch-packed

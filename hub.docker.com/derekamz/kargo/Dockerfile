@@ -1,0 +1,1 @@
+FROM quay.io/ant31/kargo:master

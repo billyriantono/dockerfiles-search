@@ -1,0 +1,69 @@
+MetaArgs: null
+Stages:
+- BaseName: node:8-alpine
+  Commands:
+  - Name: workdir
+    Path: /redis-commander
+  - Key: REMOVE_APK
+    Name: arg
+    Value: "0"
+  - Env:
+    - Key: SERVICE_USER
+      Value: redis
+    Name: env
+  - Env:
+    - Key: HOME
+      Value: /redis-commander
+    Name: env
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - apk update   && apk upgrade   && apk add --no-cache ca-certificates dumb-init
+      sed jq   && apk add --no-cache --virtual .patch-dep patch   && update-ca-certificates   &&
+      echo -e "\n---- Create runtime user and fix file access rights ----------"   &&
+      adduser ${SERVICE_USER} -h ${HOME} -G root -S   && chown -R root.root ${HOME}   &&
+      chown -R ${SERVICE_USER} ${HOME}/config   && chmod g+w ${HOME}/config   && chmod
+      ug+r,o-rwx ${HOME}/config/*.json   && echo -e "\n---- Check config file syntax
+      --------------------------------"   && for i in ${HOME}/config/*.json; do echo
+      "checking config file $i"; cat $i | jq empty; ret=$?; if [ $ret -ne 0 ]; then
+      exit $ret; fi; done   && echo -e "\n---- Installing app ------------------------------------------"   &&
+      npm install --production -s   && patch -p0 < docker/redis-dump.diff   && echo
+      -e "\n---- Cleanup and hardening -----------------------------------"   && apk
+      del .patch-dep   && rm -rf /tmp/* /root/.??* /root/cache /var/cache/apk/*   &&
+      ${HOME}/docker/harden.sh
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${SERVICE_USER}
+  - Health:
+      Interval: 60000000000
+      Test:
+      - CMD
+      - /redis-commander/bin/healthcheck.js
+      Timeout: 2000000000
+    Name: healthcheck
+  - CmdLine:
+    - /usr/bin/dumb-init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /redis-commander/docker/entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "8081"
+  From:
+    Image: node:8-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:8-alpine

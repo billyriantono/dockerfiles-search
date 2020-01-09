@@ -1,0 +1,107 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: python:3.6-alpine
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./Pipfile
+    - /Pipfile
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./Pipfile.lock
+    - /Pipfile.lock
+  - CmdLine:
+    - set -ex     && apk add --no-cache build-base postgresql-dev linux-headers git     &&
+      pip install pipenv     && pipenv install --system --deploy     && pip install
+      uwsgi==2.0.17
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.6-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM python:3.6-alpine AS builder
+- BaseName: python:3.6-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache libpq gettext
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/python3.6/site-packages
+    - /usr/local/lib/python3.6/site-packages
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/uwsgi
+    - /usr/local/bin/uwsgi
+  - CmdLine:
+    - mkdir /code
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./manage.py
+    - /code/manage.py
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./toollist/
+    - /code/toollist
+  - Env:
+    - Key: DEBUG
+      Value: "False"
+    Name: env
+  - Env:
+    - Key: UWSGI_WSGI_FILE
+      Value: /code/toollist/wsgi.py
+    - Key: UWSGI_HTTP
+      Value: :8000
+    - Key: UWSGI_MASTER
+      Value: "1"
+    - Key: UWSGI_WORKERS
+      Value: "2"
+    - Key: UWSGI_THREADS
+      Value: "8"
+    - Key: UWSGI_UID
+      Value: "1000"
+    - Key: UWSGI_GID
+      Value: "2000"
+    - Key: UWSGI_LAZY_APPS
+      Value: "1"
+    - Key: UWSGI_WSGI_ENV_BEHAVIOR
+      Value: holy
+    Name: env
+  - Name: workdir
+    Path: /code
+  - CmdLine:
+    - DATABASE_URL=sqlite:///tmp/db.sqlite SECRET_KEY=none python manage.py collectstatic
+      --noinput
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DATABASE_URL=sqlite:///tmp/db.sqlite SECRET_KEY=none python manage.py compilemessages
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - /usr/local/bin/uwsgi
+    - --http-auto-chunked
+    - --http-keepalive
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3.6-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.6-alpine

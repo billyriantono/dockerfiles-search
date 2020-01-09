@@ -1,0 +1,156 @@
+MetaArgs: null
+Stages:
+- As: build-python
+  BaseName: python:3.8
+  Commands:
+  - CmdLine:
+    - apt-get -y update   && apt-get install -y gettext   && apt-get clean   && rm
+      -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements_dev.txt
+    - /app/
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - pip install -r requirements_dev.txt
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.8
+  Name: build-python
+  Platform: ""
+  SourceCode: FROM python:3.8 as build-python
+- As: build-nodejs
+  BaseName: node:10
+  Commands:
+  - Key: STATIC_URL
+    Name: arg
+    Value: null
+  - Env:
+    - Key: STATIC_URL
+      Value: ${STATIC_URL:-/static/}
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - app.json
+    - package.json
+    - package-lock.json
+    - /app/
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./saleor/static
+    - /app/saleor/static/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./templates
+    - /app/templates/
+  - CmdLine:
+    - STATIC_URL=${STATIC_URL} npm run build-emails --production
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10
+  Name: build-nodejs
+  Platform: ""
+  SourceCode: FROM node:10 as build-nodejs
+- BaseName: python:3.8-slim
+  Commands:
+  - Key: STATIC_URL
+    Name: arg
+    Value: null
+  - Env:
+    - Key: STATIC_URL
+      Value: ${STATIC_URL:-/static/}
+    Name: env
+  - CmdLine:
+    - groupadd -r saleor && useradd -r -g saleor saleor
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update   && apt-get install -y     libxml2     libssl1.1     libcairo2     libpango-1.0-0     libpangocairo-1.0-0     libgdk-pixbuf2.0-0     shared-mime-info     mime-support   &&
+      apt-get clean   && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app
+  - Chown: ""
+    From: build-python
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/python3.8/site-packages/
+    - /usr/local/lib/python3.8/site-packages/
+  - Chown: ""
+    From: build-python
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/
+    - /usr/local/bin/
+  - Chown: ""
+    From: build-nodejs
+    Name: copy
+    SourcesAndDest:
+    - /app/saleor/static
+    - /app/saleor/static
+  - Chown: ""
+    From: build-nodejs
+    Name: copy
+    SourcesAndDest:
+    - /app/templates
+    - /app/templates
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - SECRET_KEY=dummy STATIC_URL=${STATIC_URL} python3 manage.py collectstatic --no-input
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /app/media /app/static   && chown -R saleor:saleor /app/
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8000"
+  - Env:
+    - Key: PORT
+      Value: "8000"
+    Name: env
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: PROCESSES
+      Value: "4"
+    Name: env
+  - CmdLine:
+    - uwsgi
+    - --ini
+    - /app/saleor/wsgi/uwsgi.ini
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3.8-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.8-slim

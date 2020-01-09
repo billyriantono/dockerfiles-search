@@ -1,0 +1,75 @@
+MetaArgs:
+- DefaultValue: 3.13.0
+  Key: NEXUS_VERSION
+  ProvidedValue: null
+  Value: 3.13.0
+Stages:
+- As: build
+  BaseName: maven:3-jdk-8-alpine
+  Commands:
+  - Key: NEXUS_VERSION
+    Name: arg
+    Value: 3.13.0
+  - Key: NEXUS_BUILD
+    Name: arg
+    Value: "01"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /nexus-repository-apt/
+  - CmdLine:
+    - cd /nexus-repository-apt/; sed -i "s/3.11.0-01/${NEXUS_VERSION}-${NEXUS_BUILD}/g"
+      pom.xml;     mvn;
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3-jdk-8-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM maven:3-jdk-8-alpine AS build
+- BaseName: sonatype/nexus3:$NEXUS_VERSION
+  Commands:
+  - Key: NEXUS_VERSION
+    Name: arg
+    Value: 3.13.0
+  - Key: NEXUS_BUILD
+    Name: arg
+    Value: "01"
+  - Key: APT_VERSION
+    Name: arg
+    Value: 1.0.7
+  - Key: COMP_VERSION
+    Name: arg
+    Value: 1.16.1
+  - Key: XZ_VERSION
+    Name: arg
+    Value: "1.8"
+  - Key: APT_TARGET
+    Name: arg
+    Value: /opt/sonatype/nexus/system/net/staticsnow/nexus-repository-apt/${APT_VERSION}/
+  - Name: user
+    User: root
+  - CmdLine:
+    - mkdir -p ${APT_TARGET};     sed -i "s@nexus-repository-maven</feature>@nexus-repository-maven</feature>\n        <feature
+      version=\"${APT_VERSION}\" prerequisite=\"false\" dependency=\"false\">nexus-repository-apt</feature>@g"
+      /opt/sonatype/nexus/system/org/sonatype/nexus/assemblies/nexus-core-feature/${NEXUS_VERSION}-${NEXUS_BUILD}/nexus-core-feature-${NEXUS_VERSION}-${NEXUS_BUILD}-features.xml;     sed
+      -i "s@<feature name=\"nexus-repository-maven\"@<feature name=\"nexus-repository-apt\"
+      description=\"net.staticsnow:nexus-repository-apt\" version=\"${APT_VERSION}\">\n        <details>net.staticsnow:nexus-repository-apt</details>\n        <bundle>mvn:net.staticsnow/nexus-repository-apt/${APT_VERSION}</bundle>\n        <bundle>mvn:org.apache.commons/commons-compress/${COMP_VERSION}</bundle>\n        <bundle>mvn:org.tukaani/xz/${XZ_VERSION}</bundle>\n    </feature>\n    <feature
+      name=\"nexus-repository-maven\"@g" /opt/sonatype/nexus/system/org/sonatype/nexus/assemblies/nexus-core-feature/${NEXUS_VERSION}-${NEXUS_BUILD}/nexus-core-feature-${NEXUS_VERSION}-${NEXUS_BUILD}-features.xml;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /nexus-repository-apt/target/nexus-repository-apt-${APT_VERSION}.jar
+    - ${APT_TARGET}
+  - Name: user
+    User: nexus
+  From:
+    Image: sonatype/nexus3:$NEXUS_VERSION
+  Name: ""
+  Platform: ""
+  SourceCode: FROM sonatype/nexus3:$NEXUS_VERSION

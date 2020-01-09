@@ -1,0 +1,158 @@
+MetaArgs: null
+Stages:
+- BaseName: jedisct1/alpine-runit:latest
+  Commands:
+  - Maintainer: Frank Denis
+    Name: maintainer
+  - Env:
+    - Key: SERIAL
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: BUILD_DEPS
+      Value: make gcc musl-dev git libevent-dev expat-dev shadow autoconf file libressl-dev
+    Name: env
+  - Env:
+    - Key: RUNTIME_DEPS
+      Value: bash util-linux coreutils findutils grep libressl ldns ldns-tools libevent
+        expat libexecinfo coreutils drill
+    Name: env
+  - CmdLine:
+    - set -x &&     apk --update upgrade && apk add $RUNTIME_DEPS $BUILD_DEPS
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: UNBOUND_VERSION
+      Value: 1.8.0
+    Name: env
+  - Env:
+    - Key: UNBOUND_SHA256
+      Value: 78f79d6d3b643fdcd74a14fc76542250da886c82f82bc55b51e189663d61b83f
+    Name: env
+  - Env:
+    - Key: UNBOUND_DOWNLOAD_URL
+      Value: https://www.unbound.net/downloads/unbound-${UNBOUND_VERSION}.tar.gz
+    Name: env
+  - CmdLine:
+    - set -x &&     mkdir -p /tmp/src &&     cd /tmp/src &&     wget -O unbound.tar.gz
+      $UNBOUND_DOWNLOAD_URL &&     echo "${UNBOUND_SHA256} *unbound.tar.gz" | sha256sum
+      -c - &&     tar xzf unbound.tar.gz &&     rm -f unbound.tar.gz &&     cd unbound-${UNBOUND_VERSION}
+      &&     groupadd _unbound &&     useradd -g _unbound -s /etc -d /dev/null _unbound
+      &&     ./configure --prefix=/opt/unbound --with-pthreads     --with-username=_unbound
+      --with-libevent --enable-event-api &&     make install &&     mv /opt/unbound/etc/unbound/unbound.conf
+      /opt/unbound/etc/unbound/unbound.conf.example &&     rm -fr /opt/unbound/share/man
+      &&     rm -fr /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LIBSODIUM_VERSION
+      Value: 1.0.16
+    Name: env
+  - Env:
+    - Key: LIBSODIUM_SHA256
+      Value: eeadc7e1e1bcef09680fb4837d448fbdf57224978f865ac1c16745868fbd0533
+    Name: env
+  - Env:
+    - Key: LIBSODIUM_DOWNLOAD_URL
+      Value: https://download.libsodium.org/libsodium/releases/libsodium-${LIBSODIUM_VERSION}.tar.gz
+    Name: env
+  - CmdLine:
+    - set -x &&     mkdir -p /tmp/src &&     cd /tmp/src &&     wget -O libsodium.tar.gz
+      $LIBSODIUM_DOWNLOAD_URL &&     echo "${LIBSODIUM_SHA256} *libsodium.tar.gz"
+      | sha256sum -c - &&     tar xzf libsodium.tar.gz &&     rm -f libsodium.tar.gz
+      &&     cd libsodium-${LIBSODIUM_VERSION} &&     env CFLAGS=-Ofast ./configure
+      --disable-dependency-tracking &&     make check && make install &&     ldconfig
+      /usr/local/lib &&     rm -fr /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DNSCRYPT_WRAPPER_GIT_URL
+      Value: https://github.com/jedisct1/dnscrypt-wrapper.git
+    Name: env
+  - Env:
+    - Key: DNSCRYPT_WRAPPER_GIT_BRANCH
+      Value: xchacha-stamps
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - queue.h
+    - /tmp
+  - CmdLine:
+    - set -x &&     mkdir -p /tmp/src &&     cd /tmp/src &&     git clone --branch=${DNSCRYPT_WRAPPER_GIT_BRANCH}
+      ${DNSCRYPT_WRAPPER_GIT_URL} &&     cd dnscrypt-wrapper &&     sed -i 's#<sys/queue.h>#"/tmp/queue.h"#'
+      compat.h &&     sed -i 's#HAVE_BACKTRACE#NO_BACKTRACE#' compat.h &&     mkdir
+      -p /opt/dnscrypt-wrapper/empty &&     groupadd _dnscrypt-wrapper &&     useradd
+      -g _dnscrypt-wrapper -s /etc -d /opt/dnscrypt-wrapper/empty _dnscrypt-wrapper
+      &&     groupadd _dnscrypt-signer &&     useradd -g _dnscrypt-signer -G _dnscrypt-wrapper
+      -s /etc -d /dev/null _dnscrypt-signer &&     make configure &&     env CFLAGS=-Ofast
+      ./configure --prefix=/opt/dnscrypt-wrapper &&     make install &&     rm -fr
+      /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x &&     echo apk del --purge $BUILD_DEPS &&     echo rm -rf /tmp/* /var/tmp/*
+      /usr/local/include
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p     /etc/service/unbound     /etc/service/watchdog
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - unbound.sh
+    - /etc/service/unbound/run
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - unbound-check.sh
+    - /etc/service/unbound/check
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dnscrypt-wrapper.sh
+    - /etc/service/dnscrypt-wrapper/run
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - key-rotation.sh
+    - /etc/service/key-rotation/run
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - watchdog.sh
+    - /etc/service/watchdog/run
+  - Name: volume
+    Volumes:
+    - /opt/dnscrypt-wrapper/etc/keys
+  - Name: expose
+    Ports:
+    - 443/tcp
+    - 443/udp
+  - CmdLine:
+    - /sbin/start_runit
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: jedisct1/alpine-runit:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM jedisct1/alpine-runit:latest

@@ -1,0 +1,77 @@
+MetaArgs: null
+Stages:
+- As: stage0
+  BaseName: alpine:3.9
+  Commands:
+  - Key: REPOSITORY
+    Name: arg
+    Value: https://alpha.de.repo.voidlinux.org/current
+  - Key: MUSL
+    Name: arg
+    Value: ""
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - 60:ae:0c:d6:f0:95:17:80:bc:93:46:7a:89:af:a3:2d.plist
+    - /stage1/var/db/xbps/keys/
+  - CmdLine:
+    - apk add ca-certificates &&   wget -O - https://alpha.de.repo.voidlinux.org/static/xbps-static-latest.$(uname
+      -m)-musl.tar.xz |     tar Jx &&   XBPS_ARCH=$(uname -m)${MUSL:+-musl} xbps-install.static
+      -yMU     --repository=${REPOSITORY}${MUSL:+/musl}     -r /stage1     base-minimal
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: stage0
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as stage0
+- As: stage1
+  BaseName: scratch
+  Commands:
+  - Key: REPOSITORY
+    Name: arg
+    Value: https://alpha.de.repo.voidlinux.org/current
+  - Key: MUSL
+    Name: arg
+    Value: ""
+  - Chown: ""
+    From: stage0
+    Name: copy
+    SourcesAndDest:
+    - /stage1
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - 60:ae:0c:d6:f0:95:17:80:bc:93:46:7a:89:af:a3:2d.plist
+    - /stage2/var/db/xbps/keys/
+  - CmdLine:
+    - xbps-reconfigure -a &&   mkdir -p /stage1/var/cache && ln -s /var/cache/xbps
+      /stage1/var/cache/xbps &&   XBPS_ARCH=$(uname -m)${MUSL:+-musl} xbps-install
+      -yMU     --repository=${REPOSITORY}${MUSL:+/musl}     -r /stage2     base-minimal
+    Name: run
+    PrependShell: true
+  From:
+    Scratch: true
+  Name: stage1
+  Platform: ""
+  SourceCode: FROM scratch as stage1
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: stage1
+    Name: copy
+    SourcesAndDest:
+    - /stage2
+    - /
+  - CmdLine:
+    - xbps-reconfigure -a &&   rm -r /var/cache/xbps
+    Name: run
+    PrependShell: true
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

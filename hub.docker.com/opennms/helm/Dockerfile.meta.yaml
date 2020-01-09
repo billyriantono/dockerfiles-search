@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- BaseName: grafana/grafana:4.6.2
+  Commands:
+  - Key: NODEJS_SETUP_SCRIPT_URL
+    Name: arg
+    Value: https://deb.nodesource.com/setup_6.x
+  - Key: YARN_KEY_URL
+    Name: arg
+    Value: https://dl.yarnpkg.com/debian/pubkey.gpg
+  - Key: OPENNMS_HELM_GIT_URL
+    Name: arg
+    Value: https://github.com/OpenNMS/opennms-helm.git
+  - Key: OPENNMS_HELM_GIT_BRANCH_REF
+    Name: arg
+    Value: '"master"'
+  - Key: OPENNMS_HELM_APP_DIR
+    Name: arg
+    Value: opennms-helm-app
+  - Env:
+    - Key: GF_PATHS_PLUGINS
+      Value: /opt/grafana/plugins
+    Name: env
+  - Env:
+    - Key: OPENNMS_HELM_HOME
+      Value: ${GF_PATHS_PLUGINS}/${OPENNMS_HELM_APP_DIR}
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get -y --no-install-recommends install apt-transport-https
+      &&     curl -sS ${YARN_KEY_URL} | apt-key add - &&     echo "deb https://dl.yarnpkg.com/debian/
+      stable main" | tee /etc/apt/sources.list.d/yarn.list &&     curl -sL ${NODEJS_SETUP_SCRIPT_URL}
+      | bash - &&     apt-get update &&     apt-get -y --no-install-recommends install
+      git-core                                        yarn                                        nodejs
+      &&     apt-get -y autoremove &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone ${OPENNMS_HELM_GIT_URL} ${OPENNMS_HELM_HOME} &&     cd ${OPENNMS_HELM_HOME}
+      &&     git checkout ${OPENNMS_HELM_GIT_BRANCH_REF} &&     git describe --all
+      > git.describe &&     yarn &&     yarn build
+    Name: run
+    PrependShell: true
+  - Health:
+      Interval: 10000000000
+      Test:
+      - CMD-SHELL
+      - curl --fail -s -I http://localhost:3000/login | grep "HTTP/1.1 200 OK" ||
+        exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - Name: volume
+    Volumes:
+    - /opt/grafana/plugins
+    - /var/lib/grafana
+    - /var/log/grafana
+    - /etc/grafana
+  - Name: expose
+    Ports:
+    - "3000"
+  - Labels:
+    - Key: maintainer
+      Value: '"ronny@opennms.org"'
+    - Key: grafana.version
+      Value: '"4.6.2"'
+    - Key: opennms.helm.git.url
+      Value: ${OPENNMS_HELM_GIT_URL}
+    - Key: opennms.helm.git.branch.ref
+      Value: ${OPENNMS_HELM_GIT_BRANCH_REF}
+    - Key: opennms.helm.license
+      Value: MIT
+    - Key: opennms.helm.home
+      Value: ${OPENNMS_HELM_HOME}
+    Name: label
+  - CmdLine:
+    - /run.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: grafana/grafana:4.6.2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM grafana/grafana:4.6.2

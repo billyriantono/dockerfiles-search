@@ -1,0 +1,133 @@
+MetaArgs:
+- DefaultValue: '"1.3"'
+  Key: fd_version
+  ProvidedValue: null
+  Value: '"1.3"'
+Stages:
+- BaseName: debian:stable-slim
+  Commands:
+  - Key: fd_version
+    Name: arg
+    Value: null
+  - Env:
+    - Key: FD_HOME
+      Value: /usr/share/fusiondirectory
+    Name: env
+  - Env:
+    - Key: FD_VERSION
+      Value: ${fd_version}
+    Name: env
+  - Env:
+    - Key: FD_PLUGINS_DIR
+      Value: /opt/fd_${FD_VERSION}_plugins
+    Name: env
+  - CmdLine:
+    - apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y     wget
+      ca-certificates curl ldap-utils    gettext javascript-common libarchive-extract-perl
+      apache2 locales     libjs-prototype libjs-scriptaculous smarty3 smarty-gettext
+      libcrypt-cbc-perl     libdigest-sha-perl libfile-copy-recursive-perl libnet-ldap-perl     libpath-class-perl
+      libterm-readkey-perl libxml-twig-perl     openssl php php-xml php-cas php-cli
+      php-curl php-fpdf php-gd     php-imagick php-imap php-ldap php-mbstring php-recode     &&
+      apt-get clean autoclean && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/^#\( fr_FR.*UTF-8\)/\1/g' /etc/locale.gen &&     locale-gen
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://repos.fusiondirectory.org/sources/smarty3-i18n/smarty3-i18n-1.0.tar.gz
+      -P /opt/ &&      tar -xzvf /opt/smarty3-i18n-1.0.tar.gz -C /opt &&      mv /opt/smarty3-i18n-1.0/block.t.php
+      /usr/share/php/smarty3/plugins/block.t.php &&      rm -f  /opt/smarty3-i18n-1.0.tar.gz
+      && rm -rf /opt/smarty3-i18n-1.0
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://repos.fusiondirectory.org/sources/schema2ldif/schema2ldif-1.3.tar.gz
+      -P /opt/ &&      tar -xzvf /opt/schema2ldif-1.3.tar.gz -C /opt &&      chmod
+      +x /opt/schema2ldif-1.3/bin/* &&      mv /opt/schema2ldif-1.3/bin/* /usr/bin/
+      &&      rm -f /opt/schema2ldif-1.3.tar.gz && rm -rf /opt/schema2ldif-1.3
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/cache/fusiondirectory/template       /var/cache/fusiondirectory/tmp/       /var/cache/fusiondirectory/locale/       /var/spool/fusiondirectory/
+      &&      wget https://repos.fusiondirectory.org/sources/fusiondirectory/fusiondirectory-${FD_VERSION}.tar.gz
+      -P /opt/ &&      tar -xvzf /opt/fusiondirectory-${FD_VERSION}.tar.gz -C /opt
+      &&      mv /opt/fusiondirectory-${FD_VERSION} ${FD_HOME} &&      rm /opt/fusiondirectory-${FD_VERSION}.tar.gz
+      &&      chmod 750 ${FD_HOME}/contrib/bin/* &&      sed -i "s|/var/www/fusiondirectory|${FD_HOME}|g"
+      $(find ${FD_HOME}/contrib/bin/ -type f -maxdepth 1) &&      mv ${FD_HOME}/contrib/bin/*
+      /usr/local/bin/ &&      mv ${FD_HOME}/contrib/smarty/plugins/*.php /usr/share/php/smarty3/plugins/
+      &&      mkdir -p /etc/ldap/schema/fusiondirectory/ &&      mv ${FD_HOME}/contrib/openldap/*
+      /etc/ldap/schema/fusiondirectory/ &&      mv ${FD_HOME}/contrib/fusiondirectory.conf
+      /var/cache/fusiondirectory/template/fusiondirectory.conf &&      rm -f /opt/fusiondirectory-${FD_VERSION}.tar.gz
+      &&      mkdir -p ${FD_HOME}/html/javascript &&      ln -s /usr/share/javascript/scriptaculous
+      ${FD_HOME}/html/javascript/scriptaculous &&      ln -s /usr/share/javascript/prototype
+      ${FD_HOME}/html/javascript/prototype &&      fusiondirectory-setup --yes --check-directories
+      --update-cache --update-locales
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's|include/prototype.js|javascript/prototype/prototype.js|g' ${FD_HOME}/ihtml/themes/breezy/headers.tpl
+      &&     sed -i -E 's#include/(scriptaculous|builder|effects|dragdrop|controls\.js)#javascript/scriptaculous/\1#g'
+      ${FD_HOME}/ihtml/themes/breezy/headers.tpl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - generate_plugins_archives.sh
+    - /bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - fusiondirectory.conf
+    - /etc/apache2/sites-available/fusiondirectory.conf
+  - CmdLine:
+    - wget https://repos.fusiondirectory.org/sources/fusiondirectory/fusiondirectory-plugins-${FD_VERSION}.tar.gz
+      -P /opt/ &&      tar -xvzf /opt/fusiondirectory-plugins-${FD_VERSION}.tar.gz
+      -C /opt &&      chmod +x /bin/generate_plugins_archives.sh && /bin/generate_plugins_archives.sh
+      &&      rm -f /opt/fusiondirectory-plugins-${FD_VERSION}.tar.gz &&      rm -r
+      /opt/fusiondirectory-plugins-${FD_VERSION} &&      chmod -R +r ${FD_PLUGINS_DIR}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2disconf other-vhosts-access-log && a2dissite 000-default && a2disconf security
+      &&    mv /etc/apache2/conf-available/security.conf /etc/apache2/conf-available/security_default.conf
+      &&     chmod 640 /etc/apache2/sites-available/fusiondirectory.conf && a2ensite
+      fusiondirectory
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint/entrypoint.sh
+    - /sbin/fd-entrypoint
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - security_hardened.conf
+    - /etc/apache2/conf-available/
+  - CmdLine:
+    - chmod 750 /sbin/fd-entrypoint
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /sbin/fd-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stable-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stable-slim

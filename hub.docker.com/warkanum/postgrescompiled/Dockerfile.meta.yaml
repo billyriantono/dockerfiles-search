@@ -1,0 +1,179 @@
+MetaArgs: null
+Stages:
+- BaseName: centos:8
+  Commands:
+  - Labels:
+    - Key: name
+      Value: '"PGSQL12"'
+    - Key: author
+      Value: '"Hein"'
+    - Key: email
+      Value: '"hein.puth@gmail.com"'
+    - Key: maintainer
+      Value: '"hein.puth@gmail.com"'
+    Name: label
+  - CmdLine:
+    - yum update -y && yum upgrade -y &&  yum install make gcc binutils pkgconfig
+      autoconf automake   bison flex gcc-c++ gettext patch libtool rpm-build -y &&  yum
+      install wget git yum-utils unzip -y  &&  yum install libuuid-devel openssl-devel
+      libevent-devel   readline-devel libxml2-devel libxslt-devel libffi-devel -y
+      &&  yum clean all
+    Name: run
+    PrependShell: true
+  - Key: PGVER
+    Name: arg
+    Value: "12"
+  - Key: PGSRC
+    Name: arg
+    Value: '"https://ftp.postgresql.org/pub/source/v12.1/postgresql-12.1.tar.gz"'
+  - Key: PGDIR
+    Name: arg
+    Value: '"/opt/pg12"'
+  - Key: PGCFG
+    Name: arg
+    Value: '"/etc/pg12"'
+  - Key: PYSRC
+    Name: arg
+    Value: '"https://www.python.org/ftp/python/3.6.9/Python-3.6.9.tgz"'
+  - Key: PYDIR
+    Name: arg
+    Value: '"/opt/python3"'
+  - Env:
+    - Key: PG_MAJOR
+      Value: "12"
+    - Key: PGDATADIR
+      Value: '"/data"'
+    - Key: PGLOGFILE
+      Value: '"/data/error.log"'
+    - Key: PGPORT
+      Value: "5433"
+    - Key: DUSER
+      Value: dbadm
+    - Key: DGROUP
+      Value: dbadm
+    - Key: PGUSER
+      Value: dbadm
+    - Key: PGDBNAME
+      Value: demo
+    - Key: PGMD5PW
+      Value: md5c4b131c8a66d914edbadb5b49c52b45f
+    Name: env
+  - Name: volume
+    Volumes:
+    - '[$PGDATADIR]'
+  - Name: expose
+    Ports:
+    - $PGPORT
+  - CmdLine:
+    - useradd -m -G users $DUSER
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo -e "\e[0;33mStarting Download and Extract \e[0m" &&  mkdir -p /prep &&  mkdir
+      -p /usr/src/python &&  mkdir -p /usr/src/postgres/build &&  wget -c ${PYSRC}
+      -O /prep/py.tgz &&  wget -c ${PGSRC} -O /prep/pg.tar.gz  &&  tar xfz /prep/py.tgz
+      --strip-components 1 -C /usr/src/python  &&  tar xfz /prep/pg.tar.gz --strip-components
+      1 -C /usr/src/postgres &&  rm -f /prep/*.tgz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - test_python.py
+    - /prep/test_python.py
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/local/bin/entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dbsetup.pgsql
+    - /prep/dbsetup.pgsql
+  - CmdLine:
+    - echo -e "\e[0;33mStarting Compile Process \e[0m"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/python
+  - CmdLine:
+    - ./configure --prefix=$PYDIR --libdir=$PYDIR/lib --includedir=$PYDIR/include
+      --enable-shared   --with-ensurepip=install &&  make -j 8 &&  make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - $PYDIR/bin/python3 -m pip install --upgrade pip
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PYTHONPATH
+      Value: $PYDIR
+    - Key: PATH
+      Value: $PYDIR/lib:$PATH
+    Name: env
+  - CmdLine:
+    - echo $PYDIR/lib > /etc/ld.so.conf.d/dockerpython.conf &&    ldconfig  &&    echo
+      -e "\e[0;33mPython installed to $PYDIR \e[0m" &&    $PYDIR/bin/python3 /prep/test_python.py
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/postgres/build
+  - CmdLine:
+    - ../configure PYTHON=${PYDIR}/bin/python3 --prefix=$PGDIR --with-pgport=$PGPORT   --with-python
+      --with-openssl --with-libxml --with-libxslt --with-uuid=e2fs  &&  make -j 8
+      world && make install-world &&  echo -e "\e[0;33mPostgres installed to $PGDIR
+      \e[0m"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -Rf /usr/src/python &&    rm -Rf /usr/src/postgres &&    rm -Rf /prep/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $PGDATADIR  &&    chown $DUSER:users -R /prep  &&    chown $DUSER:users
+      -R $PGDATADIR  &&    chown $DUSER:users -R $(dirname $PGLOGFILE)
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $DUSER
+  - Name: workdir
+    Path: /tmp
+  - Env:
+    - Key: PATH
+      Value: $PGDIR/bin/:$PATH
+    Name: env
+  - CmdLine:
+    - initdb -D $PGDATADIR
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "host all  all    0.0.0.0/0  md5" >> $PGDATADIR/pg_hba.conf &&    echo
+      "listen_addresses='*'" >> $PGDATADIR/postgresql.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pg_ctl -s -D $PGDATADIR start -w -t 120 -l $PGLOGFILE &&    psql --dbname postgres
+      --command "CREATE USER $PGUSER WITH SUPERUSER PASSWORD '$PGMD5PW';" ||    echo
+      -e "\e[0;33m User create failed.  \e[0m" &&    createdb -O $PGUSER -T template0
+      $PGDBNAME ||    echo -e "\e[0;33m Database create failed.  \e[0m"  &&    psql
+      --dbname $PGDBNAME -f /prep/dbsetup.pgsql ||    echo -e "\e[0;33m Database setup
+      file failed.  \e[0m"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - pg_ctl start -D $PGDATADIR -w -t 120 -l $PGLOGFILE
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: centos:8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:8

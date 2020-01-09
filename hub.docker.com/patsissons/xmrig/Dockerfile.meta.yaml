@@ -1,0 +1,92 @@
+MetaArgs:
+- DefaultValue: latest
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: latest
+- DefaultValue: https://github.com/xmrig/xmrig.git
+  Key: GIT_REPOSITORY
+  ProvidedValue: null
+  Value: https://github.com/xmrig/xmrig.git
+- DefaultValue: v5.3.0
+  Key: GIT_BRANCH
+  ProvidedValue: null
+  Value: v5.3.0
+Stages:
+- As: build
+  BaseName: alpine:${ALPINE_VERSION}
+  Commands:
+  - Key: GIT_REPOSITORY
+    Name: arg
+    Value: null
+  - Key: GIT_BRANCH
+    Name: arg
+    Value: null
+  - Env:
+    - Key: GIT_REPOSITORY
+      Value: ${GIT_REPOSITORY}
+    - Key: GIT_BRANCH
+      Value: ${GIT_BRANCH}
+    Name: env
+  - Env:
+    - Key: CMAKE_FLAGS
+      Value: '"-DWITH_OPENCL=OFF -DWITH_CUDA=OFF"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - donate-level.patch
+    - /tmp
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - set -x   && apk update   && apk add --no-cache ca-certificates git build-base
+      cmake libmicrohttpd-dev libuv-dev openssl-dev util-linux-dev   && apk add --no-cache
+      --repository http://dl-cdn.alpinelinux.org/alpine/edge/main/ --allow-untrusted
+      numactl-dev   && apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing/
+      --allow-untrusted hwloc-dev   && git clone --single-branch --depth 1 --branch
+      $GIT_BRANCH $GIT_REPOSITORY xmrig   && git -C xmrig apply /tmp/donate-level.patch   &&
+      cd xmrig   && cmake ${CMAKE_FLAGS} .   && make   && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:${ALPINE_VERSION}
+  Name: build
+  Platform: ""
+  SourceCode: FROM alpine:${ALPINE_VERSION} AS build
+- BaseName: alpine:${ALPINE_VERSION}
+  Commands:
+  - CmdLine:
+    - set -x   && adduser -S -D -h /config miner   && apk update   && apk upgrade   &&
+      apk add --no-cache libmicrohttpd libuv openssl util-linux   && apk add --no-cache
+      --repository http://dl-cdn.alpinelinux.org/alpine/edge/main/ --allow-untrusted
+      numactl   && apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing/
+      --allow-untrusted hwloc   && rm -rf /var/lib/{apt,dpkg,cache,log}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/xmrig/xmrig
+    - /usr/local/bin/
+  - Name: user
+    User: miner
+  - Name: workdir
+    Path: /config
+  - Name: volume
+    Volumes:
+    - /config
+  - CmdLine:
+    - /usr/local/bin/xmrig
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:${ALPINE_VERSION}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:${ALPINE_VERSION}

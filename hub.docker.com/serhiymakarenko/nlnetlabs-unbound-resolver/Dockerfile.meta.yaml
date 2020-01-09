@@ -1,0 +1,77 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:10-slim
+  Commands:
+  - Key: UNBOUND_VERSION
+    Name: arg
+    Value: 1.9.6
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - CmdLine:
+    - "apt-get update &&     apt-get install -y --no-install-recommends --no-install-suggests
+      \    curl file libssl-dev libexpat1-dev build-essential ca-certificates &&     curl
+      -RL -O \"https://nlnetlabs.nl/downloads/unbound/unbound-${UNBOUND_VERSION}.tar.gz\"
+      &&     tar xvzf unbound-${UNBOUND_VERSION}.tar.gz &&     cd unbound-${UNBOUND_VERSION}
+      &&     ./configure     \t--disable-static &&     make &&     make install"
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:10-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:10-slim AS builder
+- BaseName: debian:10-slim
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"serhiy@makarenko.me"'
+    Name: label
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: /usr/local/lib
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get install -y --no-install-recommends --no-install-suggests     libssl1.1
+      libexpat1 &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "groupadd -g 88 unbound && \tuseradd -c \"Unbound DNS resolver\" -d /usr/local/etc/unbound
+      -u 88         -g unbound -s /bin/false unbound"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /usr/local
+  - CmdLine:
+    - /usr/local/sbin/unbound-anchor -a /usr/local/etc/unbound/root.key || true &&
+      chown -R unbound:unbound /usr/local/etc/unbound
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - 53/tcp
+    - 53/udp
+  - CmdLine:
+    - /usr/local/sbin/unbound
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -d
+    - -c
+    - /usr/local/etc/unbound/unbound.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:10-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:10-slim

@@ -1,0 +1,319 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "base",
+      "BaseName": "node:12-slim",
+      "SourceCode": "FROM node:12-slim as base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Image": "node:12-slim"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "NODE_ENV",
+              "Value": "production"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "3000"
+          ]
+        },
+        {
+          "CmdLine": [
+            "mkdir /app \u0026\u0026 chown -R node:node /app"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Name": "user",
+          "User": "node"
+        },
+        {
+          "Chown": "node:node",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "package.json",
+            "package-lock*.json",
+            "./"
+          ]
+        },
+        {
+          "CmdLine": [
+            "npm ci \u0026\u0026 npm cache clean --force \u003e \"/dev/null\" 2\u003e\u00261"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "dev",
+      "BaseName": "base",
+      "SourceCode": "FROM base as dev",
+      "Platform": "",
+      "As": "dev",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "NODE_ENV",
+              "Value": "development"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PATH",
+              "Value": "/app/node_modules/.bin:$PATH"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "npm i \u0026\u0026 npm cache clean --force \u003e \"/dev/null\" 2\u003e\u00261"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "react-scripts",
+            "start",
+            "--inspect=0.0.0.0:9229"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    },
+    {
+      "Name": "source",
+      "BaseName": "base",
+      "SourceCode": "FROM base as source",
+      "Platform": "",
+      "As": "source",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "node:node",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "."
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "test",
+      "BaseName": "source",
+      "SourceCode": "FROM source as test",
+      "Platform": "",
+      "As": "test",
+      "From": {
+        "Stage": {
+          "Named": "source",
+          "Index": 2
+        }
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "NODE_ENV",
+              "Value": "development"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PATH",
+              "Value": "/app/node_modules/.bin:$PATH"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "dev",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/node_modules",
+            "/app/node_modules"
+          ]
+        },
+        {
+          "CmdLine": [
+            "npm run lint"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "npm",
+            "run",
+            "test"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    },
+    {
+      "Name": "audit",
+      "BaseName": "test",
+      "SourceCode": "FROM test as audit",
+      "Platform": "",
+      "As": "audit",
+      "From": {
+        "Stage": {
+          "Named": "test",
+          "Index": 3
+        }
+      },
+      "Commands": [
+        {
+          "Name": "user",
+          "User": "root"
+        },
+        {
+          "CmdLine": [
+            "npm audit --audit-level critical"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Key": "MICROSCANNER_TOKEN",
+          "Name": "arg",
+          "Value": "\"\""
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "https://get.aquasec.com/microscanner",
+            "/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "chmod +x /microscanner"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "/microscanner $MICROSCANNER_TOKEN --continue-on-failure"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "build",
+      "BaseName": "source",
+      "SourceCode": "FROM source as build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Stage": {
+          "Named": "source",
+          "Index": 2
+        }
+      },
+      "Commands": [
+        {
+          "Key": "REACT_APP_API",
+          "Name": "arg",
+          "Value": "\"\""
+        },
+        {
+          "Env": [
+            {
+              "Key": "REACT_APP_API",
+              "Value": "$REACT_APP_API"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "npm run build"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "nginx:1.16-alpine",
+      "SourceCode": "FROM nginx:1.16-alpine",
+      "Platform": "",
+      "From": {
+        "Image": "nginx:1.16-alpine"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/build",
+            "/usr/share/nginx/html"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "80"
+          ]
+        },
+        {
+          "CmdLine": [
+            "nginx",
+            "-g",
+            "daemon off;"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

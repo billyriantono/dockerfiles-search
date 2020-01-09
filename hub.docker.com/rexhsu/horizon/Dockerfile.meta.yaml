@@ -1,0 +1,61 @@
+MetaArgs: null
+Stages:
+- BaseName: rexhsu/ubuntu:xenial
+  Commands:
+  - Env:
+    - Key: HORIZON_BASEDIR
+      Value: /opt/horizon
+    - Key: KEYSTONE_URL
+      Value: '''http://keystone:5000'''
+    - Key: APACHE_RUN_USER
+      Value: www-data
+    - Key: APACHE_RUN_GROUP
+      Value: www-data
+    - Key: APACHE_PID_FILE
+      Value: /var/run/apache2/apache2.pid
+    - Key: APACHE_RUN_DIR
+      Value: /var/run/apache2
+    - Key: APACHE_LOCK_DIR
+      Value: /var/lock/apache2
+    - Key: APACHE_LOG_DIR
+      Value: /var/log/apache2
+    - Key: LANG
+      Value: C
+    - Key: VERSION
+      Value: stable/rocky
+    Name: env
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - 'apt update &&   apt install -y     apache2 libapache2-mod-wsgi     python-pip
+      python-dev git &&   git clone --branch $VERSION --depth 1 https://github.com/openstack/horizon.git
+      ${HORIZON_BASEDIR} &&   cd ${HORIZON_BASEDIR} &&   pip install . &&   pip install
+      python-memcached &&   cp openstack_dashboard/local/local_settings.py.example
+      openstack_dashboard/local/local_settings.py &&   sed -i ''s/^DEBUG.*/DEBUG =
+      False/g'' $HORIZON_BASEDIR/openstack_dashboard/local/local_settings.py &&   echo
+      ''COMPRESS_OFFLINE = True'' >> $HORIZON_BASEDIR/openstack_dashboard/local/local_settings.py
+      &&   sed -i ''s/^OPENSTACK_KEYSTONE_URL.*/OPENSTACK_KEYSTONE_URL = os\.environ\["KEYSTONE_URL"\]/g''     $HORIZON_BASEDIR/openstack_dashboard/local/local_settings.py
+      &&   printf  "\nALLOWED_HOSTS = [''*'', ]\n" >> $HORIZON_BASEDIR/openstack_dashboard/local/local_settings.py
+      &&   echo ''OPENSTACK_API_VERSIONS = {"identity": os.environ.get("IDENTITY_API_VERSION",
+      "2.0") }''     >> $HORIZON_BASEDIR/openstack_dashboard/local/local_settings.py
+      &&   ./manage.py collectstatic --noinput &&   ./manage.py compress --force &&   ./manage.py
+      make_web_conf --wsgi &&   rm -rf /etc/apache2/sites-enabled/* &&   ./manage.py
+      make_web_conf --apache > /etc/apache2/sites-enabled/horizon.conf &&   sed -i
+      ''s/<VirtualHost \*.*/<VirtualHost _default_:80>/g'' /etc/apache2/sites-enabled/horizon.conf
+      &&   chown -R www-data:www-data ${HORIZON_BASEDIR} &&   python -m compileall
+      $HORIZON_BASEDIR &&   sed -i ''/ErrorLog/c\    ErrorLog \/dev\/stderr'' /etc/apache2/sites-enabled/horizon.conf
+      &&   sed -i ''/CustomLog/c\    CustomLog \/dev\/stdout combined'' /etc/apache2/sites-enabled/horizon.conf
+      &&   sed -i ''/ErrorLog/c\    ErrorLog \/dev\/stderr'' /etc/apache2/apache2.conf
+      &&   apt remove -y python-dev git &&   apt autoremove -y'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/sbin/apache2 -DFOREGROUND
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: rexhsu/ubuntu:xenial
+  Name: ""
+  Platform: ""
+  SourceCode: FROM rexhsu/ubuntu:xenial

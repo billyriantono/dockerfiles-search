@@ -1,0 +1,122 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.11-alpine3.8
+  Commands:
+  - CmdLine:
+    - "apk add --no-cache curl git build-base && \tcurl -SL -o /usr/bin/dep https://github.com/golang/dep/releases/download/v0.5.0/dep-linux-amd64
+      && \tchmod +x /usr/bin/dep"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MAINDIR
+      Value: $GOPATH/src/github.com/go-ocf/coap-gateway
+    Name: env
+  - Env:
+    - Key: APP
+      Value: coap-gateway-service
+    Name: env
+  - Name: workdir
+    Path: $MAINDIR
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gopkg.toml
+    - Gopkg.lock
+    - ./
+  - CmdLine:
+    - dep ensure -v --vendor-only
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  From:
+    Image: golang:1.11-alpine3.8
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine3.8 AS build
+- As: build-secure
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - OCF_INSECURE=false go generate ./vendor/github.com/go-ocf/kit/security/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $MAINDIR/cmd/$APP
+  - CmdLine:
+    - go build -o /go/bin/$APP
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $MAINDIR
+  From:
+    Stage:
+      Index: 0
+      Named: build
+  Name: build-secure
+  Platform: ""
+  SourceCode: FROM build AS build-secure
+- As: coap-gateway
+  BaseName: alpine:3.8
+  Commands:
+  - Chown: ""
+    From: build-secure
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/$APP
+    - /
+  - CmdLine:
+    - /coap-gateway-service
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: coap-gateway
+  Platform: ""
+  SourceCode: FROM alpine:3.8 AS coap-gateway
+- As: build-insecure
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - OCF_INSECURE=true go generate ./vendor/github.com/go-ocf/kit/security/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $MAINDIR/cmd/$APP
+  - CmdLine:
+    - go build -o /go/bin/$APP
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $MAINDIR
+  From:
+    Stage:
+      Index: 0
+      Named: build
+  Name: build-insecure
+  Platform: ""
+  SourceCode: FROM build AS build-insecure
+- As: coap-gateway-insecure
+  BaseName: alpine:3.8
+  Commands:
+  - Chown: ""
+    From: build-insecure
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/$APP
+    - /
+  - CmdLine:
+    - /coap-gateway-service
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: coap-gateway-insecure
+  Platform: ""
+  SourceCode: FROM alpine:3.8 AS coap-gateway-insecure

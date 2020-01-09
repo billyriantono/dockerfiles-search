@@ -1,0 +1,228 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "base",
+      "BaseName": "microsoft/aspnetcore:2.0",
+      "SourceCode": "FROM microsoft/aspnetcore:2.0 AS base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Image": "microsoft/aspnetcore:2.0"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "80"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "build",
+      "BaseName": "microsoft/aspnetcore-build:2.0",
+      "SourceCode": "FROM microsoft/aspnetcore-build:2.0 as build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Image": "microsoft/aspnetcore-build:2.0"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Env": [
+            {
+              "Key": "NODE_VERSION",
+              "Value": "8.5.0"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "*.sln",
+            "./"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "DockerRegistryViewer/DockerRegistryViewer.csproj",
+            "./DockerRegistryViewer"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "DockerRegistryViewerTests/DockerRegistryViewerTests.csproj",
+            "./DockerRegistryViewerTests"
+          ]
+        },
+        {
+          "CmdLine": [
+            "dotnet restore"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "."
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "./DockerRegistryViewer"
+        },
+        {
+          "CmdLine": [
+            "npm install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        }
+      ]
+    },
+    {
+      "Name": "test",
+      "BaseName": "build",
+      "SourceCode": "FROM build as test",
+      "Platform": "",
+      "As": "test",
+      "From": {
+        "Stage": {
+          "Named": "build",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "./DockerRegistryViewerTests"
+        },
+        {
+          "CmdLine": [
+            "dotnet test"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "publish",
+      "BaseName": "build",
+      "SourceCode": "FROM build as publish",
+      "Platform": "",
+      "As": "publish",
+      "From": {
+        "Stage": {
+          "Named": "build",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/app/DockerRegistryViewerHealthChecker"
+        },
+        {
+          "CmdLine": [
+            "dotnet build -c RELEASE"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app/DockerRegistryViewer"
+        },
+        {
+          "CmdLine": [
+            "dotnet publish -c RELEASE -o /builtapp"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "production",
+      "BaseName": "base",
+      "SourceCode": "FROM base AS production",
+      "Platform": "",
+      "As": "production",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "publish",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/builtapp",
+            "."
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "publish",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/DockerRegistryViewerHealthChecker/bin/RELEASE/netcoreapp2.0/",
+            "./health/"
+          ]
+        },
+        {
+          "Health": {
+            "Interval": 60000000000,
+            "Retries": 1,
+            "StartPeriod": 5000000000,
+            "Test": [
+              "CMD",
+              "dotnet",
+              "./health/DockerRegistryViewerHealthChecker.dll"
+            ],
+            "Timeout": 10000000000
+          },
+          "Name": "healthcheck"
+        },
+        {
+          "CmdLine": [
+            "dotnet",
+            "DockerRegistryViewer.dll"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

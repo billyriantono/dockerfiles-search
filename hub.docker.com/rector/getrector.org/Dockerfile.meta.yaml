@@ -1,0 +1,131 @@
+MetaArgs: null
+Stages:
+- As: node-build
+  BaseName: node:10.15.3
+  Commands:
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package*.json
+    - webpack*.json
+    - ./
+  - CmdLine:
+    - yarn install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - yarn run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.15.3
+  Name: node-build
+  Platform: ""
+  SourceCode: FROM node:10.15.3 as node-build
+- As: production
+  BaseName: php:7.3-apache
+  Commands:
+  - Name: workdir
+    Path: /var/www/getrector.org
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./.docker/apache/apache.conf
+    - /etc/apache2/sites-available/000-default.conf
+  - CmdLine:
+    - apt-get update && apt-get install -y         git         unzip         g++         default-mysql-client         zlib1g-dev         libicu-dev         libzip-dev         libpng-dev         libjpeg-dev     &&
+      docker-php-ext-configure gd --with-png-dir=/usr/include/  --with-jpeg-dir=/usr/include/     &&
+      docker-php-ext-install gd     && docker-php-ext-configure intl     && docker-php-ext-install
+      intl     && docker-php-ext-install pdo_mysql     && docker-php-ext-install exif     &&
+      pecl -q install         zip     && docker-php-ext-enable zip     && apt-get
+      clean     && rm -rf /tmp/* /usr/local/lib/php/doc/* /var/cache/apt/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: composer:latest
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/composer
+    - /usr/bin/composer
+  - Env:
+    - Key: COMPOSER_ALLOW_SUPERUSER
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - composer global require "hirak/prestissimo:^0.3" --prefer-dist --no-progress
+      --no-suggest --classmap-authoritative --no-plugins --no-scripts
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./.docker/docker-entrypoint.sh
+    - /usr/local/bin/docker-php-entrypoint
+  - CmdLine:
+    - chmod +x /usr/local/bin/docker-php-entrypoint
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - composer.json
+    - phpunit.xml.dist
+    - ./
+  - CmdLine:
+    - COMPOSER_MEMORY_LIMIT=-1 composer install --prefer-dist --no-dev --no-autoloader
+      --no-scripts --no-progress --no-suggest     && composer clear-cache
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Chown: ""
+    From: node-build
+    Name: copy
+    SourcesAndDest:
+    - /build/public/build
+    - ./public/build
+  - CmdLine:
+    - mkdir -p ./var/cache     ./var/log     ./var/sessions         && composer dump-autoload
+      -o --no-dev         && chown -R www-data ./var
+    Name: run
+    PrependShell: true
+  From:
+    Image: php:7.3-apache
+  Name: production
+  Platform: ""
+  SourceCode: FROM php:7.3-apache as production
+- As: dev
+  BaseName: production
+  Commands:
+  - CmdLine:
+    - COMPOSER_MEMORY_LIMIT=-1 composer install --prefer-dist --no-scripts --no-progress
+      --no-suggest
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get clean     && rm -rf /tmp/* /usr/local/lib/php/doc/* /var/cache/apt/*
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: production
+  Name: dev
+  Platform: ""
+  SourceCode: FROM production as dev

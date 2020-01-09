@@ -1,0 +1,76 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk update &&     apk upgrade &&     apk add --no-cache --update             apache2-utils             busybox-extras             openssl             pcre             zlib             &&     rm
+      -rf /var/cache/apk/* &&     openssl version
+    Name: run
+    PrependShell: true
+  - Key: NGINX_VERSION
+    Name: arg
+    Value: 1.15.9
+  - Env:
+    - Key: USER
+      Value: nginx
+    Name: env
+  - Name: workdir
+    Path: /opt/cache-proxy
+  - CmdLine:
+    - addgroup ${USER} 2> /dev/null &&     adduser -S ${USER} -G ${USER} -s /bin/sh
+      2> /dev/null &&     DEV_PACKAGES='g++ git make openssl-dev pcre-dev wget zlib-dev'
+      &&     apk add --update --no-cache ${DEV_PACKAGES} &&     wget --no-check-certificate
+      -O nginx.tar.gz https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz &&     tar
+      zxvf nginx.tar.gz --strip-components 1 &&     rm nginx.tar.gz &&     wget -O
+      memc-nginx.tar.gz https://github.com/openresty/memc-nginx-module/archive/v0.19.tar.gz
+      &&     mkdir ./memc-nginx &&     tar zxvf memc-nginx.tar.gz --strip-components
+      1 -C memc-nginx &&     rm memc-nginx.tar.gz &&     git clone --branch=tags-12
+      --single-branch --depth=1 https://github.com/robbtraister/nginx-statsd ./modules/nginx-statsd
+      &&     rm -rf ./modules/nginx-statsd/.git &&     ./configure                 --user=${USER}                 --group=${USER}                 --with-http_realip_module                 --add-module=modules/nginx-statsd                 --add-module=./memc-nginx                 &&     make
+      -j2 &&     make install &&     ln -sf `pwd`/objs/nginx /usr/bin/nginx &&     rm
+      -rf        ./CHANGES*        ./auto        ./modules        ./objs/src        ./src        &&     nginx
+      -v &&     apk del ${DEV_PACKAGES} &&     rm -rf /var/cache/apk/* &&     chown
+      -R ${USER}:${USER} ./
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p           ./logs           ./tmp           &&     ln -sf /dev/stdout
+      ./logs/access.log &&     ln -sf /dev/stderr ./logs/error.log &&     chown -R
+      ${USER}:${USER}           ./logs           ./tmp
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src
+    - ./src
+  - CmdLine:
+    - chown -R ${USER}:${USER} ./src
+    Name: run
+    PrependShell: true
+  - Key: RELEASE
+    Name: arg
+    Value: beta
+  - Env:
+    - Key: RELEASE
+      Value: ${RELEASE}
+    Name: env
+  - CmdLine:
+    - echo "${RELEASE}" > ./release.txt
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /opt/cache-proxy/tmp
+  - Name: user
+    User: ${USER}
+  - CmdLine:
+    - ./src/run.sh
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

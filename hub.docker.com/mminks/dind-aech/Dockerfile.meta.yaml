@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- As: ecr-login
+  BaseName: docker:stable-dind
+  Commands:
+  - CmdLine:
+    - set -exo pipefail     && apk add --no-cache         gettext         git         go         make         musl-dev     &&
+      go get -u github.com/awslabs/amazon-ecr-credential-helper/ecr-login/cli/docker-credential-ecr-login
+    Name: run
+    PrependShell: true
+  From:
+    Image: docker:stable-dind
+  Name: ecr-login
+  Platform: ""
+  SourceCode: FROM docker:stable-dind as ecr-login
+- As: terraform
+  BaseName: docker:stable-dind
+  Commands:
+  - CmdLine:
+    - set -exo pipefail     && apk add --no-cache         curl         jq     && TERRAFORM_LEGACY_URL=$(curl
+      -Ls https://releases.hashicorp.com/terraform/index.json                         |
+      jq '.'                         | awk '{print $2}'                         |
+      grep -v alpha                         | grep -v beta                         |
+      grep https                         | grep linux                         | grep
+      amd64                         | grep -E "0\.11\.[0-9]+\/"                         |
+      tr -d '"'                         | sort -V                         | tail -n1)     &&
+      TERRAFORM_URL=$(curl -Ls https://releases.hashicorp.com/terraform/index.json                         |
+      jq '.'                         | awk '{print $2}'                         |
+      grep -v alpha                         | grep -v beta                         |
+      grep https                         | grep linux                         | grep
+      amd64                         | tr -d '"'                         | sort -V                         |
+      tail -n1)     && wget --output-document=/tmp/terraform_legacy.zip ${TERRAFORM_LEGACY_URL}     &&
+      wget --output-document=/tmp/terraform.zip ${TERRAFORM_URL}     && unzip /tmp/terraform_legacy.zip
+      -d /tmp     && mv /tmp/terraform /usr/local/bin/terraform0.11     && unzip /tmp/terraform.zip
+      -d /tmp     && mv /tmp/terraform /usr/local/bin/terraform
+    Name: run
+    PrependShell: true
+  From:
+    Image: docker:stable-dind
+  Name: terraform
+  Platform: ""
+  SourceCode: FROM docker:stable-dind as terraform
+- BaseName: docker:stable-dind
+  Commands:
+  - Name: workdir
+    Path: /root
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/*
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ssh/config
+    - /root/.ssh/
+  - Chown: ""
+    From: ecr-login
+    Name: copy
+    SourcesAndDest:
+    - /root/go/bin/docker-credential-ecr-login
+    - /usr/local/bin/docker-credential-ecr-login
+  - Chown: ""
+    From: ecr-login
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/envsubst
+    - /usr/local/bin/envsubst
+  - Chown: ""
+    From: terraform
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/terraform0.11
+    - /usr/local/bin/terraform0.11
+  - Chown: ""
+    From: terraform
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/terraform
+    - /usr/local/bin/terraform
+  - CmdLine:
+    - 'set -exo pipefail     && apk add --no-cache         bind-tools         coreutils         git         jq         libintl         openssh-client         openssl         python3         curl         python3-dev          py-pip         musl-dev         gcc         make         libffi-dev         openssl-dev     &&
+      mkdir -p /root/.docker     && echo "{ \"credsStore\": \"ecr-login\" }" > /root/.docker/config.json     &&
+      wget --output-document=/tmp/awscli-bundle.zip          "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip"     &&
+      unzip /tmp/awscli-bundle.zip -d /tmp     && /usr/bin/python3 /tmp/awscli-bundle/install
+      -i /usr/local/aws -b /usr/local/bin/aws     && pip3 install --upgrade pip     &&
+      pip3 install docker-compose     && wget --output-document=/usr/local/bin/kubectl          https://storage.googleapis.com/kubernetes-release/release/$(wget
+      --quiet --output-document=- https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl     &&
+      chmod +x /usr/local/bin/kubectl     && mkdir -p ~/.kube     && rm -rf /tmp/awscli-bundle*     &&
+      rm -rf /var/cache/apk/*     && aws --version     && terraform version     &&
+      kubectl version --client=true --short=true'
+    Name: run
+    PrependShell: true
+  From:
+    Image: docker:stable-dind
+  Name: ""
+  Platform: ""
+  SourceCode: FROM docker:stable-dind

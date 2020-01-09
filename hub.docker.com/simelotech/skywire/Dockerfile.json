@@ -1,0 +1,169 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "IMAGE_FROM",
+      "DefaultValue": "busybox:1.29-glibc",
+      "ProvidedValue": null,
+      "Value": "busybox:1.29-glibc"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "build-go",
+      "BaseName": "golang:1.10-stretch",
+      "SourceCode": "FROM golang:1.10-stretch AS build-go",
+      "Platform": "",
+      "As": "build-go",
+      "From": {
+        "Image": "golang:1.10-stretch"
+      },
+      "Commands": [
+        {
+          "Key": "ARCH",
+          "Name": "arg",
+          "Value": "amd64"
+        },
+        {
+          "Key": "GOARM",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "CC",
+          "Name": "arg",
+          "Value": "gcc"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "$GOPATH/src/github.com/skycoin/skywire"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "GOARCH",
+              "Value": "\"$ARCH\""
+            },
+            {
+              "Key": "CGO_ENABLED",
+              "Value": "\"0\""
+            },
+            {
+              "Key": "GOOS",
+              "Value": "\"linux\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "apt-get update     \u0026\u0026 apt-get -y install build-essential crossbuild-essential-armhf crossbuild-essential-arm64 automake gcc-arm-linux-gnueabihf"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd $GOPATH/src/github.com/skycoin/skywire \u0026\u0026     echo \"Go build args GOARM=$GOARM GOARCH=$GOARCH CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS \" \u0026\u0026     go install -a -installsuffix cgo ./... \u0026\u0026     sh -c \"if test -d $GOPATH/bin/linux_arm ; then mv $GOPATH/bin/linux_arm/* $GOPATH/bin/; fi;            if test -d $GOPATH/bin/linux_arm64 ; then mv $GOPATH/bin/linux_arm64/* $GOPATH/bin/; fi\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "build-node",
+      "BaseName": "node:8.9",
+      "SourceCode": "FROM node:8.9 AS build-node",
+      "Platform": "",
+      "As": "build-node",
+      "From": {
+        "Image": "node:8.9"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "npm install -g --unsafe @angular/cli \u0026\u0026     git clone https://github.com/skycoin/net.git /home/node/net \u0026\u0026     cd /home/node/net/skycoin-messenger/monitor/web \u0026\u0026     ./build-manager.sh"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "$IMAGE_FROM",
+      "SourceCode": "FROM $IMAGE_FROM",
+      "Platform": "",
+      "From": {
+        "Image": "$IMAGE_FROM"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "DATA_DIR",
+              "Value": "/root/.skywire"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "build-go",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/go/bin/*",
+            "/bin/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build-go",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/go/bin/sockss",
+            "."
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build-node",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/home/node/net/skycoin-messenger/monitor/web/dist-manager",
+            "/usr/local/skycoin/net/skycoin-messenger/monitor/web/dist-manager"
+          ]
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "$DATA_DIR"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "5000",
+            "5998",
+            "6001",
+            "8000"
+          ]
+        },
+        {
+          "CmdLine": [
+            "manager",
+            "-web-dir",
+            "/usr/local/skycoin/net/skycoin-messenger/monitor/web/dist-manager"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

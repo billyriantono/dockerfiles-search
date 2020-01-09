@@ -1,0 +1,133 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: composer:1.7.0
+  Commands:
+  - Env:
+    - Key: NOVOSGA_VER
+      Value: v2.0.8
+    - Key: NOVOSGA_MD5
+      Value: 65d1639c937291b79080c419cbf1eefc
+    Name: env
+  - Env:
+    - Key: NOVOSGA_FILE
+      Value: novosga.tar.gz
+    - Key: NOVOSGA_DIR
+      Value: /var/www/html
+    - Key: NOVOSGA_URL
+      Value: https://github.com/novosga/novosga/archive/${NOVOSGA_VER}.tar.gz
+    - Key: APP_ENV
+      Value: prod
+    - Key: DATABASE_URL
+      Value: mysql://127.0.0.1:3306/novosga?charset=utf8mb4&serverVersion=5.7
+    Name: env
+  - CmdLine:
+    - set -xe     && mkdir -p $NOVOSGA_DIR && cd $NOVOSGA_DIR     && docker-php-ext-install
+      pcntl     && curl -fSL ${NOVOSGA_URL} -o ${NOVOSGA_FILE}     && echo "${NOVOSGA_MD5}  ${NOVOSGA_FILE}"
+      | md5sum -c     && tar -xz --strip-components=1 -f ${NOVOSGA_FILE}     && rm
+      ${NOVOSGA_FILE}     && composer install --no-dev -o
+    Name: run
+    PrependShell: true
+  From:
+    Image: composer:1.7.0
+  Name: build
+  Platform: ""
+  SourceCode: FROM composer:1.7.0 AS build
+- BaseName: php:7.1-apache
+  Commands:
+  - CmdLine:
+    - set -xe     && apt-get update     && apt-get install -y         cron         libicu-dev         libxml2-dev         zlib1g-dev         supervisor     &&
+      docker-php-ext-install         intl         pcntl         pdo         pdo_mysql         xml         zip     &&
+      apt-get remove -y --purge         postgresql-server-dev-all         libicu-dev         libxml2-dev         zlib1g-dev     &&
+      apt-get clean     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*     && a2enmod
+      rewrite env     && echo 'session.save_path = "/tmp"' > /usr/local/etc/php/conf.d/sessionsavepath.ini     &&
+      echo 'date.timezone = ${TZ}' > /usr/local/etc/php/conf.d/datetimezone.ini
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /var/www/html
+    - /var/www/html
+  - CmdLine:
+    - set -xe     && chown -R www-data:www-data .     && sed -i 's|/var/www/html|/var/www/html/public|g'
+      /etc/apache2/sites-available/000-default.conf
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: APP_ENV
+      Value: prod
+    - Key: LANGUAGE
+      Value: pt_BR
+    - Key: NOVOSGA_ADMIN_USERNAME
+      Value: '"admin"'
+    - Key: NOVOSGA_ADMIN_PASSWORD
+      Value: '"123456"'
+    - Key: NOVOSGA_ADMIN_FIRSTNAME
+      Value: '"Administrator"'
+    - Key: NOVOSGA_ADMIN_LASTNAME
+      Value: '"Global"'
+    - Key: NOVOSGA_UNITY_NAME
+      Value: '"My Unity"'
+    - Key: NOVOSGA_UNITY_CODE
+      Value: '"U01"'
+    - Key: NOVOSGA_NOPRIORITY_NAME
+      Value: '"Normal"'
+    - Key: NOVOSGA_NOPRIORITY_DESCRIPTION
+      Value: '"Normal service"'
+    - Key: NOVOSGA_PRIORITY_NAME
+      Value: '"Priority"'
+    - Key: NOVOSGA_PRIORITY_DESCRIPTION
+      Value: '"Priority service"'
+    - Key: NOVOSGA_PLACE_NAME
+      Value: '"Box"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - /usr/local/bin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - apache2/htaccess
+    - public/.htaccess
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisor/apache2.conf
+    - /etc/supervisor/conf.d/apache2.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisor/cron.conf
+    - /etc/supervisor/conf.d/cron.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisor/websocket.conf
+    - /etc/supervisor/conf.d/websocket.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - crontab/cron
+    - /etc/cron.d/app
+  - CmdLine:
+    - chmod 644 /etc/cron.d/app
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:7.1-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.1-apache

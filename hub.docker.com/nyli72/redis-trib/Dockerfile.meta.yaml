@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - 'mkdir -p /usr/local/etc         && {                 echo ''install: --no-document'';                 echo
+      ''update: --no-document'';         } >> /usr/local/etc/gemrc'
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: RUBY_MAJOR
+      Value: "2.5"
+    Name: env
+  - Env:
+    - Key: RUBY_VERSION
+      Value: 2.5.1
+    Name: env
+  - Env:
+    - Key: RUBY_DOWNLOAD_SHA256
+      Value: 886ac5eed41e3b5fc699be837b0087a6a5a3d10f464087560d2d21b3e71b754d
+    Name: env
+  - Env:
+    - Key: RUBYGEMS_VERSION
+      Value: 2.7.7
+    Name: env
+  - Env:
+    - Key: BUNDLER_VERSION
+      Value: 1.16.2
+    Name: env
+  - CmdLine:
+    - set -ex                 && apk add --no-cache --virtual .ruby-builddeps                 autoconf                 bison                 bzip2                 bzip2-dev                 ca-certificates                 coreutils                 dpkg-dev
+      dpkg                 gcc                 gdbm-dev                 glib-dev                 libc-dev                 libffi-dev                 libressl                 libressl-dev                 libxml2-dev                 libxslt-dev                 linux-headers                 make                 ncurses-dev                 procps                 readline-dev                 ruby                 tar                 xz                 yaml-dev                 zlib-dev                 &&
+      wget -O ruby.tar.xz "https://cache.ruby-lang.org/pub/ruby/${RUBY_MAJOR%-rc}/ruby-$RUBY_VERSION.tar.xz"         &&
+      echo "$RUBY_DOWNLOAD_SHA256 *ruby.tar.xz" | sha256sum -c -                 &&
+      mkdir -p /usr/src/ruby         && tar -xJf ruby.tar.xz -C /usr/src/ruby --strip-components=1         &&
+      rm ruby.tar.xz                 && cd /usr/src/ruby                 && {                 echo
+      '#define ENABLE_PATH_CHECK 0';                 echo;                 cat file.c;         }
+      > file.c.new         && mv file.c.new file.c                 && autoconf         &&
+      gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)"         && export
+      ac_cv_func_isnan=yes ac_cv_func_isinf=yes         && ./configure                 --build="$gnuArch"                 --disable-install-doc                 --enable-shared         &&
+      make -j "$(nproc)"         && make install                 && runDeps="$(                 scanelf
+      --needed --nobanner --format '%n#p' --recursive /usr/local                         |
+      tr ',' '\n'                         | sort -u                         | awk
+      'system("[ -e /usr/local/lib/" $1 " ]") == 0 { next } { print "so:" $1 }'         )"         &&
+      apk add --virtual .ruby-rundeps $runDeps                 bzip2                 ca-certificates                 libffi-dev                 libressl-dev                 procps                 yaml-dev                 zlib-dev         &&
+      apk del .ruby-builddeps         && cd /         && rm -r /usr/src/ruby                 &&
+      gem update --system "$RUBYGEMS_VERSION"         && gem install bundler --version
+      "$BUNDLER_VERSION" --force         && rm -r /root/.gem/
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GEM_HOME
+      Value: /usr/local/bundle
+    Name: env
+  - Env:
+    - Key: BUNDLE_PATH
+      Value: '"$GEM_HOME"'
+    - Key: BUNDLE_SILENCE_ROOT_WARNING
+      Value: "1"
+    - Key: BUNDLE_APP_CONFIG
+      Value: '"$GEM_HOME"'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $GEM_HOME/bin:$BUNDLE_PATH/gems/bin:$PATH
+    Name: env
+  - CmdLine:
+    - mkdir -p "$GEM_HOME" && chmod 777 "$GEM_HOME"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://raw.githubusercontent.com/antirez/redis/4.0/src/redis-trib.rb
+    - /usr/local/bin/redis-trib.rb
+  - CmdLine:
+    - gem install redis && chmod 755 /usr/local/bin/redis-trib.rb &&   sed -i '/yes_or_die.msg/a
+      return if ENV["QUIET_MODE"] == "1"' /usr/local/bin/redis-trib.rb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/redis-trib.rb
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

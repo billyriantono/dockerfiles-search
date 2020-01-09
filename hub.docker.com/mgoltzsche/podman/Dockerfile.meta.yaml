@@ -1,0 +1,337 @@
+MetaArgs: null
+Stages:
+- As: runc
+  BaseName: docker.io/library/golang:alpine3.10
+  Commands:
+  - Key: RUNC_VERSION
+    Name: arg
+    Value: v1.0.0-rc9
+  - CmdLine:
+    - "set -eux; \tapk add --no-cache --virtual .build-deps gcc musl-dev libseccomp-dev
+      make git bash; \tgit clone --branch ${RUNC_VERSION} https://github.com/opencontainers/runc
+      src/github.com/opencontainers/runc; \tcd src/github.com/opencontainers/runc;
+      \tmake static BUILDTAGS='seccomp selinux ambient'; \tmv runc /usr/local/bin/runc;
+      \trm -rf $GOPATH/src/github.com/opencontainers/runc; \tapk del --purge .build-deps;
+      \t[ \"$(ldd /usr/local/bin/runc | wc -l)\" -eq 0 ] || (ldd /usr/local/bin/runc;
+      false)"
+    Name: run
+    PrependShell: true
+  From:
+    Image: docker.io/library/golang:alpine3.10
+  Name: runc
+  Platform: ""
+  SourceCode: FROM docker.io/library/golang:alpine3.10 AS runc
+- As: podmanbuildbase
+  BaseName: docker.io/library/golang:1.12-alpine3.10
+  Commands:
+  - CmdLine:
+    - "apk add --update --no-cache git make gcc pkgconf musl-dev \tbtrfs-progs btrfs-progs-dev
+      libassuan-dev lvm2-dev device-mapper \tglib-static libc-dev gpgme-dev protobuf-dev
+      protobuf-c-dev \tlibseccomp-dev libselinux-dev ostree-dev openssl iptables bash
+      \tgo-md2man"
+    Name: run
+    PrependShell: true
+  From:
+    Image: docker.io/library/golang:1.12-alpine3.10
+  Name: podmanbuildbase
+  Platform: ""
+  SourceCode: FROM docker.io/library/golang:1.12-alpine3.10 AS podmanbuildbase
+- As: podman
+  BaseName: podmanbuildbase
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache curl
+    Name: run
+    PrependShell: true
+  - Key: PODMAN_VERSION
+    Name: arg
+    Value: v1.6.4
+  - CmdLine:
+    - git clone --branch ${PODMAN_VERSION} https://github.com/containers/libpod src/github.com/containers/libpod
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH/src/github.com/containers/libpod
+  - CmdLine:
+    - make install.tools
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -eux; \tmake LDFLAGS=\"-s -w -extldflags '-static'\" BUILDTAGS='seccomp
+      selinux apparmor varlink exclude_graphdriver_devicemapper containers_image_ostree_stub
+      containers_image_openpgp'; \tmv bin/podman /usr/local/bin/podman; \t[ \"$(ldd
+      /usr/local/bin/podman | wc -l)\" -eq 0 ] || (ldd /usr/local/bin/podman; false)"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: podmanbuildbase
+  Name: podman
+  Platform: ""
+  SourceCode: FROM podmanbuildbase AS podman
+- As: conmon
+  BaseName: podmanbuildbase
+  Commands:
+  - Key: CONMON_VERSION
+    Name: arg
+    Value: v2.0.5
+  - CmdLine:
+    - git clone --branch ${CONMON_VERSION} https://github.com/containers/conmon.git
+      /conmon
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /conmon
+  - CmdLine:
+    - "set -eux; \tmake static; \tbin/conmon --help >/dev/null"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: podmanbuildbase
+  Name: conmon
+  Platform: ""
+  SourceCode: FROM podmanbuildbase AS conmon
+- As: cniplugins
+  BaseName: podmanbuildbase
+  Commands:
+  - Key: CNI_PLUGIN_VERSION
+    Name: arg
+    Value: v0.8.3
+  - CmdLine:
+    - git clone --branch=${CNI_PLUGIN_VERSION} https://github.com/containernetworking/plugins
+      /go/src/github.com/containernetworking/plugins
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/containernetworking/plugins
+  - CmdLine:
+    - "set -ex; \tfor TYPE in main ipam meta; do \t\tfor CNIPLUGIN in `ls plugins/$TYPE
+      | grep -v windows`; do \t\t\tCGO_ENABLED=0 go build -o /usr/libexec/cni/$CNIPLUGIN
+      -ldflags \"-s -w -extldflags '-static'\" ./plugins/$TYPE/$CNIPLUGIN; \t\t\t[
+      \"$(ldd /usr/libexec/cni/$CNIPLUGIN | grep -Ev '^\\s+ldd \\(0x[0-9a-f]+\\)$'
+      | wc -l)\" -eq 0 ] || (ldd /usr/libexec/cni/$CNIPLUGIN; false); \t\tdone \tdone"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: podmanbuildbase
+  Name: cniplugins
+  Platform: ""
+  SourceCode: FROM podmanbuildbase AS cniplugins
+- As: slirp4netns
+  BaseName: podmanbuildbase
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache git autoconf automake linux-headers libcap-static
+      libcap-dev
+    Name: run
+    PrependShell: true
+  - Key: SLIRP4NETNS_VERSION
+    Name: arg
+    Value: v0.4.2
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - git clone --branch $SLIRP4NETNS_VERSION https://github.com/rootless-containers/slirp4netns.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /slirp4netns
+  - CmdLine:
+    - "set -eux; \t./autogen.sh; \tLDFLAGS=-static ./configure --prefix=/usr; \tmake"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: podmanbuildbase
+  Name: slirp4netns
+  Platform: ""
+  SourceCode: FROM podmanbuildbase AS slirp4netns
+- As: fuse-overlayfs
+  BaseName: podmanbuildbase
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache automake autoconf meson ninja clang g++ eudev-dev
+    Name: run
+    PrependShell: true
+  - Key: LIBFUSE_VERSION
+    Name: arg
+    Value: fuse-3.8.0
+  - CmdLine:
+    - git clone --branch=${LIBFUSE_VERSION} https://github.com/libfuse/libfuse /libfuse
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /libfuse
+  - CmdLine:
+    - "set -eux; \tmkdir build; \tcd build; \tLDFLAGS=\"-lpthread\" meson --prefix
+      /usr -D default_library=static .. || (cat /libfuse/build/meson-logs/meson-log.txt;
+      false); \tsed -Ei '/^#include <err.h>/a #include <limits.h>' ../example/passthrough_hp.cc;
+      \tninja; \tninja install; \tfusermount3 -V"
+    Name: run
+    PrependShell: true
+  - Key: FUSEOVERLAYFS_VERSION
+    Name: arg
+    Value: v0.4.1
+  - CmdLine:
+    - git clone --branch=${FUSEOVERLAYFS_VERSION} https://github.com/containers/fuse-overlayfs
+      /fuse-overlayfs
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /fuse-overlayfs
+  - CmdLine:
+    - "set -eux; \tsh autogen.sh; \tLIBS=\"-ldl\" LDFLAGS=\"-static\" ./configure
+      --prefix /usr; \tmake; \tmake install; \tfuse-overlayfs --help >/dev/null"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: podmanbuildbase
+  Name: fuse-overlayfs
+  Platform: ""
+  SourceCode: FROM podmanbuildbase AS fuse-overlayfs
+- As: buildah
+  BaseName: podmanbuildbase
+  Commands:
+  - Key: BUILDAH_VERSION
+    Name: arg
+    Value: v1.11.6
+  - CmdLine:
+    - git clone --branch ${BUILDAH_VERSION} https://github.com/containers/buildah
+      $GOPATH/src/github.com/containers/buildah
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH/src/github.com/containers/buildah
+  - CmdLine:
+    - make static && mv buildah.static /usr/local/bin/buildah
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: podmanbuildbase
+  Name: buildah
+  Platform: ""
+  SourceCode: FROM podmanbuildbase AS buildah
+- BaseName: docker.io/library/alpine:3.10
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Max Goltzsche <max.goltzsche@gmail.com>"'
+    Name: label
+  - Key: GOSU_VERSION
+    Name: arg
+    Value: "1.11"
+  - CmdLine:
+    - "set -eux; \tapk add --no-cache gnupg; \twget -O /usr/local/bin/gosu \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64\";
+      \twget -O /usr/local/bin/gosu.asc \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64.asc\";
+      \texport GNUPGHOME=\"$(mktemp -d)\"; \tgpg --keyserver ha.pool.sks-keyservers.net
+      --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4; \tgpg --batch --verify
+      /usr/local/bin/gosu.asc /usr/local/bin/gosu; \trm -rf \"$GNUPGHOME\" /usr/local/bin/gosu.asc;
+      \tchmod +x /usr/local/bin/gosu; \tgosu nobody true; \tapk del --purge gnupg"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache ca-certificates iptables ip6tables shadow-uidmap
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: runc
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/runc
+    - /usr/local/bin/runc
+  - Chown: ""
+    From: podman
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/podman
+    - /usr/local/bin/podman
+  - Chown: ""
+    From: podman
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/containers/libpod/cni/87-podman-bridge.conflist
+    - /etc/cni/net.d/
+  - Chown: ""
+    From: conmon
+    Name: copy
+    SourcesAndDest:
+    - /conmon/bin/conmon
+    - /usr/libexec/podman/conmon
+  - Chown: ""
+    From: cniplugins
+    Name: copy
+    SourcesAndDest:
+    - /usr/libexec/cni
+    - /usr/libexec/cni
+  - Chown: ""
+    From: fuse-overlayfs
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/fuse-overlayfs
+    - /usr/local/bin/fuse-overlayfs
+  - Chown: ""
+    From: fuse-overlayfs
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/fusermount3
+    - /usr/local/bin/fusermount3
+  - Chown: ""
+    From: slirp4netns
+    Name: copy
+    SourcesAndDest:
+    - /slirp4netns/slirp4netns
+    - /usr/local/bin/slirp4netns
+  - Chown: ""
+    From: buildah
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/buildah
+    - /usr/local/bin/buildah
+  - CmdLine:
+    - "set -eux; \tadduser -D podman -h /podman -u 100000; \techo 'podman:100001:65536'
+      > /etc/subuid; \techo 'podman:100001:65536' > /etc/subgid; \tln -s /usr/local/bin/podman
+      /usr/bin/docker; \tmkdir -pm 775 /etc/containers /podman/.config/containers
+      /etc/cni/net.d /podman/.local/share/containers/storage; \tchown -R root:podman
+      /podman; \techo 'cgroup_manager = \"cgroupfs\"' > /etc/containers/libpod.conf;
+      \tcp /etc/containers/libpod.conf /podman/.config/containers/; \twget -O /etc/containers/registries.conf
+      https://raw.githubusercontent.com/projectatomic/registries/master/registries.fedora;
+      \twget -O /etc/containers/policy.json     https://raw.githubusercontent.com/containers/skopeo/master/default-policy.json;
+      \trunc --help >/dev/null; \tpodman --help >/dev/null; \t/usr/libexec/podman/conmon
+      --help >/dev/null; \tslirp4netns --help >/dev/null; \tfuse-overlayfs --help
+      >/dev/null;"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: volume
+    Volumes:
+    - /podman/.local/share/containers/storage
+  - Name: workdir
+    Path: /podman
+  - Env:
+    - Key: HOME
+      Value: /podman
+    Name: env
+  From:
+    Image: docker.io/library/alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM docker.io/library/alpine:3.10

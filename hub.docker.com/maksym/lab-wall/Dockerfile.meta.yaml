@@ -1,0 +1,194 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:14.10
+  Commands:
+  - Maintainer: Danil Kutkevich <danil@kutkevich.org>, Maksym Bodnarchuk <bodnarchuk@gmail.com>
+    Name: maintainer
+  - Env:
+    - Key: REFRESHED_AT
+      Value: "2015-02-19"
+    Name: env
+  - CmdLine:
+    - localedef --force --inputfile=en_US --charmap=UTF-8 --alias-file=/usr/share/locale/locale.alias
+      en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - CmdLine:
+    - apt-get -y update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y upgrade
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y curl git openjdk-8-jdk postgresql-9.4
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PGDATA
+      Value: /var/lib/postgresql/9.4/main
+    Name: env
+  - Env:
+    - Key: PGBIN
+      Value: /usr/lib/postgresql/9.4/bin
+    Name: env
+  - CmdLine:
+    - echo 'host all all 0.0.0.0/0 md5' >> "$PGDATA"/pg_hba.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'local all all trust' >> "$PGDATA"/pg_hba.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "listen_addresses='*'" >> "$PGDATA"/postgresql.conf
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: postgres
+  - CmdLine:
+    - $PGBIN/pg_ctl -w --pgdata $PGDATA start     && psql --command="UPDATE pg_database
+      SET datistemplate = FALSE WHERE datname = 'template1';"     && psql --command="DROP
+      DATABASE template1;"     && psql --command="CREATE DATABASE template1 WITH TEMPLATE
+      = template0 ENCODING = 'UNICODE';"     && psql --command="UPDATE pg_database
+      SET datistemplate = TRUE WHERE datname = 'template1';"     && psql --command="CREATE
+      ROLE fhirwall WITH SUPERUSER LOGIN PASSWORD 'fhirwall';"     && psql --command="CREATE
+      DATABASE fhirwall WITH OWNER fhirwall ENCODING = 'UTF8';"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - useradd --user-group --create-home --shell /bin/bash fhir && echo 'fhir:fhir'
+      | chpasswd && adduser fhir sudo
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo ''fhir ALL=(ALL) NOPASSWD: ALL'' >> /etc/sudoers'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: fhir
+  - Env:
+    - Key: HOME
+      Value: /home/fhir
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /home/fhir/bin:$PATH
+    Name: env
+  - CmdLine:
+    - mkdir -p /home/fhir/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein
+      > /home/fhir/bin/lein
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod a+x /home/fhir/bin/lein
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/fhir
+  - CmdLine:
+    - lein new deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./depsproject.clj
+    - /home/fhir/deps/project.clj
+  - Name: workdir
+    Path: /home/fhir/deps
+  - CmdLine:
+    - lein deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /home/fhir/fhirwall
+  - Name: workdir
+    Path: /home/fhir/fhirwall
+  - CmdLine:
+    - sudo chown fhir:fhir -R ./
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git submodule init
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git submodule update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - lein deps
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - lein javac
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: postgres
+  - CmdLine:
+    - $PGBIN/pg_ctl -w --pgdata $PGDATA start     && psql fhirwall < /home/fhir/fhirwall/oauth.sql     &&
+      psql fhirwall < /home/fhir/fhirwall/client.sql     && psql fhirwall < /home/fhir/fhirwall/users.sql
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "6000"
+  - Name: user
+    User: fhir
+  - Env:
+    - Key: HOME
+      Value: /home/fhir
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /home/fhir/bin:$PATH
+    Name: env
+  - Env:
+    - Key: FHIRPLACE_URI
+      Value: fhirplace.health-samurai.io:80
+    Name: env
+  - Env:
+    - Key: FHIRWALL_ROUTE_OAUTH
+      Value: oauth
+    Name: env
+  - Env:
+    - Key: FHIRWALL_ROUTE_FHIR
+      Value: fhir
+    Name: env
+  - Env:
+    - Key: OAUTH_REDIRECT_URI
+      Value: http://localhost:11155/#/redirect
+    Name: env
+  - Name: workdir
+    Path: /home/fhir/fhirwall
+  - CmdLine:
+    - sudo --user=postgres $PGBIN/pg_ctl --pgdata $PGDATA -w start     && sudo --user=postgres
+      psql fhirwall --command="UPDATE oauth.clients SET redirect_uri='$OAUTH_REDIRECT_URI'
+      WHERE name='lab-app';"     && echo "{:fhirwall-web-port 6000               :fhirwall-subprotocol
+      \"postgresql\"               :fhirwall-subname \"//127.0.0.1:5432/fhirwall\"               :fhirwall-user
+      \"fhirwall\"               :fhirwall-password \"fhirwall\"               :fhirwall-proxy-backend
+      \"http://$FHIRPLACE_URI\"               :fhirwall-route-oauth \"$FHIRWALL_ROUTE_OAUTH\"               :fhirwall-route-fhir
+      \"$FHIRWALL_ROUTE_FHIR\"}"              > .lein-env     && lein run
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:14.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:14.10

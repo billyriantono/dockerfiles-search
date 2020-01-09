@@ -1,0 +1,144 @@
+MetaArgs: null
+Stages:
+- As: goma_client
+  BaseName: ubuntu:16.04
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update     && apt-get install -y         build-essential         libxml2         curl         git         python     &&
+      apt-get clean     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /depot_tools:$PATH
+    Name: env
+  - CmdLine:
+    - mkdir goma_packager
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: goma_packager
+  - CmdLine:
+    - gclient config https://chromium.googlesource.com/infra/goma/client
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gclient sync
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd client     && gclient sync     && gn gen --args='is_debug=false' out/Release     &&
+      ninja -C out/Release
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.04
+  Name: goma_client
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04 AS goma_client
+- BaseName: docker.io/lineageos/android_build
+  Commands:
+  - Maintainer: yasu-hide
+    Name: maintainer
+  - Env:
+    - Key: USER
+      Value: lineageos
+    Name: env
+  - Env:
+    - Key: SRC_DIR
+      Value: /lineage/src
+    Name: env
+  - Env:
+    - Key: CCACHE_DIR
+      Value: /lineage/ccache
+    Name: env
+  - Env:
+    - Key: CCACHE_SIZE
+      Value: 20G
+    Name: env
+  - Env:
+    - Key: ARTIFACT_OUT_DIR
+      Value: /lineage/out
+    Name: env
+  - Env:
+    - Key: GOMA_DIR
+      Value: /lineage/goma
+    Name: env
+  - Env:
+    - Key: GIT_USER_NAME
+      Value: '"LineageOS Buildbot"'
+    Name: env
+  - Env:
+    - Key: GIT_USER_MAIL
+      Value: '"lineageos-buildbot@docker.host"'
+    Name: env
+  - Env:
+    - Key: ANDROID_JACK_VM_ARGS
+      Value: '"-Dfile.encoding=UTF-8 -XX:+TieredCompilation -Xmx4G"'
+    Name: env
+  - Name: user
+    User: root
+  - CmdLine:
+    - apt-get update && apt-get install -y     bc bison build-essential     distcc
+      distcc-pump     ccache curl     flex     g++-multilib gcc-multilib git gnupg
+      gperf     imagemagick     lib32ncurses5-dev lib32readline-dev lib32z1-dev     liblz4-tool
+      libncurses5-dev libsdl1.2-dev libssl-dev     libwxgtk3.0-dev libxml2 libxml2-utils
+      lzop     pngcrush     rsync     schedtool squashfs-tools     xsltproc zip     zlib1g-dev     &&
+      apt-get clean && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd -r -g 1000 buildbot && useradd -r -d /lineage -u 1000 -g buildbot $USER
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir $SRC_DIR $CCACHE_DIR $ARTIFACT_OUT_DIR && chown -R 1000:1000 $SRC_DIR
+      $CCACHE_DIR $ARTIFACT_OUT_DIR
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e '1s%^#!/usr/bin/python2.4%#!/usr/bin/env python2%' /usr/lib/distcc-pump/include_server/*.py
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - $SRC_DIR
+  - Name: volume
+    Volumes:
+    - $CCACHE_DIR
+  - Name: volume
+    Volumes:
+    - $ARTIFACT_OUT_DIR
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build.sh
+    - /
+  - Chown: ""
+    From: goma_client
+    Name: copy
+    SourcesAndDest:
+    - /goma_packager/client/out/Release
+    - $GOMA_DIR
+  - Name: user
+    User: $USER
+  - Name: workdir
+    Path: $SRC_DIR
+  - CmdLine:
+    - /build.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: docker.io/lineageos/android_build
+  Name: ""
+  Platform: ""
+  SourceCode: FROM docker.io/lineageos/android_build

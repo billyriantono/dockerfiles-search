@@ -1,0 +1,94 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: microsoft/dotnet:2.1-aspnetcore-runtime-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Dariusz Porowski <Dariusz.Porowski@microsoft.com>"'
+    Name: label
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sshd_config
+    - /etc/ssh/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - init_container.sh
+    - /bin/
+  - CmdLine:
+    - "apk add --no-cache openssh-server \t&& echo \"root:Docker!\" | chpasswd \t&&
+      apk update \t&& apk add --no-cache openrc \t&& rc-status \t&& touch /run/openrc/softlevel
+      \t&& chmod +x /bin/init_container.sh \t&& rm -rf /var/cache/apk/* /tmp/*"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Name: expose
+    Ports:
+    - "2222"
+    - "80"
+  From:
+    Image: microsoft/dotnet:2.1-aspnetcore-runtime-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1-aspnetcore-runtime-alpine AS base
+- As: build
+  BaseName: microsoft/dotnet:2.1-sdk-alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /src/app/
+  - Name: workdir
+    Path: /src/app
+  - CmdLine:
+    - dotnet restore && dotnet build -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.1-sdk-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1-sdk-alpine AS build
+- As: publish
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - dotnet publish -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build AS publish
+- As: final
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - CmdLine:
+    - /bin/init_container.sh
+    - dotnet
+    - docker-hello-world.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: final
+  Platform: ""
+  SourceCode: FROM base AS final

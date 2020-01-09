@@ -1,0 +1,213 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "NODE_IMAGE",
+      "DefaultValue": "node:8.12",
+      "ProvidedValue": null,
+      "Value": "node:8.12"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "base",
+      "BaseName": "mcr.microsoft.com/dotnet/core/aspnet:3.0-buster-slim",
+      "SourceCode": "FROM mcr.microsoft.com/dotnet/core/aspnet:3.0-buster-slim AS base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Image": "mcr.microsoft.com/dotnet/core/aspnet:3.0-buster-slim"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "80"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "443"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "build",
+      "BaseName": "mcr.microsoft.com/dotnet/core/sdk:3.0-buster",
+      "SourceCode": "FROM mcr.microsoft.com/dotnet/core/sdk:3.0-buster AS build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Image": "mcr.microsoft.com/dotnet/core/sdk:3.0-buster"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/src"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "PayApi/PayApi.csproj",
+            "PayApi/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "Core/Core.csproj",
+            "Core/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "DataAccessMongo/DataAccessMongo.csproj",
+            "DataAccessMongo/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "dotnet restore \"PayApi/PayApi.csproj\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "."
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "\"/src/PayApi\""
+        }
+      ]
+    },
+    {
+      "Name": "node-build",
+      "BaseName": "${NODE_IMAGE}",
+      "SourceCode": "FROM ${NODE_IMAGE} as node-build",
+      "Platform": "",
+      "As": "node-build",
+      "From": {
+        "Image": "${NODE_IMAGE}"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/src"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "PayApi/ClientApp",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "npm install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "npm run build --prod"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "publish",
+      "BaseName": "build",
+      "SourceCode": "FROM build AS publish",
+      "Platform": "",
+      "As": "publish",
+      "From": {
+        "Stage": {
+          "Named": "build",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "dotnet publish \"PayApi.csproj\" -c Release -o /app"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "final",
+      "BaseName": "base",
+      "SourceCode": "FROM base AS final",
+      "Platform": "",
+      "As": "final",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Chown": "",
+          "From": "publish",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app",
+            "."
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "node-build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/src/dist",
+            "./ClientApp/dist"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "CmdLine": [
+            "dotnet",
+            "PayApi.dll"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

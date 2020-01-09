@@ -1,0 +1,67 @@
+MetaArgs:
+- DefaultValue: "1.12"
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: "1.12"
+Stages:
+- As: build
+  BaseName: golang:${GO_VERSION}-alpine
+  Commands:
+  - CmdLine:
+    - apk add git musl-dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/dutchcoders/transfer.sh
+  - Name: workdir
+    Path: /go/src/github.com/dutchcoders/transfer.sh
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - CmdLine:
+    - go get -u ./... && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags -a
+      -tags netgo -ldflags '-w -extldflags "-static"' -o /go/bin/transfersh github.com/dutchcoders/transfer.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:${GO_VERSION}-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:${GO_VERSION}-alpine as build
+- As: final
+  BaseName: scratch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Andrea Spacca <andrea.spacca@gmail.com>"'
+    Name: label
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/transfersh
+    - /go/bin/transfersh
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/ca-certificates.crt
+  - CmdLine:
+    - /go/bin/transfersh
+    - --listener
+    - :8080
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "8080"
+  From:
+    Scratch: true
+  Name: final
+  Platform: ""
+  SourceCode: FROM scratch AS final

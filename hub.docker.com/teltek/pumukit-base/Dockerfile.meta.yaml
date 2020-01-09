@@ -1,0 +1,105 @@
+MetaArgs:
+- DefaultValue: "7.2"
+  Key: PHP_VERSION
+  ProvidedValue: null
+  Value: "7.2"
+- DefaultValue: "3.8"
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: "3.8"
+Stages:
+- As: base
+  BaseName: php:${PHP_VERSION}-fpm-alpine${ALPINE_VERSION}
+  Commands:
+  - Maintainer: Pablo Nieto, pnieto@teltek.es
+    Name: maintainer
+  - Key: APCU_VERSION
+    Name: arg
+    Value: 5.1.12
+  - Key: PHP_MONGODB_VERSION
+    Name: arg
+    Value: 1.5.3
+  - Key: XDEBUG_VERSION
+    Name: arg
+    Value: 2.6.1
+  - CmdLine:
+    - "apk  add --no-cache     \t     \t\t--update \t     \t\tlibgcc \t\t\tlibstdc++
+      \t\t\tca-certificates \t\t\tlibcrypto1.0 \t\t\tlibssl1.0 \t\t\tlibgomp \t\t\texpat
+      \t\t\tpython \t\t\tpy-setuptools \t\t\tpy-argparse \t\t\tpy2-pip \t\t\tpy-gflags
+      ;"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install google-api-python-client==1.2
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: jrottenberg/ffmpeg:4.0-alpine
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /usr/local
+  - CmdLine:
+    - "apk add --no-cache \t\tacl \t\tfile \t\tgettext \t\tgit ;"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -eux;  \tapk add --no-cache --virtual .build-deps  \t\t$PHPIZE_DEPS  \t\ticu-dev
+      \t\topenldap-dev \t\tgettext-dev \t\tlibpng-dev \t\texpat-dev  \t\tlibzip-dev
+      \ \t\tzlib-dev \t\tlibxml2-dev \t\tlibxslt-dev \t\tjpeg-dev \t\tfreetype-dev
+      \ \t;  \t \tdocker-php-ext-configure zip --with-libzip; \tfreetype-config --cflags;
+      \     \tmkdir -p /opt/ffmpeg/include; \tln -s /usr/include/freetype2 /opt/ffmpeg/include/freetype2;
+      \tdocker-php-ext-configure gd \t \t--with-freetype-dir=/usr/include/ \t\t--with-jpeg-dir=/usr/include/
+      \t\t-with-png-dir=/usr/include;  \tdocker-php-ext-install -j$(nproc)  \t\tintl
+      \t\texif \t\tldap \t\tgettext \t\tpcntl \t\tgd \t\tshmop \t\tsockets \t\tsysvmsg
+      \t\tsysvsem \t\tsysvshm  \t\tzip \t\twddx \t\txsl  \t;  \tpecl install  \t\tapcu-${APCU_VERSION}
+      \t\tmongodb-${PHP_MONGODB_VERSION} \t\txdebug-${XDEBUG_VERSION}  \t;  \tpecl
+      clear-cache ; \tdocker-php-ext-enable  \t\tapcu  \t\topcache \t\tmongodb  \t;
+      \t\trunDeps=\"$(             scanelf --needed --nobanner --format '%n#p' --recursive
+      /usr/local/lib/php/extensions                 | tr ',' '\\n'                 |
+      sort -u                 | awk 'system(\"[ -e /usr/local/lib/\" $1 \" ]\") ==
+      0 { next } { print \"so:\" $1 }'             )\"; \tapk add --no-cache --virtual
+      .api-phpexts-rundeps $runDeps; \t\tapk del .build-deps"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: composer:latest
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/composer
+    - /usr/bin/composer
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php.ini
+    - /usr/local/etc/php/php.ini
+  - Env:
+    - Key: COMPOSER_ALLOW_SUPERUSER
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - set -eux;     composer global require "rubenrua/symfony-clean-tags-composer-plugin"
+      --prefer-dist --no-progress --no-suggest --classmap-authoritative
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/pumukit/pumukit /srv/pumukit; cd /srv/pumukit;
+      composer install -a -n --no-scripts
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /srv/pumukit
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: '"${PATH}:/root/.composer/vendor/bin"'
+    Name: env
+  - Name: workdir
+    Path: /srv/pumukit
+  From:
+    Image: php:${PHP_VERSION}-fpm-alpine${ALPINE_VERSION}
+  Name: base
+  Platform: ""
+  SourceCode: FROM php:${PHP_VERSION}-fpm-alpine${ALPINE_VERSION} as base

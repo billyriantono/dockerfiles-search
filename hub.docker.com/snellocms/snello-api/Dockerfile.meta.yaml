@@ -1,0 +1,93 @@
+MetaArgs: null
+Stages:
+- As: gitter
+  BaseName: alpine/git
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - git clone  --depth 1 https://github.com/snello-cms/snello-api.git
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine/git
+  Name: gitter
+  Platform: ""
+  SourceCode: FROM alpine/git  as gitter
+- As: builder_api
+  BaseName: maven:3.6.1-jdk-11-slim
+  Commands:
+  - Chown: ""
+    From: gitter
+    Name: copy
+    SourcesAndDest:
+    - /app/snello-api/pom.xml
+    - /tmp/
+  - Chown: ""
+    From: gitter
+    Name: copy
+    SourcesAndDest:
+    - /app/snello-api/src
+    - /tmp/src
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - mvn package -Dmaven.test.skip=true
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.6.1-jdk-11-slim
+  Name: builder_api
+  Platform: ""
+  SourceCode: FROM maven:3.6.1-jdk-11-slim as builder_api
+- BaseName: adoptopenjdk/openjdk11:alpine-jre
+  Commands:
+  - Env:
+    - Key: SNELLO_HOME
+      Value: /home/snello
+    - Key: SNELLO_USER
+      Value: snello
+    - Key: SNELLO_GROUP
+      Value: snello
+    - Key: SNELLO_PGUID
+      Value: "1000"
+    - Key: SNELLO_PUID
+      Value: "1000"
+    Name: env
+  - CmdLine:
+    - apk add --no-cache tzdata  && cp /usr/share/zoneinfo/Europe/Rome /etc/localtime  &&
+      addgroup -g ${SNELLO_PGUID} -S ${SNELLO_GROUP}  && adduser -h ${SNELLO_HOME}
+      -s /sbin/nologin -G ${SNELLO_GROUP} -S -D -u ${SNELLO_PUID} ${SNELLO_USER}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /home/snello/public/files
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder_api
+    Name: copy
+    SourcesAndDest:
+    - /tmp/target/snello*.jar
+    - $SNELLO_HOME/snello.jar
+  - CmdLine:
+    - chown -R ${SNELLO_USER}:${SNELLO_GROUP} ${SNELLO_HOME}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod -R 755 ${SNELLO_HOME}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${SNELLO_HOME}
+  - Name: user
+    User: ${SNELLO_USER}
+  - CmdLine:
+    - java ${JAVA_OPTS} -jar snello.jar
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: adoptopenjdk/openjdk11:alpine-jre
+  Name: ""
+  Platform: ""
+  SourceCode: FROM adoptopenjdk/openjdk11:alpine-jre

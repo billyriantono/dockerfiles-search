@@ -1,0 +1,99 @@
+MetaArgs: null
+Stages:
+- As: assetbuilder
+  BaseName: node:alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package*.json
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - gulpfile.js
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/
+    - ./assets/
+  - CmdLine:
+    - npm install && NODE_ENV=production ./node_modules/gulp/bin/gulp.js
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:alpine
+  Name: assetbuilder
+  Platform: ""
+  SourceCode: FROM node:alpine AS assetbuilder
+- As: binarybuilder
+  BaseName: golang:latest
+  Commands:
+  - CmdLine:
+    - go get -u github.com/gobuffalo/packr/packr
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/usefathom/fathom
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/usefathom/fathom
+  - Chown: ""
+    From: assetbuilder
+    Name: copy
+    SourcesAndDest:
+    - /app/assets/build
+    - ./assets/build
+  - CmdLine:
+    - make docker
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: binarybuilder
+  Platform: ""
+  SourceCode: FROM golang:latest AS binarybuilder
+- BaseName: alpine:latest
+  Commands:
+  - Name: expose
+    Ports:
+    - "8080"
+  - Health:
+      Retries: 10
+      Test:
+      - CMD
+      - wget
+      - -qO-
+      - http://localhost:8080/health
+    Name: healthcheck
+  - CmdLine:
+    - apk add --update --no-cache bash ca-certificates
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: binarybuilder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/usefathom/fathom/fathom
+    - .
+  - CmdLine:
+    - ./fathom
+    - server
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

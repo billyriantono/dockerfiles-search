@@ -1,0 +1,111 @@
+MetaArgs: null
+Stages:
+- BaseName: phusion/baseimage:0.9.18
+  Commands:
+  - CmdLine:
+    - echo 'APT::Install-Recommends 0;' >> /etc/apt/apt.conf.d/01norecommends  &&
+      echo 'APT::Install-Suggests 0;' >> /etc/apt/apt.conf.d/01norecommends  && apt-get
+      update  && DEBIAN_FRONTEND=noninteractive apt-get install -y vim.tiny wget sudo
+      net-tools ca-certificates unzip  && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PG_VERSION
+      Value: "9.4"
+    - Key: PG_USER
+      Value: postgres
+    - Key: PG_HOME
+      Value: /var/lib/postgresql
+    - Key: PG_RUNDIR
+      Value: /run/postgresql
+    - Key: PG_LOGDIR
+      Value: /var/log/postgresql
+    Name: env
+  - Env:
+    - Key: PG_CONFDIR
+      Value: '"/etc/postgresql/${PG_VERSION}/main"'
+    - Key: PG_BINDIR
+      Value: '"/usr/lib/postgresql/${PG_VERSION}/bin"'
+    - Key: PG_DATADIR
+      Value: '"${PG_HOME}/${PG_VERSION}/main"'
+    Name: env
+  - Env:
+    - Key: DB_USER
+      Value: '"musicbrainz"'
+    - Key: DB_PASS
+      Value: '"musicbrainz"'
+    - Key: DB_UNACCENT
+      Value: "true"
+    - Key: REPLICATION_USER
+      Value: repluser
+    - Key: REPLICATION_PASS
+      Value: '"set_this_password_in_docker_compose"'
+    Name: env
+  - Env:
+    - Key: MBSLAVE_REV
+      Value: b36a1c6
+    Name: env
+  - CmdLine:
+    - wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key
+      add -  && echo 'deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main'
+      > /etc/apt/sources.list.d/pgdg.list  && apt-get update  && DEBIAN_FRONTEND=noninteractive
+      apt-get install -y postgresql-${PG_VERSION} postgresql-client-${PG_VERSION}
+      postgresql-contrib-${PG_VERSION}  && rm -rf ${PG_HOME}  && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${PG_HOME}
+  - CmdLine:
+    - apt-get update && apt-get install -y python python-psycopg2 git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - crontab
+    - /etc/crontab
+  - CmdLine:
+    - chmod 600 /etc/crontab
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /etc/my_init.d/entrypoint.sh
+  - CmdLine:
+    - chmod 755 /etc/my_init.d/entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /dumps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./volume
+    - ${PG_HOME}
+  - CmdLine:
+    - git clone https://bitbucket.org/lalinsky/mbslave.git ./mbslave2 &&     cd ./mbslave2
+      && git reset --hard ${MBSLAVE_REV}
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - ${PG_HOME}
+    - /dumps
+  - CmdLine:
+    - /sbin/my_init
+    - ./make_as_postgres
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - 5432/tcp
+  From:
+    Image: phusion/baseimage:0.9.18
+  Name: ""
+  Platform: ""
+  SourceCode: FROM phusion/baseimage:0.9.18

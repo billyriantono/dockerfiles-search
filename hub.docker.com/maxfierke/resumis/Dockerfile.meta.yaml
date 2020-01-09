@@ -1,0 +1,159 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: ruby:2.6.3-alpine3.9
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Max Fierke <max@maxfierke.com>"'
+    - Key: description
+      Value: '"Build image for resumis"'
+    Name: label
+  - Env:
+    - Key: APP_HOME
+      Value: /resumis
+    - Key: NODE_ENV
+      Value: production
+    - Key: RAILS_ENV
+      Value: production
+    - Key: RESUMIS_USER
+      Value: resumis
+    Name: env
+  - CmdLine:
+    - apk add --update --no-cache   build-base   linux-headers   nodejs   yarn   tzdata   libxml2-dev   libxslt-dev   libgcc
+      libstdc++   git   postgresql-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $APP_HOME
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $APP_HOME
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./Gemfile*
+    - $APP_HOME/
+  - CmdLine:
+    - bundle config --global frozen 1   && bundle config build.nokogiri --use-system-libraries   &&
+      bundle install -j$(getconf _NPROCESSORS_ONLN)     --without development test     --retry
+      3   && rm -rf /usr/local/bundle/cache/*.gem   && find /usr/local/bundle/gems/
+      -name "*.c" -delete   && find /usr/local/bundle/gems/ -name "*.o" -delete
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./package.json
+    - ./yarn.lock
+    - $APP_HOME/
+  - CmdLine:
+    - yarn install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - $APP_HOME
+  - CmdLine:
+    - SECRET_KEY_BASE=IGNORE_ME_I_AM_A_BAD_KEY_BASE bundle exec rake assets:precompile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf node_modules tmp/cache
+    Name: run
+    PrependShell: true
+  From:
+    Image: ruby:2.6.3-alpine3.9
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ruby:2.6.3-alpine3.9 AS builder
+- BaseName: ruby:2.6.3-alpine3.9
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Max Fierke <max@maxfierke.com>"'
+    - Key: description
+      Value: '"An API for your personal site & resume"'
+    Name: label
+  - Env:
+    - Key: APP_HOME
+      Value: /resumis
+    - Key: NODE_ENV
+      Value: production
+    - Key: RAILS_ENV
+      Value: production
+    - Key: RAILS_SERVE_STATIC_FILES
+      Value: "true"
+    - Key: RESUMIS_DEPLOY_ROOT
+      Value: /resumis
+    - Key: RESUMIS_TENANCY_MODE
+      Value: single
+    - Key: RESUMIS_USER
+      Value: resumis
+    - Key: PORT
+      Value: "5000"
+    - Key: WKHTMLTOPDF_PATH
+      Value: /usr/bin/wkhtmltopdf
+    Name: env
+  - CmdLine:
+    - mkdir -p $APP_HOME/shared/pids
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - addgroup -g 1000 -S $RESUMIS_USER &&     adduser -u 1000 -S $RESUMIS_USER -G
+      $RESUMIS_USER -D
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --update --no-cache   postgresql-client   file   imagemagick   tzdata   libx11
+      glib libxrender libxext libintl   libcrypto1.1 libssl1.1   ttf-dejavu ttf-droid
+      ttf-freefont ttf-liberation ttf-ubuntu-font-family   qt5-qtbase-dev wkhtmltopdf
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $APP_HOME
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bundle/
+    - /usr/local/bundle/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $APP_HOME
+    - $APP_HOME
+  - CmdLine:
+    - chown -R $RESUMIS_USER:$RESUMIS_USER $APP_HOME
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sf /dev/stdout log/unicorn.log && ln -sf /dev/stderr log/production.log
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $RESUMIS_USER
+  - Name: expose
+    Ports:
+    - "5000"
+  - CmdLine:
+    - date -u > IMAGE_BUILD_TIME
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bundle
+    - exec
+    - unicorn
+    - -c
+    - config/unicorn.rb
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ruby:2.6.3-alpine3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ruby:2.6.3-alpine3.9

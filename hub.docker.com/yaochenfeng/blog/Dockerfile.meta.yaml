@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- As: node
+  BaseName: node
+  Commands:
+  - Name: workdir
+    Path: /usr/src/app
+  - CmdLine:
+    - git clone https://github.com/yaochenfeng/weblog.git /usr/src/app &&    npm install
+      && npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node
+  Name: node
+  Platform: ""
+  SourceCode: FROM  node as NODE
+- As: build
+  BaseName: openjdk:8
+  Commands:
+  - Name: workdir
+    Path: /usr/src/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Chown: ""
+    From: NODE
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/dist/
+    - src/main/resources/public/
+  - CmdLine:
+    - ./gradlew bootJar
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8
+  Name: build
+  Platform: ""
+  SourceCode: FROM  openjdk:8 as BUILD
+- BaseName: java:8-jre-alpine
+  Commands:
+  - CmdLine:
+    - echo http://mirrors.aliyun.com/alpine/v3.6/main > /etc/apk/repositories;    apk
+      --update add --no-cache tzdata curl
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TZ
+      Value: Asia/Shanghai
+    - Key: JAVA_OPTS
+      Value: '""'
+    - Key: SPRING_PROFILES_ACTIVE
+      Value: '"prod"'
+    - Key: APP_PORT
+      Value: "8080"
+    - Key: SPRING_APPLICATION_JSON
+      Value: '''{"server.port":"$APP_PORT"}'''
+    - Key: HEALTH_URL
+      Value: '"localhost:8080/actuator/health"'
+    Name: env
+  - Chown: ""
+    From: BUILD
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/build/libs/*.jar
+    - app.jar
+  - Name: expose
+    Ports:
+    - $APP_PORT
+  - CmdLine:
+    - exec java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -jar /app.jar
+    Name: entrypoint
+    PrependShell: true
+  - Health:
+      Interval: 10000000000
+      Retries: 12
+      Test:
+      - CMD-SHELL
+      - curl -f $HEALTH_URL || exit 1
+      Timeout: 2000000000
+    Name: healthcheck
+  From:
+    Image: java:8-jre-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM java:8-jre-alpine

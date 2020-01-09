@@ -1,0 +1,118 @@
+MetaArgs: null
+Stages:
+- BaseName: php:7-apache
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"edmurcardoso@gmail.com"'
+    Name: label
+  - CmdLine:
+    - apt-get update && apt-get install --assume-yes --fix-missing libssl-dev libxml2-dev
+      libicu-dev libsqlite3-dev libsqlite3-0 libwebp-dev libjpeg62-turbo-dev libpng-dev
+      libxpm-dev libzip-dev zlib1g-dev git unzip supervisor wget cron
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-ext-install gd intl bcmath pdo pdo_sqlite mbstring opcache soap ctype
+      json xml tokenizer zip
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/www/html/
+  - CmdLine:
+    - wget https://getcomposer.org/composer.phar
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: COMPOSER_ALLOW_SUPERUSER
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "* * * * * /usr/local/bin/php /var/www/html/artisan schedule:run > /proc/1/fd/1
+      2>&1"  | crontab
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - service cron restart
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - service cron reload
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /var/www/html/
+  - CmdLine:
+    - chmod 777 -R /var/www/html/storage
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 777 -R /var/www/html/bootstrap/cache
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 777 -R /var/www/html/database
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - php composer.phar install --no-interaction --no-dev --optimize-autoloader
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch storage/db.sqlite
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 777 storage/db.sqlite
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chgrp -R www-data /var/www/html
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - php prep_env.php
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - apache.conf
+    - /etc/apache2/sites-enabled/000-default.conf
+  - CmdLine:
+    - a2enmod rewrite && service apache2 restart
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - jobs.conf
+    - /etc/supervisor/conf.d/jobs.conf
+  - Name: volume
+    Volumes:
+    - /var/www/html/storage
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - php artisan env:ensure && php artisan migrate --seed --force && php artisan
+      cache:clear && php artisan optimize && php artisan route:cache && php artisan
+      view:cache && php artisan queue:flush && cron -f -L 8 & supervisord && docker-php-entrypoint
+      && apache2-foreground
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: php:7-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7-apache

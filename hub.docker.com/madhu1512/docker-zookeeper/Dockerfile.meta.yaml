@@ -1,0 +1,80 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:latest
+  Commands:
+  - Maintainer: Madhukar Thota <madhukar.thota@gmail.com>
+    Name: maintainer
+  - Env:
+    - Key: MAVEN_HOME
+      Value: '"/usr/share/maven"'
+    - Key: JAVA_HOME
+      Value: '"/usr/lib/jvm/default-jvm"'
+    - Key: ZK_VERSION
+      Value: 3.4.10
+    - Key: JAVA_PREFS
+      Value: '"/.java/.userPrefs"'
+    - Key: ZK_HOME
+      Value: '"/opt/zookeeper"'
+    - Key: EXBT_HOME
+      Value: '"/opt/exhibitor"'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: ${JAVA_HOME}/bin:${PATH}
+    Name: env
+  - CmdLine:
+    - apk update &&     apk upgrade &&     apk add --no-cache bash curl openjdk8 maven
+      &&     mkdir -p ${EXBT_HOME} &&     grep '^networkaddress.cache.ttl=' ${JAVA_HOME}/jre/lib/security/java.security
+      || echo 'networkaddress.cache.ttl=60' >> ${JAVA_HOME}/jre/lib/security/java.security
+      &&     mkdir -p ${ZK_HOME}/transactions ${ZK_HOME}/snapshots &&     curl -sO
+      http://archive.apache.org/dist/zookeeper/stable/zookeeper-${ZK_VERSION}.tar.gz
+      &&     tar xzf zookeeper-${ZK_VERSION}.tar.gz  -C ${ZK_HOME} --strip-components=1
+      &&     ln -sf /dev/stdout /opt/zookeeper/zookeeper.out &&     rm -rf zookeeper-*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - pom.xml
+    - ${EXBT_HOME}/pom.xml
+  - CmdLine:
+    - curl -kL https://raw.github.com/Netflix/exhibitor/master/exhibitor-standalone/src/main/resources/buildscripts/standalone/maven/pom.xml
+      -o ${EXBT_HOME}/pom.xml &&     mvn -f ${EXBT_HOME}/pom.xml clean package &&     ln
+      -s ${EXBT_HOME}/target/exhibitor*.jar ${EXBT_HOME}/exhibitor.jar &&     chown
+      -R nobody:nobody ${ZK_HOME} ${EXBT_HOME}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${JAVA_PREFS} &&     chown -R nobody:nobody ${JAVA_PREFS}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk del curl maven &&     rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - wrapper.sh
+    - ${EXBT_HOME}/wrapper.sh
+  - Name: user
+    User: nobody
+  - Name: workdir
+    Path: ${EXBT_HOME}
+  - Name: expose
+    Ports:
+    - "2181"
+    - "2888"
+    - "3888"
+    - "8181"
+  - CmdLine:
+    - bash
+    - -ex
+    - /opt/exhibitor/wrapper.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

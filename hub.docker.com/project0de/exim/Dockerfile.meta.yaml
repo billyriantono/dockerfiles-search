@@ -1,0 +1,108 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: project0de/base-devel:amzn2
+  Commands:
+  - Env:
+    - Key: DESTDIR
+      Value: '"/build/"'
+    Name: env
+  - Name: workdir
+    Path: /src
+  - Key: EXIM_VERSION
+    Name: arg
+    Value: exim-4.92.3
+  - Key: EXIM_REPO
+    Name: arg
+    Value: https://github.com/Exim/exim.git
+  - Key: LIBSPF_VERSION
+    Name: arg
+    Value: ec7545ee044ac3f4f6958255778fa43046287386
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://codeload.github.com/shevek/libspf2/tar.gz/${LIBSPF_VERSION}
+    - /src/libspf2.tar.gz
+  - CmdLine:
+    - yum install -y openssl-devel mariadb-devel libidn-devel libidn2-devel libdb-devel
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xvf libspf2.tar.gz     && cd libspf2-${LIBSPF_VERSION}     && ./configure
+      --prefix=/usr --libdir=/usr/lib64     && make -j$(nproc)     && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git get-release "${EXIM_REPO}" "${EXIM_VERSION}" /src/exim
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - exim.Makefile
+    - /src/exim/src/Local/Makefile
+  - CmdLine:
+    - cd /src/exim/src     && make -j$(nproc)     && install -dm0755 "${DESTDIR}/etc/exim"
+      "${DESTDIR}/usr/bin" "${DESTDIR}/usr/lib/exim/lookups" "${DESTDIR}/var/log/exim"  "${DESTDIR}/var/spool/exim"     &&
+      for file in $(find /src/exim/src/build* -type f -executable -iname 'e*'); do
+      install -m0755 "$file" "${DESTDIR}/usr/bin/"; done     && touch "${DESTDIR}/etc/exim/exim.conf"
+    Name: run
+    PrependShell: true
+  From:
+    Image: project0de/base-devel:amzn2
+  Name: builder
+  Platform: ""
+  SourceCode: FROM project0de/base-devel:amzn2 as builder
+- BaseName: project0de/base:amzn2
+  Commands:
+  - CmdLine:
+    - yum -y install openssl-libs mariadb-libs libidn libidn2 libdb     && yum clean
+      all     && rm -rf /var/cache/yum     && mkdir -p /_etc
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /entrypoint.sh
+  - Env:
+    - Key: EXIM_USER
+      Value: exim
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build
+    - /
+  - CmdLine:
+    - echo "${EXIM_USER}:x:79:79:Exim MTA:/var/spool/exim:/sbin/nologin" >> /etc/passwd     &&
+      echo "${EXIM_USER}:x:79:" >> /etc/group     && chmod u+s /usr/bin/exim     &&
+      chown -R "${EXIM_USER}:${EXIM_USER}" /var/spool/exim /var/log/exim     && exim
+      --version     && chmod a+x /entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/spool/exim
+    - /var/log/exim
+  - CmdLine:
+    - tini
+    - --
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - exim
+    - -bdf
+    - -v
+    - -q30m
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: project0de/base:amzn2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM project0de/base:amzn2

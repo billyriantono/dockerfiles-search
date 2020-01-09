@@ -1,0 +1,81 @@
+MetaArgs: null
+Stages:
+- As: cbuilder
+  BaseName: gcc:9
+  Commands:
+  - CmdLine:
+    - set -eux;       apt-get update;       apt install -y libcap-ng-dev;       rm
+      -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - set_ambient.c
+    - /
+  - CmdLine:
+    - gcc ./set_ambient.c -o set_ambient -lcap-ng
+    Name: run
+    PrependShell: true
+  From:
+    Image: gcc:9
+  Name: cbuilder
+  Platform: ""
+  SourceCode: FROM gcc:9 as cbuilder
+- As: gobuilder
+  BaseName: golang:1.13
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server.go
+    - /go/
+  - CmdLine:
+    - go build server.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13
+  Name: gobuilder
+  Platform: ""
+  SourceCode: FROM golang:1.13 as gobuilder
+- BaseName: debian:buster
+  Commands:
+  - CmdLine:
+    - set -eux;       apt-get update;       apt install -y libcap2-bin gosu;       rm
+      -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: cbuilder
+    Name: copy
+    SourcesAndDest:
+    - /set_ambient
+    - /
+  - CmdLine:
+    - setcap cap_net_bind_service+p /set_ambient
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: gobuilder
+    Name: copy
+    SourcesAndDest:
+    - /go/server
+    - /
+  - Chown: ""
+    From: gobuilder
+    Name: copy
+    SourcesAndDest:
+    - /go/server
+    - /inh_server
+  - CmdLine:
+    - setcap cap_net_bind_service+ie /inh_server
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:buster
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:buster

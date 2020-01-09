@@ -1,0 +1,140 @@
+MetaArgs: null
+Stages:
+- As: node
+  BaseName: node:10-jessie
+  Commands:
+  - Name: workdir
+    Path: /app/ui
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ui/package.json
+    - ui/yarn.lock
+    - ./
+  - CmdLine:
+    - yarn install --pure-lockfile
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ui
+    - /app/ui
+  - CmdLine:
+    - yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10-jessie
+  Name: node
+  Platform: ""
+  SourceCode: FROM node:10-jessie as node
+- As: rust
+  BaseName: rust:latest
+  Commands:
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install musl-tools -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rustup target add x86_64-unknown-linux-musl
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - USER=root cargo new server
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/server
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server/Cargo.toml
+    - server/Cargo.lock
+    - ./
+  - CmdLine:
+    - mkdir -p ./src/bin   && echo 'fn main() { println!("Dummy") }' > ./src/bin/main.rs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - RUSTFLAGS=-Clinker=musl-gcc cargo build --release --target=x86_64-unknown-linux-musl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -f ./target/x86_64-unknown-linux-musl/release/deps/lemmy_server*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server/src
+    - ./src/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server/migrations
+    - ./migrations/
+  - CmdLine:
+    - RUSTFLAGS=-Clinker=musl-gcc cargo build --frozen --release --target=x86_64-unknown-linux-musl
+    Name: run
+    PrependShell: true
+  From:
+    Image: rust:latest
+  Name: rust
+  Platform: ""
+  SourceCode: FROM rust:latest as rust
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk add libpq
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: rust
+    Name: copy
+    SourcesAndDest:
+    - /app/server/target/x86_64-unknown-linux-musl/release/lemmy_server
+    - /app/lemmy
+  - Chown: ""
+    From: node
+    Name: copy
+    SourcesAndDest:
+    - /app/ui/dist
+    - /app/dist
+  - CmdLine:
+    - addgroup -g 1000 lemmy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -D -s /bin/sh -u 1000 -G lemmy lemmy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown lemmy:lemmy /app/lemmy
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: lemmy
+  - Name: expose
+    Ports:
+    - "8536"
+  - CmdLine:
+    - /app/lemmy
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

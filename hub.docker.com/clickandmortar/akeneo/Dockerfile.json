@@ -1,0 +1,164 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "php-builder",
+      "BaseName": "php:7.2-cli",
+      "SourceCode": "FROM php:7.2-cli AS php-builder",
+      "Platform": "",
+      "As": "php-builder",
+      "From": {
+        "Image": "php:7.2-cli"
+      },
+      "Commands": [
+        {
+          "Maintainer": "Click \u0026 Mortar \u003ccontact@clickandmortar.fr\u003e",
+          "Name": "maintainer"
+        },
+        {
+          "CmdLine": [
+            "apt-get update     \u0026\u0026 DEBIAN_FRONTEND=noninteractive apt-get install -y git wget zip     \u0026\u0026 wget https://getcomposer.org/composer.phar -O /usr/local/bin/composer     \u0026\u0026 chmod +x /usr/local/bin/composer"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "CmdLine": [
+            "composer global require hirak/prestissimo     \u0026\u0026 php -dmemory_limit=-1 /usr/local/bin/composer create-project --no-interaction --ignore-platform-reqs --prefer-dist --no-dev --no-progress         akeneo/pim-community-standard . \"3.1.*@stable\"     \u0026\u0026 rm -rf /app/var/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "parameters.yml",
+            "/app/app/config/parameters.yml"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "js-builder",
+      "BaseName": "node:10",
+      "SourceCode": "FROM node:10 AS js-builder",
+      "Platform": "",
+      "As": "js-builder",
+      "From": {
+        "Image": "node:10"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Chown": "",
+          "From": "php-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app",
+            "/app"
+          ]
+        },
+        {
+          "CmdLine": [
+            "yarn install \u0026\u0026 yarn run webpack \u0026\u0026 rm -rf node_modules"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "php:7.2-apache",
+      "SourceCode": "FROM php:7.2-apache",
+      "Platform": "",
+      "From": {
+        "Image": "php:7.2-apache"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "js-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app",
+            "/app"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "pim-init-db.sh",
+            "/usr/local/bin/pim-init-db.sh"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "APACHE_RUN_USER",
+              "Value": "docker"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "apt-get update     \u0026\u0026 DEBIAN_FRONTEND=noninteractive apt-get install -y         git wget zip zlib1g-dev libicu-dev libpng-dev libfreetype6-dev libjpeg62-turbo-dev libmagickwand-dev     \u0026\u0026 wget https://getcomposer.org/composer.phar -O /usr/local/bin/composer     \u0026\u0026 chmod +x /usr/local/bin/composer     \u0026\u0026 docker-php-ext-install pdo pdo_mysql opcache zip bcmath exif     \u0026\u0026 pecl install imagick     \u0026\u0026 docker-php-ext-enable imagick     \u0026\u0026 pecl install apcu     \u0026\u0026 docker-php-ext-enable apcu     \u0026\u0026 docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/     \u0026\u0026 docker-php-ext-install -j$(nproc) gd     \u0026\u0026 docker-php-ext-configure intl     \u0026\u0026 docker-php-ext-install intl     \u0026\u0026 a2enmod rewrite     \u0026\u0026 sed -i 's/Listen 80$/Listen 8080/g' /etc/apache2/ports.conf     \u0026\u0026 wget https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh -O /usr/local/bin/wait-for-it.sh     \u0026\u0026 chmod +x /usr/local/bin/wait-for-it.sh     \u0026\u0026 chmod +x /usr/local/bin/pim-init-db.sh"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "php.ini",
+            "/usr/local/etc/php/conf.d/custom.ini"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "apache-vhost.conf",
+            "/etc/apache2/sites-available/000-default.conf"
+          ]
+        },
+        {
+          "CmdLine": [
+            "useradd -s /bin/bash -d /home/docker -m -g www-data docker     \u0026\u0026 mkdir -p /app     \u0026\u0026 chown -R docker /app"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Name": "user",
+          "User": "docker"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "8080"
+          ]
+        }
+      ]
+    }
+  ]
+}

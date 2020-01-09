@@ -1,0 +1,67 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Patrick Kahr <patrick@kahrpatrick.me>"'
+    Name: label
+  - Env:
+    - Key: PKGVER
+      Value: 0.14.48
+    Name: env
+  - CmdLine:
+    - apk add --no-cache ca-certificates curl &&     mkdir /go || true &&     cd /go
+      &&     mkdir -p src/github.com/syncthing &&     export SRCDIR=$PWD &&     cd
+      src/github.com/syncthing &&     curl -L https://github.com/syncthing/syncthing/releases/download/v$PKGVER/syncthing-source-v${PKGVER}.tar.gz
+      | tar xzf - &&     cd syncthing &&     export GOPATH="$SRCDIR" GOROOT_FINAL="/usr/bin"
+      &&     go run build.go -no-upgrade -version v${PKGVER} build strelaysrv
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine AS builder
+- BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/syncthing/syncthing/strelaysrv
+    - /usr/bin/strelaysrv
+  - CmdLine:
+    - mkdir /relaysrv && chown nobody:nobody /relaysrv
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /relaysrv
+  - Name: user
+    User: nobody
+  - Name: workdir
+    Path: /relaysrv
+  - Name: expose
+    Ports:
+    - "22067"
+    - "22070"
+  - CmdLine:
+    - /usr/bin/strelaysrv
+    - -keys=/relayserv/certs
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - ""
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

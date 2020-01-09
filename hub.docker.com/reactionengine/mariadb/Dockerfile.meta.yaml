@@ -1,0 +1,58 @@
+MetaArgs: null
+Stages:
+- BaseName: mariadb:10.4.4-bionic
+  Commands:
+  - Maintainer: Viktor Horvath <support@reaction-engine.org>
+    Name: maintainer
+  - Env:
+    - Key: MYSQL_ROOT_PASSWORD
+      Value: root
+    - Key: MYSQL_DATABASE
+      Value: reactionstore
+    - Key: TZ
+      Value: '''Europe/London'''
+    Name: env
+  - CmdLine:
+    - apt-get update -y && apt-get install -y wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'CREATE USER "reaction"@"%" IDENTIFIED BY "reactionengine";GRANT ALL PRIVILEGES
+      ON reactionstore.* TO "reaction"@"%";DELETE FROM mysql.user WHERE User="";DELETE
+      FROM mysql.user WHERE User="root" AND Host NOT IN ("localhost", "127.0.0.1",
+      "::1");DROP DATABASE IF EXISTS test;DELETE FROM mysql.db WHERE Db="test" OR
+      Db="test\\_%";FLUSH PRIVILEGES;' > /tmp/create_user.sql
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo '[mysqld]\nsymbolic-links = 0\nautocommit = 0\nlower_case_table_names =
+      1\ntransaction-isolation = READ-COMMITTED\nbind-address=0.0.0.0\n!includedir
+      /etc/mysql/conf.d/' > /etc/my.cnf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://bitbucket.org/ric_flair_wcw/reaction-storage-v1_1/downloads/create_tables_mysql.sql  -P
+      /tmp
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo '#!/bin/bash\n mysql -h "localhost" -u "root" "-proot" "reactionstore"
+      < "/tmp/create_tables_mysql.sql"\n mysql -h "localhost" -u "root" "-proot" "reactionstore"
+      < "/tmp/create_user.sql"\n touch /tmp/healthy' > /docker-entrypoint-initdb.d/create-reaction-db.sh
+    Name: run
+    PrependShell: true
+  - Health:
+      Interval: 10000000000
+      Retries: 30
+      Test:
+      - CMD-SHELL
+      - cat /tmp/healthy
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - "3306"
+  From:
+    Image: mariadb:10.4.4-bionic
+  Name: ""
+  Platform: ""
+  SourceCode: FROM mariadb:10.4.4-bionic

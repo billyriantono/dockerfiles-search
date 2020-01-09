@@ -1,0 +1,144 @@
+MetaArgs: null
+Stages:
+- BaseName: postgres
+  Commands:
+  - Labels:
+    - Key: Description
+      Value: '"This image contains Postgres, ORACLE JDK and Atlassian Confluence"'
+    Name: label
+  - Env:
+    - Key: JAVA_PACKAGE
+      Value: server-jre
+    - Key: JAVA_VERSION_MAJOR
+      Value: "8"
+    - Key: JAVA_VERSION_MINOR
+      Value: u151
+    - Key: JAVA_VERSION_BUILD
+      Value: b12
+    - Key: JAVA_DIR_NAME
+      Value: jdk1.8.0_151
+    - Key: JAVA_BASE
+      Value: /opt/jdk
+    - Key: PATH
+      Value: ${PATH}:/opt/jdk/bin
+    - Key: GLIBC_VERSION
+      Value: 2.23-r3
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Env:
+    - Key: POSTGRES_USER
+      Value: postgres
+    - Key: POSTGRES_PASSWORD
+      Value: confluence
+    - Key: POSTGRES_DB
+      Value: confluence
+    Name: env
+  - Env:
+    - Key: CONFLUENCE_USER
+      Value: confluence
+    - Key: CONFLUENCE_GRP
+      Value: confluence
+    - Key: CONFLUENCE_VERSION
+      Value: 6.5.1
+    - Key: CONFLUENCE_HOME
+      Value: /var/confluence
+    - Key: CONFLUENCE_INSTALL
+      Value: /opt/atlassian/confluence
+    Name: env
+  - Env:
+    - Key: BASE_URL
+      Value: http://download.oracle.com/otn-pub/java/jdk/8u151-b12/e758a0de34e24606bca991d704f6dcbf/${JAVA_PACKAGE}-8u151
+    Name: env
+  - CmdLine:
+    - set -x     && apt-get update --quiet     && apt-get install --quiet --yes --no-install-recommends
+      libtcnative-1 xmlstarlet     && apt-get install -y procps curl supervisor dnsutils     &&
+      apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo "Installing JDK from ${BASE_URL}" &&     curl  -o "/tmp/java.tar.gz" -C
+      - -LR#OH "Cookie: oraclelicense=accept-securebackup-cookie" -k "${BASE_URL}-linux-x64.tar.gz"
+      &&     mkdir -p ${JAVA_BASE} &&     tar x -C ${JAVA_BASE} -f /tmp/java.tar.gz
+      &&     rm /tmp/java.tar.gz'
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_HOME
+      Value: ${JAVA_BASE}/${JAVA_DIR_NAME}
+    Name: env
+  - CmdLine:
+    - echo "JAVA_HOME is set to ${JAVA_HOME}" &&     update-alternatives --install
+      /usr/bin/java java ${JAVA_HOME}/bin/java 100 &&     update-alternatives --install
+      /usr/bin/javac javac ${JAVA_HOME}/bin/javac 100 &&     update-alternatives --install
+      /usr/bin/jar jar ${JAVA_HOME}/bin/jar 100
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CONFLUENCE_DOWNLOAD_URL
+      Value: https://www.atlassian.com/software/confluence/downloads/binary/atlassian-confluence-${CONFLUENCE_VERSION}.tar.gz
+    Name: env
+  - CmdLine:
+    - groupadd -r ${CONFLUENCE_GRP} --gid=888 && useradd -r -g ${CONFLUENCE_GRP} --uid=888
+      ${CONFLUENCE_USER}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir -p                              \t\t\t\"${CONFLUENCE_HOME}\"     && chmod
+      -R 700                       \t\t\t\"${CONFLUENCE_HOME}\"     && chown ${CONFLUENCE_USER}:${CONFLUENCE_GRP}
+      \   \"${CONFLUENCE_HOME}\"     && mkdir -p                           \t\t\t\"${CONFLUENCE_INSTALL}/conf\"
+      \    && curl -C - -LR                      \t\t\t\"${CONFLUENCE_DOWNLOAD_URL}\"
+      | tar -xz --directory \"${CONFLUENCE_INSTALL}\" --strip-components=1 --no-same-owner"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "chmod -R 700                       \t\t\t\"${CONFLUENCE_INSTALL}/conf\"     &&
+      chmod -R 700                       \t\t\t\"${CONFLUENCE_INSTALL}/temp\"     &&
+      chmod -R 700                       \t\t\t\"${CONFLUENCE_INSTALL}/logs\"     &&
+      chmod -R 700                       \t\t\t\"${CONFLUENCE_INSTALL}/work\"     &&
+      chown -R ${CONFLUENCE_USER}:${CONFLUENCE_GRP} \"${CONFLUENCE_INSTALL}/conf\"
+      \    && chown -R ${CONFLUENCE_USER}:${CONFLUENCE_GRP} \"${CONFLUENCE_INSTALL}/temp\"
+      \    && chown -R ${CONFLUENCE_USER}:${CONFLUENCE_GRP} \"${CONFLUENCE_INSTALL}/logs\"
+      \    && chown -R ${CONFLUENCE_USER}:${CONFLUENCE_GRP} \"${CONFLUENCE_INSTALL}/work\"
+      \    && echo -e                            \"\\nconfluence.home=${CONFLUENCE_HOME}\"
+      >> \"${CONFLUENCE_INSTALL}/confluence/WEB-INF/classes/confluence-init.properties\"
+      \    && xmlstarlet                         ed --inplace         --delete                          \"Server/@debug\"
+      \        --delete                          \"Server/Service/Connector/@debug\"
+      \        --delete                          \"Server/Service/Connector/@useURIValidationHack\"
+      \        --delete                          \"Server/Service/Connector/@minProcessors\"
+      \        --delete                          \"Server/Service/Connector/@maxProcessors\"
+      \        --delete                          \"Server/Service/Engine/@debug\"
+      \        --delete                          \"Server/Service/Engine/Host/@debug\"
+      \        --delete                          \"Server/Service/Engine/Host/Context/@debug\"
+      \                                          \"${CONFLUENCE_INSTALL}/conf/server.xml\"
+      \    && touch -d \"@0\"                      \"${CONFLUENCE_INSTALL}/conf/server.xml\""
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisor/postgres.conf
+    - supervisor/confluence.conf
+    - /etc/supervisor/conf.d/
+  - Name: expose
+    Ports:
+    - "5432"
+    - "8090"
+    - "8091"
+  - Name: volume
+    Volumes:
+    - ${CONFLUENCE_INSTALL}
+    - ${CONFLUENCE_HOME}
+    - ${PGDATA}
+  - Name: workdir
+    Path: ${CONFLUENCE_INSTALL}
+  - CmdLine:
+    - supervisord
+    - -n
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: postgres
+  Name: ""
+  Platform: ""
+  SourceCode: FROM postgres

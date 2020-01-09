@@ -1,0 +1,94 @@
+MetaArgs:
+- DefaultValue: latest
+  Key: TENSORFLOW_TAG
+  ProvidedValue: null
+  Value: latest
+- DefaultValue: tensorflow/tensorflow:$TENSORFLOW_TAG-py3
+  Key: SOURCE_IMAGE
+  ProvidedValue: null
+  Value: tensorflow/tensorflow:$TENSORFLOW_TAG-py3
+Stages:
+- As: artefact-builder
+  BaseName: tensorflow/tensorflow:latest-py3
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y curl openjdk-8-jdk git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "deb [arch=amd64] http://storage.googleapis.com/bazel-apt stable jdk1.8"
+      | tee /etc/apt/sources.list.d/bazel.list &     curl https://bazel.build/bazel-release.pub.gpg
+      | apt-key add - &&     apt-get update && apt-get install bazel -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y   lua5.1   liblua5.1-0-dev   libffi-dev   gettext   freeglut3-dev   libsdl2-dev   libosmesa6-dev   python3-dev   python3-numpy   realpath   build-essential   zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /toolbox && cd /toolbox &&  git clone https://github.com/jkulhanek/lab.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "#!/bin/bash\nrm /tmp/.X1-lock /tmp/.X11-unix/X1 \nvncserver :1 -randr
+      -geometry 1280x800 -depth 24 && tail -F /root/.vnc/*.log" | tee /opt/vnc.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DISPLAY
+      Value: :1
+    Name: env
+  - CmdLine:
+    - cd /toolbox/lab && bazel build :deepmind_lab.so --define headless=osmesa --force_python=PY3
+      --host_force_python=PY3
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /toolbox/lab &&   bazel build -c opt python/pip_package:build_pip_package
+      --force_python=PY3 --host_force_python=PY3 &&   mkdir /artifact &&   ./bazel-bin/python/pip_package/build_pip_package
+      /artifact
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install /artifact/DeepMind_Lab-1.0-py3-none-any.whl
+    Name: run
+    PrependShell: true
+  From:
+    Image: tensorflow/tensorflow:latest-py3
+  Name: artefact-builder
+  Platform: ""
+  SourceCode: FROM tensorflow/tensorflow:latest-py3 as artefact-builder
+- BaseName: $SOURCE_IMAGE
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y   lua5.1   liblua5.1-0-dev   libffi-dev   gettext   freeglut3-dev   libsdl2-dev   libosmesa6-dev   python3-dev   python3-numpy   realpath   build-essential   zip   git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "#!/bin/bash\nrm /tmp/.X1-lock /tmp/.X11-unix/X1 \nvncserver :1 -randr
+      -geometry 1280x800 -depth 24 && tail -F /root/.vnc/*.log" | tee /opt/vnc.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DISPLAY
+      Value: :1
+    Name: env
+  - Chown: ""
+    From: artefact-builder
+    Name: copy
+    SourcesAndDest:
+    - /artifact/DeepMind_Lab-1.0-py3-none-any.whl
+    - /tmp/DeepMind_Lab-1.0-py3-none-any.whl
+  - CmdLine:
+    - pip install /tmp/DeepMind_Lab-1.0-py3-none-any.whl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install gym &&   pip install git+https://github.com/jkulhanek/gym-maze-env.git
+    Name: run
+    PrependShell: true
+  From:
+    Image: $SOURCE_IMAGE
+  Name: ""
+  Platform: ""
+  SourceCode: FROM $SOURCE_IMAGE

@@ -1,0 +1,160 @@
+MetaArgs: null
+Stages:
+- As: npminstall
+  BaseName: node:10.14
+  Commands:
+  - Name: workdir
+    Path: /TeamCityTheatre
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/TeamCityTheatre.Web/package.json
+    - ./TeamCityTheatre.Web/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/TeamCityTheatre.Web/package-lock.json
+    - ./TeamCityTheatre.Web/
+  - Name: workdir
+    Path: /TeamCityTheatre/TeamCityTheatre.Web
+  - CmdLine:
+    - npm ci
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.14
+  Name: npminstall
+  Platform: ""
+  SourceCode: FROM node:10.14 AS npminstall
+- As: npmbuild
+  BaseName: npminstall
+  Commands:
+  - Name: workdir
+    Path: /TeamCityTheatre/TeamCityTheatre.Web
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/TeamCityTheatre.Web/tsconfig.json
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/TeamCityTheatre.Web/webpack.config.js
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/TeamCityTheatre.Web/Views/
+    - ./Views/
+  - CmdLine:
+    - npm run build:release
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: npminstall
+  Name: npmbuild
+  Platform: ""
+  SourceCode: FROM npminstall as npmbuild
+- As: dotnetrestore
+  BaseName: microsoft/dotnet:2.2-sdk
+  Commands:
+  - Name: workdir
+    Path: /TeamCityTheatre
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/TeamCityTheatre.sln
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/TeamCityTheatre.Web/TeamCityTheatre.Web.csproj
+    - ./TeamCityTheatre.Web/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/TeamCityTheatre.Core/TeamCityTheatre.Core.csproj
+    - ./TeamCityTheatre.Core/
+  - CmdLine:
+    - dotnet restore
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.2-sdk
+  Name: dotnetrestore
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2-sdk AS dotnetrestore
+- As: dotnetpublish
+  BaseName: dotnetrestore
+  Commands:
+  - Name: workdir
+    Path: /TeamCityTheatre
+  - Chown: ""
+    From: npmbuild
+    Name: copy
+    SourcesAndDest:
+    - ./TeamCityTheatre/TeamCityTheatre.Web/wwwroot/
+    - ./TeamCityTheatre.Web/wwwroot/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/TeamCityTheatre.Core/.
+    - ./TeamCityTheatre.Core/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/TeamCityTheatre.Web/.
+    - ./TeamCityTheatre.Web/
+  - CmdLine:
+    - dotnet publish "./TeamCityTheatre.Web/TeamCityTheatre.Web.csproj" --verbosity
+      normal --configuration Release --output "/Output"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 2
+      Named: dotnetrestore
+  Name: dotnetpublish
+  Platform: ""
+  SourceCode: FROM dotnetrestore AS dotnetpublish
+- As: runtime
+  BaseName: microsoft/dotnet:2.2-aspnetcore-runtime
+  Commands:
+  - Name: workdir
+    Path: /TeamCityTheatre
+  - CmdLine:
+    - mkdir Data
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir Logs
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: dotnetpublish
+    Name: copy
+    SourcesAndDest:
+    - /Output
+    - ./
+  - CmdLine:
+    - dotnet
+    - TeamCityTheatre.Web.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: microsoft/dotnet:2.2-aspnetcore-runtime
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2-aspnetcore-runtime AS runtime

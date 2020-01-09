@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:14.04.3
+  Commands:
+  - Maintainer: khiraiwa
+    Name: maintainer
+  - Env:
+    - Key: AWS_ACCESS_KEY_ID
+      Value: dummy
+    Name: env
+  - Env:
+    - Key: AWS_SECRET_ACCESS_KEY
+      Value: dummy
+    Name: env
+  - Env:
+    - Key: LOGSTASH_VERSION
+      Value: 2.0.0
+    Name: env
+  - CmdLine:
+    - apt-get update &&   apt-get install software-properties-common python-software-properties
+      wget unzip git -y --no-install-recommends &&   echo oracle-java8-installer shared/accepted-oracle-license-v1-1
+      select true | debconf-set-selections &&   add-apt-repository -y ppa:webupd8team/java
+      &&   apt-get update &&   apt-get install -y oracle-java8-installer --no-install-recommends
+      &&   apt-get clean &&   rm -rf /var/lib/apt/lists/* &&   rm -rf /var/cache/oracle-jdk8-installer
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/java-8-oracle
+    Name: env
+  - CmdLine:
+    - mkdir -p /home/logstash/ &&   groupadd -r logstash && useradd -r -d /home/logstash
+      -s /bin/bash -g logstash logstash &&   echo 'logstash ALL=(ALL) NOPASSWD:ALL'
+      >> /etc/sudoers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /home/logstash &&   wget https://download.elastic.co/logstash/logstash/logstash-${LOGSTASH_VERSION}.zip
+      &&   unzip logstash-${LOGSTASH_VERSION}.zip &&   rm -f logstash-${LOGSTASH_VERSION}.zip
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - logstash.conf
+    - /home/logstash/logstash-${LOGSTASH_VERSION}/logstash.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - logstash-input-cloudwatch-0.2.2.gem
+    - /home/logstash/logstash-input-cloudwatch-0.2.2.gem
+  - CmdLine:
+    - /home/logstash/logstash-${LOGSTASH_VERSION}/bin/plugin install /home/logstash/logstash-input-cloudwatch-0.2.2.gem
+      &&   rm -f /home/logstash/logstash-input-cloudwatch-0.2.2.gem
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /data_logstash/
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data_logstash/
+  - CmdLine:
+    - chown -R logstash:logstash /data_logstash &&   chown -R logstash:logstash /home/logstash
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: logstash
+  - Name: workdir
+    Path: /home/logstash/logstash-${LOGSTASH_VERSION}
+  - CmdLine:
+    - sudo chown -R logstash:logstash /data_logstash &&   if [ ! -e /data_logstash/logstash.conf
+      ]; then     cp /home/logstash/logstash-${LOGSTASH_VERSION}/logstash.conf /data_logstash/logstash.conf;   fi
+      &&   /home/logstash/logstash-${LOGSTASH_VERSION}/bin/logstash agent -f /data_logstash/logstash.conf
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:14.04.3
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:14.04.3

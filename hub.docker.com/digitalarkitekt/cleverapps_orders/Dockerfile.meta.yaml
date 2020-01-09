@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: microsoft/aspnetcore:2.0
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Name: expose
+    Ports:
+    - "80"
+  From:
+    Image: microsoft/aspnetcore:2.0
+  Name: base
+  Platform: ""
+  SourceCode: FROM microsoft/aspnetcore:2.0 as base
+- As: builder
+  BaseName: microsoft/aspnetcore-build:2.0
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.sln'
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - CleverApps.Services.Orders/CleverApps.Services.Orders.csproj
+    - CleverApps.Services.Orders/
+  - CmdLine:
+    - dotnet restore
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Name: workdir
+    Path: /src/CleverApps.Services.Orders
+  - CmdLine:
+    - dotnet build -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/aspnetcore-build:2.0
+  Name: builder
+  Platform: ""
+  SourceCode: FROM microsoft/aspnetcore-build:2.0 as builder
+- As: publish
+  BaseName: builder
+  Commands:
+  - CmdLine:
+    - dotnet publish --output ./publish
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: builder
+  Name: publish
+  Platform: ""
+  SourceCode: FROM builder as publish
+- As: production
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - CmdLine:
+    - dotnet
+    - CleverApps.Services.Orders.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: production
+  Platform: ""
+  SourceCode: FROM base as production

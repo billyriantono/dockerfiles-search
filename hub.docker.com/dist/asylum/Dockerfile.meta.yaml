@@ -1,0 +1,129 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:14.04
+  Commands:
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - apt-get update && apt-get upgrade -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y build-essential postgresql git python-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'apt-get install -y python-virtualenv python3-pip graphviz-dev libpq-dev # faster
+      builds'
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "1080"
+  - CmdLine:
+    - pip install maildump
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL https://deb.nodesource.com/setup_4.x | sudo -E bash
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y nodejs
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: postgres
+  - CmdLine:
+    - service postgresql start &&     createuser asylum &&     createdb -E utf-8 -T
+      template0 -O asylum asylum &&     psql -U postgres -d postgres -c "alter user
+      asylum with password 'asylum';"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - adduser --disabled-password --gecos '' asylum &&     adduser asylum sudo &&     echo
+      '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /opt/asylum/ && chown asylum:asylum /opt/asylum/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/asylum/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - project/requirements.apt
+    - /opt/asylum/
+  - CmdLine:
+    - awk '/^\s*[^#]/' requirements.apt | xargs -r -- sudo apt-get install --no-install-recommends
+      -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - virtualenv -p `which python3.4` ../asylum-venv
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - project/requirements
+    - /opt/asylum/requirements/
+  - CmdLine:
+    - . ../asylum-venv/bin/activate && pip install -r requirements/local.txt
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - project
+    - /opt/asylum/
+  - CmdLine:
+    - echo "DATABASE_URL=postgres://asylum:asylum@localhost/asylum" > .env
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R asylum:asylum /opt/asylum/
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: asylum
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: asylum
+  - CmdLine:
+    - sudo -u postgres service postgresql start;     . ../asylum-venv/bin/activate
+      &&     ./manage.py migrate &&     echo "from django.contrib.auth.models import
+      User; User.objects.create_superuser('admin', 'nospamplz@hacklab.fi', 'admin')"
+      | ./manage.py shell
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /opt/asylum/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:14.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:14.04

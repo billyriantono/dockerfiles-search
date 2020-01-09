@@ -1,0 +1,77 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - CmdLine:
+    - apt-get update --fix-missing     && apt-get install -q -y nagios-nrpe-server
+      nagios-plugins curl     && apt-get clean     && rm -rf /var/lib/apt /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NAGIOS_CONF_DIR
+      Value: /etc/nagios
+    Name: env
+  - Env:
+    - Key: NAGIOS_PLUGINS_DIR
+      Value: /usr/lib/nagios/plugins
+    Name: env
+  - CmdLine:
+    - sed -e 's/^allowed_hosts=/#allowed_hosts=/' -i $NAGIOS_CONF_DIR/nrpe.cfg     &&
+      echo "command[check_load]=$NAGIOS_PLUGINS_DIR/check_load -w 15,10,5 -c 30,25,20"
+      > $NAGIOS_CONF_DIR/nrpe.d/load.cfg     && echo "command[check_mem]=$NAGIOS_PLUGINS_DIR/check_mem
+      -f -C -w 12 -c 10 " > $NAGIOS_CONF_DIR/nrpe.d/mem.cfg     && echo "command[check_total_procs]=/usr/lib/nagios/plugins/check_procs
+      -w 500 -c 700 " > $NAGIOS_CONF_DIR/nrpe.d/procs.cfg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -o /usr/local/bin/dumb-init -L https://github.com/Yelp/dumb-init/releases/download/v1.0.0/dumb-init_1.0.0_amd64
+      &&    chmod +x /usr/local/bin/dumb-init
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ETCDCTL_VERSION
+      Value: v2.2.5
+    Name: env
+  - CmdLine:
+    - curl -L https://github.com/coreos/etcd/releases/download/$ETCDCTL_VERSION/etcd-$ETCDCTL_VERSION-linux-amd64.tar.gz
+      -o /tmp/etcd-$ETCDCTL_VERSION-linux-amd64.tar.gz &&     cd /tmp && gzip -dc
+      etcd-$ETCDCTL_VERSION-linux-amd64.tar.gz | tar -xof - &&     cp -f /tmp/etcd-$ETCDCTL_VERSION-linux-amd64/etcdctl
+      /usr/local/bin &&     rm -rf /tmp/etcd-$ETCDCTL_VERSION-linux-amd64.tar.gz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - run-nrpe.sh
+    - /usr/sbin/run-nrpe.sh
+  - CmdLine:
+    - chmod +x /usr/sbin/run-nrpe.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - plugins
+    - $NAGIOS_PLUGINS_DIR
+  - CmdLine:
+    - chmod +x -R  $NAGIOS_PLUGINS_DIR
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - nrpe.d
+    - $NAGIOS_CONF_DIR/nrpe.d
+  - Name: expose
+    Ports:
+    - "5666"
+  - CmdLine:
+    - /usr/local/bin/dumb-init
+    - /usr/sbin/run-nrpe.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

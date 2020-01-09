@@ -1,0 +1,137 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: ubuntu
+  Commands:
+  - Env:
+    - Key: IRODS_USER
+      Value: anonymous
+    - Key: SEQSERVER_USER
+      Value: seqserver
+    - Key: SEQSERVER_GROUP
+      Value: seqserver_group
+    - Key: SEQSERVER_BASE_PATH
+      Value: /var/www/sequenceserver
+    - Key: SEQSERVER_DB_PATH
+      Value: /var/www/sequenceserver/db
+    - Key: SEQSERVER_SYNC_PATH_FILE
+      Value: /var/www/sequenceserver/irods_sync_path.txt
+    Name: env
+  - CmdLine:
+    - apt-get -qq -y update     && apt-get -qq -y install build-essential zlib1g-dev
+      wget git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root
+  - CmdLine:
+    - git clone https://github.com/JLHonors/ACIC2019-Midterm.git     && wget https://github.com/zhxu73/sequenceserver-scale-docker/releases/download/ncbi-blast-2.9.0%2B/ncbi-blast-2.9.0+-x64-linux.tar.gz     &&
+      tar -xvf ncbi-blast-2.9.0+-x64-linux.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget http://ccl.cse.nd.edu/software/files/cctools-7.0.21-source.tar.gz     &&
+      tar -xvf cctools-7.0.21-source.tar.gz     && cd cctools-release-7.0.21     &&
+      ./configure --prefix $HOME/cctools     && make     && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'mkdir -p to_final_image/bin     && cp ncbi-blast-2.9.0+/bin/* to_final_image/bin/     &&
+      cp cctools/bin/* to_final_image/bin/     && cp ACIC2019-Midterm/deploy/sync_blast_db.sh
+      to_final_image/     && echo "{ \"irods_zone_name\": \"iplant\", \"irods_host\":
+      \"data.cyverse.org\", \"irods_port\": 1247, \"irods_user_name\": \"$IRODS_USER\"
+      }" > to_final_image/irods_environment.json'
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu
+  Name: build
+  Platform: ""
+  SourceCode: FROM ubuntu AS build
+- BaseName: ubuntu
+  Commands:
+  - Labels:
+    - Key: Description
+      Value: '"Scalable intuitive local web frontend for the BLAST bioinformatics
+        tool"'
+    Name: label
+  - Labels:
+    - Key: Version
+      Value: '"0.1"'
+    Name: label
+  - Env:
+    - Key: PROJECT_NAME
+      Value: ""
+    - Key: WORKQUEUE_PASSWORD
+      Value: VERY_STRONG_PASSWORD
+    - Key: IRODS_SYNC_PATH
+      Value: /iplant/home/shared/iplantcollaborative/example_data/GEA_Blast_dbs
+    - Key: MASTER_IP
+      Value: 127.0.0.1
+    - Key: BLAST_NUM_THREADS
+      Value: "4"
+    - Key: NUM_WORKER
+      Value: "1"
+    - Key: IRODS_USER
+      Value: anonymous
+    - Key: SEQSERVER_USER
+      Value: seqserver
+    - Key: SEQSERVER_GROUP
+      Value: seqserver_group
+    - Key: SEQSERVER_BASE_PATH
+      Value: /var/www/sequenceserver
+    - Key: SEQSERVER_DB_PATH
+      Value: /var/www/sequenceserver/db
+    - Key: SEQSERVER_SYNC_PATH_FILE
+      Value: /var/www/sequenceserver/irods_sync_path.txt
+    Name: env
+  - Name: expose
+    Ports:
+    - "9123"
+  - Name: workdir
+    Path: /root
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /root/to_final_image
+    - from_build_image
+  - CmdLine:
+    - apt-get -qq -y update     && apt-get -qq -y install gnupg wget     && wget -qO
+      - https://packages.irods.org/irods-signing-key.asc | apt-key add -     && echo
+      "deb [arch=amd64] https://packages.irods.org/apt/ xenial main" | tee /etc/apt/sources.list.d/renci-irods.list     &&
+      apt-get -qq -y update     && apt-get -qq -y install irods-icommands     && addgroup
+      ${SEQSERVER_GROUP} && adduser --quiet --disabled-login --gecos 'SequenceServer'
+      ${SEQSERVER_USER} && adduser ${SEQSERVER_USER} ${SEQSERVER_GROUP}     && cd
+      /root     && cp from_build_image/bin/* /usr/bin     && mkdir -p $SEQSERVER_DB_PATH     &&
+      echo ${IRODS_SYNC_PATH} > $SEQSERVER_SYNC_PATH_FILE     && cp from_build_image/sync_blast_db.sh
+      $SEQSERVER_BASE_PATH/     && mkdir -p /home/$SEQSERVER_USER/.irods     && cp
+      from_build_image/irods_environment.json /home/$SEQSERVER_USER/.irods/irods_environment.json     &&
+      echo ${WORKQUEUE_PASSWORD} > $SEQSERVER_BASE_PATH/wq_password.txt     && cd
+      ${SEQSERVER_APP_PATH}     && chown -R ${SEQSERVER_USER}:${SEQSERVER_GROUP} ${SEQSERVER_BASE_PATH}     &&
+      chown :${SEQSERVER_GROUP} /home     && chmod g+rwx /home
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker_entry.sh
+    - ${SEQSERVER_BASE_PATH}/docker_entry.sh
+  - CmdLine:
+    - chown -R ${SEQSERVER_USER}:${SEQSERVER_GROUP} ${SEQSERVER_BASE_PATH}
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${SEQSERVER_USER}
+  - Name: workdir
+    Path: ${SEQSERVER_BASE_PATH}
+  - CmdLine:
+    - /bin/bash
+    - docker_entry.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu

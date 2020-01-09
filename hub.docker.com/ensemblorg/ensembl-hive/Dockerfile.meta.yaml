@@ -1,0 +1,136 @@
+MetaArgs: null
+Stages:
+- As: repo
+  BaseName: alpine:3.9.4
+  Commands:
+  - CmdLine:
+    - apk add git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /tmp/ensembl-hive
+  - CmdLine:
+    - cd /tmp/ensembl-hive && git clean -d -X -f
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /tmp/ensembl-hive/.git
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9.4
+  Name: repo
+  Platform: ""
+  SourceCode: FROM alpine:3.9.4 AS repo
+- As: java_builder
+  BaseName: maven:3.6-jdk-12-alpine
+  Commands:
+  - Chown: ""
+    From: repo
+    Name: copy
+    SourcesAndDest:
+    - /tmp/ensembl-hive/wrappers/java
+    - /tmp/java_wrapper
+  - CmdLine:
+    - cd /tmp/java_wrapper && mvn package
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.6-jdk-12-alpine
+  Name: java_builder
+  Platform: ""
+  SourceCode: FROM maven:3.6-jdk-12-alpine AS java_builder
+- As: os_installer
+  BaseName: ubuntu:16.04
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/setup_os.Ubuntu-16.04.sh
+    - /tmp/
+  - CmdLine:
+    - /tmp/setup_os.Ubuntu-16.04.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.04
+  Name: os_installer
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04 AS os_installer
+- As: cpan_builder
+  BaseName: os_installer
+  Commands:
+  - CmdLine:
+    - apt-get update -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y cpanminus build-essential
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - cpanfile
+    - /tmp/
+  - CmdLine:
+    - cpanm --installdeps --with-recommends /tmp/
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 2
+      Named: os_installer
+  Name: cpan_builder
+  Platform: ""
+  SourceCode: FROM os_installer AS cpan_builder
+- BaseName: os_installer
+  Commands:
+  - Chown: ""
+    From: repo
+    Name: copy
+    SourcesAndDest:
+    - /tmp/ensembl-hive
+    - /repo/ensembl-hive
+  - Chown: ""
+    From: cpan_builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /usr/local
+  - Chown: ""
+    From: java_builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/java_wrapper/target/eHive-*-jar-with-dependencies.jar
+    - /repo/ensembl-hive/wrappers/java/target/
+  - Env:
+    - Key: EHIVE_ROOT_DIR
+      Value: '"/repo/ensembl-hive"'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"/repo/ensembl-hive/scripts:$PATH"'
+    Name: env
+  - Env:
+    - Key: PERL5LIB
+      Value: '"/repo/ensembl-hive/modules:$PERL5LIB"'
+    Name: env
+  - CmdLine:
+    - /repo/ensembl-hive/scripts/dev/simple_init.py
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 2
+      Named: os_installer
+  Name: ""
+  Platform: ""
+  SourceCode: FROM os_installer

@@ -1,0 +1,122 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: node:8-alpine
+  Commands:
+  - CmdLine:
+    - apk add --update tini curl   && rm -r /var/cache
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /sbin/tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - Name: workdir
+    Path: /home/node/app
+  From:
+    Image: node:8-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:8-alpine AS base
+- As: dependencies
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - yarn.lock
+    - ./
+  - CmdLine:
+    - yarn install --production
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: dependencies
+  Platform: ""
+  SourceCode: FROM base AS dependencies
+- As: elm-build
+  BaseName: node:6-jessie
+  Commands:
+  - Name: workdir
+    Path: /home/node/app
+  - CmdLine:
+    - npm install -g elm --silent
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - elm-package.json
+    - ./
+  - CmdLine:
+    - elm package install -y
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - elm make Main.elm --output=client/index.js
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:6-jessie
+  Name: elm-build
+  Platform: ""
+  SourceCode: FROM node:6-jessie AS elm-build
+- As: release
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /home/node/app
+  - Chown: ""
+    From: dependencies
+    Name: copy
+    SourcesAndDest:
+    - /home/node/app/node_modules
+    - node_modules
+  - Chown: ""
+    From: elm-build
+    Name: copy
+    SourcesAndDest:
+    - /home/node/app/client/
+    - client
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server
+    - server
+  - Health:
+      Interval: 5000000000
+      Test:
+      - CMD-SHELL
+      - curl --fail http://localhost:$PORT/_health || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - node
+    - server/index.js
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: release
+  Platform: ""
+  SourceCode: FROM base AS release

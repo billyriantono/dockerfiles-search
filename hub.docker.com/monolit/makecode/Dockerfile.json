@@ -1,0 +1,204 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "base",
+      "BaseName": "node:stretch",
+      "SourceCode": "FROM node:stretch AS base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Image": "node:stretch"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update -q -y \u0026\u0026 apt-get install -q -y     dumb-init"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "useradd --user-group --create-home --shell /bin/false app"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "HOME",
+              "Value": "/home/app"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Name": "workdir",
+          "Path": "$HOME"
+        },
+        {
+          "CmdLine": [
+            "/usr/bin/dumb-init",
+            "--"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    },
+    {
+      "Name": "production-dependencies",
+      "BaseName": "base",
+      "SourceCode": "FROM base AS production-dependencies",
+      "Platform": "",
+      "As": "production-dependencies",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "src/package.json",
+            "./"
+          ]
+        },
+        {
+          "CmdLine": [
+            "chown app:app ./package.json"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "user",
+          "User": "app"
+        },
+        {
+          "CmdLine": [
+            "npm set progress=false \u0026\u0026     npm config set depth 0 \u0026\u0026     npm install --only=production"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "tested-build",
+      "BaseName": "production-dependencies",
+      "SourceCode": "FROM production-dependencies AS tested-build",
+      "Platform": "",
+      "As": "tested-build",
+      "From": {
+        "Stage": {
+          "Named": "production-dependencies",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Name": "user",
+          "User": "root"
+        },
+        {
+          "CmdLine": [
+            "apt-get update -q -y \u0026\u0026 apt-get install -q -y     libgnome-keyring-dev     libusb-1.0-0-dev"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "npm set progress=false \u0026\u0026     npm config set depth 0 \u0026\u0026     npm install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "src",
+            "./"
+          ]
+        },
+        {
+          "CmdLine": [
+            "npm run build"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "npm test"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "production",
+      "BaseName": "production-dependencies",
+      "SourceCode": "FROM production-dependencies AS production",
+      "Platform": "",
+      "As": "production",
+      "From": {
+        "Stage": {
+          "Named": "production-dependencies",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "2",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "$HOME/built/packaged",
+            "./built/packaged"
+          ]
+        },
+        {
+          "Name": "user",
+          "User": "root"
+        },
+        {
+          "CmdLine": [
+            "chown -R app:app ./built"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "user",
+          "User": "app"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "3000"
+          ]
+        },
+        {
+          "CmdLine": [
+            "npm",
+            "run",
+            "serve"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

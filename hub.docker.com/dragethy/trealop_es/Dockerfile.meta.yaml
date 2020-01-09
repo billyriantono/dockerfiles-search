@@ -1,0 +1,193 @@
+MetaArgs: null
+Stages:
+- BaseName: gliderlabs/alpine:3.4
+  Commands:
+  - Maintainer: blacktop, https://github.com/blacktop
+    Name: maintainer
+  - Env:
+    - Key: GOSU_VERSION
+      Value: "1.10"
+    Name: env
+  - Env:
+    - Key: GOSU_URL
+      Value: https://github.com/tianon/gosu/releases/download
+    Name: env
+  - CmdLine:
+    - apk-install openjdk8-jre tini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk-install -t build-deps wget ca-certificates gpgme   && set -x   && echo "Grab
+      *gosu* for easy step-down from root..."   && wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64"   &&
+      wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64.asc"   &&
+      export GNUPGHOME="$(mktemp -d)"   && gpg --keyserver ha.pool.sks-keyservers.net
+      --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4   && gpg --batch --verify
+      /usr/local/bin/gosu.asc /usr/local/bin/gosu   && rm -r "$GNUPGHOME" /usr/local/bin/gosu.asc   &&
+      chmod +x /usr/local/bin/gosu   && gosu nobody true   && apk del --purge build-deps
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: STACK
+      Value: 5.0.1
+    Name: env
+  - CmdLine:
+    - apk-install libzmq bash nodejs supervisor nginx apache2-utils openssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir -p /usr/local/lib \t&& ln -s /usr/lib/*/libzmq.so.3 /usr/local/lib/libzmq.so"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apk-install -t .build-deps wget ca-certificates   && set -x   && cd /tmp   &&
+      echo \"Download Elastic Stack ======================================================\"
+      \  && echo \"Download Elasticsearch...\"   && wget -O elasticsearch-$STACK.tar.gz
+      https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-$STACK.tar.gz
+      \  && tar -xzf elasticsearch-$STACK.tar.gz   && mv elasticsearch-$STACK /usr/share/elasticsearch
+      \  && echo \"Download Logstash...\"   && wget -O logstash-$STACK.tar.gz     https://artifacts.elastic.co/downloads/logstash/logstash-$STACK.tar.gz
+      \  && tar -xzf logstash-$STACK.tar.gz   && mv logstash-$STACK /usr/share/logstash
+      \  && echo \"Download Kibana...\"   && wget -O kibana-$STACK.tar.gz https://artifacts.elastic.co/downloads/kibana/kibana-$STACK-linux-x86_64.tar.gz
+      \  && tar -xzf kibana-$STACK.tar.gz   && mv kibana-$STACK-linux-x86_64 /usr/share/kibana
+      \  && echo \"Configure [Elasticsearch] ===================================================\"
+      \  && for path in   \t/usr/share/elasticsearch/data   \t/usr/share/elasticsearch/logs
+      \  \t/usr/share/elasticsearch/config   \t/usr/share/elasticsearch/config/scripts
+      \  \t/usr/share/elasticsearch/plugins   ; do   mkdir -p \"$path\";   done   &&
+      echo \"Configure [Logstash] ========================================================\"
+      \  && if [ -f \"$LS_SETTINGS_DIR/logstash.yml\" ]; then   \t\tsed -ri 's!^(path.log|path.config):!#&!g'
+      \"$LS_SETTINGS_DIR/logstash.yml\";   \tfi   && echo \"Configure [Kibana] ==========================================================\"
+      \  && sed -ri \"s!^(\\#\\s*)?(server\\.host:).*!\\2 '0.0.0.0'!\" /usr/share/kibana/config/kibana.yml
+      \  && grep -q \"^server\\.host: '0.0.0.0'\\$\" /usr/share/kibana/config/kibana.yml
+      \  && bundled='NODE=\"${DIR}/node/bin/node\"'   && apline_node='NODE=\"/usr/bin/node\"'
+      \  && sed -i \"s|$bundled|$apline_node|g\" /usr/share/kibana/bin/kibana-plugin
+      \  && sed -i \"s|$bundled|$apline_node|g\" /usr/share/kibana/bin/kibana   &&
+      rm -rf /usr/share/kibana/node   && echo \"Make Ngins SSL directory...\"   &&
+      mkdir -p /etc/nginx/ssl   && echo \"Create elstack user...\"   && adduser -DH
+      -s /sbin/nologin elstack   && chown -R elstack:elstack /usr/share/elasticsearch
+      \  && chown -R elstack:elstack /usr/share/logstash   && chown -R elstack:elstack
+      /usr/share/kibana   && echo \"Clean Up...\"   && rm -rf /tmp/*   && apk del
+      --purge .build-deps"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /usr/share/elasticsearch/bin:$PATH
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /usr/share/logstash/bin:$PATH
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /usr/share/kibana/bin:$PATH
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/elastic
+    - /usr/share/elasticsearch/config
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/elastic/logrotate
+    - /etc/logrotate.d/elasticsearch
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/logstash/conf.d/
+    - /etc/logstash/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/logstash/patterns/
+    - /opt/logstash/patterns/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/logstash/logstash.yml
+    - /etc/logstash/
+  - Env:
+    - Key: LS_SETTINGS_DIR
+      Value: /etc/logstash
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/nginx/nginx.conf
+    - /etc/nginx/nginx.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/nginx/kibana.conf
+    - /etc/nginx/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/nginx/ssl.kibana.conf
+    - /etc/nginx/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/supervisord/supervisord.conf
+    - /etc/supervisor/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoints/elastic-entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoints/logstash-entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoints/kibana-entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoints/nginx-entrypoint.sh
+    - /
+  - Name: volume
+    Volumes:
+    - /usr/share/elasticsearch/data
+  - Name: volume
+    Volumes:
+    - /etc/logstash/conf.d
+  - Name: volume
+    Volumes:
+    - /etc/nginx
+  - Name: expose
+    Ports:
+    - "443"
+    - "5601"
+    - "80"
+    - "9200"
+    - "9300"
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /usr/bin/supervisord
+    - -c
+    - /etc/supervisor/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: gliderlabs/alpine:3.4
+  Name: ""
+  Platform: ""
+  SourceCode: FROM gliderlabs/alpine:3.4

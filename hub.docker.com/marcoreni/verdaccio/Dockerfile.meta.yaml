@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- BaseName: node:10.7-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"https://github.com/verdaccio/verdaccio"'
+    Name: label
+  - CmdLine:
+    - apk --no-cache add wget openssl &&     wget -O /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.0/dumb-init_1.2.0_amd64
+      &&     chmod +x /usr/local/bin/dumb-init &&     apk del openssl &&     apk --no-cache
+      add ca-certificates wget &&     apk --no-cache add g++ gcc libgcc libstdc++
+      linux-headers make python &&     wget -q -O /etc/apk/keys/sgerrand.rsa.pub https://alpine-pkgs.sgerrand.com/sgerrand.rsa.pub
+      &&     wget https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.25-r0/glibc-2.25-r0.apk
+      &&     apk add glibc-2.25-r0.apk
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: APPDIR
+      Value: /usr/local/app
+    Name: env
+  - Name: workdir
+    Path: $APPDIR
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - $APPDIR
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - CmdLine:
+    - npm config set registry http://registry.npmjs.org/ &&     yarn global add -s
+      flow-bin@0.69.0 &&     yarn install --production=false &&     yarn lint &&     yarn
+      code:docker-build &&     yarn build:webui &&     yarn cache clean &&     yarn
+      install --production=true --pure-lockfile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /verdaccio/storage /verdaccio/plugins /verdaccio/conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - conf/docker.yaml
+    - /verdaccio/conf/config.yaml
+  - CmdLine:
+    - addgroup -S verdaccio && adduser -S -G verdaccio verdaccio &&     chown -R verdaccio:verdaccio
+      "$APPDIR" &&     chown -R verdaccio:verdaccio /verdaccio
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: verdaccio
+  - Env:
+    - Key: PORT
+      Value: "4873"
+    Name: env
+  - Env:
+    - Key: PROTOCOL
+      Value: http
+    Name: env
+  - Name: expose
+    Ports:
+    - $PORT
+  - Name: volume
+    Volumes:
+    - /verdaccio
+  - CmdLine:
+    - /usr/local/bin/dumb-init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - $APPDIR/bin/verdaccio --config /verdaccio/conf/config.yaml --listen $PROTOCOL://0.0.0.0:${PORT}
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: node:10.7-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:10.7-alpine

@@ -1,0 +1,274 @@
+MetaArgs: null
+Stages:
+- As: sftpgo
+  BaseName: golang:stretch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"nicola.murino@gmail.com"'
+    Name: label
+  - CmdLine:
+    - go get -d github.com/drakkan/sftpgo
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/drakkan/sftpgo
+  - Key: build_commit
+    Name: arg
+    Value: '"8e604f888a3a3c324500ba261cd1789ee8d80f0d"'
+  - CmdLine:
+    - go build -i -ldflags "-s -w -X github.com/drakkan/sftpgo/utils.commit=`git describe
+      --always --dirty` -X github.com/drakkan/sftpgo/utils.date=`date -u +%FT%TZ`"
+      -o sftpgo
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:stretch
+  Name: sftpgo
+  Platform: ""
+  SourceCode: FROM golang:stretch as sftpgo
+- BaseName: phusion/baseimage:0.11
+  Commands:
+  - Env:
+    - Key: TZ
+      Value: '"UTC"'
+    Name: env
+  - CmdLine:
+    - echo $TZ > /etc/timezone
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&     DEBIAN_FRONTEND=noninteractive apt-get install -q -y --no-install-recommends
+      apt-transport-https         ca-certificates curl wget tar software-properties-common
+      sudo zip unzip git rsync tzdata         tmpreaper mariadb-client         nginx
+      nginx-common nginx-extras         openbsd-inetd lsb-base libc6 libcap2 libpam0g
+      libssl1.1 openssl     && wget -qO- https://repos.influxdata.com/influxdb.key
+      | apt-key add -     && echo "deb https://repos.influxdata.com/ubuntu bionic
+      stable" | tee /etc/apt/sources.list.d/influxdb.list     && add-apt-repository
+      -y ppa:certbot/certbot     && add-apt-repository -y ppa:ondrej/php     && apt-get
+      update     && DEBIAN_FRONTEND=noninteractive apt-get install -q -y --no-install-recommends         certbot
+      influxdb         php7.4-fpm php7.4-cli php7.4-gd         php7.4-curl php7.4-xml
+      php7.4-zip php7.4-bcmath         php7.4-mysqlnd php7.4-mbstring php7.4-intl
+      php7.4-redis     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'adduser --home /var/azuracast --disabled-password --gecos "" azuracast     &&
+      usermod -aG docker_env azuracast     && usermod -aG www-data azuracast     &&
+      mkdir -p /var/azuracast/www /var/azuracast/backups /var/azuracast/www_tmp /var/azuracast/geoip     &&
+      chown -R azuracast:azuracast /var/azuracast     && chmod -R 777 /var/azuracast/www_tmp     &&
+      echo ''azuracast ALL=(ALL) NOPASSWD: ALL'' >> /etc/sudoers'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./nginx/nginx.conf
+    - /etc/nginx/nginx.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./nginx/azuracast.conf
+    - /etc/nginx/conf.d/azuracast.conf
+  - CmdLine:
+    - mkdir -p /tmp/azuracast_nginx_client /tmp/azuracast_fastcgi_temp     && touch
+      /tmp/azuracast_nginx_client/.tmpreaper     && touch /tmp/azuracast_fastcgi_temp/.tmpreaper     &&
+      chmod -R 777 /tmp/azuracast_*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl dhparam -dsaparam -out /etc/nginx/dhparam.pem 4096
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/www/letsencrypt /var/lib/letsencrypt /etc/letsencrypt /var/log/letsencrypt     &&
+      chown -R azuracast:azuracast /var/www/letsencrypt /var/lib/letsencrypt /etc/letsencrypt
+      /var/log/letsencrypt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/azuracast/sftpgo/persist /var/azuracast/sftpgo/backups
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: sftpgo
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/drakkan/sftpgo/sftpgo
+    - /usr/local/sbin/sftpgo
+  - Chown: ""
+    From: sftpgo
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/drakkan/sftpgo/templates
+    - /var/azuracast/sftpgo/templates
+  - Chown: ""
+    From: sftpgo
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/drakkan/sftpgo/static
+    - /var/azuracast/sftpgo/static
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./sftpgo/sftpgo.json
+    - /var/azuracast/sftpgo/sftpgo.json
+  - CmdLine:
+    - touch /var/azuracast/sftpgo/sftpgo.db     && chown -R azuracast:azuracast /var/azuracast/sftpgo
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /run/php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch /run/php/php7.4-fpm.pid
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./php/php.ini.tmpl
+    - /etc/php/7.4/fpm/05-azuracast.ini.tmpl
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./php/www.conf.tmpl
+    - /etc/php/7.4/fpm/www.conf.tmpl
+  - Env:
+    - Key: DOCKERIZE_VERSION
+      Value: '"v0.6.1"'
+    Name: env
+  - CmdLine:
+    - wget --quiet https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz     &&
+      tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz     &&
+      rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/bin --filename=composer
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/
+    - /usr/local/bin
+  - CmdLine:
+    - chmod -R a+x /usr/local/bin
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./startup_scripts/
+    - /etc/my_init.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./runit/
+    - /etc/service/
+  - CmdLine:
+    - chmod +x /etc/service/*/run     && chmod +x /etc/my_init.d/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./cron/
+    - /etc/cron.d/
+  - CmdLine:
+    - chmod -R 600 /etc/cron.d/*
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: azuracast
+  - CmdLine:
+    - composer create-project azuracast/azuracast /var/azuracast/new ^0.9.8 --no-dev     &&
+      mv /var/azuracast/new/vendor /var/azuracast/www     && rm -rf /var/azuracast/new
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch /var/azuracast/.docker
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "openssl req -new -nodes -x509 -subj \"/C=US/ST=Texas/L=Austin/O=IT/CN=localhost\"
+      \    -days 365 -extensions v3_ca     -keyout /etc/letsencrypt/selfsigned.key
+      \t-out /etc/letsencrypt/selfsigned.crt"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /etc/letsencrypt/selfsigned.key /etc/letsencrypt/ssl.key     && ln -s
+      /etc/letsencrypt/selfsigned.crt /etc/letsencrypt/ssl.crt
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/azuracast/www
+  - Name: volume
+    Volumes:
+    - /var/azuracast/www
+    - /var/azuracast/backups
+    - /etc/letsencrypt
+    - /var/azuracast/sftpgo/persist
+  - Name: user
+    User: root
+  - Name: expose
+    Ports:
+    - "2022"
+    - "443"
+    - "80"
+  - Env:
+    - Key: VIRTUAL_HOST
+      Value: '"azuracast.local"'
+    - Key: HTTPS_METHOD
+      Value: '"noredirect"'
+    Name: env
+  - Env:
+    - Key: APPLICATION_ENV
+      Value: '"production"'
+    - Key: MYSQL_HOST
+      Value: '"mariadb"'
+    - Key: MYSQL_PORT
+      Value: "3306"
+    - Key: MYSQL_USER
+      Value: '"azuracast"'
+    - Key: MYSQL_PASSWORD
+      Value: '"azur4c457"'
+    - Key: MYSQL_DATABASE
+      Value: '"azuracast"'
+    - Key: PREFER_RELEASE_BUILDS
+      Value: '"false"'
+    - Key: COMPOSER_PLUGIN_MODE
+      Value: '"false"'
+    - Key: ADDITIONAL_MEDIA_SYNC_WORKER_COUNT
+      Value: "0"
+    Name: env
+  - CmdLine:
+    - dockerize
+    - -wait
+    - tcp://mariadb:3306
+    - -wait
+    - tcp://influxdb:8086
+    - -timeout
+    - 40s
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /sbin/my_init
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: phusion/baseimage:0.11
+  Name: ""
+  Platform: ""
+  SourceCode: FROM phusion/baseimage:0.11

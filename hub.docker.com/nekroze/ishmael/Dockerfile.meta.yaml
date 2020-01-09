@@ -1,0 +1,112 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.12
+  Commands:
+  - Key: PROJECT
+    Name: arg
+    Value: ishmael
+  - Env:
+    - Key: PROJECT
+      Value: '"${PROJECT}"'
+    Name: env
+  - Name: workdir
+    Path: '"$GOPATH/src/github.com/Nekroze/${PROJECT}"'
+  - CmdLine:
+    - curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh
+      | bash -s -- -b "$GOPATH/bin" v1.15.0  && go get -u github.com/kyoh86/richgo
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - go.sum
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - main.go
+    - ./main.go
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cmd
+    - ./cmd
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pkg
+    - ./pkg
+  - CmdLine:
+    - richgo test -v ./...  && golangci-lint run --deadline '2m' --enable-all --disable
+      gochecknoglobals,gochecknoinits  && CGO_ENABLED=0 GOOS=linux GOARCH=386 go build     -a
+      -installsuffix cgo -ldflags='-w -s' -o "/usr/bin/${PROJECT}" -v     .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.12 AS build
+- As: test
+  BaseName: nekroze/containaruba:alpine
+  Commands:
+  - CmdLine:
+    - --order=random
+    Name: cmd
+    PrependShell: false
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - '"/usr/bin/${PROJECT}"'
+    - '"/usr/bin/${PROJECT}"'
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./testing/features
+    - /usr/src/app/features
+  From:
+    Image: nekroze/containaruba:alpine
+  Name: test
+  Platform: ""
+  SourceCode: FROM nekroze/containaruba:alpine AS test
+- As: final
+  BaseName: scratch
+  Commands:
+  - Key: PROJECT
+    Name: arg
+    Value: ishmael
+  - Env:
+    - Key: PROJECT
+      Value: '"${PROJECT}"'
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - '"/usr/bin/${PROJECT}"'
+    - /app
+  - CmdLine:
+    - /app
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: final
+  Platform: ""
+  SourceCode: FROM scratch AS final

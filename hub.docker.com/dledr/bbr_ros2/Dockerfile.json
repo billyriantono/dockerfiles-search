@@ -1,0 +1,140 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "FROM_IMAGE",
+      "DefaultValue": "ros:dashing",
+      "ProvidedValue": null,
+      "Value": "ros:dashing"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "cache",
+      "BaseName": "$FROM_IMAGE",
+      "SourceCode": "FROM $FROM_IMAGE AS cache",
+      "Platform": "",
+      "As": "cache",
+      "From": {
+        "Image": "$FROM_IMAGE"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "OVERLAY_WS",
+              "Value": "/opt/overlay_ws"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "mkdir -p $OVERLAY_WS/src"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "$OVERLAY_WS"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./",
+            "src/bbr_ros2"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/opt"
+        },
+        {
+          "CmdLine": [
+            "find ./ -name \"package.xml\" |       xargs cp --parents -t /tmp"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "build",
+      "BaseName": "$FROM_IMAGE",
+      "SourceCode": "FROM $FROM_IMAGE AS build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Image": "$FROM_IMAGE"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026     apt-get install -q -y       ccache       lcov       ros-$ROS_DISTRO-ros2bag     \u0026\u0026 rm -rf /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "OVERLAY_WS",
+              "Value": "/opt/overlay_ws"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "cache",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/tmp/overlay_ws",
+            "$OVERLAY_WS"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "$OVERLAY_WS"
+        },
+        {
+          "CmdLine": [
+            ". /opt/ros/$ROS_DISTRO/setup.sh \u0026\u0026     apt-get update \u0026\u0026 rosdep install -q -y       --from-paths src       --ignore-src     \u0026\u0026 rm -rf /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "cache",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "$OVERLAY_WS",
+            "./"
+          ]
+        },
+        {
+          "Key": "OVERLAY_MIXINS",
+          "Name": "arg",
+          "Value": "\"release ccache\""
+        },
+        {
+          "CmdLine": [
+            ". /opt/ros/$ROS_DISTRO/setup.sh \u0026\u0026     colcon build       --symlink-install       --mixin         $OVERLAY_MIXINS       --cmake-args         --no-warn-unused-cli         -DCMAKE_CXX_FLAGS=\"-Wno-unused-parameter\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "sed --in-place       's|^source .*|source \"$OVERLAY_WS/install/setup.bash\"|'       /ros_entrypoint.sh"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    }
+  ]
+}

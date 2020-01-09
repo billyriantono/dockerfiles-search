@@ -1,0 +1,117 @@
+MetaArgs:
+- DefaultValue: golang:1.13.4-buster
+  Key: BASE_IMAGE
+  ProvidedValue: null
+  Value: golang:1.13.4-buster
+- DefaultValue: 3.10.1
+  Key: PROTOC_VERSION
+  ProvidedValue: null
+  Value: 3.10.1
+- DefaultValue: v1.3.2
+  Key: PROTOC_GEN_GO_VERSION
+  ProvidedValue: null
+  Value: v1.3.2
+- DefaultValue: v1.11.3
+  Key: GRPC_GATEWAY_VERSION
+  ProvidedValue: null
+  Value: v1.11.3
+- DefaultValue: v1.3.0
+  Key: GOGO_PROTO_VERSION
+  ProvidedValue: null
+  Value: v1.3.0
+- DefaultValue: c6e62c7e5e61e6dae7fdc3bc3de81f60e6a9445c
+  Key: GOOGLEAPI_VERSION
+  ProvidedValue: null
+  Value: c6e62c7e5e61e6dae7fdc3bc3de81f60e6a9445c
+Stages:
+- As: builder
+  BaseName: ${BASE_IMAGE}
+  Commands:
+  - Key: PROTOC_GEN_GO_VERSION
+    Name: arg
+    Value: null
+  - Key: PROTOC_VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Env:
+    - Key: PROTOC_ZIP
+      Value: protoc-${PROTOC_VERSION}-linux-x86_64.zip
+    Name: env
+  - Env:
+    - Key: PROTOC_URL
+      Value: https://github.com/google/protobuf/releases/download/v${PROTOC_VERSION}/${PROTOC_ZIP}
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y curl unzip &&     curl -OL ${PROTOC_URL}
+      &&     unzip -o ${PROTOC_ZIP} -d /pb &&     chmod -R 0777 /pb &&     go get
+      -u github.com/golang/protobuf/protoc-gen-go@${PROTOC_GEN_GO_VERSION}
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${BASE_IMAGE}
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ${BASE_IMAGE} AS builder
+- BaseName: ${BASE_IMAGE}
+  Commands:
+  - Key: GRPC_GATEWAY_VERSION
+    Name: arg
+    Value: null
+  - Key: GOGO_PROTO_VERSION
+    Name: arg
+    Value: null
+  - Key: GOOGLEAPI_VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /pb/include/*
+    - /usr/local/include/google
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /pb/bin/protoc
+    - /usr/local/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/protoc-gen-go
+    - /usr/local/bin/
+  - CmdLine:
+    - git clone -b ${GRPC_GATEWAY_VERSION} --depth 1 https://github.com/grpc-ecosystem/grpc-gateway
+      /go/src/github.com/grpc-ecosystem/grpc-gateway &&     go install github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
+      &&     go install github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
+      &&     git clone -b ${GOGO_PROTO_VERSION} --depth 1 https://github.com/gogo/protobuf
+      /go/src/github.com/gogo/protobuf &&     git clone https://github.com/googleapis/googleapis
+      /go/src/github.com/googleapis/googleapis &&     cd /go/src/github.com/googleapis/googleapis
+      &&     git reset --hard ${GOOGLEAPI_VERSION}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/protoc
+    - -I/usr/local/include
+    - -I/go/src/github.com/grpc-ecosystem/grpc-gateway
+    - -I/go/src/github.com/gogo/protobuf
+    - -I/go/src/github.com/googleapis/googleapis
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine: []
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ${BASE_IMAGE}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${BASE_IMAGE}

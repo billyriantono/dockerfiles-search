@@ -1,0 +1,94 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: hmcts.azurecr.io/hmcts/base/node/stretch-slim-lts-8:latest
+  Commands:
+  - CmdLine:
+    - yarn config set proxy "$http_proxy" && yarn config set https-proxy "$https_proxy"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - yarn.lock
+    - ./
+  - CmdLine:
+    - yarn install --production   && yarn cache clean
+    Name: run
+    PrependShell: true
+  From:
+    Image: hmcts.azurecr.io/hmcts/base/node/stretch-slim-lts-8:latest
+  Name: base
+  Platform: ""
+  SourceCode: FROM hmcts.azurecr.io/hmcts/base/node/stretch-slim-lts-8:latest as base
+- As: build
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - yarn install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tsconfig.json
+    - tsconfig.prod.json
+    - gulpfile.js
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/main
+    - ./src/main
+  - CmdLine:
+    - yarn compile   && yarn setup
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: build
+  Platform: ""
+  SourceCode: FROM base as build
+- As: runtime
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - $WORKDIR/src/main
+    - ./src/main
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - $WORKDIR/tsconfig.json
+    - $WORKDIR/tsconfig.prod.json
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config
+    - ./config
+  - Name: expose
+    Ports:
+    - "4000"
+  - CmdLine:
+    - yarn
+    - start-prod
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM base as runtime

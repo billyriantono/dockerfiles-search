@@ -1,0 +1,162 @@
+MetaArgs: null
+Stages:
+- BaseName: phusion/baseimage:latest
+  Commands:
+  - Key: FILEBEAT_VERSION
+    Name: arg
+    Value: 7.5.1
+  - Key: WAZUH_VERSION
+    Name: arg
+    Value: 3.11.1-1
+  - Env:
+    - Key: API_USER
+      Value: '"foo"'
+    - Key: API_PASS
+      Value: '"bar"'
+    Name: env
+  - Key: TEMPLATE_VERSION
+    Name: arg
+    Value: '"v3.11.1"'
+  - CmdLine:
+    - set -x && echo "deb https://packages.wazuh.com/3.x/apt/ stable main" | tee /etc/apt/sources.list.d/wazuh.list
+      &&    curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | apt-key add - &&    curl
+      --silent --location https://deb.nodesource.com/setup_8.x | bash - &&    echo
+      "postfix postfix/mailname string wazuh-manager" | debconf-set-selections &&    echo
+      "postfix postfix/main_mailer_type string 'Internet Site'" | debconf-set-selections
+      &&    groupadd -g 1000 ossec && useradd -u 1000 -g 1000 -d /var/ossec ossec
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - add-apt-repository universe && apt-get update && apt-get upgrade -y -o Dpkg::Options::="--force-confold"
+      &&    apt-get --no-install-recommends --no-install-suggests -y install openssl
+      postfix bsd-mailx python-boto python-pip     apt-transport-https vim expect
+      nodejs python-cryptography mailutils libsasl2-modules wazuh-manager=${WAZUH_VERSION}    wazuh-api=${WAZUH_VERSION}
+      && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && rm -f    /var/ossec/logs/alerts/*/*/*.log
+      && rm -f /var/ossec/logs/alerts/*/*/*.json && rm -f    /var/ossec/logs/archives/*/*/*.log
+      && rm -f /var/ossec/logs/archives/*/*/*.json && rm -f    /var/ossec/logs/firewall/*/*/*.log
+      && rm -f /var/ossec/logs/firewall/*/*/*.json
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/data_dirs.env
+    - /data_dirs.env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/init.bash
+    - /init.bash
+  - CmdLine:
+    - mkdir /entrypoint-scripts
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/entrypoint.sh
+    - /entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/00-wazuh.sh
+    - /entrypoint-scripts/00-wazuh.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/01-config_filebeat.sh
+    - /entrypoint-scripts/01-config_filebeat.sh
+  - CmdLine:
+    - chmod 755 /init.bash &&    sync && /init.bash &&    sync && rm /init.bash &&    curl
+      -L -O https://artifacts.elastic.co/downloads/beats/filebeat/filebeat-${FILEBEAT_VERSION}-amd64.deb
+      &&   dpkg -i filebeat-${FILEBEAT_VERSION}-amd64.deb && rm -f filebeat-${FILEBEAT_VERSION}-amd64.deb
+      &&    chmod 755 /entrypoint.sh &&    chmod 755 /entrypoint-scripts/00-wazuh.sh
+      &&    chmod 755 /entrypoint-scripts/01-config_filebeat.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/filebeat.yml
+    - /etc/filebeat/
+  - CmdLine:
+    - chmod go-w /etc/filebeat/filebeat.yml
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/ossec/data
+  - Name: volume
+    Volumes:
+    - /etc/filebeat
+  - Name: volume
+    Volumes:
+    - /etc/postfix
+  - Name: volume
+    Volumes:
+    - /var/lib/filebeat
+  - Name: expose
+    Ports:
+    - 1514/udp
+    - 1515/tcp
+    - 1516/tcp
+    - 514/udp
+    - 55000/tcp
+  - CmdLine:
+    - mkdir /etc/service/wazuh &&    mkdir /etc/service/wazuh-api &&    mkdir /etc/service/postfix
+      &&    mkdir /etc/service/filebeat
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/wazuh.runit.service
+    - /etc/service/wazuh/run
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/wazuh-api.runit.service
+    - /etc/service/wazuh-api/run
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/postfix.runit.service
+    - /etc/service/postfix/run
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/filebeat.runit.service
+    - /etc/service/filebeat/run
+  - CmdLine:
+    - chmod +x /etc/service/wazuh-api/run &&    chmod +x /etc/service/wazuh/run &&    chmod
+      +x /etc/service/postfix/run &&    chmod +x /etc/service/filebeat/run
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://raw.githubusercontent.com/wazuh/wazuh/$TEMPLATE_VERSION/extensions/elasticsearch/7.x/wazuh-template.json
+    - /etc/filebeat
+  - CmdLine:
+    - chmod go-w /etc/filebeat/wazuh-template.json
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: phusion/baseimage:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM phusion/baseimage:latest

@@ -1,0 +1,144 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:zesty
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get -y install vim
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update --fix-missing && apt-get -y install software-properties-common
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - add-apt-repository -y ppa:brightbox/ruby-ng
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y ruby ruby-dev   imagemagick libicu-dev zlib1g-dev unzip   openjdk-8-jre-headless
+      git libxslt1-dev build-essential nodejs redis-server   postgresql libpq-dev
+      file cron   && apt-get -qq autoremove --purge -y && apt-get -qq clean    &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gem install rails -v=4.2.8
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rails _4.2.8_ new enju_leaf -d postgresql --skip-bundle -m https://gist.github.com/nabeta/8024918f41242a16719796c962ed2af1.txt
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /enju_leaf
+  - CmdLine:
+    - echo "\ngem 'tzinfo-data'" >> Gemfile   && echo "gem 'foreman', '0.82.0'" >>
+      Gemfile   && echo "gem 'net-ldap', '0.16.0'" >> Gemfile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bundle -j4 &&   bundle install
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DB_HOST
+      Value: db
+    Name: env
+  - Env:
+    - Key: DB_USERNAME
+      Value: postgres
+    Name: env
+  - Env:
+    - Key: DB_PASSWORD
+      Value: password
+    Name: env
+  - Env:
+    - Key: DB_DATABASE
+      Value: enju_production
+    Name: env
+  - Env:
+    - Key: RAILS_ENV
+      Value: production
+    Name: env
+  - CmdLine:
+    - echo SECRET_KEY_BASE=`bundle exec rake secret` >> .env   && echo RAILS_SERVE_STATIC_FILES=true
+      >> .env   && echo REDIS_URL=redis://redis/enju_leaf >> .env
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rails g enju_leaf:setup
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - enju_leaf/config/
+    - /enju_leaf/config/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - enju_leaf/db/
+    - /enju_leaf/db/
+  - CmdLine:
+    - "mv config/schedule.rb config/schedule.rb.orig && \techo \"env :PATH, ENV['PATH']\"
+      > config/schedule.rb && \techo \"env :DB_HOST, ENV['DB_HOST']\" >> config/schedule.rb
+      && \techo \"env :DB_USERNAME, ENV['DB_USERNAME']\" >> config/schedule.rb &&
+      \techo \"env :DB_PASSWORD, ENV['DB_PASSWORD']\" >> config/schedule.rb && \techo
+      \"env :DB_DATABASE, ENV['DB_DATABASE']\" >> config/schedule.rb && \tcat config/schedule.rb.orig
+      >> config/schedule.rb && \trm config/schedule.rb.orig"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bundle exec whenever --update-crontab
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'sed -i -e "s/^\(web: bundle exec rails s\)$/\1 -b 0.0.0.0/" Procfile'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e "s/^\(run Rails.application\)$/map Rails.application.config.relative_url_root
+      || '\/' do\n  \1\nend/" config.ru
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e "s/^set :environment, :development$/set :environment, :${RAILS_ENV}/"
+      config/schedule.rb     && rake enju_seed_engine:install:migrations     && rake
+      enju_biblio_engine:install:migrations     && rake enju_library_engine:install:migrations     &&
+      rake enju_manifestation_viewer_engine:install:migrations     && rails generate
+      enju_library:setup     && rails generate enju_biblio:setup     && rails generate
+      enju_circulation:setup     && rails generate enju_subject:setup
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - ./
+  - Name: volume
+    Volumes:
+    - /enju_leaf/log
+    - /enju_leaf/config
+    - /enju_leaf/bk/migrate
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - ./docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - bundle
+    - exec
+    - foreman
+    - start
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:zesty
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:zesty

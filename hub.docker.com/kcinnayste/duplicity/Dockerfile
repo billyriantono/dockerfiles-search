@@ -1,0 +1,44 @@
+FROM alpine:3.8
+
+ENV HOME=/home/duplicity
+
+RUN set -x \
+ && apk add --no-cache \
+        ca-certificates \
+        duplicity \
+        lftp \
+        openssh \
+        openssl \
+        py-crypto \
+        py-paramiko \
+        py-setuptools \
+        py-requests \
+        py-requests-oauthlib \
+        rsync \
+ && update-ca-certificates
+
+COPY Pipfile Pipfile.lock /
+
+RUN set -x \
+ && apk add --no-cache py-pip \
+ && pip install pipenv \
+ && pipenv install --system --deploy \
+ && apk del --purge py-pip \
+ && adduser -D -u 1896 duplicity \
+ && mkdir -p /home/duplicity/.cache/duplicity \
+ && mkdir -p /home/duplicity/.gnupg \
+ && chmod -R go+rwx /home/duplicity/ \
+ && su - duplicity -c 'duplicity --version'
+
+RUN apk add --update bash && rm -rf /var/cache/apk/*
+
+VOLUME ["/home/duplicity/.cache/duplicity", "/home/duplicity/.gnupg"]
+
+USER duplicity
+
+WORKDIR /home/duplicity
+RUN mkdir .ssh
+
+COPY entrypoint.sh ./entrypoint.sh
+
+ENTRYPOINT [ "./entrypoint.sh" ]

@@ -1,0 +1,99 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.9
+  Commands:
+  - Key: RTORRENT_VER
+    Name: arg
+    Value: 0.9.7
+  - Key: LIBTORRENT_VER
+    Name: arg
+    Value: 0.13.7
+  - Key: MEDIAINFO_VER
+    Name: arg
+    Value: "19.04"
+  - Key: FLOOD_VER
+    Name: arg
+    Value: master
+  - Key: BUILD_CORES
+    Name: arg
+    Value: null
+  - Env:
+    - Key: UID
+      Value: "991"
+    - Key: GID
+      Value: "991"
+    - Key: FLOOD_SECRET
+      Value: supersecret
+    - Key: WEBROOT
+      Value: /
+    - Key: RTORRENT_SCGI
+      Value: "0"
+    - Key: PKG_CONFIG_PATH
+      Value: /usr/local/lib/pkgconfig
+    Name: env
+  - CmdLine:
+    - NB_CORES=${BUILD_CORES-`getconf _NPROCESSORS_CONF`}  && apk -U upgrade  && apk
+      add -t build-dependencies     build-base     git     libtool     automake     autoconf     wget     tar     xz     zlib-dev     cppunit-dev     openssl-dev     ncurses-dev     curl-dev     binutils     linux-headers  &&
+      apk add     ca-certificates     curl     ncurses     openssl     gzip     zip     zlib     s6     su-exec     python     nodejs     nodejs-npm     unrar     findutils  &&
+      cd /tmp && mkdir libtorrent rtorrent  && cd libtorrent && wget -qO- https://github.com/rakshasa/libtorrent/archive/v${LIBTORRENT_VER}.tar.gz
+      | tar xz --strip 1  && rm src/utils/diffie_hellman.cc  && wget -q https://raw.githubusercontent.com/ppentchev/libtorrent/b293276bc5f17f6372146bd605a33340a8162072/src/utils/diffie_hellman.cc
+      -O src/utils/diffie_hellman.cc  && cd ../rtorrent && wget -qO- https://github.com/rakshasa/rtorrent/releases/download/v${RTORRENT_VER}/rtorrent-${RTORRENT_VER}.tar.gz
+      | tar xz --strip 1  && cd /tmp  && git clone https://github.com/mirror/xmlrpc-c.git  &&
+      git clone https://github.com/Rudde/mktorrent.git  && cd /tmp/mktorrent && make
+      -j ${NB_CORES} && make install  && cd /tmp/xmlrpc-c/advanced && ./configure
+      && make -j ${NB_CORES} && make install  && cd /tmp/libtorrent && ./autogen.sh
+      && ./configure && make -j ${NB_CORES} && make install  && cd /tmp/rtorrent &&
+      ./autogen.sh && ./configure --with-xmlrpc-c && make -j ${NB_CORES} && make install  &&
+      cd /tmp  && wget -q http://mediaarea.net/download/binary/mediainfo/${MEDIAINFO_VER}/MediaInfo_CLI_${MEDIAINFO_VER}_GNU_FromSource.tar.gz  &&
+      wget -q http://mediaarea.net/download/binary/libmediainfo0/${MEDIAINFO_VER}/MediaInfo_DLL_${MEDIAINFO_VER}_GNU_FromSource.tar.gz  &&
+      tar xzf MediaInfo_DLL_${MEDIAINFO_VER}_GNU_FromSource.tar.gz  && tar xzf MediaInfo_CLI_${MEDIAINFO_VER}_GNU_FromSource.tar.gz  &&
+      cd /tmp/MediaInfo_DLL_GNU_FromSource && ./SO_Compile.sh  && cd /tmp/MediaInfo_DLL_GNU_FromSource/ZenLib/Project/GNU/Library
+      && make install  && cd /tmp/MediaInfo_DLL_GNU_FromSource/MediaInfoLib/Project/GNU/Library
+      && make install  && cd /tmp/MediaInfo_CLI_GNU_FromSource && ./CLI_Compile.sh  &&
+      cd /tmp/MediaInfo_CLI_GNU_FromSource/MediaInfo/Project/GNU/CLI && make install  &&
+      strip -s /usr/local/bin/rtorrent  && strip -s /usr/local/bin/mktorrent  && strip
+      -s /usr/local/bin/mediainfo  && ln -sf /usr/local/bin/mediainfo /usr/bin/mediainfo  &&
+      mkdir /usr/flood && cd /usr/flood && wget -qO- https://github.com/jfurrow/flood/archive/${FLOOD_VER}.tar.gz
+      | tar xz --strip 1  && npm install && npm cache clean --force  && apk del build-dependencies  &&
+      rm -rf /var/cache/apk/* /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs
+    - /
+  - CmdLine:
+    - chmod +x /usr/local/bin/* /etc/s6.d/*/* /etc/s6.d/.s6-svscan/*  && cd /usr/flood/
+      && npm run build
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+    - /flood-db
+  - Name: expose
+    Ports:
+    - "3000"
+    - "49184"
+    - 49184/udp
+  - Labels:
+    - Key: description
+      Value: '"BitTorrent client with WebUI front-end"'
+    - Key: rtorrent
+      Value: '"rTorrent BiTorrent client v$RTORRENT_VER"'
+    - Key: libtorrent
+      Value: '"libtorrent v$LIBTORRENT_VER"'
+    - Key: maintainer
+      Value: '"Wonderfall <wonderfall@targaryen.house>"'
+    Name: label
+  - CmdLine:
+    - run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

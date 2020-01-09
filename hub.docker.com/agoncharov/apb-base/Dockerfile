@@ -1,0 +1,65 @@
+FROM centos:7
+MAINTAINER Ansible Playbook Bundle Community
+LABEL "com.redhat.apb.runtime"="2"
+
+ENV USER_NAME=apb \
+    USER_UID=1001 \
+    BASE_DIR=/opt/apb
+ENV HOME=${BASE_DIR}
+
+
+RUN mkdir -p /usr/share/ansible/openshift \
+             /etc/ansible /opt/apb /opt/ansible
+
+RUN yum -y install epel-release centos-release-openshift-origin \
+    && yum -y update \
+    && yum -y install bind-utils \
+                      gcc \
+                      libffi-devel \
+                      make \
+                      net-tools \
+                      openssl-devel \
+                      origin \
+                      origin-clients \
+                      python-cffi \
+                      python-devel \
+                      python-pip \
+                      python-setuptools \
+    && yum clean all
+
+RUN git clone https://github.com:/ansible/ansible.git
+RUN cd ansible \
+    && pip install -U setuptools \
+    && git checkout stable-2.6 \
+    && python setup.py install \
+    && pip install jmespath
+
+RUN git clone https://github.com/openshift/openshift-restclient-python
+RUN cd openshift-restclient-python \
+    && pip install -U urllib3==1.22 \
+    && pip install -r requirements.txt \
+    && python setup.py install
+
+RUN git clone https://github.com/ansible/ansible-kubernetes-modules.git /etc/ansible/roles/ansible.kubernetes-modules
+
+RUN git clone https://github.com/ansibleplaybookbundle/ansible-asb-modules.git /etc/ansible/roles/ansibleplaybookbundle.asb-modules
+
+RUN echo "localhost ansible_connection=local" > /etc/ansible/hosts \
+    && echo '[defaults]' > /etc/ansible/ansible.cfg \
+    && echo 'roles_path = /opt/ansible/roles' >> /etc/ansible/ansible.cfg \
+    && echo 'library = /usr/share/ansible/openshift' >> /etc/ansible/ansible.cfg
+
+COPY files/usr/bin/* /usr/bin/
+COPY files/opt/apb/. /opt/apb/
+
+RUN mkdir -p /usr/share/ansible/openshift \
+              /etc/ansible /opt/ansible \
+              ${BASE_DIR}/{etc,.kube,.ansible/tmp} \
+              && useradd -u ${USER_UID} -r -g 0 -M -d ${BASE_DIR} -b ${BASE_DIR} -s /sbin/nologin -c "apb user" ${USER_NAME} \
+              && chown -R ${USER_NAME}:0 /opt/{ansible,apb} \
+              && chmod -R g=u /opt/{ansible,apb} /etc/passwd
+
+RUN mkdir /etc/apb-secrets
+
+WORKDIR /opt/apb
+ENTRYPOINT ["entrypoint.sh"]

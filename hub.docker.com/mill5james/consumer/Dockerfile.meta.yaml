@@ -1,0 +1,81 @@
+MetaArgs:
+- DefaultValue: stretch-slim
+  Key: BASE_TAG
+  ProvidedValue: null
+  Value: stretch-slim
+- DefaultValue: Release
+  Key: CONFIG
+  ProvidedValue: null
+  Value: Release
+Stages:
+- As: build_release
+  BaseName: microsoft/dotnet:2.2-sdk
+  Commands:
+  - Name: workdir
+    Path: /vsdbg
+  From:
+    Image: microsoft/dotnet:2.2-sdk
+  Name: build_release
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2-sdk AS build_Release
+- As: build_debug
+  BaseName: build_Release
+  Commands:
+  - Expression: "RUN apt-get update && \t\t\tapt-get install --yes unzip && \t\t\tcurl
+      -SL https://aka.ms/getvsdbgsh | bash /dev/stdin -v latest -l /vsdbg"
+    Name: onbuild
+  From:
+    Image: build_Release
+  Name: build_debug
+  Platform: ""
+  SourceCode: FROM build_Release AS build_Debug
+- As: publish
+  BaseName: build_${CONFIG}
+  Commands:
+  - Key: CONFIG
+    Name: arg
+    Value: null
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Consumer
+    - Consumer
+  - CmdLine:
+    - dotnet publish --configuration ${CONFIG} --output /app "Consumer/Consumer.csproj"
+    Name: run
+    PrependShell: true
+  From:
+    Image: build_${CONFIG}
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build_${CONFIG} AS publish
+- As: final
+  BaseName: microsoft/dotnet:2.2-runtime-$BASE_TAG
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /vsdbg
+    - /vsdbg
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - CmdLine:
+    - dotnet
+    - Consumer.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: microsoft/dotnet:2.2-runtime-$BASE_TAG
+  Name: final
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2-runtime-$BASE_TAG as final

@@ -1,0 +1,120 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: alpine:3.9
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"kevin@welikeinc.com"'
+    - Key: org.label-schema.name
+      Value: '"direwolf"'
+    - Key: org.label-schema.description
+      Value: '"Multi-arch Docker container for direwolf"'
+    - Key: org.label-schema.url
+      Value: '"https://github.com/boxelio/dockerfiles/direwolf"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/boxelio/dockerfiles"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - Key: TARGETPLATFORM
+    Name: arg
+    Value: null
+  - Key: BUILDPLATFORM
+    Name: arg
+    Value: null
+  - CmdLine:
+    - echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM."
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Env:
+    - Key: LC_ALL
+      Value: C.UTF-8
+    Name: env
+  - Key: ALPINE_MIRROR
+    Name: arg
+    Value: '"http://dl-cdn.alpinelinux.org/alpine"'
+  - CmdLine:
+    - cat /etc/apk/repositories &&     echo "@testing ${ALPINE_MIRROR}/edge/testing"
+      >> /etc/apk/repositories &&     cat /etc/apk/repositories &&     apk add --no-cache
+      tini     rtl-sdr@testing     hamlib@testing     gpsd     alsa-lib
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: base
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as base
+- As: builder
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apk add --no-cache     git build-base cmake     hamlib-dev@testing     libc-dev     gpsd-dev     alsa-lib-dev     linux-headers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone "https://github.com/wb2osz/direwolf.git" /tmp/direwolf &&     echo
+      "#include <unistd.h>" > /usr/include/sys/unistd.h &&     cd /tmp/direwolf &&     sed
+      -i 's/--mode=/-m /g' Makefile.linux &&     sed -i 's/cp -n/cp/g' Makefile.linux
+      &&     CFLAGS=-D__FreeBSD__ make && make DESTDIR=/target install &&     find
+      /target/bin -type f -exec strip -p --strip-debug {} \;
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base as builder
+- BaseName: base
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /target/
+    - /usr/local/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/udev/rules.d/99-direwolf-cmedia.rules
+    - /etc/udev/rules.d/99-direwolf-cmedia.rules
+  - Env:
+    - Key: MYCALL
+      Value: n0call     IGSERVER noam.aprs2.net     IGLOGIN n0call -1     FREQUENCY
+        144.39M
+    Name: env
+  - Name: expose
+    Ports:
+    - "8000"
+    - "8001"
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - sdr.conf
+    - /root/sdr.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - start.sh
+    - /root/start.sh
+  - CmdLine:
+    - tini
+    - --
+    - /bin/sh
+    - /root/start.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

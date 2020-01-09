@@ -1,0 +1,207 @@
+MetaArgs: null
+Stages:
+- As: protoc_builder
+  BaseName: golang:1.13.0
+  Commands:
+  - Env:
+    - Key: GRPC_VERSION
+      Value: 1.23.0
+    - Key: GOPATH
+      Value: /go
+    - Key: PATH
+      Value: $PATH:/go/bin/
+    Name: env
+  - CmdLine:
+    - mkdir -p /go/bin
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $GOPATH/src/github.com/xissy/protoc
+  - Name: workdir
+    Path: $GOPATH/src/github.com/xissy/protoc
+  - CmdLine:
+    - curl https://glide.sh/get | sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - glide install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd vendor/github.com/golang/protobuf && make all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd vendor/github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway &&         glide
+      init --non-interactive &&         glide install &&         go install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd vendor/github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger &&         glide
+      init --non-interactive &&         glide install &&         go install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/ckaznocha/protoc-gen-lint
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/xissy/protoc-gen-swiftgrpcrx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go install github.com/xissy/protoc-gen-swiftgrpcrx
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13.0
+  Name: protoc_builder
+  Platform: ""
+  SourceCode: FROM golang:1.13.0 as protoc_builder
+- As: swift_builder
+  BaseName: swift:4.2.1
+  Commands:
+  - CmdLine:
+    - apt update && apt install -y libnghttp2-dev
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SWIFT_GRPC_VERSION
+      Value: master
+    - Key: SWIFT_GRPC_REPO
+      Value: grpc
+    Name: env
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - git clone -b ${SWIFT_GRPC_VERSION} https://github.com/${SWIFT_GRPC_REPO}/grpc-swift
+      &&     cd grpc-swift &&     make
+    Name: run
+    PrependShell: true
+  From:
+    Image: swift:4.2.1
+  Name: swift_builder
+  Platform: ""
+  SourceCode: FROM swift:4.2.1 as swift_builder
+- BaseName: swift:4.2.1
+  Commands:
+  - CmdLine:
+    - export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true && apt-get
+      -q update &&     apt-get -q install -y     build-essential     automake     autoconf     curl     libtool     libnghttp2-dev     unzip     &&
+      rm -r /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PROTOBUF_VERSION
+      Value: 3.9.1
+    - Key: GRPC_VERSION
+      Value: 1.23.0
+    - Key: GOPATH
+      Value: /go
+    - Key: PATH
+      Value: $PATH:/go/bin/
+    - Key: GRPC_JAVA_VERSION
+      Value: 1.23.0
+    - Key: GRPC_WEB_VERSION
+      Value: 1.0.6
+    - Key: OUTDIR
+      Value: /out
+    Name: env
+  - CmdLine:
+    - curl -O -L https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/protoc-${PROTOBUF_VERSION}-linux-x86_64.zip     &&
+      unzip protoc-${PROTOBUF_VERSION}-linux-x86_64.zip -d /usr     && rm -rf protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /protobuf &&         curl -L https://github.com/google/protobuf/archive/v${PROTOBUF_VERSION}.tar.gz
+      | tar xvz --strip-components=1 -C /protobuf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth 1 --recursive -b v${GRPC_VERSION} https://github.com/grpc/grpc.git
+      /grpc &&         rm -rf grpc/third_party/protobuf &&         ln -s /protobuf
+      /grpc/third_party/protobuf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /grpc-java &&         curl -L https://github.com/grpc/grpc-java/archive/v${GRPC_JAVA_VERSION}.tar.gz
+      | tar xvz --strip-components=1 -C /grpc-java
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /grpc-web &&         curl -L https://github.com/grpc/grpc-web/archive/${GRPC_WEB_VERSION}.tar.gz
+      | tar xvz --strip-components=1 -C /grpc-web
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /protobuf &&         autoreconf -f -i -Wall,no-obsolete &&         ./configure
+      --prefix=/usr --enable-static=no &&         make -j2 && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /grpc-java/compiler/src/java_plugin/cpp &&         g++         -I. -I/protobuf/src         *.cpp         -L/protobuf/src/.libs         -lprotoc
+      -lprotobuf -lpthread --std=c++0x -s         -o protoc-gen-grpc-java
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /protobuf &&         make install DESTDIR=${OUTDIR}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /grpc &&         make install-plugins prefix=${OUTDIR}/usr
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /grpc-java/compiler/src/java_plugin/cpp &&         install -c protoc-gen-grpc-java
+      ${OUTDIR}/usr/bin/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /grpc-web/javascript/net/grpc/web &&         make &&         install protoc-gen-grpc-web
+      ${OUTDIR}/usr/bin/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find ${OUTDIR} -name "*.a" -delete -or -name "*.la" -delete
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -R ${OUTDIR}/usr /
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: protoc_builder
+    Name: copy
+    SourcesAndDest:
+    - $GOPATH/bin
+    - $GOPATH/bin
+  - Chown: ""
+    From: protoc_builder
+    Name: copy
+    SourcesAndDest:
+    - $GOPATH/src/github.com/xissy/protoc/vendor/github.com/grpc-ecosystem/grpc-gateway
+    - $GOPATH/src/github.com/grpc-ecosystem/grpc-gateway
+  - Chown: ""
+    From: swift_builder
+    Name: copy
+    SourcesAndDest:
+    - /grpc-swift
+    - /grpc-swift
+  - CmdLine:
+    - for p in protoc-gen-swift protoc-gen-swiftgrpc; do         ln -s /grpc-swift/${p}
+      /usr/bin/${p};     done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - protoc
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: swift:4.2.1
+  Name: ""
+  Platform: ""
+  SourceCode: FROM swift:4.2.1

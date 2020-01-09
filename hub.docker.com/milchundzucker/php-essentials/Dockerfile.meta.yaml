@@ -1,0 +1,133 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk add --update   openssl   wget   && wget -U "" https://www.milchundzucker.de/ROOT-CA.crt
+      https://www.milchundzucker.de/milchundzucker-ca.crt   && openssl x509 -inform
+      DER -outform PEM -in ROOT-CA.crt -out ROOT-CA.crt   && openssl x509 -inform
+      DER -outform PEM -in milchundzucker-ca.crt -out milchundzucker-ca.crt   && rm
+      -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:latest as builder
+- BaseName: php:7.2
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"jens.kohl@milchundzucker.de"'
+    Name: label
+  - Env:
+    - Key: COMPOSER_CACHE_DIR
+      Value: /cache/composer
+    Name: env
+  - Env:
+    - Key: YARN_CACHE_FOLDER
+      Value: /cache/yarn
+    Name: env
+  - Env:
+    - Key: NPM_CONFIG_CACHE
+      Value: /cache/npm
+    Name: env
+  - Env:
+    - Key: bower_storage__packages
+      Value: /cache/bower
+    Name: env
+  - Env:
+    - Key: GEM_SPEC_CACHE
+      Value: /cache/gem
+    Name: env
+  - Env:
+    - Key: PIP_DOWNLOAD_CACHE
+      Value: /cache/pip
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /ROOT-CA.crt
+    - /usr/local/share/ca-certificates/ROOT-CA.crt
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /milchundzucker-ca.crt
+    - /usr/local/share/ca-certificates/milchundzucker-ca.crt
+  - Chown: ""
+    From: composer:latest
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/composer
+    - /usr/local/bin/composer
+  - Chown: ""
+    From: milchundzucker/php-parallel-lint:latest
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/parallel-lint
+    - /usr/local/bin/parallel-lint
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/ssh_config
+    - /root/.ssh/config
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/uopz
+    - /usr/local/bin/uopz
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/xdebug
+    - /usr/local/bin/xdebug
+  - CmdLine:
+    - apt-get update && apt-get install -y   git-core   subversion   unzip   rsync   ssh-client   libxml2-dev   libssh2-1-dev   libicu-dev   libbz2-dev   libzip-dev   libgmp3-dev   --no-install-recommends
+      && apt-get clean
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: COMPOSER_ALLOW_SUPERUSER
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: COMPOSER_HOME
+      Value: /composer
+    Name: env
+  - CmdLine:
+    - set -xe   && update-ca-certificates   && echo "date.timezone=${PHP_TIMEZONE:-UTC}"
+      > ${PHP_INI_DIR}/conf.d/date_timezone.ini   && php -v   && mkdir -p /composer   &&
+      curl -fsS https://composer.github.io/snapshots.pub -o /composer/keys.dev.pub   &&
+      curl -fsS https://composer.github.io/releases.pub -o /composer/keys.tags.pub   &&
+      cd /tmp   && composer global require hirak/prestissimo   && curl -L http://www.phing.info/get/phing-latest.phar
+      -o /usr/local/bin/phing --silent   && chmod +x /usr/local/bin/phing   && which
+      phing   && phing -version   && pecl install uopz-5.0.2   && chmod +x /usr/local/bin/uopz   &&
+      echo "extension=uopz.so" > ${PHP_INI_DIR}/conf.d/uopz.ini   && pecl install
+      ssh2-1.1.2   && echo "extension=ssh2.so" > ${PHP_INI_DIR}/conf.d/ssh2.ini   &&
+      docker-php-ext-install opcache soap pdo_mysql intl bz2 gmp sockets zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pecl install xdebug   && chmod +x /usr/local/bin/xdebug   && php -m
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cat $HOME/.ssh/config && chmod -R 600 $HOME/.ssh &&  ls -l $HOME/.ssh/config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - php -a
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: php:7.2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.2

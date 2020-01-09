@@ -1,0 +1,106 @@
+MetaArgs: null
+Stages:
+- As: app
+  BaseName: node:8-alpine
+  Commands:
+  - CmdLine:
+    - apk -U add --no-cache git make gcc g++ autoconf automake libc-dev pcsc-lite-dev
+      linux-headers
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/app
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - patch
+    - /tmp/patch
+  - CmdLine:
+    - git clone https://github.com/Chinachu/Mirakurun.git .  && xargs rm -rf <.dockerignore
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - for i in /tmp/patch/*.patch; do patch -p1 <$i ; done
+    Name: run
+    PrependShell: true
+  - Key: DOCKER
+    Name: arg
+    Value: "YES"
+  - CmdLine:
+    - npm install  && npm run build  && rm -rf node_modules  && npm install --production
+      --unsafe
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install arib-b25-stream-test -g --unsafe
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - tune++
+    - /tmp/tune++
+  - CmdLine:
+    - cd /tmp/tune++ && make && make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - mkdir -p /chroot/usr/local/bin /chroot/usr/src/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /usr/src/app /chroot/usr/src/app
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /usr/local/lib/node_modules/arib-b25-stream-test/bin/b25 /chroot/usr/local/bin/arib-b25-stream-test
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /tmp/tune++/tune++ /chroot/usr/local/bin/tune++
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8-alpine
+  Name: app
+  Platform: ""
+  SourceCode: FROM node:8-alpine as app
+- BaseName: node:8-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache pcsc-lite-libs
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: app
+    Name: copy
+    SourcesAndDest:
+    - /chroot
+    - /
+  - Name: workdir
+    Path: /usr/src/app/
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - CmdLine:
+    - node
+    - --max_old_space_size=256
+    - lib/server.js
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "40772"
+  - Name: user
+    User: node
+  - Name: volume
+    Volumes:
+    - /var/run/
+  From:
+    Image: node:8-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:8-alpine

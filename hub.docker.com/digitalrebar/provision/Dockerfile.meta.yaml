@@ -1,0 +1,92 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:stable-slim
+  Commands:
+  - Key: DOCKER_TAG
+    Name: arg
+    Value: stable
+  - Key: DRP_VERSION
+    Name: arg
+    Value: ${DOCKER_TAG}
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Name: workdir
+    Path: /provision/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tools/install.sh
+    - .
+  - CmdLine:
+    - echo "DRP_VERSION=${DRP_VERSION}" &&     apt-get update &&     apt-get install
+      -y sudo curl procps iproute2 ipmitool libarchive-tools p7zip &&     ./install.sh
+      --isolated install --drp-version=${DRP_VERSION}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /provision/binaries &&     cp -L /provision/dr-provision /provision/drpcli
+      /provision/drpjoin /provision/binaries/
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stable-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:stable-slim as builder
+- BaseName: debian:stable-slim
+  Commands:
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get install --no-install-recommends -y ca-certificates
+      curl iproute2 ipmitool jq libarchive-tools p7zip &&     rm -rf /var/lib/apt/lists/*
+      &&     mkdir -p /provision/drp-data
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /provision/binaries/
+    - /usr/bin/
+  - CmdLine:
+    - chmod +x /usr/bin/dr*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dr-provision --version || true
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "4011"
+    - "67"
+    - "69"
+    - "8091"
+    - "8092"
+  - Name: volume
+    Volumes:
+    - /provision/drp-data
+  - CmdLine:
+    - dr-provision
+    - --base-root=/provision/drp-data
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine: []
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stable-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stable-slim

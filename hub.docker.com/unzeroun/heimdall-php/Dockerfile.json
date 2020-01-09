@@ -1,0 +1,215 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "PHP_VERSION",
+      "DefaultValue": "7.4-rc",
+      "ProvidedValue": null,
+      "Value": "7.4-rc"
+    },
+    {
+      "Key": "ALPINE_VERSION",
+      "DefaultValue": "3.10",
+      "ProvidedValue": null,
+      "Value": "3.10"
+    },
+    {
+      "Key": "NGINX_VERSION",
+      "DefaultValue": "1.17",
+      "ProvidedValue": null,
+      "Value": "1.17"
+    },
+    {
+      "Key": "NODE_VERSION",
+      "DefaultValue": "12",
+      "ProvidedValue": null,
+      "Value": "12"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "node",
+      "BaseName": "node:${NODE_VERSION}-alpine",
+      "SourceCode": "FROM node:${NODE_VERSION}-alpine AS node",
+      "Platform": "",
+      "As": "node",
+      "From": {
+        "Image": "node:${NODE_VERSION}-alpine"
+      },
+      "Commands": null
+    },
+    {
+      "Name": "php",
+      "BaseName": "php:${PHP_VERSION}-fpm-alpine${ALPINE_VERSION}",
+      "SourceCode": "FROM php:${PHP_VERSION}-fpm-alpine${ALPINE_VERSION} AS php",
+      "Platform": "",
+      "As": "php",
+      "From": {
+        "Image": "php:${PHP_VERSION}-fpm-alpine${ALPINE_VERSION}"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "set -eux;     apk add --no-cache postgresql-client libpq make git acl unzip oniguruma libstdc++;     apk add --no-cache --virtual .build-deps ${PHPIZE_DEPS} postgresql-dev oniguruma-dev;     docker-php-ext-install pdo_pgsql pcntl mbstring opcache;     apk del .build-deps"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "composer:latest",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/bin/composer",
+            "/usr/bin/composer"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "COMPOSER_ALLOW_SUPERUSER",
+              "Value": "1"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PATH",
+              "Value": "\"${PATH}:/root/.composer/vendor/bin\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "node",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/bin/node",
+            "/usr/local/bin/node"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "node",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/include/node",
+            "/usr/local/include/node"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "node",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/lib/node_modules",
+            "/usr/local/lib/node_modules"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "node",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/opt/yarn*",
+            "/opt/yarn"
+          ]
+        },
+        {
+          "CmdLine": [
+            "ln -vs /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "ln -vs /opt/yarn/bin/yarn /usr/local/bin/yarn"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "docker/php/docker-entrypoint.sh",
+            "/usr/local/bin/docker-entrypoint"
+          ]
+        },
+        {
+          "CmdLine": [
+            "chmod +x /usr/local/bin/docker-entrypoint"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "9000"
+          ]
+        },
+        {
+          "CmdLine": [
+            "docker-entrypoint"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "CmdLine": [
+            "php-fpm"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    },
+    {
+      "Name": "nginx",
+      "BaseName": "nginx:${NGINX_VERSION}-alpine",
+      "SourceCode": "FROM nginx:${NGINX_VERSION}-alpine AS nginx",
+      "Platform": "",
+      "As": "nginx",
+      "From": {
+        "Image": "nginx:${NGINX_VERSION}-alpine"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "rm /etc/nginx/conf.d/default.conf;"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "docker/nginx/default.nginx.conf",
+            "/etc/nginx/conf.d/"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "80"
+          ]
+        }
+      ]
+    }
+  ]
+}

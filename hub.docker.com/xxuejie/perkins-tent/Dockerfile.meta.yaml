@@ -1,0 +1,150 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: rust:1.40
+  Commands:
+  - Maintainer: Xuejie Xiao <xxuejie@gmail.com>
+    Name: maintainer
+  - CmdLine:
+    - git clone https://github.com/xxuejie/ckb-graphql-server /ckb-graphql-server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /ckb-graphql-server && git checkout becbc890bda8bb1aff63456bbd2d09ff23e1daff
+      && cargo build --release
+    Name: run
+    PrependShell: true
+  From:
+    Image: rust:1.40
+  Name: builder
+  Platform: ""
+  SourceCode: FROM rust:1.40 as builder
+- BaseName: debian:buster
+  Commands:
+  - Maintainer: Xuejie Xiao <xxuejie@gmail.com>
+    Name: maintainer
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y install --no-install-recommends wget gnupg ca-certificates unzip
+      software-properties-common
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -O - https://openresty.org/package/pubkey.gpg | apt-key add -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - add-apt-repository -y "deb http://openresty.org/package/debian $(lsb_release
+      -sc) openresty"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y install --no-install-recommends openresty
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /ckb-graphql-server/target/release/ckb-graphql-server
+    - /bin/ckb-graphql-server
+  - CmdLine:
+    - wget https://github.com/nervosnetwork/ckb/releases/download/v0.26.0/ckb_v0.26.0_x86_64-unknown-linux-gnu.tar.gz
+      -O /tmp/ckb_v0.26.0_x86_64-unknown-linux-gnu.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp && tar xzf ckb_v0.26.0_x86_64-unknown-linux-gnu.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /tmp/ckb_v0.26.0_x86_64-unknown-linux-gnu/ckb /bin/ckb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /tmp/goreman && wget https://github.com/mattn/goreman/releases/download/v0.3.4/goreman_linux_amd64.zip
+      -O /tmp/goreman/goreman_linux_amd64.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp/goreman && unzip goreman_linux_amd64.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /tmp/goreman/goreman /bin/goreman
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://github.com/Yelp/dumb-init/releases/download/v1.2.2/dumb-init_1.2.2_amd64.deb
+      -O /tmp/dumb-init.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dpkg -i /tmp/dumb-init.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /tmp/ckb_v0.26.0_x86_64-unknown-linux-gnu/ckb /tmp/goreman /tmp/dumb-init.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y remove wget gnupg ca-certificates unzip software-properties-common
+      && apt-get -y autoremove && apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /data
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /confs
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx.conf
+    - /confs/nginx.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - setup.sh
+    - /confs/setup.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Procfile
+    - /confs/Procfile
+  - Name: expose
+    Ports:
+    - "8115"
+  - Name: expose
+    Ports:
+    - "9115"
+  - CmdLine:
+    - /usr/bin/dumb-init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - bash
+    - -c
+    - /confs/setup.sh && exec goreman -set-ports=false -exit-on-error -f /data/confs/Procfile
+      start
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:buster
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:buster

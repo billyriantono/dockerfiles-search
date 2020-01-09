@@ -1,0 +1,151 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: alpine:3.10.3
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"kalaksi@users.noreply.github.com"'
+    Name: label
+  - Env:
+    - Key: QUASSEL_UID
+      Value: '"62643"'
+    Name: env
+  - Env:
+    - Key: QUASSEL_GID
+      Value: '"62643"'
+    Name: env
+  - Env:
+    - Key: QUASSEL_USE_TLS
+      Value: '"false"'
+    Name: env
+  - Env:
+    - Key: DB_BACKEND
+      Value: '"SQLite"'
+    Name: env
+  - Env:
+    - Key: AUTH_AUTHENTICATOR
+      Value: '"Database"'
+    Name: env
+  - Env:
+    - Key: AUTH_LDAP_HOSTNAME
+      Value: '"ldap://localhost"'
+    Name: env
+  - Env:
+    - Key: AUTH_LDAP_PORT
+      Value: '"389"'
+    Name: env
+  - Env:
+    - Key: AUTH_LDAP_BIND_DN
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: AUTH_LDAP_BIND_PASSWORD
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: AUTH_LDAP_BASE_DN
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: AUTH_LDAP_FILTER
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: AUTH_LDAP_UID_ATTRIBUTE
+      Value: '"uid"'
+    Name: env
+  - Env:
+    - Key: DB_PGSQL_USERNAME
+      Value: '"quassel"'
+    Name: env
+  - Env:
+    - Key: DB_PGSQL_PASSWORD
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: DB_PGSQL_HOSTNAME
+      Value: '"localhost"'
+    Name: env
+  - Env:
+    - Key: DB_PGSQL_PORT
+      Value: '"5432"'
+    Name: env
+  - Env:
+    - Key: DB_PGSQL_DATABASE
+      Value: '"quassel"'
+    Name: env
+  From:
+    Image: alpine:3.10.3
+  Name: base
+  Platform: ""
+  SourceCode: FROM alpine:3.10.3 AS base
+- As: builder
+  BaseName: base
+  Commands:
+  - Key: QUASSEL_VERSION
+    Name: arg
+    Value: '"0.13.1"'
+  - CmdLine:
+    - apk add --no-cache --virtual=build-deps        git       gcc       g++       qt5-qtbase-dev       qt5-qtscript-dev       qt5-qttools-dev       qt5-qtbase-postgresql       qt5-qtbase-sqlite       boost-dev       cmake       make       openldap-dev
+      &&     mkdir /opt/quassel &&     chown ${QUASSEL_UID}:${QUASSEL_GID} /opt/quassel
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${QUASSEL_UID}:${QUASSEL_GID}
+  - CmdLine:
+    - cd /tmp &&     git clone https://github.com/quassel/quassel &&     cd quassel
+      &&     git checkout "$QUASSEL_VERSION" &&     mkdir build &&     mkdir config
+      sqlite-data &&     cd build &&     CXXFLAGS="-D_FORTIFY_SOURCE=2 -fstack-protector-strong
+      -fPIE -pie" cmake ..       -DCMAKE_INSTALL_PREFIX=/opt/quassel       -DWANT_CORE=ON       -DWANT_QTCLIENT=OFF       -DWANT_MONO=OFF       -DUSE_QT5=ON       -DWITH_KDE=OFF       -DWITH_BUNDLED_ICONS=OFF       -DWITH_WEBKIT=OFF       -DEMBED_DATA=OFF       -DCMAKE_BUILD_TYPE=Release
+      &&     make &&     make install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base AS builder
+- BaseName: base
+  Commands:
+  - CmdLine:
+    - apk add --no-cache --virtual=runtime-deps       boost       libldap       qt5-qtbase       qt5-qtbase-sqlite       qt5-qtbase-postgresql       qt5-qtscript       qt5-qttools
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/
+    - /opt/
+  - Name: workdir
+    Path: /opt/quassel
+  - Name: expose
+    Ports:
+    - 10113/tcp
+    - 4242/tcp
+  - Name: user
+    User: ${QUASSEL_UID}:${QUASSEL_GID}
+  - Name: volume
+    Volumes:
+    - /opt/quassel/config
+    - /opt/quassel/sqlite-data
+  - CmdLine:
+    - /opt/quassel/bin/quasselcore
+    - --configdir=/opt/quassel/config
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --config-from-environment
+    - --strict-ident
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

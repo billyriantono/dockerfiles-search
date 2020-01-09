@@ -1,0 +1,131 @@
+MetaArgs: null
+Stages:
+- As: openssl
+  BaseName: debian:stretch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Matthew Vance"'
+    Name: label
+  - Env:
+    - Key: VERSION_OPENSSL
+      Value: openssl-1.1.1a
+    - Key: SHA256_OPENSSL
+      Value: fc20130f8b7cbd2fb918b2f14e2f429e109c31ddd0fb38fc5d71d9ffed3f9f41
+    - Key: SOURCE_OPENSSL
+      Value: https://www.openssl.org/source/
+    - Key: OPGP_OPENSSL
+      Value: 8657ABB260F056B1E5190839D9C4D26D0E604491
+    Name: env
+  - Name: workdir
+    Path: /tmp/src
+  - CmdLine:
+    - set -e -x &&     build_deps="build-essential ca-certificates curl dirmngr gnupg
+      libidn2-0-dev libssl-dev" &&     DEBIAN_FRONTEND=noninteractive apt-get update
+      && apt-get install -y --no-install-recommends       $build_deps &&     curl
+      -L $SOURCE_OPENSSL$VERSION_OPENSSL.tar.gz -o openssl.tar.gz &&     echo "${SHA256_OPENSSL}
+      ./openssl.tar.gz" | sha256sum -c - &&     curl -L $SOURCE_OPENSSL$VERSION_OPENSSL.tar.gz.asc
+      -o openssl.tar.gz.asc &&     GNUPGHOME="$(mktemp -d)" &&     export GNUPGHOME
+      &&     ( gpg --no-tty --keyserver ipv4.pool.sks-keyservers.net --recv-keys "$OPGP_OPENSSL"     ||
+      gpg --no-tty --keyserver ha.pool.sks-keyservers.net --recv-keys "$OPGP_OPENSSL"
+      ) &&     gpg --batch --verify openssl.tar.gz.asc openssl.tar.gz &&     tar xzf
+      openssl.tar.gz &&     cd $VERSION_OPENSSL &&     ./config --prefix=/opt/openssl
+      no-weak-ssl-ciphers no-ssl3 no-shared enable-ec_nistp_64_gcc_128 -DOPENSSL_NO_HEARTBEATS
+      -fstack-protector-strong &&     make depend &&     make &&     make install_sw
+      &&     apt-get purge -y --auto-remove       $build_deps &&     rm -rf         /tmp/*         /var/tmp/*         /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch
+  Name: openssl
+  Platform: ""
+  SourceCode: FROM debian:stretch as openssl
+- BaseName: debian:stretch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Matthew Vance"'
+    Name: label
+  - Env:
+    - Key: NAME
+      Value: unbound
+    - Key: UNBOUND_VERSION
+      Value: 1.8.2
+    - Key: UNBOUND_SHA256
+      Value: 19f2235a8936d89e7dc919bbfcef355de759f220e36bb5e1e931ac000ed04993
+    - Key: UNBOUND_DOWNLOAD_URL
+      Value: https://nlnetlabs.nl/downloads/unbound/unbound-1.8.2.tar.gz
+    - Key: VERSION
+      Value: "0"
+    - Key: SUMMARY
+      Value: '"${NAME} is a validating, recursive, and caching DNS resolver."'
+    - Key: DESCRIPTION
+      Value: '"${NAME} is a validating, recursive, and caching DNS resolver."'
+    Name: env
+  - Labels:
+    - Key: summary
+      Value: '"${SUMMARY}"'
+    - Key: description
+      Value: '"${DESCRIPTION}"'
+    - Key: io.k8s.description
+      Value: '"${DESCRIPTION}"'
+    - Key: io.k8s.display-name
+      Value: '"Unbound ${UNBOUND_VERSION}"'
+    - Key: name
+      Value: '"mvance/${NAME}"'
+    - Key: maintainer
+      Value: '"Matthew Vance"'
+    Name: label
+  - Name: expose
+    Ports:
+    - "53"
+  - Name: workdir
+    Path: /tmp/src
+  - Chown: ""
+    From: openssl
+    Name: copy
+    SourcesAndDest:
+    - /opt/openssl
+    - /opt/openssl
+  - CmdLine:
+    - build_deps="curl gcc libc-dev libevent-dev libexpat1-dev make" &&     set -x
+      &&     DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends       $build_deps       bsdmainutils       ca-certificates       ldnsutils       libevent-2.0       libexpat1
+      &&     curl -sSL $UNBOUND_DOWNLOAD_URL -o unbound.tar.gz &&     echo "${UNBOUND_SHA256}
+      *unbound.tar.gz" | sha256sum -c - &&     tar xzf unbound.tar.gz &&     rm -f
+      unbound.tar.gz &&     cd unbound-1.8.2 &&     groupadd _unbound &&     useradd
+      -g _unbound -s /etc -d /dev/null _unbound &&     ./configure         --disable-dependency-tracking         --prefix=/opt/unbound         --with-pthreads         --with-username=_unbound         --with-ssl=/opt/openssl         --with-libevent         --enable-event-api
+      &&     make install &&     mv /opt/unbound/etc/unbound/unbound.conf /opt/unbound/etc/unbound/unbound.conf.example
+      &&     apt-get purge -y --auto-remove       $build_deps &&     rm -rf         /opt/unbound/share/man         /tmp/*         /var/tmp/*         /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - a-records.conf
+    - /opt/unbound/etc/unbound/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - unbound.sh
+    - /
+  - CmdLine:
+    - chmod +x /unbound.sh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/unbound/
+  - Env:
+    - Key: PATH
+      Value: /opt/unbound/sbin:"$PATH"
+    Name: env
+  - CmdLine:
+    - /unbound.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch

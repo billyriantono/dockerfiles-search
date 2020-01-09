@@ -1,0 +1,148 @@
+MetaArgs: null
+Stages:
+- As: helper
+  BaseName: golang:1.13-alpine
+  Commands:
+  - Name: workdir
+    Path: /go/src/github.com/bdwyertech/docker-skopeo/helper-utility
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - helper-utility/
+    - .
+  - CmdLine:
+    - CGO_ENABLED=0 GOFLAGS=-mod=vendor go build .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-alpine
+  Name: helper
+  Platform: ""
+  SourceCode: FROM golang:1.13-alpine as helper
+- As: amazon-ecr-credential-helper
+  BaseName: golang:1.13-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps git     && CGO_ENABLED=0 GOFLAGS=-mod=vendor
+      go get github.com/awslabs/amazon-ecr-credential-helper/ecr-login/cli/docker-credential-ecr-login     &&
+      apk del .build-deps
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-alpine
+  Name: amazon-ecr-credential-helper
+  Platform: ""
+  SourceCode: FROM golang:1.13-alpine as amazon-ecr-credential-helper
+- As: skopeo
+  BaseName: golang:1.13-alpine
+  Commands:
+  - Key: SKOPEO_VERSION
+    Name: arg
+    Value: '''v0.1.40'''
+  - Name: workdir
+    Path: /go/src/github.com/containers/skopeo
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps git build-base btrfs-progs-dev gpgme-dev
+      linux-headers lvm2-dev     && git clone --single-branch --branch "$SKOPEO_VERSION"
+      https://github.com/containers/skopeo.git .     && make binary-local     && apk
+      del .build-deps
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-alpine
+  Name: skopeo
+  Platform: ""
+  SourceCode: FROM golang:1.13-alpine as skopeo
+- BaseName: library/alpine:3.10
+  Commands:
+  - Chown: ""
+    From: helper
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/bdwyertech/docker-skopeo/helper-utility/helper-utility
+    - /usr/local/bin/
+  - Chown: ""
+    From: skopeo
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/containers/skopeo/skopeo
+    - /usr/local/bin/
+  - Chown: ""
+    From: amazon-ecr-credential-helper
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/docker-credential-ecr-login
+    - /usr/local/bin
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: SKOPEO_VERSION
+    Name: arg
+    Value: '''v0.1.40'''
+  - Labels:
+    - Key: org.opencontainers.image.title
+      Value: '"bdwyertech/skopeo"'
+    - Key: org.opencontainers.image.version
+      Value: $SKOPEO_VERSION
+    - Key: org.opencontainers.image.description
+      Value: '"For running Skopeo ($SKOPEO_VERSION) within a CI Environment"'
+    - Key: org.opencontainers.image.authors
+      Value: '"Brian Dwyer <bdwyertech@github.com>"'
+    - Key: org.opencontainers.image.url
+      Value: '"https://hub.docker.com/r/bdwyertech/skopeo"'
+    - Key: org.opencontainers.image.source
+      Value: '"https://github.com/bdwyertech/docker-skopeo.git"'
+    - Key: org.opencontainers.image.revision
+      Value: $VCS_REF
+    - Key: org.opencontainers.image.created
+      Value: $BUILD_DATE
+    - Key: org.label-schema.name
+      Value: '"bdwyertech/skopeo"'
+    - Key: org.label-schema.description
+      Value: '"For running Skopeo ($SKOPEO_VERSION) within a CI Environment"'
+    - Key: org.label-schema.url
+      Value: '"https://hub.docker.com/r/bdwyertech/skopeo"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/bdwyertech/docker-skopeo.git"'
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    Name: label
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker-manifest/policy.json
+    - /etc/containers/policy.json
+  - CmdLine:
+    - apk update && apk upgrade     && apk add --no-cache bash ca-certificates device-mapper-libs
+      gpgme     && adduser skopeo -S -h /home/skopeo
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/docker-entrypoint.sh
+  - Name: user
+    User: skopeo
+  - Name: workdir
+    Path: /home/skopeo
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: library/alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM library/alpine:3.10

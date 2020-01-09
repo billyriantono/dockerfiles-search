@@ -1,0 +1,127 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.9
+  Commands:
+  - Env:
+    - Key: BRANCH_PIAWARE
+      Value: v3.7.1
+    - Key: BRANCH_TCLLAUNCHER
+      Value: v1.8
+    - Key: BRANCH_DUMP1090
+      Value: v3.7.1
+    - Key: BRANCH_MLATCLIENT
+      Value: v0.2.10
+    - Key: BRANCH_TCLLIB
+      Value: tcllib-1-18-1
+    - Key: VERSION_S6OVERLAY
+      Value: v1.22.1.0
+    - Key: ARCH_S6OVERLAY
+      Value: amd64
+    - Key: S6_BEHAVIOUR_IF_STAGE2_FAILS
+      Value: "2"
+    Name: env
+  - CmdLine:
+    - apk update &&     apk add git             make             tcl             gcc             musl-dev             autoconf             tcl-dev             tclx             tcl-tls             cmake             libusb-dev             ncurses-dev             g++             net-tools             python3             python3-dev             lighttpd             tzdata
+      &&     mkdir -p /src &&     mkdir -p /var/cache/lighttpd/compress &&     chown
+      lighttpd:lighttpd /var/cache/lighttpd/compress
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone git://git.osmocom.org/rtl-sdr.git /src/rtl-sdr &&     mkdir -p /src/rtl-sdr/build
+      &&     cd /src/rtl-sdr/build &&     cmake ../ -DINSTALL_UDEV_RULES=ON -Wno-dev
+      &&     make -j -Wstringop-truncation &&     make -j -Wstringop-truncation install
+      &&     cp -v /src/rtl-sdr/rtl-sdr.rules /etc/udev/rules.d/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "blacklist dvb_usb_rtl28xxu" >> /etc/modprobe.d/no-rtl.conf &&     echo
+      "blacklist rtl2832" >> /etc/modprobe.d/no-rtl.conf &&     echo "blacklist rtl2830"
+      >> /etc/modprobe.d/no-rtl.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --recursive https://github.com/Nuand/bladeRF.git /src/bladeRF &&     cd
+      /src/bladeRF &&     git checkout 2017.12-rc1 &&     mkdir /src/bladeRF/host/build
+      &&     cd /src/bladeRF/host/build &&     cmake -DTREAT_WARNINGS_AS_ERRORS=OFF
+      ../ &&     make -j &&     make -j install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b ${BRANCH_TCLLAUNCHER} https://github.com/flightaware/tcllauncher.git
+      /src/tcllauncher &&     cd /src/tcllauncher &&     autoconf &&     ./configure
+      --prefix=/opt/tcl &&     make -j &&     make -j install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b ${BRANCH_TCLLIB} https://github.com/tcltk/tcllib.git /src/tcllib
+      &&     cd /src/tcllib &&     autoconf &&     ./configure &&     make -j &&     make
+      -j install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b ${BRANCH_PIAWARE} https://github.com/flightaware/piaware.git /src/piaware
+      &&     cp -v /src/piaware/programs/piaware/faup.tcl /src/piaware/programs/piaware/faup.tcl.original
+      &&     sed -i 's/package require Itcl 3.4/package require Itcl/' /src/piaware/programs/piaware/faup.tcl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /src/piaware &&     make -j &&     make -j install &&     cp -v /src/piaware/package/ca/*.pem
+      /etc/ssl/ &&     touch /etc/piaware.conf &&     mkdir -p /run/piaware
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b ${BRANCH_DUMP1090} https://github.com/flightaware/dump1090.git
+      /src/dump1090 &&     cd /src/dump1090 &&     make -j all &&     make -j faup1090
+      &&     cp -v view1090 dump1090 /usr/local/bin/ &&     cp -v faup1090 /usr/lib/piaware/helpers/
+      &&     mkdir -p /run/dump1090-fa &&     mkdir -p /usr/share/dump1090-fa/html
+      &&     cp -a /src/dump1090/public_html/* /usr/share/dump1090-fa/html/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b ${BRANCH_MLATCLIENT} https://github.com/mutability/mlat-client.git
+      /src/mlat-client &&     cd /src/mlat-client &&     ./setup.py install &&     ln
+      -s /usr/bin/fa-mlat-client /usr/lib/piaware/helpers/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk del git             make             gcc             musl-dev             autoconf             tcl-dev             cmake             ncurses-dev             python3
+      &&     rm -rf /var/cache/apk/* &&     rm -rf /src
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/just-containers/s6-overlay/releases/download/${VERSION_S6OVERLAY}/s6-overlay-${ARCH_S6OVERLAY}.tar.gz
+    - /tmp/s6-overlay.tar.gz
+  - CmdLine:
+    - tar -xzf /tmp/s6-overlay.tar.gz -C /
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/
+    - /etc/
+  - Env:
+    - Key: S6_BEHAVIOUR_IF_STAGE2_FAILS
+      Value: "2"
+    Name: env
+  - Name: expose
+    Ports:
+    - 30001/tcp
+    - 30002/tcp
+    - 30003/tcp
+    - 30004/tcp
+    - 30005/tcp
+    - 30104/tcp
+    - 8080/tcp
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

@@ -1,0 +1,72 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Env:
+    - Key: PKGVER
+      Value: 1.3.1
+    Name: env
+  - CmdLine:
+    - apk add --no-cache ca-certificates curl     && mkdir -p /go     && cd /go     &&
+      mkdir -p src/github.com/syncthing     && export SRCDIR=$PWD     && cd src/github.com/syncthing     &&
+      curl -L https://github.com/syncthing/syncthing/releases/download/v${PKGVER}/syncthing-source-v${PKGVER}.tar.gz
+      | tar xzf -     && cd syncthing     && export GOPATH="$SRCDIR" GOROOT_FINAL="/usr/bin"     &&
+      go run build.go -no-upgrade -version v${PKGVER} build strelaysrv     && go run
+      build.go -no-upgrade -version v${PKGVER} build stdiscosrv
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine AS builder
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk add --no-cache bash ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/syncthing/syncthing/strelaysrv
+    - /usr/bin/strelaysrv
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/syncthing/syncthing/stdiscosrv
+    - /usr/bin/stdiscosrv
+  - CmdLine:
+    - mkdir -p /strelaysrv     && mkdir -p /stdiscosrv
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /strelaysrv
+  - Name: volume
+    Volumes:
+    - /stdiscosrv
+  - Name: expose
+    Ports:
+    - "22067"
+  - Name: expose
+    Ports:
+    - "8443"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

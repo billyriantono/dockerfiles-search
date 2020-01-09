@@ -1,0 +1,88 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.10
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"PRESSMAN <wp10@pressman.ne.jp>"'
+    Name: label
+  - Env:
+    - Key: NGINX_VERSION
+      Value: 1.17.5
+    Name: env
+  - Env:
+    - Key: NJS_VERSION
+      Value: 0.3.6
+    Name: env
+  - Env:
+    - Key: PKG_RELEASE
+      Value: "1"
+    Name: env
+  - Key: NGX_CACHE_PURGE_VERSION
+    Name: arg
+    Value: "2.3"
+  - CmdLine:
+    - "set -x     && addgroup -g 101 -S nginx     && adduser -S -D -H -u 101 -h /var/cache/nginx
+      -s /sbin/nologin -G nginx -g nginx nginx     && apkArch=\"$(cat /etc/apk/arch)\"
+      \    && nginxPackages=\"         nginx=${NGINX_VERSION}-r${PKG_RELEASE}         nginx-module-xslt=${NGINX_VERSION}-r${PKG_RELEASE}
+      \        nginx-module-geoip=${NGINX_VERSION}-r${PKG_RELEASE}         nginx-module-image-filter=${NGINX_VERSION}-r${PKG_RELEASE}
+      \        nginx-module-njs=${NGINX_VERSION}.${NJS_VERSION}-r${PKG_RELEASE}     \"
+      \    && apk add --no-cache --virtual .build-add-modules-deps         curl         autoconf
+      \        automake         cmake         git         g++         libtool     &&
+      mkdir -p /usr/src     && git clone --recursive https://github.com/google/ngx_brotli.git
+      /usr/src/ngx_brotli \t&& curl -fSL https://github.com/FRiCKLE/ngx_cache_purge/archive/${NGX_CACHE_PURGE_VERSION}.tar.gz
+      -o ngx_cache_purge.tar.gz     && tar -zxC /usr/src -f ngx_cache_purge.tar.gz
+      \    && rm ngx_cache_purge.tar.gz     && case \"$apkArch\" in         *)             set
+      -x             && tempDir=\"$(mktemp -d)\"             && chown nobody:nobody
+      $tempDir             && apk add --no-cache --virtual .build-deps                 gcc
+      \                libc-dev                 make                 openssl-dev                 pcre-dev
+      \                zlib-dev                 linux-headers                 libxslt-dev
+      \                gd-dev                 geoip-dev                 perl-dev                 libedit-dev
+      \                mercurial                 bash                 alpine-sdk                 findutils
+      \            && su - nobody -s /bin/sh -c \"                 export HOME=${tempDir}
+      \                && cd ${tempDir}                 && hg clone https://hg.nginx.org/pkg-oss
+      \                && cd pkg-oss                 && hg up ${NGINX_VERSION}-${PKG_RELEASE}
+      \                && cd alpine                 && sed -i -e 's/BASE_CONFIGURE_ARGS=/BASE_CONFIGURE_ARGS=\\\\\t--add-module=\\/usr\\/src\\/ngx_brotli
+      \\\\\t--add-module=\\/usr\\/src\\/ngx_cache_purge-${NGX_CACHE_PURGE_VERSION}
+      /' Makefile                 && make all                 && apk index -o ${tempDir}/packages/alpine/${apkArch}/APKINDEX.tar.gz
+      ${tempDir}/packages/alpine/${apkArch}/*.apk                 && abuild-sign -k
+      ${tempDir}/.abuild/abuild-key.rsa ${tempDir}/packages/alpine/${apkArch}/APKINDEX.tar.gz
+      \                \"             && echo \"${tempDir}/packages/alpine/\" >> /etc/apk/repositories
+      \            && cp ${tempDir}/.abuild/abuild-key.rsa.pub /etc/apk/keys/             &&
+      apk del .build-deps             ;;     esac     && apk add --no-cache --update
+      $nginxPackages     && if [ -n \"$tempDir\" ]; then rm -rf \"$tempDir\"; fi     &&
+      if [ -n \"/etc/apk/keys/abuild-key.rsa.pub\" ]; then rm -f /etc/apk/keys/abuild-key.rsa.pub;
+      fi     && if [ -n \"/etc/apk/keys/nginx_signing.rsa.pub\" ]; then rm -f /etc/apk/keys/nginx_signing.rsa.pub;
+      fi     && sed -i '$ d' /etc/apk/repositories \t&& rm -rf /usr/src/ngx_brotli
+      \t&& rm -rf /usr/src/ngx_cache_purge-${NGX_CACHE_PURGE_VERSION}     && apk add
+      --no-cache --virtual .gettext gettext     && mv /usr/bin/envsubst /tmp/         &&
+      runDeps=\"$(         scanelf --needed --nobanner /tmp/envsubst             |
+      awk '{ gsub(/,/, \"\\nso:\", $2); print \"so:\" $2 }'             | sort -u
+      \            | xargs -r apk info --installed             | sort -u     )\"     &&
+      apk add --no-cache $runDeps     && apk del .gettext     && mv /tmp/envsubst
+      /usr/local/bin/     && apk add --no-cache tzdata     && ln -sf /dev/stdout /var/log/nginx/access.log
+      \    && ln -sf /dev/stderr /var/log/nginx/error.log"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx.conf
+    - /etc/nginx/nginx.conf
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: stopsignal
+    Signal: SIGTERM
+  - CmdLine:
+    - nginx
+    - -g
+    - daemon off;
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10

@@ -1,0 +1,71 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: tzarc/alpine-dev-base:latest
+  Commands:
+  - CmdLine:
+    - sudo apk --no-cache add gnupg1
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TINI_VERSION
+      Value: v0.18.0
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-muslc-amd64
+    - /tini
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-muslc-amd64.asc
+    - /tini.asc
+  - CmdLine:
+    - sudo chmod 755 /tini     && sudo chmod 644 /tini.asc     && sudo chown root:root
+      /tini*     && gpg --batch --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys
+      595E85A6B1B4779EA4DAAEC70B588DFF0527A9B7     && gpg --batch --verify /tini.asc
+      /tini     && sudo strip -s /tini     && sudo chmod 0700 /tini
+    Name: run
+    PrependShell: true
+  - Chown: devel:devel
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/
+    - /home/devel
+  - CmdLine:
+    - g++ -std=c++17 -static -g -O0 -o nanosrv main.cpp -lstdc++fs     && strip -s
+      nanosrv     && chmod 0700 nanosrv
+    Name: run
+    PrependShell: true
+  From:
+    Image: tzarc/alpine-dev-base:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM tzarc/alpine-dev-base:latest as builder
+- BaseName: scratch
+  Commands:
+  - Chown: "0:0"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tini
+    - /tini
+  - Chown: "0:0"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/devel/nanosrv
+    - /nanosrv
+  - CmdLine:
+    - /tini
+    - --
+    - /nanosrv
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

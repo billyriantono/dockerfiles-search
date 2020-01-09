@@ -1,0 +1,90 @@
+MetaArgs:
+- DefaultValue: puppeteer-environment
+  Key: PUPPETEER_ENV_IMAGE
+  ProvidedValue: null
+  Value: puppeteer-environment
+Stages:
+- As: puppeteer-environment
+  BaseName: node:12
+  Commands:
+  - CmdLine:
+    - ':   && sh -c ''echo "deb [arch=amd64, trusted=true] http://dl.google.com/linux/chrome/deb/
+      stable main" >> /etc/apt/sources.list.d/google.list''   && curl -s https://dl-ssl.google.com/linux/linux_signing_key.pub
+      | apt-key add -   && apt-get update   && apt-get install -yq --no-install-recommends   libgconf-2-4   google-chrome-stable   fonts-ipafont-gothic   fonts-wqy-zenhei   fonts-thai-tlwg   fonts-kacst   ttf-freefont   &&
+      rm -rf /var/lib/apt/lists/* /src/*.deb /tmp/* /var/tmp/*'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/Yelp/dumb-init/releases/download/v1.2.2/dumb-init_1.2.2_amd64
+    - /usr/local/bin/dumb-init
+  - CmdLine:
+    - chmod +x /usr/local/bin/dumb-init
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dumb-init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: node:12
+  Name: puppeteer-environment
+  Platform: ""
+  SourceCode: FROM node:12 as puppeteer-environment
+- As: app
+  BaseName: ${PUPPETEER_ENV_IMAGE}
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - chown node:node .
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: node
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package*.json
+    - ./
+  - CmdLine:
+    - npm ci
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - ./src
+  - CmdLine:
+    - ./src/cli.js
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ${PUPPETEER_ENV_IMAGE}
+  Name: app
+  Platform: ""
+  SourceCode: FROM ${PUPPETEER_ENV_IMAGE} as app
+- As: cli-runner
+  BaseName: app
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - data
+    - ./data
+  - Name: expose
+    Ports:
+    - "8080"
+  From:
+    Stage:
+      Index: 1
+      Named: app
+  Name: cli-runner
+  Platform: ""
+  SourceCode: FROM app as cli-runner

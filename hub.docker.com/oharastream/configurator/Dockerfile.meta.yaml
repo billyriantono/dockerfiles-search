@@ -1,0 +1,146 @@
+MetaArgs: null
+Stages:
+- As: deps
+  BaseName: centos:7.6.1810
+  Commands:
+  - CmdLine:
+    - yum install -y   git   java-1.8.0-openjdk-devel   wget   unzip
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/java
+    Name: env
+  - Key: GRADLE_VERSION
+    Name: arg
+    Value: 5.1.1
+  - Name: workdir
+    Path: /opt/gradle
+  - CmdLine:
+    - wget https://downloads.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip gradle-$GRADLE_VERSION-bin.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -f gradle-$GRADLE_VERSION-bin.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /opt/gradle/gradle-$GRADLE_VERSION /opt/gradle/default
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GRADLE_HOME
+      Value: /opt/gradle/default
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:$GRADLE_HOME/bin
+    Name: env
+  - Key: BRANCH
+    Name: arg
+    Value: '"master"'
+  - Name: workdir
+    Path: /testpatch/ohara
+  - CmdLine:
+    - git clone --single-branch -b $BRANCH https://github.com/oharastream/ohara.git
+      /testpatch/ohara
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gradle clean build -x test -PskipManager
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /opt/ohara
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar -xvf $(find "/testpatch/ohara/ohara-assembly/build/distributions" -maxdepth
+      1 -type f -name "*.tar") -C /opt/ohara/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf $(find "/opt/ohara/" -maxdepth 1 -type d -name "ohara-*")/manager
+    Name: run
+    PrependShell: true
+  - Key: TINI_VERSION
+    Name: arg
+    Value: v0.18.0
+  - CmdLine:
+    - wget https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini
+      -O /tini
+    Name: run
+    PrependShell: true
+  From:
+    Image: centos:7.6.1810
+  Name: deps
+  Platform: ""
+  SourceCode: FROM centos:7.6.1810 AS deps
+- BaseName: centos:7.6.1810
+  Commands:
+  - CmdLine:
+    - yum install -y   java-1.8.0-openjdk
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/jre
+    Name: env
+  - Key: USER
+    Name: arg
+    Value: ohara
+  - CmdLine:
+    - groupadd $USER
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -ms /bin/bash -g $USER $USER
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: deps
+    Name: copy
+    SourcesAndDest:
+    - /opt/ohara
+    - /home/$USER
+  - CmdLine:
+    - ln -s $(find "/home/$USER/" -maxdepth 1 -type d -name "ohara-*") /home/$USER/default
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: OHARA_HOME
+      Value: /home/$USER/default
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:$OHARA_HOME/bin
+    Name: env
+  - Chown: ""
+    From: deps
+    Name: copy
+    SourcesAndDest:
+    - /tini
+    - /tini
+  - CmdLine:
+    - chmod +x /tini
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $USER
+  - CmdLine:
+    - /tini
+    - --
+    - ohara.sh
+    - start
+    - configurator
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: centos:7.6.1810
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:7.6.1810

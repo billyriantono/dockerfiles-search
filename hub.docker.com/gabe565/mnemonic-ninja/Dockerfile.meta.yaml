@@ -1,0 +1,155 @@
+MetaArgs: null
+Stages:
+- As: vendor
+  BaseName: gabe565/prestissimo
+  Commands:
+  - Env:
+    - Key: COMPOSER_ALLOW_SUPERUSER
+      Value: "1"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - composer.json
+    - composer.lock
+    - ./
+  - CmdLine:
+    - set -x     && composer install         --ignore-platform-reqs         --no-autoloader         --no-interaction         --no-progress         --no-suggest
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - CmdLine:
+    - set -x     && composer dump-autoload         --classmap-authoritative         --no-interaction
+    Name: run
+    PrependShell: true
+  From:
+    Image: gabe565/prestissimo
+  Name: vendor
+  Platform: ""
+  SourceCode: FROM gabe565/prestissimo as vendor
+- As: frontend
+  BaseName: node:8-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - artisan
+    - package.json
+    - webpack.mix.js
+    - yarn.lock
+    - ./
+  - CmdLine:
+    - set -x     && yarn install         --frozen-lockfile         --no-cache         --no-progress
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - resources/assets/
+    - resources/assets/
+  - CmdLine:
+    - set -x     && yarn run production         --no-progress
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - public
+    - public/
+  From:
+    Image: node:8-alpine
+  Name: frontend
+  Platform: ""
+  SourceCode: FROM node:8-alpine as frontend
+- As: packer
+  BaseName: alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: 82:82
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - .
+  - Chown: 82:82
+    From: vendor
+    Name: copy
+    SourcesAndDest:
+    - /app/vendor
+    - vendor/
+  - Chown: 82:82
+    From: frontend
+    Name: copy
+    SourcesAndDest:
+    - /app/public
+    - public/
+  - CmdLine:
+    - set -x     && apk add --no-cache xz     && ln -s ../storage/app/public /app/public/storage     &&
+      XZ_OPT=-9e tar -Jcf /app.tar.xz -C /app .     && apk del xz
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: packer
+  Platform: ""
+  SourceCode: FROM alpine as packer
+- BaseName: php:7.3-fpm-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Gabe Cook <gabe565@gmail.com>"'
+    Name: label
+  - CmdLine:
+    - set -x     && apk add --no-cache         fcgi         rsync     && docker-php-ext-install
+      mysqli pdo_mysql     && rm -rf /tmp/* /var/cache/apk/*     && sed -ri         -e
+      's/;(ping\.path)/\1/' /usr/local/etc/php-fpm.d/www.conf     && cd "$PHP_INI_DIR"     &&
+      ln -s php.ini-production php.ini     && sed -ri         -e 's/^(expose_php).*$/\1
+      = Off/'         php.ini-production
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/www/html
+  - Name: volume
+    Volumes:
+    - /var/www/html
+  - Chown: ""
+    From: packer
+    Name: copy
+    SourcesAndDest:
+    - /app.tar.xz
+    - /usr/src/app.tar.xz
+  - Chown: root
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/entrypoint
+    - docker/health-check
+    - /
+  - Health:
+      Interval: 60000000000
+      Test:
+      - CMD-SHELL
+      - /health-check
+      Timeout: 5000000000
+    Name: healthcheck
+  - CmdLine:
+    - /entrypoint
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:7.3-fpm-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.3-fpm-alpine

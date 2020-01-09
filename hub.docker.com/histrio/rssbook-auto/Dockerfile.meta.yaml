@@ -1,0 +1,129 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:latest
+  Commands:
+  - CmdLine:
+    - go get github.com/gosimple/slug
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /build
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/histrio/rssbook
+  - Name: workdir
+    Path: /go/src/github.com/histrio/rssbook
+  - CmdLine:
+    - go test ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -v -a -installsuffix cgo -ldflags "-s -w -X
+      ${PROJECT}/pkg/version.Release=${RELEASE} -X ${PROJECT}/pkg/version.Commit=$(git
+      rev-parse --short HEAD) -X ${PROJECT}/pkg/version.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S')"
+      -o /build/main cmd/rssbookcli/main.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:latest as builder
+- As: downloader
+  BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk add curl tar xz upx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - curl https://johnvansickle.com/ffmpeg/builds/ffmpeg-git-64bit-static.tar.xz
+      -o /tmp/ffmpeg-git-64bit-static.tar.xz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar -xf /tmp/ffmpeg-git-64bit-static.tar.xz --wildcards --no-anchored 'ffmpeg'
+      --no-anchored 'ffprobe' --strip=1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /tmp/ffmpeg-git-64bit-static.tar.xz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - upx ffmpeg -offmpeg.compressed
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - upx ffprobe -offprobe.compressed
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/main
+    - /build/
+  - CmdLine:
+    - upx --best main
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: downloader
+  Platform: ""
+  SourceCode: FROM alpine:latest as downloader
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - empty
+    - /tmp/
+  - Chown: ""
+    From: downloader
+    Name: copy
+    SourcesAndDest:
+    - /build/ffmpeg.compressed
+    - /ffmpeg
+  - Chown: ""
+    From: downloader
+    Name: copy
+    SourcesAndDest:
+    - /build/ffprobe.compressed
+    - /ffprobe
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/main
+    - /
+  - Env:
+    - Key: PATH
+      Value: /
+    Name: env
+  - CmdLine:
+    - /main
+    - --src
+    - /data
+    - --dst
+    - /data
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

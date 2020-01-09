@@ -1,0 +1,115 @@
+MetaArgs: null
+Stages:
+- As: go-build
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache add --update git  && go get -v git.torproject.org/pluggable-transports/obfs4.git/obfs4proxy  &&
+      go get -v git.torproject.org/pluggable-transports/meek.git/meek-server  && cp
+      -rv /go/bin /usr/local/
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: go-build
+  Platform: ""
+  SourceCode: FROM golang:alpine AS go-build
+- As: tor-build
+  BaseName: alpine:latest
+  Commands:
+  - Key: TOR_GPG_KEY
+    Name: arg
+    Value: "0x6AFEE6D49E92B601"
+  - CmdLine:
+    - "apk --no-cache add --update         gnupg         build-base         libevent
+      \        libevent-dev         libressl         libressl-dev         xz-libs
+      \        xz-dev         zlib         zlib-dev         zstd         zstd-libs
+      \        zstd-dev       && TOR_VERSION=$(wget -q https://gitweb.torproject.org/tor.git/plain/ReleaseNotes
+      -O - | grep -m1  \"Changes in version\" | sed 's/^.*[^0-9]\\([0-9]*\\.[0-9]*\\.[0-9]*\\.[0-9]*\\).*$/\\1/')
+      \      && TOR_TARBALL_NAME=\"tor-${TOR_VERSION}.tar.gz\"       && TOR_TARBALL_LINK=\"https://dist.torproject.org/${TOR_TARBALL_NAME}\"
+      \      && wget -q $TOR_TARBALL_LINK       && wget $TOR_TARBALL_LINK.asc         &&
+      found='';          \tfor server in            \t\tha.pool.sks-keyservers.net
+      \           \t\thkp://keyserver.ubuntu.com:80            \t\thkp://p80.pool.sks-keyservers.net:80
+      \               ipv4.pool.sks-keyservers.net                keys.gnupg.net            \t\tpgp.mit.edu
+      \         \t; do          \t\techo \"Fetching GPG key $TOR_GPG_KEY from $server\";
+      \         \t\tgpg --keyserver \"$server\" --keyserver-options timeout=10 --recv-keys
+      \"$TOR_GPG_KEY\" && found=yes && break;          \tdone;          \ttest -z
+      \"$found\" && echo >&2 \"error: failed to fetch GPG key $TOR_GPG_KEY\" && exit
+      1;         gpg --verify $TOR_TARBALL_NAME.asc       && tar xf $TOR_TARBALL_NAME
+      \      && cd tor-$TOR_VERSION       && ./configure       && make install       &&
+      ls -R /usr/local/"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: tor-build
+  Platform: ""
+  SourceCode: FROM alpine:latest AS tor-build
+- BaseName: alpine:latest
+  Commands:
+  - Maintainer: Christian chriswayg@gmail.com
+    Name: maintainer
+  - Env:
+    - Key: TOR_USER
+      Value: tord
+    - Key: TOR_NICKNAME
+      Value: Tor4
+    Name: env
+  - CmdLine:
+    - apk --no-cache add --update       libevent       libressl       xz-libs       zstd-libs       zlib       zstd       pwgen
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: go-build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/
+    - /usr/local/bin/
+  - Chown: ""
+    From: tor-build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/
+    - /usr/local/
+  - CmdLine:
+    - addgroup -g 19001 -S $TOR_USER && adduser -u 19001 -G $TOR_USER -S $TOR_USER
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./torrc
+    - /etc/tor/torrc
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./scripts/
+    - /usr/local/bin/
+  - Name: volume
+    Volumes:
+    - /etc/tor
+    - /var/lib/tor
+  - Name: expose
+    Ports:
+    - "54444"
+    - "7002"
+    - "9001"
+    - "9030"
+    - "9050"
+  - CmdLine:
+    - docker-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - tor
+    - -f
+    - /etc/tor/torrc
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

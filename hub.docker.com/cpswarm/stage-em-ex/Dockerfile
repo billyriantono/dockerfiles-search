@@ -1,0 +1,26 @@
+FROM cpswarm/stage-simulation-manager:latest
+
+COPY . $HOME
+
+RUN chmod a+x $HOME/launch_SM.sh $HOME/ws/build.sh
+
+WORKDIR $HOME/ws/
+
+RUN catkin init --workspace .
+
+RUN /bin/bash build.sh
+
+RUN echo "source $HOME/ws/devel/setup.bash" >> ~/.bashrc
+
+WORKDIR $HOME
+
+RUN mkdir cpswarm
+
+ENV JAVA_HOME /usr/lib/jvm/java-1.8.0-openjdk-amd64/
+
+RUN keytool -noprompt -importcert -trustcacerts \
+    -file pert-demoenergy-virtus.ismb.polito.it.pem -alias pert-demoenergy-virtus.ismb.polito.it \
+    -storepass changeit -keystore -J-Duser.language=en $JAVA_HOME/jre/lib/security/cacerts
+
+ENTRYPOINT ["/home/launch_SM.sh"]
+CMD []

@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: python:3
+  Commands:
+  - Env:
+    - Key: LANG
+      Value: en_US.utf8
+    Name: env
+  - CmdLine:
+    - curl -sL https://deb.nodesource.com/setup_12.x | bash -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install build-essential nodejs  -y
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - /tmp/
+  - CmdLine:
+    - pip install -U -r /tmp/requirements.txt && rm /tmp/requirements.txt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /code
+  - CmdLine:
+    - cd /code && lektor build -f webpack -f scsscompile --output-path /code/output
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3
+  Name: builder
+  Platform: ""
+  SourceCode: FROM python:3 as builder
+- As: server
+  BaseName: nginx:1.17-alpine
+  Commands:
+  - CmdLine:
+    - apk --update --no-cache add curl
+    Name: run
+    PrependShell: true
+  - Health:
+      Test:
+      - CMD-SHELL
+      - curl --fail http://localhost:8080 || exit 1
+    Name: healthcheck
+  - CmdLine:
+    - rm -Rf /usr/share/nginx/html
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /code/output
+    - /usr/share/nginx/html
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/nginx.conf
+    - /etc/nginx/nginx.conf
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: user
+    User: nginx
+  From:
+    Image: nginx:1.17-alpine
+  Name: server
+  Platform: ""
+  SourceCode: FROM nginx:1.17-alpine as server

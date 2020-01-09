@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12.4-alpine3.9
+  Commands:
+  - CmdLine:
+    - apk add --no-cache make git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /workspace/helmfile
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /workspace/helmfile
+  - CmdLine:
+    - make static-linux
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.4-alpine3.9
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12.4-alpine3.9 as builder
+- BaseName: alpine:3.8
+  Commands:
+  - CmdLine:
+    - apk add --no-cache ca-certificates git bash curl jq
+    Name: run
+    PrependShell: true
+  - Key: HELM_VERSION
+    Name: arg
+    Value: v2.13.0
+  - Key: HELM_LOCATION
+    Name: arg
+    Value: '"https://kubernetes-helm.storage.googleapis.com"'
+  - Key: HELM_FILENAME
+    Name: arg
+    Value: '"helm-${HELM_VERSION}-linux-amd64.tar.gz"'
+  - Key: HELM_SHA256
+    Name: arg
+    Value: '"15eca6ad225a8279de80c7ced42305e24bc5ac60bb7d96f2d2fa4af86e02c794"'
+  - CmdLine:
+    - wget ${HELM_LOCATION}/${HELM_FILENAME} &&     sha256sum ${HELM_FILENAME} | grep
+      -q "${HELM_SHA256}" &&     tar zxf ${HELM_FILENAME} && mv /linux-amd64/helm
+      /usr/local/bin/ &&     rm ${HELM_FILENAME} && rm -r /linux-amd64
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: KUBECTL_VERSION
+      Value: '"v1.14.5"'
+    Name: env
+  - Env:
+    - Key: KUBECTL_SHA256
+      Value: '"26681319de56820a8467c9407e9203d5b15fb010ffc75ac5b99c9945ad0bd28c"'
+    Name: env
+  - CmdLine:
+    - curl -LO "https://storage.googleapis.com/kubernetes-release/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+      &&     sha256sum kubectl | grep ${KUBECTL_SHA256} &&     chmod +x kubectl &&     mv
+      kubectl /usr/local/bin/kubectl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p "$(helm home)/plugins"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - helm plugin install https://github.com/databus23/helm-diff &&     helm plugin
+      install https://github.com/futuresimple/helm-secrets &&     helm plugin install
+      https://github.com/hypnoglow/helm-s3.git &&     helm plugin install https://github.com/aslafy-z/helm-git.git
+      &&     helm plugin install https://github.com/rimusz/helm-tiller
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /workspace/helmfile/dist/helmfile_linux_amd64
+    - /usr/local/bin/helmfile
+  - CmdLine:
+    - /usr/local/bin/helmfile
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

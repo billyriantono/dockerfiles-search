@@ -1,0 +1,73 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:buster
+  Commands:
+  - Name: workdir
+    Path: /go/src/doh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/doh
+  - CmdLine:
+    - wget -O /sbin/dep -q https://github.com/golang/dep/releases/download/v0.5.4/dep-linux-amd64
+      && chmod +x /sbin/dep
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /sbin/dep ensure -add github.com/ReneKroon/ttlcache
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /sbin/dep ensure
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -ldflags '-extldflags "-D_FORTIFY_SOURCE=2,-static,-Wl,-z,noexecstack,relro"'
+      -o doh_server *.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:buster
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:buster as builder
+- BaseName: busybox:latest
+  Commands:
+  - CmdLine:
+    - mkdir -p /srv/ssl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/doh/doh_server
+    - /srv/doh_server
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - doh-server.conf
+    - /srv/doh-server.conf
+  - Name: user
+    User: nobody
+  - Name: expose
+    Ports:
+    - "4443"
+  - CmdLine:
+    - /srv/doh_server
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -c
+    - /srv/doh-server.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: busybox:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM busybox:latest

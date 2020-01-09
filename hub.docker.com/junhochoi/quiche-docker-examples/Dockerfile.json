@@ -1,0 +1,118 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "rust:1.39",
+      "SourceCode": "FROM rust:1.39 AS builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "rust:1.39"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get install -y cmake golang curl libpcre3-dev zlib1g-dev"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/build"
+        },
+        {
+          "CmdLine": [
+            "git clone --recursive https://github.com/cloudflare/quiche.git \u0026\u0026     curl -q -s https://nginx.org/download/nginx-1.16.1.tar.gz | tar xzf - \u0026\u0026     cd nginx-1.16.1 \u0026\u0026 patch -p1 -i ../quiche/extras/nginx/nginx-1.16.patch"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/build/nginx-1.16.1"
+        },
+        {
+          "CmdLine": [
+            "./configure         --build=\"quiche-$(git --git-dir=../quiche/.git rev-parse --short HEAD)\"    \t    --with-http_ssl_module    \t    --with-http_v2_module    \t    --with-http_v3_module    \t    --with-openssl=../quiche/deps/boringssl    \t    --with-quiche=../quiche \u0026\u0026     make -j`nproc` \u0026\u0026     make install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "debian:latest",
+      "SourceCode": "FROM debian:latest",
+      "Platform": "",
+      "From": {
+        "Image": "debian:latest"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get install -y ca-certificates libpcre3 zlib1g procps"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/nginx",
+            "/usr/local/nginx"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/build/quiche/examples/cert.*",
+            "/usr/local/nginx/conf/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "nginx.conf",
+            "/usr/local/nginx/conf/nginx.conf"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "8080/tcp"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "8443/tcp"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "8443/udp"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/usr/local/nginx/sbin/nginx",
+            "-g",
+            "daemon off;"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

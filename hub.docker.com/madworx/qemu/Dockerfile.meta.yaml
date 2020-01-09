@@ -1,0 +1,114 @@
+MetaArgs: null
+Stages:
+- As: build-qemu
+  BaseName: alpine:3.9
+  Commands:
+  - Maintainer: Martin Kjellstrand [https://github.com/madworx]
+    Name: maintainer
+  - Key: QEMU_RELEASE
+    Name: arg
+    Value: '"v4.0.0"'
+  - Key: QEMU_BUILD_PKGS
+    Name: arg
+    Value: '"build-base lzo-dev jpeg-dev sdl2-dev libcap-ng-dev                      git-email
+      xen-dev bison libssh2-dev cyrus-sasl-dev                      ncurses-dev libnfs-dev  libseccomp-dev  libaio-dev                      flex
+      bash curl-dev libcap-dev snappy-dev bzip2-dev                      sed"'
+  - Key: QEMU_DISABLE_FEATURES
+    Name: arg
+    Value: '"lzo capstone libssh2 smartcard opengl gcrypt                            cocoa
+      sdl nettle guest-agent-msi guest-agent                            brlapi glusterfs
+      xen-pci-passthrough  xfsctl                            vxhs replication crypto-afalg
+      qom-cast-debug                            bzip2 bsd-user rdma usb-redir user
+      debug-tcg                            vhost-net  tools  virglrenderer  tpm  gnutls                            linux-user
+      snappy docs  gtk  libiscsi  bluez                            debug-info xen
+      libnfs modules vte numa mpath                            live-block-migration
+      spice"'
+  - Key: RETAIN_BIOSES
+    Name: arg
+    Value: '"vgabios-stdvga.bin                    bios-256k.bin                         efi-e1000.rom                         kvmvapic.bin"'
+  - CmdLine:
+    - apk add --no-cache ${QEMU_BUILD_PKGS}
+    Name: run
+    PrependShell: true
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -c
+  - CmdLine:
+    - echo "#include <sys/timex.h>" >> /usr/include/time.h
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -S bob     && mkdir -p /build     && chown bob /build
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: bob
+  - CmdLine:
+    - cd /build     && git clone --depth 1 --single-branch            -b ${QEMU_RELEASE}            git://git.qemu-project.org/qemu.git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - patches/*.patch
+    - /build/qemu/
+  - CmdLine:
+    - cd /build/qemu     && patch -p1 < qemu-root-path.patch     && patch -p1 < qemu-clientid-bootfile-handling.patch     &&
+      patch -p1 < qemu-envcmdline.patch     && patch -p1 < qemu-4.0-alpine-compilefix.patch     &&
+      sed -e '1i#include <pty.h>' -i util/qemu-openpty.c     && sed -e '1i#include
+      <linux/limits.h>' -i hw/9pfs/9p.c     && sed -e '/^#define PAGE_SIZE/d' -i accel/kvm/kvm-all.c     &&
+      sed -e 's/#include <sys\/signal.h>/#include <signal.h>/'            -i util/oslib-posix.c
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /build/qemu     && set -x     && ./configure            $(echo "${QEMU_DISABLE_FEATURES}"
+      |              sed -e 's#^\|  *# --disable-#g')            --target-list=$(uname
+      -m)-softmmu            --prefix=/usr            --sysconfdir=/etc
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - cd /build/qemu     && make -j$(nproc)     && make qemu-img
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - cd /build/qemu     && DESTDIR=/tmp/qemu make install     && cp qemu-img /tmp/qemu/usr/bin/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /tmp/qemu/usr/share/qemu/ -type f -maxdepth 1     | egrep -v "/($(echo
+      ${RETAIN_BIOSES} | sed 's#  *#|#g'))\$"     | xargs -r rm &&     find /tmp/qemu/usr/share/qemu/keymaps/
+      -type f     | egrep -v '/en-gb$' | xargs -r rm
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: build-qemu
+  Platform: ""
+  SourceCode: FROM alpine:3.9 AS build-qemu
+- BaseName: alpine:3.9
+  Commands:
+  - Key: QEMU_RUNTIME_PKGS
+    Name: arg
+    Value: '"busybox-extras libpng pixman libseccomp  openssh                        bash
+      curl libjpeg libaio cyrus-sasl                        libgcc glib"'
+  - CmdLine:
+    - apk add --no-cache ${QEMU_RUNTIME_PKGS}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-qemu
+    Name: copy
+    SourcesAndDest:
+    - /tmp/qemu/*
+    - /usr/
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

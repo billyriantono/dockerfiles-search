@@ -1,0 +1,95 @@
+MetaArgs:
+- DefaultValue: latest
+  Key: IMAGE_REF
+  ProvidedValue: null
+  Value: latest
+Stages:
+- BaseName: manageiq/manageiq-pods:frontend-${IMAGE_REF}
+  Commands:
+  - Maintainer: ManageIQ https://github.com/ManageIQ/manageiq
+    Name: maintainer
+  - Key: REF
+    Name: arg
+    Value: master
+  - Env:
+    - Key: DATABASE_URL
+      Value: postgresql://root@localhost/vmdb_production?encoding=utf8&pool=5&wait_timeout=5
+    Name: env
+  - CmdLine:
+    - yum -y install --setopt=tsflags=nodocs                    memcached                                  postgresql-server                          repmgr10                                   mod_ssl                                    openssh-clients                            openssh-server                             &&                          yum
+      clean all
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/lib/pgsql/data
+  - CmdLine:
+    - ssh-keygen -q -t dsa -N '' -f /etc/ssh/ssh_host_dsa_key &&     ssh-keygen -q
+      -t rsa -N '' -f /etc/ssh/ssh_host_rsa_key &&     ssh-keygen -q -t rsa -N ''
+      -f /root/.ssh/id_rsa &&     cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys
+      &&     for key in /etc/ssh/ssh_host_*_key.pub; do echo "localhost $(cat ${key})"
+      >> /root/.ssh/known_hosts; done &&     echo "root:smartvm" | chpasswd &&     chmod
+      700 /root/.ssh &&     chmod 600 /root/.ssh/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ${APPLIANCE_ROOT}/setup &&     mv /etc/httpd/conf.d/ssl.conf{,.orig} &&     echo
+      "# This file intentionally left blank. ManageIQ maintains its own SSL configuration"
+      > /etc/httpd/conf.d/ssl.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-assets/appliance-initialize.sh
+    - /usr/bin
+  - Name: expose
+    Ports:
+    - "22"
+    - "443"
+  - Labels:
+    - Key: name
+      Value: '"manageiq"'
+    - Key: vendor
+      Value: '"ManageIQ"'
+    - Key: version
+      Value: '"Master"'
+    - Key: release
+      Value: ${REF}
+    - Key: architecture
+      Value: '"x86_64"'
+    - Key: url
+      Value: '"http://manageiq.org/"'
+    - Key: summary
+      Value: '"ManageIQ appliance image"'
+    - Key: description
+      Value: '"ManageIQ is a management and automation platform for virtual, private,
+        and hybrid cloud infrastructures."'
+    - Key: INSTALL
+      Value: '''docker run -ti                 --name ${NAME}_volume                 --entrypoint
+        /usr/bin/appliance-initialize.sh                 $IMAGE'''
+    - Key: RUN
+      Value: '''docker run -di             --name ${NAME}_run             -v /etc/localtime:/etc/localtime:ro             --volumes-from
+        ${NAME}_volume             -p 443:443             $IMAGE'''
+    - Key: STOP
+      Value: '''docker stop ${NAME}_run && echo "Container ${NAME}_run has been stopped"'''
+    - Key: UNINSTALL
+      Value: '''docker rm -v ${NAME}_volume ${NAME}_run && echo "Uninstallation complete"'''
+    Name: label
+  - Labels:
+    - Key: io.k8s.description
+      Value: '"ManageIQ is a management and automation platform for virtual, private,
+        and hybrid cloud infrastructures."'
+    - Key: io.k8s.display-name
+      Value: '"ManageIQ"'
+    - Key: io.openshift.expose-services
+      Value: '"443:https"'
+    - Key: io.openshift.tags
+      Value: '"ManageIQ,miq,manageiq"'
+    Name: label
+  From:
+    Image: manageiq/manageiq-pods:frontend-${IMAGE_REF}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM manageiq/manageiq-pods:frontend-${IMAGE_REF}

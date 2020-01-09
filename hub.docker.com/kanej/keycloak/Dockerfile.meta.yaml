@@ -1,0 +1,88 @@
+MetaArgs: null
+Stages:
+- BaseName: jboss/base-jdk:8
+  Commands:
+  - Maintainer: john@kanej.me
+    Name: maintainer
+  - Env:
+    - Key: KEYCLOAK_VERSION
+      Value: 1.1.0.Final
+    Name: env
+  - CmdLine:
+    - cd $HOME; curl -O http://central.maven.org/maven2/org/keycloak/keycloak-appliance-dist-all/$KEYCLOAK_VERSION/keycloak-appliance-dist-all-$KEYCLOAK_VERSION.zip;
+      unzip keycloak-appliance-dist-all-$KEYCLOAK_VERSION.zip; mv $HOME/keycloak-appliance-dist-all-$KEYCLOAK_VERSION/keycloak
+      $HOME/keycloak; rm -rf $HOME/keycloak-appliance-dist-all-$KEYCLOAK_VERSION.zip;
+      rm -rf $HOME/keycloak-appliance-dist-all-$KEYCLOAK_VERSION
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JBOSS_HOME
+      Value: /opt/jboss/keycloak
+    Name: env
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: expose
+    Ports:
+    - "8443"
+  - CmdLine:
+    - /opt/jboss/keycloak/bin/standalone.sh
+    - -b
+    - 0.0.0.0
+    Name: cmd
+    PrependShell: false
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - changeDatabase.xsl
+    - /opt/jboss/keycloak/
+  - CmdLine:
+    - java -jar /usr/share/java/saxon.jar -s:/opt/jboss/keycloak/standalone/configuration/standalone.xml
+      -xsl:/opt/jboss/keycloak/changeDatabase.xsl -o:/opt/jboss/keycloak/standalone/configuration/standalone.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/jboss/keycloak/modules/system/layers/base/org/postgresql/jdbc/main;
+      cd /opt/jboss/keycloak/modules/system/layers/base/org/postgresql/jdbc/main;
+      curl -O http://central.maven.org/maven2/org/postgresql/postgresql/9.3-1102-jdbc3/postgresql-9.3-1102-jdbc3.jar
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - module.xml
+    - /opt/jboss/keycloak/modules/system/layers/base/org/postgresql/jdbc/main/
+  - Name: volume
+    Volumes:
+    - /opt/jboss/keycloak/standalone/deployments
+  - Name: volume
+    Volumes:
+    - /opt/jboss/keycloak/standalone/configuration/security
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - setupHttps.xsl
+    - /opt/jboss/keycloak/
+  - CmdLine:
+    - java -jar /usr/share/java/saxon.jar -s:/opt/jboss/keycloak/standalone/configuration/standalone.xml
+      -xsl:/opt/jboss/keycloak/setupHttps.xsl -o:/opt/jboss/keycloak/standalone/configuration/standalone.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i s/KEYSTORE_PASSWORD/\$\{env\.KEYSTORE_PASSWORD\:password\}/ /opt/jboss/keycloak/standalone/configuration/standalone.xml
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: KEYSTORE_PASSWORD
+      Value: password
+    Name: env
+  - CmdLine:
+    - echo 'JAVA_OPTS="$JAVA_OPTS -Dkeycloak.import=/opt/jboss/keycloak/standalone/configuration/security/realm.json"'
+      >> /opt/jboss/keycloak/bin/standalone.conf
+    Name: run
+    PrependShell: true
+  From:
+    Image: jboss/base-jdk:8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM jboss/base-jdk:8

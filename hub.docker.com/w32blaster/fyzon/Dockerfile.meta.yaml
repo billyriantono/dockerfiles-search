@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- As: semantic-builder
+  BaseName: node:alpine
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/w32blaster/fyzon
+  - CmdLine:
+    - cd /go/src/github.com/w32blaster/fyzon &&     npm install &&     npm install
+      semantic-ui --save &&     npm install gulp -g &&     cd semantic &&     gulp
+      build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:alpine
+  Name: semantic-builder
+  Platform: ""
+  SourceCode: FROM node:alpine AS semantic-builder
+- BaseName: golang:1.7-alpine
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/w32blaster/fyzon
+  - Chown: ""
+    From: semantic-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/w32blaster/fyzon/semantic
+    - /go/bin/semantic
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./templates
+    - /go/bin/templates
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./assets
+    - /go/bin/assets
+  - CmdLine:
+    - apk add --no-cache sqlite &&     mkdir -p /go/bin/db &&     sqlite3 /go/bin/db/trans.sqlite3
+      < src/github.com/w32blaster/fyzon/db/schema.sql &&     cp src/github.com/w32blaster/fyzon/db/schema.sql
+      /go/bin/ &&     cp src/github.com/w32blaster/fyzon/db/importDb.sh /go/bin/ &&     chmod
+      +x /go/bin/importDb.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex &&     apk add --no-cache git gcc g++
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /go/src/github.com/w32blaster/fyzon &&     go get -u -v github.com/kardianos/govendor
+      &&     govendor fetch -v +out  &&     CGO_ENABLED=0 go build -a -installsuffix
+      cgo --ldflags="-s" &&     go install . &&     apk del git &&     rm -rf /var/cache/apk/*
+      &&     rm -rf /go/src
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GIN_MODE
+      Value: release
+    Name: env
+  - Name: workdir
+    Path: /go/bin
+  - Name: volume
+    Volumes:
+    - /go/bin/db
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - /go/bin/fyzon
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: golang:1.7-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM golang:1.7-alpine

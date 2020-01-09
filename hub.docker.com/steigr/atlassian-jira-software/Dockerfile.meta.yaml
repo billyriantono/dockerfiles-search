@@ -1,0 +1,76 @@
+MetaArgs: null
+Stages:
+- BaseName: steigr/tomcat:latest
+  Commands:
+  - Env:
+    - Key: APPLICATION_USER
+      Value: software
+    - Key: JIRA_SOFTWARE_VERSION
+      Value: 7.3.1
+    Name: env
+  - CmdLine:
+    - addgroup -S $APPLICATION_USER  &&  adduser -h /app -G $APPLICATION_USER -g ''
+      -S -D -H $APPLICATION_USER  &&  apk add --no-cache --virtual .build-deps tar
+      curl  &&  install -D -d -o $APPLICATION_USER -g $APPLICATION_USER /app  &&  curl
+      -L https://www.atlassian.com/software/jira/downloads/binary/atlassian-jira-software-$JIRA_SOFTWARE_VERSION.tar.gz      |
+      su-exec $APPLICATION_USER tar -x -z -C /app --strip-components=1  &&  rm -rf
+      /app/lib/hsqldb-*.jar             /app/lib/postgresql-*.jar             /app/README*             /app/NOTICE*             /app/licenses             /app/tomcat-docs  &&  tomcat-install
+      /app $APPLICATION_USER  &&  xml c14n --without-comments /app/conf/server.xml
+      | xml fo -s 2 > /app/conf/server.xml.tmp  &&  mv /app/conf/server.xml.tmp /app/conf/server.xml  &&  curl
+      -Lo /app/lib/hsqldb-2.3.4.jar http://central.maven.org/maven2/org/hsqldb/hsqldb/2.3.4/hsqldb-2.3.4.jar  &&  curl
+      -Lo /app/lib/postgresql-42.0.0.jar https://jdbc.postgresql.org/download/postgresql-42.0.0.jar  &&  apk
+      del .build-deps  &&  rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - export MIDANAUTHENTICATOR_VERSION=1.1.0  &&  apk add --no-cache --virtual .build-deps
+      curl  &&  curl -L https://github.com/MIDAN-SOFTWARE/MIDANAuthenticator/releases/download/${MIDANAUTHENTICATOR_VERSION}/midan-authenticator-${MIDANAUTHENTICATOR_VERSION:0:3}.jar      |
+      install -D -o $APPLICATION_USER -g $APPLICATION_USER -m 0644 /dev/stdin /app/atlassian-jira/WEB-INF/lib/midan-authenticator-${MIDANAUTHENTICATOR_VERSION:0:3}.jar  &&  apk
+      del .build-deps  &&  rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Health:
+      Test:
+      - CMD-SHELL
+      - nc -z 127.0.0.1 8080
+    Name: healthcheck
+  - Name: volume
+    Volumes:
+    - /app/.oracle_jre_usage
+    - /app/work
+    - /app/logs
+    - /tmp
+  - CmdLine:
+    - software
+    Name: entrypoint
+    PrependShell: false
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /bin/software
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/main
+    - /main
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/vars
+    - /vars
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/crowd-sso-configurator
+    - /crowd-sso-configurator
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/jira-software-configurator
+    - /jira-software-configurator
+  From:
+    Image: steigr/tomcat:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM steigr/tomcat:latest

@@ -1,0 +1,206 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: ubuntu:bionic
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"devel@jochenbauer.net"'
+    Name: label
+  - Labels:
+    - Key: stage
+      Value: qt-build-base
+    Name: label
+  - Key: USER_UID
+    Name: arg
+    Value: ""
+  - Key: USER_GID
+    Name: arg
+    Value: ""
+  - Key: PROXY
+    Name: arg
+    Value: ""
+  - Env:
+    - Key: http_proxy
+      Value: $PROXY
+    Name: env
+  - Env:
+    - Key: https_proxy
+      Value: $PROXY
+    Name: env
+  - Env:
+    - Key: QT_USERNAME
+      Value: qt
+    Name: env
+  - Env:
+    - Key: QT_PREFIX
+      Value: /usr/local
+    Name: env
+  - CmdLine:
+    - "apt-get update && apt-get -y dist-upgrade && apt-get -y --no-install-recommends
+      install \tca-certificates \tcurl \tpython \tgperf \tbison \tflex \tbuild-essential
+      \tpkg-config \tlibgl1-mesa-dev \tlibicu-dev \tfirebird-dev \tlibmysqlclient-dev
+      \tlibpq-dev \tbc \tlibssl-dev \tgit \tlibfontconfig1-dev \tlibfreetype6-dev
+      \tlibx11-dev \tlibxext-dev \tlibxfixes-dev \tlibxi-dev \tlibxrender-dev \tlibxcb1-dev
+      \tlibx11-xcb-dev \tlibxcb-glx0-dev \tbash \tlibnss3-dev \tlibdbus-1-dev \t&&
+      apt-get -qq clean \t&& rm -rf /var/lib/apt/lists/* \t&& printf \"#!/bin/sh\\nls
+      -lah\" > /usr/local/bin/ll && chmod +x /usr/local/bin/ll"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "if [ ${USER_GID} ]; then \taddgroup -g ${USER_GID} ${QT_USERNAME}; \telse \taddgroup
+      ${QT_USERNAME}; \tfi \t&& if [ ${USER_UID} ]; then \tuseradd -u ${USER_UID}
+      -g ${QT_USERNAME} ${QT_USERNAME}; \telse \tuseradd -g ${QT_USERNAME} ${QT_USERNAME};
+      \tfi && mkdir /home/${QT_USERNAME}"
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:bionic
+  Name: base
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic as base
+- As: builder
+  BaseName: base
+  Commands:
+  - Labels:
+    - Key: stage
+      Value: qt-build-builder
+    Name: label
+  - Key: QT_VERSION_MAJOR
+    Name: arg
+    Value: "5"
+  - Key: QT_VERSION_MINOR
+    Name: arg
+    Value: "11"
+  - Key: QT_VERSION_PATCH
+    Name: arg
+    Value: "3"
+  - Env:
+    - Key: QT_BUILD_ROOT
+      Value: /tmp/qt_build
+    Name: env
+  - Key: QT_TARBALL_NAMING_SCHEME
+    Name: arg
+    Value: everywhere
+  - Key: QT_DOWNLOAD_BRANCH
+    Name: arg
+    Value: official_releases
+  - Env:
+    - Key: QT_BUILD_DIR
+      Value: ${QT_BUILD_ROOT}/qt-${QT_TARBALL_NAMING_SCHEME}-src-${QT_VERSION_MAJOR}.${QT_VERSION_MINOR}.${QT_VERSION_PATCH}/build
+    Name: env
+  - Name: workdir
+    Path: ${QT_BUILD_ROOT}
+  - CmdLine:
+    - curl -sSL https://download.qt.io/${QT_DOWNLOAD_BRANCH}/qt/${QT_VERSION_MAJOR}.${QT_VERSION_MINOR}/${QT_VERSION_MAJOR}.${QT_VERSION_MINOR}.${QT_VERSION_PATCH}/single/qt-${QT_TARBALL_NAMING_SCHEME}-src-${QT_VERSION_MAJOR}.${QT_VERSION_MINOR}.${QT_VERSION_PATCH}.tar.xz
+      | tar xJ
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${QT_BUILD_DIR}
+  - Key: CI_BUILD
+    Name: arg
+    Value: ""
+  - Env:
+    - Key: CI_BUILD
+      Value: ${CI_BUILD}
+    Name: env
+  - Key: CORE_COUNT
+    Name: arg
+    Value: "1"
+  - Env:
+    - Key: CORE_COUNT
+      Value: ${CORE_COUNT}
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - buildconfig/configure-${QT_VERSION_MAJOR}.${QT_VERSION_MINOR}.${QT_VERSION_PATCH}.sh
+    - configure.sh
+  - CmdLine:
+    - mkdir /opt/extra-dependencies && chmod +x ./configure.sh && ./configure.sh ${CORE_COUNT}
+      ${CI_BUILD}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - buildconfig/build.sh
+    - build.sh
+  - CmdLine:
+    - ./build.sh ${CI_BUILD} ${CORE_COUNT}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base as builder
+- As: qt
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: ENTRYPOINT_DIR
+      Value: /usr/local/bin
+    Name: env
+  - Env:
+    - Key: APP_BUILDDIR
+      Value: /var/build
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - ${QT_PREFIX}
+    - ${QT_PREFIX}
+  - CmdLine:
+    - "true"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/extra-dependencies
+    - /opt/extra-dependencies
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: /opt/extra-dependencies/lib:${LD_LIBRARY_PATH}
+    Name: env
+  - CmdLine:
+    - "true"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - ${ENTRYPOINT_DIR}
+  - CmdLine:
+    - chmod +x ${ENTRYPOINT_DIR}/entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - ${APP_BUILDDIR}
+  - Name: user
+    User: ${QT_USERNAME}
+  - CmdLine:
+    - entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: qt
+  Platform: ""
+  SourceCode: FROM base as qt

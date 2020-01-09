@@ -1,0 +1,209 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:18.04
+  Commands:
+  - Maintainer: Derek Bourgeois <derek@ibourgeois.com>
+    Name: maintainer
+  - Env:
+    - Key: APP_NAME
+      Value: app
+    Name: env
+  - Env:
+    - Key: APP_EMAIL
+      Value: app@laraedit.com
+    Name: env
+  - Env:
+    - Key: APP_DOMAIN
+      Value: app.dev
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get upgrade -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y software-properties-common curl build-essential     dos2unix
+      gcc git libmcrypt4 libpcre3-dev memcached make python2.7-dev     python-pip
+      re2c unattended-upgrades whois vim libnotify-bin nano wget     debconf-utils
+      locales libpng-dev rsync
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q -O - https://packages.blackfire.io/gpg.key | apt-key add - &&     echo
+      "deb http://packages.blackfire.io/debian any main" | tee /etc/apt/sources.list.d/blackfire.list
+      &&     curl --silent --location https://deb.nodesource.com/setup_8.x | bash
+      - &&     curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - &&     echo
+      "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list
+      &&     apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "LC_ALL=en_US.UTF-8" >> /etc/default/locale  &&     locale-gen en_US.UTF-8  &&     ln
+      -sf /usr/share/zoneinfo/UTC /etc/localtime
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .bash_aliases
+    - /root
+  - CmdLine:
+    - apt-get install -y --force-yes nginx
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - homestead
+    - /etc/nginx/sites-available/
+  - CmdLine:
+    - rm -rf /etc/nginx/sites-available/default &&     rm -rf /etc/nginx/sites-enabled/default
+      &&     ln -fs "/etc/nginx/sites-available/homestead" "/etc/nginx/sites-enabled/homestead"
+      &&     sed -i -e"s/keepalive_timeout\s*65/keepalive_timeout 2/" /etc/nginx/nginx.conf
+      &&     sed -i -e"s/keepalive_timeout 2/keepalive_timeout 2;\n\tclient_max_body_size
+      100m/" /etc/nginx/nginx.conf &&     echo "daemon off;" >> /etc/nginx/nginx.conf
+      &&     usermod -u 1000 www-data &&     chown -Rf www-data.www-data /var/www/html/
+      &&     sed -i -e"s/worker_processes  1/worker_processes 5/" /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/www/html/app
+  - Name: volume
+    Volumes:
+    - /var/cache/nginx
+  - Name: volume
+    Volumes:
+    - /var/log/nginx
+  - CmdLine:
+    - apt-get install -y --force-yes php-fpm php-cli php-dev php-pgsql php-sqlite3
+      php-gd     php-apcu php-curl php-imap php-mysql php-readline php-xdebug php-common     php-mbstring
+      php-xml php-zip php-bcmath php-soap
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - fastcgi_params
+    - /etc/nginx/
+  - CmdLine:
+    - mkdir -p /run/php/ && chown -Rf www-data.www-data /run/php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y --force-yes sqlite3 libsqlite3-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y --force-yes redis-server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y --force-yes postgresql postgresql-contrib
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo mysql-server mysql-server/root_password password $DB_PASS | debconf-set-selections;    echo
+      mysql-server mysql-server/root_password_again password $DB_PASS | debconf-set-selections;    apt-get
+      install -y mysql-server &&     echo "[mysqld]" >> /etc/mysql/my.cnf &&     echo
+      "default_password_lifetime = 0" >> /etc/mysql/my.cnf &&     sed -i '/^bind-address/s/bind-address.*=.*/bind-address
+      = 0.0.0.0/' /etc/mysql/my.cnf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /var/lib/mysql -exec touch {} \; && service mysql start &&     sleep 10s
+      &&     echo "GRANT ALL ON *.* TO root@'0.0.0.0' IDENTIFIED BY 'secret' WITH
+      GRANT OPTION; CREATE USER 'homestead'@'0.0.0.0' IDENTIFIED BY 'secret'; GRANT
+      ALL ON *.* TO 'homestead'@'0.0.0.0' IDENTIFIED BY 'secret' WITH GRANT OPTION;
+      GRANT ALL ON *.* TO 'homestead'@'%' IDENTIFIED BY 'secret' WITH GRANT OPTION;
+      FLUSH PRIVILEGES; CREATE DATABASE homestead;" | mysql
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/lib/mysql
+  - CmdLine:
+    - curl -sS https://getcomposer.org/installer | php &&     mv composer.phar /usr/local/bin/composer
+      &&     printf "\nPATH=\"~/.composer/vendor/bin:\$PATH\"\n" | tee -a ~/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - composer global require "laravel/envoy"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - composer global require "laravel/installer"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y nodejs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/npm install -g gulp
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/npm install -g bower
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y blackfire-agent blackfire-php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y --force-yes beanstalkd &&     sed -i "s/BEANSTALKD_LISTEN_ADDR.*/BEANSTALKD_LISTEN_ADDR=0.0.0.0/"
+      /etc/default/beanstalkd &&     sed -i "s/#START=yes/START=yes/" /etc/default/beanstalkd
+      &&     /etc/init.d/beanstalkd start
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y supervisor &&     mkdir -p /var/log/supervisor
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/supervisor/conf.d/supervisord.conf
+  - Name: volume
+    Volumes:
+    - /var/log/supervisor
+  - CmdLine:
+    - apt-get install -y yarn
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get remove --purge -y software-properties-common &&     apt-get autoremove
+      -y &&     apt-get clean &&     apt-get autoclean &&     echo -n > /var/lib/apt/extended_states
+      &&     rm -rf /var/lib/apt/lists/* &&     rm -rf /usr/share/man/?? &&     rm
+      -rf /usr/share/man/??_*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3306"
+    - "443"
+    - "6379"
+    - "80"
+  - CmdLine:
+    - /bin/bash
+    - -c
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/bin/supervisord
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

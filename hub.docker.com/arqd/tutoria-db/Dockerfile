@@ -1,0 +1,2 @@
+FROM postgres
+EXPOSE 3002

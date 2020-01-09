@@ -1,0 +1,102 @@
+MetaArgs: null
+Stages:
+- As: build_env
+  BaseName: debian:buster
+  Commands:
+  - Key: SOURCE_BRANCH
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SOURCE_BRANCH
+      Value: ${SOURCE_BRANCH:-1.9.6}
+    Name: env
+  - Env:
+    - Key: UNBOUND_URL
+      Value: https://nlnetlabs.nl/downloads/unbound/unbound-${SOURCE_BRANCH}.tar.gz
+    Name: env
+  - CmdLine:
+    - echo ${UNBOUND_URL}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y curl build-essential libexpat-dev libssl-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build
+  - CmdLine:
+    - curl -O ${UNBOUND_URL}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xvf unbound-${SOURCE_BRANCH}.tar.gz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build/unbound-${SOURCE_BRANCH}
+  - CmdLine:
+    - ./configure --enable-tfo-server --enable-tfo-client --enable-subnet
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip -s /usr/local/sbin/unbound
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip -s /usr/local/sbin/unbound-host
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip -s /usr/local/lib/libunbound.so.8
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:buster
+  Name: build_env
+  Platform: ""
+  SourceCode: FROM debian:buster as build_env
+- BaseName: gcr.io/distroless/base-debian10
+  Commands:
+  - Chown: ""
+    From: build_env
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/sbin/unbound
+    - /bin/unbound
+  - Chown: ""
+    From: build_env
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/sbin/unbound-host
+    - /bin/unbound-host
+  - Chown: ""
+    From: build_env
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/libunbound.so.8
+    - /lib/x86_64-linux-gnu/
+  - Health:
+      Test:
+      - CMD
+      - /bin/unbound-host
+      - -r
+      - g.co
+    Name: healthcheck
+  - CmdLine:
+    - /bin/unbound
+    - -p
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: gcr.io/distroless/base-debian10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM gcr.io/distroless/base-debian10

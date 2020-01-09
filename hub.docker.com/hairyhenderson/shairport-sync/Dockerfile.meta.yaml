@@ -1,0 +1,146 @@
+MetaArgs: null
+Stages:
+- As: build-base
+  BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk --no-cache add     git     build-base     autoconf     automake     libtool     alsa-lib-dev     libdaemon-dev     popt-dev     openssl-dev     soxr-dev     avahi-dev     libconfig-dev
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: build-base
+  Platform: ""
+  SourceCode: FROM alpine:3.9 AS build-base
+- As: build-alac
+  BaseName: build-base
+  Commands:
+  - Name: workdir
+    Path: /root/alac
+  - CmdLine:
+    - git clone https://github.com/mikebrady/alac.git .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - autoreconf -i -f
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./configure   --prefix=/usr/local
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build-base
+  Name: build-alac
+  Platform: ""
+  SourceCode: FROM build-base AS build-alac
+- As: build
+  BaseName: build-base
+  Commands:
+  - Name: workdir
+    Path: /root/shairport-sync
+  - CmdLine:
+    - git clone https://github.com/mikebrady/shairport-sync.git .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - autoreconf -i -f
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-alac
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/libalac.*
+    - /usr/local/lib/
+  - Chown: ""
+    From: build-alac
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/pkgconfig/alac.pc
+    - /usr/local/lib/pkgconfig/alac.pc
+  - Chown: ""
+    From: build-alac
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/include
+    - /usr/local/include
+  - CmdLine:
+    - ./configure         --prefix=/usr/local         --with-alsa         --with-pipe         --with-avahi         --with-ssl=openssl         --with-soxr         --with-apple-alac         --with-metadata
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build-base
+  Name: build
+  Platform: ""
+  SourceCode: FROM build-base AS build
+- As: shairport
+  BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk --no-cache add     dbus     alsa-lib     libdaemon     popt     libressl     soxr     avahi     libconfig     libgcc     libgc++
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: hairyhenderson/gomplate:slim
+    Name: copy
+    SourcesAndDest:
+    - /gomplate
+    - /bin/gomplate
+  - Chown: ""
+    From: build-alac
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/libalac.*
+    - /usr/local/lib/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/shairport-sync
+    - /usr/local/bin/shairport-sync
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - /start.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - shairport-sync.conf.tmpl
+    - /shairport-sync.conf.tmpl
+  - Env:
+    - Key: AIRPLAY_NAME
+      Value: Docker
+    Name: env
+  - CmdLine:
+    - /start.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: shairport
+  Platform: ""
+  SourceCode: FROM alpine:3.9 AS shairport

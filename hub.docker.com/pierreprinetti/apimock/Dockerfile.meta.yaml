@@ -1,0 +1,96 @@
+MetaArgs:
+- DefaultValue: "1.12"
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: "1.12"
+Stages:
+- As: builder
+  BaseName: golang:${GO_VERSION}-alpine
+  Commands:
+  - CmdLine:
+    - mkdir /user &&     echo 'nobody:x:65534:65534:nobody:/:' > /user/passwd &&     echo
+      'nobody:x:65534:' > /user/group
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./go.mod
+    - ./go.sum
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - ./
+  - CmdLine:
+    - CGO_ENABLED=0 go build     -installsuffix 'static'     -o /app .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:${GO_VERSION}-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:${GO_VERSION}-alpine AS builder
+- As: final
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /user/group
+    - /user/passwd
+    - /etc/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /app
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.opencontainers.image.created
+      Value: $BUILD_DATE
+    - Key: org.opencontainers.image.authors
+      Value: '"https://pierreprinetti.com"'
+    - Key: org.opencontainers.image.url
+      Value: '"https://hub.docker.com/r/pierreprinetti/apimock/"'
+    - Key: org.opencontainers.image.source
+      Value: '"https://github.com/pierreprinetti/apimock"'
+    - Key: org.opencontainers.image.version
+      Value: $VCS_REF
+    - Key: org.opencontainers.image.revision
+      Value: $VCS_REF
+    - Key: org.opencontainers.image.title
+      Value: '"apimock"'
+    - Key: org.opencontainers.image.description
+      Value: '"A mock API server"'
+    Name: label
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: user
+    User: nobody:nobody
+  - CmdLine:
+    - /app
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: final
+  Platform: ""
+  SourceCode: FROM scratch AS final

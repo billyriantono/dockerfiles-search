@@ -1,0 +1,61 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: continuumio/miniconda3
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -o
+    - pipefail
+    - -c
+  - CmdLine:
+    - apt-get update -qq -y &&  apt-get install -qq -y gnupg curl git-core &&  curl
+      -sL https://deb.nodesource.com/setup_10.x | bash - &&  apt-get update -qq -y
+      && apt-get install -qq -y nodejs &&  cd mlflow/server/js &&  npm install &&  npm
+      run build &&  cd /app &&  python setup.py bdist_wheel
+    Name: run
+    PrependShell: true
+  From:
+    Image: continuumio/miniconda3
+  Name: builder
+  Platform: ""
+  SourceCode: FROM continuumio/miniconda3 as builder
+- As: runtime
+  BaseName: continuumio/miniconda3
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/dist/*.whl
+    - /tmp/wheel/
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - useradd --create-home --home-dir /app --shell /bin/bash --uid 8888 app &&  apt
+      update -qq -y &&  apt install -qq -y --no-install-recommends build-essential
+      libpq-dev &&  pip install /tmp/wheel/*.whl sqlalchemy psycopg2 &&  apt clean
+      &&  /bin/rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache/
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  - CmdLine:
+    - mlflow
+    - server
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: continuumio/miniconda3
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM continuumio/miniconda3 as runtime

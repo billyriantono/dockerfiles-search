@@ -1,0 +1,200 @@
+MetaArgs: null
+Stages:
+- BaseName: thomasbjackson/java:oracle-java7
+  Commands:
+  - Maintainer: Tom Jackson thomas.jackson@cprime.com
+    Name: maintainer
+  - Env:
+    - Key: CONFLUENCE_VERSION
+      Value: "5.7"
+    Name: env
+  - Env:
+    - Key: DOWNLOAD_URL
+      Value: https://downloads.atlassian.com/software/confluence/downloads/atlassian-confluence-
+    Name: env
+  - Env:
+    - Key: CONFLUENCE_HOME
+      Value: /var/local/atlassian/confluence
+    Name: env
+  - Env:
+    - Key: CONFLUENCE_INSTALL
+      Value: /usr/local/confluence
+    Name: env
+  - Env:
+    - Key: CATALINA_OPTS
+      Value: -Dfile.encoding=UTF-8 -Xms6G -Xmx6G
+    Name: env
+  - CmdLine:
+    - set -x     && apt-get update --quiet     && apt-get install --quiet --yes --no-install-recommends
+      libtcnative-1 xmlstarlet
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p                "${CONFLUENCE_HOME}"     && chmod -R 770            "${CONFLUENCE_HOME}"     &&
+      chown daemon:daemon     "${CONFLUENCE_HOME}"     && mkdir -p                "${CONFLUENCE_INSTALL}/conf"     &&
+      mkdir -p                "${CONFLUENCE_INSTALL}/security"     && curl -L --silent  ${DOWNLOAD_URL}${CONFLUENCE_VERSION}.tar.gz
+      | tar -xz --strip=1 -C "${CONFLUENCE_INSTALL}" --no-same-owner     && chmod
+      -R 770            "${CONFLUENCE_INSTALL}/conf"     && chmod -R 770            "${CONFLUENCE_INSTALL}/temp"     &&
+      chmod -R 770            "${CONFLUENCE_INSTALL}/logs"     && chmod -R 770            "${CONFLUENCE_INSTALL}/work"     &&
+      chmod -R 770            "${CONFLUENCE_INSTALL}/security"     && chown -R daemon:daemon  "${CONFLUENCE_INSTALL}/conf"     &&
+      chown -R daemon:daemon  "${CONFLUENCE_INSTALL}/temp"     && chown -R daemon:daemon  "${CONFLUENCE_INSTALL}/logs"     &&
+      chown -R daemon:daemon  "${CONFLUENCE_INSTALL}/work"     && chown -R daemon:daemon  "${CONFLUENCE_INSTALL}/security"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - configs/certs/confluence.p7b
+    - /tmp/confluence.p7b
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - configs/certs/jira.p7b
+    - /tmp/jira.p7b
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - configs/certs/confluence.affinityps.com.key
+    - /tmp/confluence.affinityps.com.key
+  - CmdLine:
+    - openssl pkcs7 -print_certs -in /tmp/confluence.p7b -out /tmp/confluence.pem
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cat /tmp/confluence.affinityps.com.key /tmp/confluence.pem > /tmp/confluence-keyed-cert.pem
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: KEYSTORE_FILE
+      Value: confluence_keystore.pkcs12
+    Name: env
+  - CmdLine:
+    - openssl pkcs12 -export -in /tmp/confluence-keyed-cert.pem -out $CONFLUENCE_INSTALL/security/$KEYSTORE_FILE
+      -name jira-noiter -nomaciter -password pass:affinityps
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 444 $CONFLUENCE_INSTALL/security/$KEYSTORE_FILE
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R daemon:daemon ${CONFLUENCE_INSTALL}/security/$KEYSTORE_FILE
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "confluence.home=${CONFLUENCE_HOME}" > ${CONFLUENCE_INSTALL}/confluence/WEB-INF/classes/confluence-init.properties
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp ${CONFLUENCE_INSTALL}/confluence/WEB-INF/web.xml ${CONFLUENCE_INSTALL}/temp/web.xml.$CONFLUENCE_VERSION
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - configs/web.xml
+    - ${CONFLUENCE_INSTALL}/confluence/WEB-INF/web.xml
+  - CmdLine:
+    - chown -R daemon:daemon ${CONFLUENCE_INSTALL}/confluence/WEB-INF/web.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp ${CONFLUENCE_INSTALL}/conf/server.xml ${CONFLUENCE_INSTALL}/temp/server.xml.$CONFLUENCE_VERSION
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - configs/server.xml
+    - ${CONFLUENCE_INSTALL}/conf/server.xml
+  - CmdLine:
+    - chown -R daemon:daemon ${CONFLUENCE_INSTALL}/conf/server.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp ${CONFLUENCE_INSTALL}/confluence/WEB-INF/urlrewrite.xml ${CONFLUENCE_INSTALL}/temp/urlrewrite.xml.$CONFLUENCE_VERSION
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - configs/urlrewrite.xml
+    - ${CONFLUENCE_INSTALL}/confluence/WEB-INF/urlrewrite.xml
+  - CmdLine:
+    - chown -R daemon:daemon ${CONFLUENCE_INSTALL}/confluence/WEB-INF/urlrewrite.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - install -d -m 0755 -o daemon -g daemon "${CONFLUENCE_HOME}/affinityps-configs"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - configs/configs_linker.sh
+    - /tmp/configs_linker.sh
+  - CmdLine:
+    - chmod 0744 /tmp/configs_linker.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl pkcs7 -print_certs -in /tmp/jira.p7b -out /tmp/jira.pem
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl x509 -outform der -in /tmp/jira.pem -out /tmp/jira.der
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - printf 'changeit\nyes' | keytool -import -file /tmp/jira.der -alias jira -keystore
+      /usr/lib/jvm/java-7-oracle/jre/lib/security/cacerts
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - configs/initKeyStore_4_2.jsp
+    - ${CONFLUENCE_INSTALL}/confluence/admin/initKeyStore_4_2.jsp
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - configs/start-container.sh
+    - ${CONFLUENCE_INSTALL}/bin/start-container.sh
+  - CmdLine:
+    - chmod 555 ${CONFLUENCE_INSTALL}/bin/start-container.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - configs/urlrewrite.xml
+    - ${CONFLUENCE_HOME}/affinityps-configs/urlrewrite.xml
+  - CmdLine:
+    - chown -R daemon:daemon ${CONFLUENCE_HOME}/affinityps-configs/urlrewrite.xml
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: daemon:daemon
+  - Name: volume
+    Volumes:
+    - '['
+    - ${CONFLUENCE_INSTALL}
+    - ','
+    - ${CONFLUENCE_HOME}
+    - ']'
+  - Name: expose
+    Ports:
+    - "8090"
+    - "8443"
+  - Name: workdir
+    Path: /usr/local/confluence
+  - CmdLine:
+    - ./bin/start-container.sh
+    - -fg
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: thomasbjackson/java:oracle-java7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM thomasbjackson/java:oracle-java7

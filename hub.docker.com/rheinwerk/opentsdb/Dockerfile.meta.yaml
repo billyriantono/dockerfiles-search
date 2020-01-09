@@ -1,0 +1,145 @@
+MetaArgs: null
+Stages:
+- BaseName: janeczku/alpine-kubernetes:3.2
+  Commands:
+  - CmdLine:
+    - apk --update add rsyslog bash openjdk7 make wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --update add --virtual builddeps build-base autoconf automake git python
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TSDB_VERSION
+      Value: 2.3.0
+    Name: env
+  - Env:
+    - Key: HBASE_VERSION
+      Value: 1.1.12
+    Name: env
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/java-1.7-openjdk
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:/usr/lib/jvm/java-1.7-openjdk/bin/
+    Name: env
+  - CmdLine:
+    - mkdir -p /opt/bin/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /opt/opentsdb/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/opentsdb/
+  - CmdLine:
+    - wget --no-check-certificate -O v${TSDB_VERSION}.zip https://github.com/OpenTSDB/opentsdb/archive/v${TSDB_VERSION}.zip
+      &&     unzip v${TSDB_VERSION}.zip &&     rm v${TSDB_VERSION}.zip
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/opentsdb/opentsdb-${TSDB_VERSION}
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/opentsdb.conf
+    - /opt/opentsdb/opentsdb-${TSDB_VERSION}/src/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/logback.xml
+    - /opt/opentsdb/opentsdb-${TSDB_VERSION}/src/
+  - CmdLine:
+    - ln -s /opt/opentsdb/opentsdb-${TSDB_VERSION}/src/opentsdb.conf /etc/opentsdb.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./build.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -E "s|-classpath \"|-classpath \"/opt/opentsdb/opentsdb-${TSDB_VERSION}/src:|"
+      /opt/opentsdb/opentsdb-${TSDB_VERSION}/build/tsdb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk del builddeps && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /data/hbase
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /root/.profile.d
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/downloads
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/downloads
+  - CmdLine:
+    - wget -O hbase-${HBASE_VERSION}.bin.tar.gz http://www-us.apache.org/dist/hbase/${HBASE_VERSION}/hbase-${HBASE_VERSION}-bin.tar.gz
+      &&     tar xzvf hbase-${HBASE_VERSION}.bin.tar.gz &&     mv hbase-${HBASE_VERSION}
+      /opt/hbase &&     rm hbase-${HBASE_VERSION}.bin.tar.gz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/hbase-site.xml
+    - /opt/hbase/conf/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/start_opentsdb.sh
+    - /opt/bin/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/create_tsdb_tables.sh
+    - /opt/bin/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/start_hbase.sh
+    - /opt/bin/
+  - CmdLine:
+    - for i in /opt/bin/start_hbase.sh /opt/bin/start_opentsdb.sh /opt/bin/create_tsdb_tables.sh;     do         sed
+      -i "s#::JAVA_HOME::#$JAVA_HOME#g; s#::PATH::#$PATH#g; s#::TSDB_VERSION::#$TSDB_VERSION#g;"
+      $i;     done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /etc/services.d/hbase /etc/services.d/tsdb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /opt/bin/start_hbase.sh /etc/services.d/hbase/run
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /opt/bin/start_opentsdb.sh /etc/services.d/tsdb/run
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "16010"
+    - "4242"
+    - "60000"
+    - "60010"
+    - "60030"
+  - Name: volume
+    Volumes:
+    - /data/hbase
+  From:
+    Image: janeczku/alpine-kubernetes:3.2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM janeczku/alpine-kubernetes:3.2

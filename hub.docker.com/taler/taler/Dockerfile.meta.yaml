@@ -1,0 +1,175 @@
+MetaArgs: null
+Stages:
+- As: berkeleydb
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache add autoconf automake build-base openssl
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: BERKELEYDB_VERSION
+      Value: db-4.8.30.NC
+    Name: env
+  - Env:
+    - Key: BERKELEYDB_PREFIX
+      Value: /opt/${BERKELEYDB_VERSION}
+    Name: env
+  - CmdLine:
+    - wget https://download.oracle.com/berkeley-db/${BERKELEYDB_VERSION}.tar.gz     &&
+      tar -xzf *.tar.gz     && sed s/__atomic_compare_exchange/__atomic_compare_exchange_db/g
+      -i ${BERKELEYDB_VERSION}/dbinc/atomic.h     && mkdir -p ${BERKELEYDB_PREFIX}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /${BERKELEYDB_VERSION}/build_unix
+  - CmdLine:
+    - ../dist/configure --enable-cxx --disable-shared --with-pic --prefix=${BERKELEYDB_PREFIX}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf ${BERKELEYDB_PREFIX}/docs
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: berkeleydb
+  Platform: ""
+  SourceCode: FROM alpine as berkeleydb
+- As: taler-core
+  BaseName: alpine
+  Commands:
+  - Chown: ""
+    From: berkeleydb
+    Name: copy
+    SourcesAndDest:
+    - /opt
+    - /opt
+  - CmdLine:
+    - apk --no-cache add git autoconf automake boost-dev build-base chrpath file libevent-dev
+      gnupg openssl openssl-dev libtool protobuf-dev zeromq-dev
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TALER_VERSION
+      Value: 0.16.3.1
+    Name: env
+  - Env:
+    - Key: TALER_PREFIX
+      Value: /opt/taler-${TALER_VERSION}
+    Name: env
+  - CmdLine:
+    - git clone https://github.com/taler-project/taler.git --depth=1
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /taler
+  - CmdLine:
+    - sed -i '/AC_PREREQ/a\AR_FLAGS=cr' src/univalue/configure.ac
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i '/AX_PROG_CC_FOR_BUILD/a\AR_FLAGS=cr' src/secp256k1/configure.ac
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'sed -i s:sys/fcntl.h:fcntl.h: src/compat.h'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i '/char\ scratchpad\[SCRYPT_SCRATCHPAD_SIZE\];/a\memset(scratchpad, 0,
+      sizeof(scratchpad));' src/crypto/scrypt.cpp  && sed -i 's/char\ scratchpad\[SCRYPT_SCRATCHPAD_SIZE\];/static
+      &/g' src/crypto/scrypt.cpp
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./autogen.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./configure LDFLAGS=-L`ls -d /opt/db*`/lib/ CPPFLAGS=-I`ls -d /opt/db*`/include/     --prefix=${TALER_PREFIX}     --mandir=/usr/share/man     --disable-tests     --disable-bench     --disable-ccache     --with-gui=no     --with-utils     --with-libs     --with-daemon     --disable-shared     --enable-static
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip ${TALER_PREFIX}/bin/taler-cli  && strip ${TALER_PREFIX}/bin/taler-tx  &&
+      strip ${TALER_PREFIX}/bin/talerd  && strip ${TALER_PREFIX}/lib/libbitcoinconsensus.a
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: taler-core
+  Platform: ""
+  SourceCode: FROM alpine as taler-core
+- BaseName: alpine
+  Commands:
+  - CmdLine:
+    - adduser -S taler
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --no-cache add   boost   boost-program_options   libevent   openssl   libzmq   su-exec
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TALER_DATA
+      Value: /home/taler/.taler
+    Name: env
+  - Env:
+    - Key: TALER_VERSION
+      Value: 0.16.3.1
+    Name: env
+  - Env:
+    - Key: TALER_PREFIX
+      Value: /opt/taler-${TALER_VERSION}
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: ${TALER_PREFIX}/bin:$PATH
+    Name: env
+  - Chown: ""
+    From: taler-core
+    Name: copy
+    SourcesAndDest:
+    - ${TALER_PREFIX}
+    - ${TALER_PREFIX}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /entrypoint.sh
+  - Name: volume
+    Volumes:
+    - /home/taler/.taler
+  - Name: expose
+    Ports:
+    - "23153"
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - talerd
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

@@ -1,0 +1,109 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:14.04
+  Commands:
+  - Maintainer: developers@8layertech.com
+    Name: maintainer
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: DBUSER
+      Value: root
+    Name: env
+  - Env:
+    - Key: DBPASS
+      Value: root
+    Name: env
+  - Env:
+    - Key: APPPORT
+      Value: "4567"
+    Name: env
+  - Env:
+    - Key: BOOT2DOCKER_ID
+      Value: "1000"
+    Name: env
+  - Env:
+    - Key: BOOT2DOCKER_GID
+      Value: "50"
+    Name: env
+  - CmdLine:
+    - usermod -u ${BOOT2DOCKER_ID} www-data &&     usermod -G staff www-data
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'groupmod -g $(($BOOT2DOCKER_GID + 10000)) $(getent group $BOOT2DOCKER_GID |
+      cut -d: -f1)'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupmod -g ${BOOT2DOCKER_GID} staff
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&     echo "mysql-server-5.5 mysql-server/root_password password
+      $DBUSER" | debconf-set-selections &&     echo "mysql-server-5.5 mysql-server/root_password_again
+      password $DBPASS" | debconf-set-selections &&     apt-get -y install mysql-server
+      libapache2-mod-auth-mysql php5-mysql                         php5 libapache2-mod-php5
+      php5-mcrypt php5-cli                         curl git supervisor
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "phpmyadmin phpmyadmin/reconfigure-webserver multiselect apache2" | debconf-set-selections
+      &&     echo "phpmyadmin phpmyadmin/dbconfig-install boolean true" | debconf-set-selections
+      &&     echo "phpmyadmin phpmyadmin/mysql/admin-user string $DBUSER" | debconf-set-selections
+      &&     echo "phpmyadmin phpmyadmin/mysql/admin-pass password $DBPASS" | debconf-set-selections
+      &&     echo "phpmyadmin phpmyadmin/mysql/app-pass password $DBPASS" | debconf-set-selections
+      &&     echo "phpmyadmin phpmyadmin/app-password-confirm password $DBPASS" |
+      debconf-set-selections &&     apt-get -y install phpmyadmin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - php5enmod mcrypt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/bplo.local.conf
+      &&     sed -i.bak "s/\*:80/\*:$APPPORT/" /etc/apache2/sites-available/bplo.local.conf
+      &&     mkdir /var/www/site &&     sed -i.bak 's/DocumentRoot.*$/DocumentRoot
+      \/var\/www\/app\/public/' /etc/apache2/sites-available/bplo.local.conf &&     sed
+      -i.bak "s/error\.log.*$/$APPPORT-bplo\.local-error\.log/" /etc/apache2/sites-available/bplo.local.conf
+      &&     sed -i.bak "s/access\.log/$APPPORT-bplo\.local-access\.log/" /etc/apache2/sites-available/bplo.local.conf
+      &&     sed -i.bak "s/Listen 80/Listen 80\n\nListen $APPPORT\n/" /etc/apache2/ports.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2ensite 000-default &&     a2ensite bplo.local &&     a2enmod rewrite
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin
+      --filename=composer
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - composer global require "laravel/installer=~1.1"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: expose
+    Ports:
+    - "4567"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/supervisor/conf.d/supervisord.conf
+  - CmdLine:
+    - supervisord
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:14.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:14.04

@@ -1,0 +1,11 @@
+FROM python:3.7
+
+ENV HTTPSTAT_SHOW_BODY false
+ENV HTTPSTAT_SHOW_IP false
+ENV HTTPSTAT_SHOW_SPEED false
+ENV HTTPSTAT_SAVE_BODY false
+ENV HTTPSTAT_DEBUG false
+
+COPY . .
+
+ENTRYPOINT ["python", "httpstat.py"]

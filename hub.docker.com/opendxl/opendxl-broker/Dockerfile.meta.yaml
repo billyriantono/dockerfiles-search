@@ -1,0 +1,149 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:stretch-slim
+  Commands:
+  - Key: build_docs
+    Name: arg
+    Value: "false"
+  - CmdLine:
+    - apt-get update -y     && apt-get install -y libssl1.0-dev libboost-dev cmake
+      uuid-dev wget build-essential
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp     && wget https://github.com/msgpack/msgpack-c/releases/download/cpp-3.1.1/msgpack-3.1.1.tar.gz     &&
+      tar xvfz ./msgpack-3.1.1.tar.gz     && cd msgpack-3.1.1     && cmake .     &&
+      make     && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp     && wget https://github.com/open-source-parsers/jsoncpp/archive/1.8.4.tar.gz     &&
+      tar xvfz 1.8.4.tar.gz     && cd jsoncpp-1.8.4     && cmake -DCMAKE_BUILD_TYPE=release
+      -DBUILD_STATIC_LIBS=ON -DBUILD_SHARED_LIBS=OFF         -DARCHIVE_INSTALL_DIR=/usr/local/lib
+      -G "Unix Makefiles"     && make     && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp     && wget https://github.com/opendxl-community/libwebsockets/archive/v3.1-stable-opendxl-4.tar.gz     &&
+      tar xvzf v3.1-stable-opendxl-4.tar.gz     && cd libwebsockets-3.1-stable-opendxl-4     &&
+      cmake -DCMAKE_BUILD_TYPE=release -DLWS_IPV6=On -DLWS_WITH_STATIC=ON         -DLWS_WITH_SHARED=OFF
+      -DLWS_WITHOUT_TESTAPPS=ON -G "Unix Makefiles"     && make     && make install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /tmp/src
+  - CmdLine:
+    - cd /tmp/src && make
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docs
+    - /tmp/docs
+  - CmdLine:
+    - mkdir /tmp/docs-output
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ "$build_docs" = "true" ]; then apt-get -y install flex bison python3 doxygen     &&
+      cd /tmp/docs     && . /tmp/src/version     && sed -i "s,@PROJECT_NUMBER@,$SOMAJVER.$SOMINVER.$SOSUBMINVER.$SOBLDNUM,g"
+      doxygen.config     && doxygen doxygen.config > /tmp/docs-output/build.log 2>&1
+      ; fi
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim as builder
+- BaseName: debian:stretch-slim
+  Commands:
+  - Key: DXL_CONSOLE_VERSION
+    Name: arg
+    Value: 0.3.3
+  - CmdLine:
+    - apt-get update -y     && apt-get install -y libssl1.0 wget uuid-runtime python
+      iproute2 procps     && apt-get clean     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "wget -O get-pip.py 'https://bootstrap.pypa.io/get-pip.py' \t&& python get-pip.py
+      --disable-pip-version-check --no-cache-dir     && rm -f get-pip.py     && cp
+      -f /usr/local/bin/pip2 /usr/local/bin/pip     && pip install dxlconsole==${DXL_CONSOLE_VERSION}"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dxlbroker
+    - /dxlbroker
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - LICENSE*
+    - /dxlbroker/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/src/mqtt-core/src/dxlbroker
+    - /dxlbroker/bin
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/libmsgpackc.so.2.0.0
+    - /dxlbroker/lib
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/docs-output
+    - /dxlbroker/docs
+  - CmdLine:
+    - mkdir /dxlbroker-volume
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser --home /dxlbroker --disabled-password --gecos "" dxl     && chown -R
+      dxl:dxl /dxlbroker-volume     && chown -R dxl:dxl /dxlbroker
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /dxlbroker/startup.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /dxlbroker/startup_as_root.sh
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /dxlbroker-volume
+  - Name: expose
+    Ports:
+    - "8883"
+  - Name: expose
+    Ports:
+    - "8443"
+  - Name: expose
+    Ports:
+    - "443"
+  - CmdLine:
+    - /dxlbroker/startup_as_root.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

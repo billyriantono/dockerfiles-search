@@ -1,0 +1,315 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:testing
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get -y update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y upgrade
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y autoremove
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get install -y \tca-certificates \tgit-core \twget \tapt-utils \t--no-install-recommends"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get install -y \tautoconf \tautomake \tbuild-essential \tintltool \tlibglib2.0-0
+      \tlibglib2.0-dev \tlibtool \tgobject-introspection \tmeson \t--no-install-recommends"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PREFIX
+      Value: /usr/local
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PREFIX/bin:$PATH
+    Name: env
+  - Env:
+    - Key: PKG_CONFIG_PATH
+      Value: $PREFIX/lib/pkgconfig:$PREFIX/share/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
+    Name: env
+  - Env:
+    - Key: SRCDIR
+      Value: /usr/src/gimp-git
+    Name: env
+  - CmdLine:
+    - mkdir -p $SRCDIR
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $SRCDIR
+  - CmdLine:
+    - ldconfig
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:testing
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:testing AS builder
+- As: build-babl
+  BaseName: builder
+  Commands:
+  - CmdLine:
+    - git clone https://gitlab.gnome.org/GNOME/babl.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "DEBIAN_FRONTEND=noninteractive apt-get install -y \tliblcms2-dev \t--no-install-recommends"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ldconfig
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $SRCDIR/babl
+  - CmdLine:
+    - meson --prefix=$PREFIX build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $SRCDIR/babl/build
+  - CmdLine:
+    - ninja -j`nproc`
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ninja install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: builder
+  Name: build-babl
+  Platform: ""
+  SourceCode: FROM builder AS build-babl
+- As: build-gegl
+  BaseName: builder
+  Commands:
+  - CmdLine:
+    - git clone https://gitlab.gnome.org/GNOME/gegl.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "DEBIAN_FRONTEND=noninteractive apt-get install -y \tgtk-doc-tools \tlibgexiv2-dev
+      \tlibgs-dev \tlibjson-glib-dev \tlibopenexr-dev \tlibrsvg2-dev \tpython \tpython-dev
+      \tpython-gtk2-dev \tpython-cairo-dev \truby \tlibgirepository1.0-dev \t--no-install-recommends"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-babl
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /usr/local
+  - Chown: ""
+    From: build-babl
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/share/gir-1.0
+    - /usr/share/gir-1.0
+  - CmdLine:
+    - ldconfig
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $SRCDIR/gegl
+  - CmdLine:
+    - meson --prefix=$PREFIX build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $SRCDIR/gegl/build
+  - CmdLine:
+    - ninja -j`nproc`
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ninja install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: builder
+  Name: build-gegl
+  Platform: ""
+  SourceCode: FROM builder AS build-gegl
+- As: build-libmypaint
+  BaseName: builder
+  Commands:
+  - CmdLine:
+    - git clone https://github.com/mypaint/libmypaint.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "DEBIAN_FRONTEND=noninteractive apt-get install -y \tlibjson-c-dev \tlibjson-c4
+      \tpython \t--no-install-recommends"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $SRCDIR/libmypaint
+  - CmdLine:
+    - git checkout libmypaint-v1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./autogen.sh --prefix=$PREFIX
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./configure --disable-gegl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -j`nproc`
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: builder
+  Name: build-libmypaint
+  Platform: ""
+  SourceCode: FROM builder AS build-libmypaint
+- As: build-gimp
+  BaseName: builder
+  Commands:
+  - CmdLine:
+    - git clone https://gitlab.gnome.org/GNOME/gimp.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get install -y \tautopoint \tgettext \tgtk-3-examples \tlibaa1-dev \tlibappstream-glib-dev
+      \tlibasound2-dev \tlibbz2-dev \tlibexif-dev \tlibgexiv2-dev \tlibgtk2.0-dev
+      \tlibgtk-3-dev \tlibjson-glib-dev \tliblcms2-dev \tlibmng-dev \tlibpoppler-glib-dev
+      \tlibtiff5-dev \tlibwebp-dev \tlibwmf-dev \tlibxpm-dev \tmypaint-brushes \topenexr
+      \tpoppler-data \tvalac \txsltproc \tlibgirepository1.0-dev \tgjs \tluajit \tpython-gobject-2-dev
+      \tlibopenexr-dev \tlibheif-dev \tlibopenjp2-7-dev \tpython3-gi \tlibjson-c-dev
+      \tlibrsvg2-dev \t--no-install-recommends"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-babl
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /usr/local
+  - Chown: ""
+    From: build-gegl
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /usr/local
+  - Chown: ""
+    From: build-libmypaint
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /usr/local
+  - CmdLine:
+    - ldconfig
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $SRCDIR/gimp
+  - CmdLine:
+    - ./autogen.sh --prefix=$PREFIX --disable-gtk-doc --without-webkit
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -j`nproc`
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: builder
+  Name: build-gimp
+  Platform: ""
+  SourceCode: FROM builder AS build-gimp
+- BaseName: debian:testing
+  Commands:
+  - Maintainer: Jaroslaw Filiochowski <jarfil@gmail.com>
+    Name: maintainer
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get -y update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y upgrade
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y autoremove
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PREFIX
+      Value: /usr/local
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PREFIX/bin:$PATH
+    Name: env
+  - Chown: ""
+    From: build-gimp
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/
+    - /usr/local/
+  - CmdLine:
+    - "DEBIAN_FRONTEND=noninteractive apt-get install -y \tgjs \tlibaa1 \tlibappstream-glib8
+      \tlibasound2 \tlibbz2-1.0 \tlibexif12 \tlibgexiv2-2 \tlibgs9 \tlibgtk2.0-0 \tlibgtk2.0-bin
+      \tlibgtk-3-0 \tlibgtk-3-bin \tlibheif1 \tlibjson-c4 \tlibjson-glib-1.0-0 \tliblcms2-2
+      \tlibmng1 \tlibopenjp2-7 \tlibpoppler-glib8 \tlibrsvg2-2 \tlibtiff5 \tlibwebp6
+      \tlibwmf0.2-7 \tlibxpm4 \tluajit \tmypaint-brushes \topenexr \tpoppler-data
+      \tpython \tpython-cairo \tpython-gobject-2 \tpython-gtk2 \truby \tvalac \txsltproc
+      \t--no-install-recommends"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ldconfig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s `ls /usr/local/bin/gimp-?.* | head -n2` /usr/local/bin/gimp
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - /usr/local/bin/gimp
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:testing
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:testing

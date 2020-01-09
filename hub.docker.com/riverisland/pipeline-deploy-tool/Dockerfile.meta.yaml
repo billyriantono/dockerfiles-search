@@ -1,0 +1,93 @@
+MetaArgs:
+- DefaultValue: "3.6"
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: "3.6"
+- DefaultValue: 0.11.13
+  Key: TERRAFORM_VERSION
+  ProvidedValue: null
+  Value: 0.11.13
+Stages:
+- As: alpine
+  BaseName: alpine:${ALPINE_VERSION}
+  Commands: null
+  From:
+    Image: alpine:${ALPINE_VERSION}
+  Name: alpine
+  Platform: ""
+  SourceCode: FROM alpine:${ALPINE_VERSION} AS alpine
+- As: tf
+  BaseName: hashicorp/terraform:${TERRAFORM_VERSION}
+  Commands: null
+  From:
+    Image: hashicorp/terraform:${TERRAFORM_VERSION}
+  Name: tf
+  Platform: ""
+  SourceCode: FROM hashicorp/terraform:${TERRAFORM_VERSION} AS tf
+- As: tfg
+  BaseName: alpine
+  Commands:
+  - Key: TERRAGRUNT_VERSION
+    Name: arg
+    Value: v0.18.3
+  - CmdLine:
+    - apk --no-cache --update add     ca-certificates     wget     && wget --output-document=/bin/terragrunt
+      --no-verbose "https://github.com/gruntwork-io/terragrunt/releases/download/${TERRAGRUNT_VERSION}/terragrunt_linux_amd64"     &&
+      chmod +x /bin/terragrunt
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: alpine
+  Name: tfg
+  Platform: ""
+  SourceCode: FROM alpine AS tfg
+- As: final
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache --update add     make     git     openssh-client     && mkdir
+      -p /usr/local/tmp     && echo 'terragrunt = {}' >  /usr/local/tmp/terraform.tfvars     &&
+      touch /usr/local/tmp/fake.tf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: tf
+    Name: copy
+    SourcesAndDest:
+    - /bin/terraform
+    - /bin/terraform
+  - Chown: ""
+    From: tfg
+    Name: copy
+    SourcesAndDest:
+    - /bin/terragrunt
+    - /bin/terragrunt
+  - Chown: ""
+    From: tfg
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/ca-certificates.crt
+  - Name: workdir
+    Path: /data
+  - CmdLine:
+    - /bin/terragrunt
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - version
+    - --terragrunt-config
+    - /usr/local/tmp/terraform.tfvars
+    - --terragrunt-working-dir
+    - /usr/local/tmp
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: alpine
+  Name: final
+  Platform: ""
+  SourceCode: FROM alpine as final

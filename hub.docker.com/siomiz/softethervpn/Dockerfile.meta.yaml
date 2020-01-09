@@ -1,0 +1,99 @@
+MetaArgs: null
+Stages:
+- As: prep
+  BaseName: alpine:3.9
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Tomohisa Kusano <siomiz@gmail.com>"'
+    - Key: contributors
+      Value: '"See CONTRIBUTORS file <https://github.com/siomiz/SoftEtherVPN/blob/master/CONTRIBUTORS>"'
+    Name: label
+  - Env:
+    - Key: BUILD_VERSION
+      Value: 4.29-9680-rtm
+    - Key: SHA256_SUM
+      Value: c19cd49835c613cb5551ce66c91f90da3d3496ab3e15e8c61e22b464dc55d9b0
+    Name: env
+  - CmdLine:
+    - wget https://github.com/SoftEtherVPN/SoftEtherVPN_Stable/archive/v${BUILD_VERSION}.tar.gz     &&
+      echo "${SHA256_SUM}  v${BUILD_VERSION}.tar.gz" | sha256sum -c     && mkdir -p
+      /usr/local/src     && tar -x -C /usr/local/src/ -f v${BUILD_VERSION}.tar.gz     &&
+      rm v${BUILD_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: prep
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as prep
+- As: build
+  BaseName: centos:7
+  Commands:
+  - Chown: ""
+    From: prep
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/src
+    - /usr/local/src
+  - CmdLine:
+    - yum -y update     && yum -y groupinstall "Development Tools"     && yum -y install
+      ncurses-devel openssl-devel readline-devel     && cd /usr/local/src/SoftEtherVPN_Stable-*     &&
+      ./configure     && make     && make install     && touch /usr/vpnserver/vpn_server.config     &&
+      zip -r9 /artifacts.zip /usr/vpn* /usr/bin/vpn*
+    Name: run
+    PrependShell: true
+  From:
+    Image: centos:7
+  Name: build
+  Platform: ""
+  SourceCode: FROM centos:7 as build
+- BaseName: centos:7
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /artifacts.zip
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - copyables
+    - /
+  - CmdLine:
+    - yum -y update     && yum -y install unzip iptables sysvinit-tools     && rm
+      -rf /var/log/* /var/cache/yum/* /var/lib/yum/*     && chmod +x /entrypoint.sh
+      /gencert.sh     && unzip -o /artifacts.zip -d /     && rm /artifacts.zip     &&
+      rm -rf /opt     && ln -s /usr/vpnserver /opt     && find /usr/bin/vpn* -type
+      f ! -name vpnserver        -exec sh -c 'ln -s {} /opt/$(basename {})' \;
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/vpnserver/
+  - Name: volume
+    Volumes:
+    - /usr/vpnserver/server_log/
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - 1194/udp
+    - 1701/tcp
+    - 443/tcp
+    - 4500/udp
+    - 500/udp
+    - 5555/tcp
+  - CmdLine:
+    - /usr/bin/vpnserver
+    - execsvc
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos:7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:7

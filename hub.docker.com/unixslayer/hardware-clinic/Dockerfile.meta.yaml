@@ -1,0 +1,184 @@
+MetaArgs: null
+Stages:
+- As: vendor
+  BaseName: composer
+  Commands:
+  - Env:
+    - Key: COMPOSER_ALLOW_SUPERUSER
+      Value: "1"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - composer.json
+    - composer.json
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - composer.lock
+    - composer.lock
+  - CmdLine:
+    - composer global require hirak/prestissimo --no-plugins --no-scripts --no-suggest
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - composer install --ignore-platform-reqs --prefer-dist --optimize-autoloader
+      --no-suggest
+    Name: run
+    PrependShell: true
+  From:
+    Image: composer
+  Name: vendor
+  Platform: ""
+  SourceCode: FROM composer as vendor
+- BaseName: php:7.2-apache
+  Commands:
+  - Maintainer: Piotr Zając <piotr.zajac@unixslayer.pl>
+    Name: maintainer
+  - CmdLine:
+    - usermod -u 1000 www-data && groupmod -g 1000 www-data
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update -y &&     apt-get install -y     git     unzip     zlib1g-dev     libicu-dev     libxml2-dev     libmcrypt-dev     libxslt1-dev     mysql-client   &&
+      pecl install mcrypt-1.0.1   && apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-ext-install   bcmath   intl   mbstring   soap   xsl   zip   opcache   pdo_mysql
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-ext-enable mcrypt
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LC_ALL
+      Value: C.UTF-8
+    - Key: LANG
+      Value: C.UTF-8
+    - Key: TINI_VERSION
+      Value: v0.17.0
+    - Key: SERVER_ENVIRONMENT
+      Value: '"production"'
+    - Key: SERVER_SERVICE
+      Value: '"apache2"'
+    - Key: SERVER_NAME
+      Value: '"localhost"'
+    - Key: SERVER_ADMIN
+      Value: '"webmaster@localhost"'
+    - Key: PHP_MEMORY_LIMIT
+      Value: '"4G"'
+    - Key: PHP_DATE_TIMEZONE
+      Value: '"Europe/Warsaw"'
+    - Key: PHP_OPCACHE_ENABLE
+      Value: "1"
+    - Key: PHP_OPCACHE_ENABLE_CLI
+      Value: "1"
+    - Key: PHP_OPCACHE_VALIDATE_TIMESTAMP
+      Value: "0"
+    - Key: COMPOSER_HOME
+      Value: '"/var/www/.composer/"'
+    - Key: COMPOSER_ALLOW_SUPERUSER
+      Value: "1"
+    - Key: APACHE_LOG_DIR
+      Value: '"/var/log/apache2"'
+    - Key: APACHE_DOCUMENT_ROOT
+      Value: '"/var/www/html/public"'
+    - Key: DATABASE_HOST
+      Value: database
+    - Key: DATABASE_PORT
+      Value: "3306"
+    - Key: DATABASE_USER
+      Value: clinic
+    - Key: DATABASE_NAME
+      Value: clinic
+    - Key: DATABASE_PASS
+      Value: hardwareclinic
+    Name: env
+  - Name: workdir
+    Path: /var/www/html
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/php/php.ini
+    - /usr/local/etc/conf.d/php.ini
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/apache2/sites-enabled/000-default.conf
+    - /etc/apache2/sites-enabled/000-default.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/apache2/conf-enabled/*
+    - /etc/apache2/conf-enabled/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/app/entrypoint.sh
+    - /usr/local/bin/entrypoint.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/app/deploy.sh
+    - /usr/local/bin/deploy.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/app/demo.sh
+    - /usr/local/bin/demo.sh
+  - CmdLine:
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin
+      --filename=composer
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --location --output /sbin/tini https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini
+      && chmod +x /sbin/tini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod rewrite &&     a2enmod status &&     a2enmod headers &&     a2enmod
+      unique_id &&     rm /etc/apache2/conf-enabled/other-vhosts-access-log.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sf /proc/self/fd/1 ${APACHE_LOG_DIR}/access.log &&     ln -sf /proc/self/fd/1
+      ${APACHE_LOG_DIR}/error.log
+    Name: run
+    PrependShell: true
+  - Chown: www-data:www-data
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /var/www/html
+  - Chown: www-data:www-data
+    From: vendor
+    Name: copy
+    SourcesAndDest:
+    - /tmp
+    - /var/www/.composer
+  - Chown: www-data:www-data
+    From: vendor
+    Name: copy
+    SourcesAndDest:
+    - /app/vendor
+    - /var/www/html/vendor
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/sbin/apache2ctl
+    - -DFOREGROUND
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:7.2-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.2-apache

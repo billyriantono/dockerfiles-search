@@ -1,0 +1,114 @@
+MetaArgs:
+- DefaultValue: '"3.10"'
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: '"3.10"'
+- DefaultValue: '"1.22.1.0"'
+  Key: S6_OVERLAY_VERSION
+  ProvidedValue: null
+  Value: '"1.22.1.0"'
+Stages:
+- As: builder
+  BaseName: golang:1.11-alpine${ALPINE_VERSION}
+  Commands:
+  - Env:
+    - Key: QEMU_USER_STATIC_DOWNLOAD_URL
+      Value: https://github.com/multiarch/qemu-user-static/releases/download
+    Name: env
+  - Env:
+    - Key: QEMU_USER_STATIC_TAGS_API
+      Value: https://api.github.com/repos/multiarch/qemu-user-static/tags
+    Name: env
+  - CmdLine:
+    - apk update &&     apk add --no-cache --virtual build-dependencies         curl         g++         git
+      &&     git clone https://github.com/rfgamaral/gphotos-uploader-cli.git --branch
+      docker &&     git clone https://github.com/rfgamaral/oauth2-noserver.git --branch
+      docker &&     cd gphotos-uploader-cli &&     sed -i "s/~\/\.config\/gphotos-uploader-cli/\/config/"
+      cmd/root.go &&     sed -i "s/~\/\.config\/gphotos-uploader-cli/\/config/" config/config.go
+      &&     go generate &&     cp /go/oauth2-noserver/oauth2ns.go /go/pkg/mod/github.com/nmrshll/oauth2-noserver@v0.0.0-20190221200101-9bf017bef639
+      &&     GOOS=linux GOARCH=arm GOARM=7 go build -ldflags='-w -s' -o /go/bin/gphotos-uploader-cli
+      &&     export QEMU_USER_STATIC_LATEST_TAG=$(curl -s ${QEMU_USER_STATIC_TAGS_API}         |
+      grep 'name.*v[0-9]' | head -n 1 | cut -d '"' -f 4) &&     curl -SL "${QEMU_USER_STATIC_DOWNLOAD_URL}/${QEMU_USER_STATIC_LATEST_TAG}/x86_64_qemu-arm-static.tar.gz"         |
+      tar xzv --directory /go/bin &&     apk del build-dependencies
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-alpine${ALPINE_VERSION}
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine${ALPINE_VERSION} AS builder
+- BaseName: arm32v7/alpine:${ALPINE_VERSION}
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"master@ricardoamaral.net"'
+    Name: label
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: S6_OVERLAY_VERSION
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: '"${BUILD_DATE}"'
+    - Key: org.label-schema.description
+      Value: '"Mass upload media folders to your Google Photos account with this Docker
+        image."'
+    - Key: org.label-schema.name
+      Value: '"rfgamaral/gphotos-uploader"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.vcs-ref
+      Value: '"${VCS_REF}"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/rfgamaral/docker-gphotos-uploader.git"'
+    Name: label
+  - Env:
+    - Key: GPU_SCHEDULE
+      Value: '"0 */8 * * *"'
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/qemu-arm-static
+    - /usr/bin/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-arm.tar.gz
+    - /tmp/
+  - CmdLine:
+    - apk update &&     apk add --no-cache         curl &&     tar xzf /tmp/s6-overlay-arm.tar.gz
+      -C / &&     rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/gphotos-uploader-cli
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs/
+    - /
+  - Name: volume
+    Volumes:
+    - /config
+    - /photos
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: arm32v7/alpine:${ALPINE_VERSION}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM arm32v7/alpine:${ALPINE_VERSION}

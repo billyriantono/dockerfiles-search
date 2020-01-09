@@ -1,0 +1,128 @@
+MetaArgs: null
+Stages:
+- As: builder-node
+  BaseName: node
+  Commands:
+  - Env:
+    - Key: SERIES
+      Value: "5.0"
+    Name: env
+  - CmdLine:
+    - npm install -g bower
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://downloads.tryton.org/${SERIES}/tryton-sao-last.tgz | tar zxf -
+      -C /
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /package && bower install --allow-root
+    Name: run
+    PrependShell: true
+  From:
+    Image: node
+  Name: builder-node
+  Platform: ""
+  SourceCode: FROM node as builder-node
+- BaseName: debian:stretch-slim
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Tryton <foundation@tryton.org>"'
+    - Key: org.label-schema.name
+      Value: '"Tryton"'
+    - Key: org.label-schema.url
+      Value: '"http://www.tryton.org/"'
+    - Key: org.label-schema.vendor
+      Value: '"Tryton"'
+    - Key: org.label-schema.version
+      Value: '"5.0"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - Env:
+    - Key: SERIES
+      Value: "5.0"
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - CmdLine:
+    - groupadd -r trytond     && useradd --no-log-init -r -d /var/lib/trytond -m -g
+      trytond trytond     && mkdir /var/lib/trytond/db && chown trytond:trytond /var/lib/trytond/db     &&
+      mkdir /var/lib/trytond/www
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends         curl         python3         python3-pip         python3-setuptools         uwsgi         uwsgi-plugin-python3         python3-lxml         python3-genshi         python3-polib         python3-werkzeug         python3-wrapt         python3-psycopg2         python3-bcrypt         python3-dateutil         python3-html2text         python3-magic         python3-ofxparse         python3-pypdf2         python3-pysimplesoap         python3-requests         python3-simpleeval         python3-stdnum         python3-tz         python3-zeep         mercurial         nano         patch     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip3 install --no-cache-dir     "trytond == ${SERIES}.*"     && for module in
+      `curl https://downloads.tryton.org/${SERIES}/modules.txt`; do         pip3 install
+      --no-cache-dir "trytond_${module} == ${SERIES}.*";         done     && pip3
+      install --no-cache-dir wheel phonenumbers
+    Name: run
+    PrependShell: true
+  - Key: MODULE_PATH
+    Name: arg
+    Value: /usr/local/lib/python3.5/dist-packages/trytond/modules
+  - CmdLine:
+    - mkdir $MODULE_PATH/account_uk   && cd $MODULE_PATH/account_uk   && curl https://codereview.tryton.org/download/issue51551002_40001.diff   |
+      patch -p1
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder-node
+    Name: copy
+    SourcesAndDest:
+    - /package
+    - /var/lib/trytond/www
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - trytond.conf
+    - /etc/trytond.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - uwsgi.conf
+    - /etc/uwsgi.conf
+  - Name: expose
+    Ports:
+    - "8000"
+  - Name: volume
+    Volumes:
+    - /var/lib/trytond/db
+  - Env:
+    - Key: TRYTOND_CONFIG
+      Value: /etc/trytond.conf
+    Name: env
+  - Name: user
+    User: trytond
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - uwsgi
+    - --ini
+    - /etc/uwsgi.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

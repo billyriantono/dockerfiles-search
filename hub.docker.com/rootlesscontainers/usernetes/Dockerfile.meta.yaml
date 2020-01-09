@@ -1,0 +1,726 @@
+MetaArgs:
+- DefaultValue: 8cf0679be24c640267784f500c65ace2b44b0412
+  Key: ROOTLESSKIT_COMMIT
+  ProvidedValue: null
+  Value: 8cf0679be24c640267784f500c65ace2b44b0412
+- DefaultValue: a8414d1d1629f6f7a93b60b55e183a93d10d9a1c
+  Key: SLIRP4NETNS_COMMIT
+  ProvidedValue: null
+  Value: a8414d1d1629f6f7a93b60b55e183a93d10d9a1c
+- DefaultValue: a88592a63474e6976030b4fbded41dd445152236
+  Key: RUNC_COMMIT
+  ProvidedValue: null
+  Value: a88592a63474e6976030b4fbded41dd445152236
+- DefaultValue: 8ca8f8bd6598d44d344da407663a57584a0dc6a2
+  Key: MOBY_COMMIT
+  ProvidedValue: null
+  Value: 8ca8f8bd6598d44d344da407663a57584a0dc6a2
+- DefaultValue: 537afb149869e5ef6acbd267f9b02c648abcbef3
+  Key: CONTAINERD_COMMIT
+  ProvidedValue: null
+  Value: 537afb149869e5ef6acbd267f9b02c648abcbef3
+- DefaultValue: 2dc77fc03c522237a353ca8dfbd9a69c1319bed6
+  Key: CRIO_COMMIT
+  ProvidedValue: null
+  Value: 2dc77fc03c522237a353ca8dfbd9a69c1319bed6
+- DefaultValue: ec8f6c99d030bd75337ae8bfc62fc02cdc462528
+  Key: CNI_PLUGINS_COMMIT
+  ProvidedValue: null
+  Value: ec8f6c99d030bd75337ae8bfc62fc02cdc462528
+- DefaultValue: 36db62cd7397d153d037bcc4eec34dce99b03fc6
+  Key: KUBERNETES_COMMIT
+  ProvidedValue: null
+  Value: 36db62cd7397d153d037bcc4eec34dce99b03fc6
+- DefaultValue: v2.0.8
+  Key: CONMON_RELEASE
+  ProvidedValue: null
+  Value: v2.0.8
+- DefaultValue: 19.03.5
+  Key: DOCKER_CLI_RELEASE
+  ProvidedValue: null
+  Value: 19.03.5
+- DefaultValue: v1.18.0-usernetes
+  Key: KUBE_GIT_VERSION
+  ProvidedValue: null
+  Value: v1.18.0-usernetes
+- DefaultValue: 2.0.0
+  Key: BAZEL_RELEASE
+  ProvidedValue: null
+  Value: 2.0.0
+- DefaultValue: tag-1.7.3.3
+  Key: SOCAT_RELEASE
+  ProvidedValue: null
+  Value: tag-1.7.3.3
+- DefaultValue: v0.11.0
+  Key: FLANNEL_RELEASE
+  ProvidedValue: null
+  Value: v0.11.0
+- DefaultValue: v3.4.3
+  Key: ETCD_RELEASE
+  ProvidedValue: null
+  Value: v3.4.3
+- DefaultValue: v2.8.0
+  Key: GOTASK_RELEASE
+  ProvidedValue: null
+  Value: v2.8.0
+- DefaultValue: ubuntu
+  Key: BASEOS
+  ProvidedValue: null
+  Value: ubuntu
+Stages:
+- As: common-golang-alpine
+  BaseName: golang:1.13-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-alpine
+  Name: common-golang-alpine
+  Platform: ""
+  SourceCode: FROM golang:1.13-alpine AS common-golang-alpine
+- As: common-golang-alpine-heavy
+  BaseName: common-golang-alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache add btrfs-progs-dev bash build-base linux-headers libseccomp-dev
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: common-golang-alpine
+  Name: common-golang-alpine-heavy
+  Platform: ""
+  SourceCode: FROM common-golang-alpine AS common-golang-alpine-heavy
+- As: rootlesskit-build
+  BaseName: common-golang-alpine
+  Commands:
+  - CmdLine:
+    - git clone https://github.com/rootless-containers/rootlesskit.git /go/src/github.com/rootless-containers/rootlesskit
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/rootless-containers/rootlesskit
+  - Key: ROOTLESSKIT_COMMIT
+    Name: arg
+    Value: null
+  - CmdLine:
+    - git pull && git checkout ${ROOTLESSKIT_COMMIT}
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - CmdLine:
+    - mkdir /out &&   go build -o /out/rootlesskit github.com/rootless-containers/rootlesskit/cmd/rootlesskit
+      &&   go build -o /out/rootlessctl github.com/rootless-containers/rootlesskit/cmd/rootlessctl
+      &&   go build -o /out/rootlesskit-docker-proxy github.com/rootless-containers/rootlesskit/cmd/rootlesskit-docker-proxy
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: common-golang-alpine
+  Name: rootlesskit-build
+  Platform: ""
+  SourceCode: FROM common-golang-alpine AS rootlesskit-build
+- As: slirp4netns-build
+  BaseName: alpine:3.10
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git build-base autoconf automake libtool linux-headers glib-dev
+      glib-static libcap-static libcap-dev libseccomp-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/rootless-containers/slirp4netns.git /slirp4netns
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /slirp4netns
+  - Key: SLIRP4NETNS_COMMIT
+    Name: arg
+    Value: null
+  - CmdLine:
+    - git pull && git checkout ${SLIRP4NETNS_COMMIT}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./autogen.sh && ./configure LDFLAGS="-static" && make &&   mkdir /out && cp
+      slirp4netns /out
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: slirp4netns-build
+  Platform: ""
+  SourceCode: FROM alpine:3.10 AS slirp4netns-build
+- As: runc-build
+  BaseName: common-golang-alpine-heavy
+  Commands:
+  - CmdLine:
+    - git clone https://github.com/opencontainers/runc.git /go/src/github.com/opencontainers/runc
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/opencontainers/runc
+  - Key: RUNC_COMMIT
+    Name: arg
+    Value: null
+  - CmdLine:
+    - git pull && git checkout ${RUNC_COMMIT}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make BUILDTAGS="seccomp" static &&   mkdir /out && cp runc /out
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: common-golang-alpine-heavy
+  Name: runc-build
+  Platform: ""
+  SourceCode: FROM common-golang-alpine-heavy AS runc-build
+- As: moby-base
+  BaseName: common-golang-alpine-heavy
+  Commands:
+  - CmdLine:
+    - git clone https://github.com/moby/moby.git /go/src/github.com/docker/docker
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/docker/docker
+  - Key: MOBY_COMMIT
+    Name: arg
+    Value: null
+  - CmdLine:
+    - git pull && git checkout ${MOBY_COMMIT}
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: common-golang-alpine-heavy
+  Name: moby-base
+  Platform: ""
+  SourceCode: FROM common-golang-alpine-heavy AS moby-base
+- As: moby-build-docker-init
+  BaseName: moby-base
+  Commands:
+  - CmdLine:
+    - apk --no-cache add cmake
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - hack/dockerfile/install/install.sh tini
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 5
+      Named: moby-base
+  Name: moby-build-docker-init
+  Platform: ""
+  SourceCode: FROM moby-base AS moby-build-docker-init
+- As: moby-build-docker-proxy
+  BaseName: moby-base
+  Commands:
+  - CmdLine:
+    - hack/dockerfile/install/install.sh proxy
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 5
+      Named: moby-base
+  Name: moby-build-docker-proxy
+  Platform: ""
+  SourceCode: FROM moby-base AS moby-build-docker-proxy
+- As: moby-build
+  BaseName: moby-base
+  Commands:
+  - CmdLine:
+    - mkdir /out
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DOCKER_BUILDTAGS
+      Value: '"seccomp"'
+    Name: env
+  - CmdLine:
+    - ./hack/make.sh .binary && cp -f bundles/.binary/dockerd-dev /out/dockerd
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: moby-build-docker-init
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/docker-init
+    - /out/
+  - Chown: ""
+    From: moby-build-docker-proxy
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/docker-proxy
+    - /out/
+  - Key: DOCKER_CLI_RELEASE
+    Name: arg
+    Value: null
+  From:
+    Stage:
+      Index: 5
+      Named: moby-base
+  Name: moby-build
+  Platform: ""
+  SourceCode: FROM moby-base AS moby-build
+- As: dockercli-build
+  BaseName: docker:$DOCKER_CLI_RELEASE
+  Commands:
+  - CmdLine:
+    - mkdir /out && cp /usr/local/bin/docker /out
+    Name: run
+    PrependShell: true
+  From:
+    Image: docker:$DOCKER_CLI_RELEASE
+  Name: dockercli-build
+  Platform: ""
+  SourceCode: FROM docker:$DOCKER_CLI_RELEASE AS dockercli-build
+- As: containerd-build
+  BaseName: common-golang-alpine-heavy
+  Commands:
+  - CmdLine:
+    - git clone https://github.com/containerd/containerd.git /go/src/github.com/containerd/containerd
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/containerd/containerd
+  - Key: CONTAINERD_COMMIT
+    Name: arg
+    Value: null
+  - CmdLine:
+    - git pull && git checkout ${CONTAINERD_COMMIT}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./script/setup/install-dev-tools
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make EXTRA_FLAGS="-buildmode pie" EXTRA_LDFLAGS='-extldflags "-fno-PIC -static"'
+      BUILDTAGS="netgo osusergo static_build" &&   mkdir /out && cp bin/containerd
+      bin/containerd-shim bin/containerd-shim-runc-v1 bin/containerd-shim-runc-v2
+      bin/ctr /out
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: common-golang-alpine-heavy
+  Name: containerd-build
+  Platform: ""
+  SourceCode: FROM common-golang-alpine-heavy AS containerd-build
+- As: crio-build
+  BaseName: golang:1.13-stretch
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y build-essential libglib2.0-dev libseccomp-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/cri-o/cri-o.git /go/src/github.com/cri-o/cri-o
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/cri-o/cri-o
+  - Key: CRIO_COMMIT
+    Name: arg
+    Value: null
+  - CmdLine:
+    - git pull && git checkout ${CRIO_COMMIT}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make binaries && mkdir /out && cp bin/crio bin/crio-status bin/pinns /out
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-stretch
+  Name: crio-build
+  Platform: ""
+  SourceCode: FROM golang:1.13-stretch AS crio-build
+- As: conmon-build
+  BaseName: common-golang-alpine-heavy
+  Commands:
+  - CmdLine:
+    - apk add --no-cache glib-dev glib-static
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/containers/conmon.git /go/src/github.com/containers/conmon
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/containers/conmon
+  - Key: CONMON_RELEASE
+    Name: arg
+    Value: null
+  - CmdLine:
+    - git pull && git checkout ${CONMON_RELEASE}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make static && mkdir /out && cp bin/conmon /out
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: common-golang-alpine-heavy
+  Name: conmon-build
+  Platform: ""
+  SourceCode: FROM common-golang-alpine-heavy AS conmon-build
+- As: cniplugins-build
+  BaseName: common-golang-alpine-heavy
+  Commands:
+  - CmdLine:
+    - git clone https://github.com/containernetworking/plugins.git /go/src/github.com/containernetworking/plugins
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/containernetworking/plugins
+  - Key: CNI_PLUGINS_COMMIT
+    Name: arg
+    Value: null
+  - CmdLine:
+    - git pull && git checkout ${CNI_PLUGINS_COMMIT}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./build_linux.sh -buildmode pie -ldflags "-extldflags \"-fno-PIC -static\""
+      &&   mkdir /out && mv bin /out/cni
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: common-golang-alpine-heavy
+  Name: cniplugins-build
+  Platform: ""
+  SourceCode: FROM common-golang-alpine-heavy AS cniplugins-build
+- As: k8s-build
+  BaseName: golang:1.13-stretch
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y -q patch rsync
+    Name: run
+    PrependShell: true
+  - Key: BAZEL_RELEASE
+    Name: arg
+    Value: null
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/bazelbuild/bazel/releases/download/${BAZEL_RELEASE}/bazel-${BAZEL_RELEASE}-linux-x86_64
+    - /usr/local/bin/bazel
+  - CmdLine:
+    - chmod +x /usr/local/bin/bazel
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/kubernetes/kubernetes.git /kubernetes
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /kubernetes
+  - Key: KUBERNETES_COMMIT
+    Name: arg
+    Value: null
+  - CmdLine:
+    - git pull && git checkout ${KUBERNETES_COMMIT}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/patches/kubernetes
+    - /patches
+  - CmdLine:
+    - git config user.email "nobody@example.com" &&   git config user.name "Usernetes
+      Build Script" &&   git am /patches/* && git show --summary
+    Name: run
+    PrependShell: true
+  - Key: KUBE_GIT_VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: KUBE_GIT_VERSION
+      Value: ${KUBE_GIT_VERSION}
+    Name: env
+  - CmdLine:
+    - make kube-apiserver kube-controller-manager kube-proxy kube-scheduler kubectl
+      kubelet &&   mkdir /out && cp _output/bin/kube* /out
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-stretch
+  Name: k8s-build
+  Platform: ""
+  SourceCode: FROM golang:1.13-stretch AS k8s-build
+- As: socat-build
+  BaseName: ubuntu:19.10
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y autoconf automake libtool build-essential
+      git yodl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone git://repo.or.cz/socat.git /socat
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /socat
+  - Key: SOCAT_RELEASE
+    Name: arg
+    Value: null
+  - CmdLine:
+    - git pull && git checkout ${SOCAT_RELEASE}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - autoconf && ./configure LDFLAGS="-static" && make && strip socat &&   mkdir
+      -p /out && cp -f socat /out
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:19.10
+  Name: socat-build
+  Platform: ""
+  SourceCode: FROM ubuntu:19.10 AS socat-build
+- As: flannel-build
+  BaseName: busybox
+  Commands:
+  - Key: FLANNEL_RELEASE
+    Name: arg
+    Value: null
+  - CmdLine:
+    - mkdir -p /out &&   wget -O /out/flanneld https://github.com/coreos/flannel/releases/download/${FLANNEL_RELEASE}/flanneld-amd64
+      &&   chmod +x /out/flanneld
+    Name: run
+    PrependShell: true
+  From:
+    Image: busybox
+  Name: flannel-build
+  Platform: ""
+  SourceCode: FROM busybox AS flannel-build
+- As: etcd-build
+  BaseName: busybox
+  Commands:
+  - Key: ETCD_RELEASE
+    Name: arg
+    Value: null
+  - CmdLine:
+    - mkdir /tmp-etcd out &&   wget -O - https://github.com/etcd-io/etcd/releases/download/${ETCD_RELEASE}/etcd-${ETCD_RELEASE}-linux-amd64.tar.gz
+      | tar xz -C /tmp-etcd &&   cp /tmp-etcd/etcd-${ETCD_RELEASE}-linux-amd64/etcd
+      /tmp-etcd/etcd-${ETCD_RELEASE}-linux-amd64/etcdctl /out
+    Name: run
+    PrependShell: true
+  From:
+    Image: busybox
+  Name: etcd-build
+  Platform: ""
+  SourceCode: FROM busybox AS etcd-build
+- As: gotask-build
+  BaseName: busybox
+  Commands:
+  - Key: GOTASK_RELEASE
+    Name: arg
+    Value: null
+  - CmdLine:
+    - mkdir /tmp-task /out &&   wget -O - https://github.com/go-task/task/releases/download/${GOTASK_RELEASE}/task_linux_amd64.tar.gz
+      | tar xz  -C /tmp-task &&   cp /tmp-task/task /out
+    Name: run
+    PrependShell: true
+  From:
+    Image: busybox
+  Name: gotask-build
+  Platform: ""
+  SourceCode: FROM busybox AS gotask-build
+- As: bin-main
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: rootlesskit-build
+    Name: copy
+    SourcesAndDest:
+    - /out/*
+    - /
+  - Chown: ""
+    From: slirp4netns-build
+    Name: copy
+    SourcesAndDest:
+    - /out/*
+    - /
+  - Chown: ""
+    From: runc-build
+    Name: copy
+    SourcesAndDest:
+    - /out/*
+    - /
+  - Chown: ""
+    From: moby-build
+    Name: copy
+    SourcesAndDest:
+    - /out/*
+    - /
+  - Chown: ""
+    From: dockercli-build
+    Name: copy
+    SourcesAndDest:
+    - /out/*
+    - /
+  - Chown: ""
+    From: containerd-build
+    Name: copy
+    SourcesAndDest:
+    - /out/*
+    - /
+  - Chown: ""
+    From: crio-build
+    Name: copy
+    SourcesAndDest:
+    - /out/*
+    - /
+  - Chown: ""
+    From: conmon-build
+    Name: copy
+    SourcesAndDest:
+    - /out/*
+    - /
+  - Chown: ""
+    From: cniplugins-build
+    Name: copy
+    SourcesAndDest:
+    - /out/cni
+    - /cni
+  - Chown: ""
+    From: k8s-build
+    Name: copy
+    SourcesAndDest:
+    - /out/*
+    - /
+  - Chown: ""
+    From: socat-build
+    Name: copy
+    SourcesAndDest:
+    - /out/*
+    - /
+  - Chown: ""
+    From: flannel-build
+    Name: copy
+    SourcesAndDest:
+    - /out/*
+    - /
+  - Chown: ""
+    From: etcd-build
+    Name: copy
+    SourcesAndDest:
+    - /out/*
+    - /
+  - Chown: ""
+    From: gotask-build
+    Name: copy
+    SourcesAndDest:
+    - /out/*
+    - /
+  From:
+    Scratch: true
+  Name: bin-main
+  Platform: ""
+  SourceCode: FROM scratch AS bin-main
+- As: test-main-ubuntu
+  BaseName: ubuntu:19.10
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y -q git libglib2.0-dev iproute2 iptables
+      uidmap
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:19.10
+  Name: test-main-ubuntu
+  Platform: ""
+  SourceCode: FROM ubuntu:19.10 AS test-main-ubuntu
+- As: test-main-fedora
+  BaseName: fedora:31
+  Commands:
+  - CmdLine:
+    - chmod +s /usr/bin/newuidmap /usr/bin/newgidmap
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dnf install -y git iproute iptables hostname procps-ng
+    Name: run
+    PrependShell: true
+  From:
+    Image: fedora:31
+  Name: test-main-fedora
+  Platform: ""
+  SourceCode: FROM fedora:31 AS test-main-fedora
+- As: test-main
+  BaseName: test-main-$BASEOS
+  Commands:
+  - CmdLine:
+    - useradd --create-home --home-dir /home/user --uid 1000 user
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /home/user/usernetes
+  - Chown: ""
+    From: bin-main
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /home/user/usernetes/bin
+  - CmdLine:
+    - mkdir -p /run/user/1000 /home/user/.local &&   chown -R user:user /run/user/1000
+      /home/user
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: user
+  - Env:
+    - Key: HOME
+      Value: /home/user
+    Name: env
+  - Env:
+    - Key: USER
+      Value: user
+    Name: env
+  - Env:
+    - Key: XDG_RUNTIME_DIR
+      Value: /run/user/1000
+    Name: env
+  - Name: workdir
+    Path: /home/user/usernetes
+  - Name: volume
+    Volumes:
+    - /home/user/.local
+  - CmdLine:
+    - /home/user/usernetes/run.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: test-main-$BASEOS
+  Name: test-main
+  Platform: ""
+  SourceCode: FROM test-main-$BASEOS AS test-main

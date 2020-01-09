@@ -1,0 +1,133 @@
+MetaArgs: null
+Stages:
+- As: build-deps
+  BaseName: alpine:latest
+  Commands:
+  - Key: NODE_ENV
+    Name: arg
+    Value: production
+  - Env:
+    - Key: NODE_ENV
+      Value: '"${NODE_ENV}"'
+    Name: env
+  - Env:
+    - Key: NPM_CONFIG_LOGLEVEL
+      Value: warn
+    Name: env
+  - CmdLine:
+    - echo "$NODE_ENV" &&     apk add --no-cache git nodejs npm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /code
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /code
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package*.json
+    - .env.example
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client
+    - ./client
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - migrations
+    - ./migrations
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server
+    - ./server
+  - CmdLine:
+    - npm install --production &&     npm dedupe --production &&     npm install modclean
+      -g &&     modclean --no-dotfiles --no-progress --run &&     cd migrations &&     npm
+      install --production &&     modclean --no-dotfiles --no-progress --run
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: build-deps
+  Platform: ""
+  SourceCode: FROM alpine:latest as build-deps
+- BaseName: alpine:latest
+  Commands:
+  - Key: APPLICATION_PATH
+    Name: arg
+    Value: /usr/src/app
+  - Env:
+    - Key: APK_ADD
+      Value: '"sqlite nodejs npm"'
+    - Key: APK_DEL
+      Value: '"npm"'
+    - Key: USERNAME
+      Value: '"app"'
+    - Key: USER_ID
+      Value: '"1000"'
+    Name: env
+  - Name: workdir
+    Path: ${APPLICATION_PATH}
+  - Chown: ""
+    From: build-deps
+    Name: copy
+    SourcesAndDest:
+    - /code
+    - ${APPLICATION_PATH}
+  - CmdLine:
+    - apk update     && apk upgrade     && apk add --no-cache ${APK_ADD}     && npm
+      install -g -s --no-progress pm2@3     && npm cache clean --force     && apk
+      del ${APK_DEL}     && rm -rf          /usr/share/man/*          /usr/includes/*          /var/cache/apk/*          /root/.npm/*          /usr/lib/node_modules/npm/*     &&
+      adduser -H -D ${USERNAME} -u ${USER_ID}     && chown ${USERNAME}:${USERNAME}
+      -R ${APPLICATION_PATH}     && deluser --remove-home daemon     && deluser --remove-home
+      adm     && deluser --remove-home lp     && deluser --remove-home sync     &&
+      deluser --remove-home shutdown     && deluser --remove-home halt     && deluser
+      --remove-home postmaster     && deluser --remove-home cyrus     && deluser --remove-home
+      mail     && deluser --remove-home news     && deluser --remove-home uucp     &&
+      deluser --remove-home operator     && deluser --remove-home man     && deluser
+      --remove-home cron     && deluser --remove-home ftp     && deluser --remove-home
+      sshd     && deluser --remove-home at     && deluser --remove-home squid     &&
+      deluser --remove-home xfs     && deluser --remove-home games     && deluser
+      --remove-home postgres     && deluser --remove-home vpopmail     && deluser
+      --remove-home ntp     && deluser --remove-home smmsp     && deluser --remove-home
+      guest
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - init.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - chmod u+x /usr/local/bin/init.sh
+    Name: run
+    PrependShell: true
+  - Health:
+      Interval: 15000000000
+      Test:
+      - CMD-SHELL
+      - /usr/bin/nc 127.0.0.1 80 < /dev/null || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - init.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

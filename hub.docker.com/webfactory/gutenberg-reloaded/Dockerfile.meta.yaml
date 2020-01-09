@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: maven:3.6-jdk-8
+  Commands:
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pom.xml
+    - /build
+  - CmdLine:
+    - mvn verify clean --fail-never
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /build/src
+  - CmdLine:
+    - mvn clean install -Dmaven.test.skip=true
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.6-jdk-8
+  Name: build
+  Platform: ""
+  SourceCode: FROM maven:3.6-jdk-8 as build
+- As: runtime
+  BaseName: openjdk:8-jdk
+  Commands:
+  - Env:
+    - Key: TINI_VERSION
+      Value: v0.18.0
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini
+    - /tini
+  - CmdLine:
+    - chmod +x /tini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - Name: workdir
+    Path: /application
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/target/gutenberg-reloaded*.jar
+    - /application/target/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/main/resources
+    - /application/src/main/resources
+  - CmdLine:
+    - java
+    - -XX:+UnlockExperimentalVMOptions
+    - -XX:+UseCGroupMemoryLimitForHeap
+    - -jar
+    - /application/target/gutenberg-reloaded.jar
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "5000"
+  From:
+    Image: openjdk:8-jdk
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk as runtime

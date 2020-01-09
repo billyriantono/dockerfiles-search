@@ -1,0 +1,73 @@
+MetaArgs:
+- DefaultValue: amd64
+  Key: ARCH
+  ProvidedValue: null
+  Value: amd64
+Stages:
+- As: gobuild
+  BaseName: golang:alpine
+  Commands:
+  - Key: GOARCH
+    Name: arg
+    Value: amd64
+  - Key: GOARM
+    Name: arg
+    Value: "6"
+  - CmdLine:
+    - apk update;     apk add git gcc build-base;     go get -v github.com/cloudflare/cloudflared/cmd/cloudflared
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/cloudflare/cloudflared/cmd/cloudflared
+  - CmdLine:
+    - GOARCH=${GOARCH} GOARM=${GOARM} go build ./
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: gobuild
+  Platform: ""
+  SourceCode: FROM golang:alpine as gobuild
+- BaseName: multiarch/alpine:${ARCH}-edge
+  Commands:
+  - Env:
+    - Key: DNS1
+      Value: 1.1.1.1
+    Name: env
+  - Env:
+    - Key: DNS2
+      Value: 1.0.0.1
+    Name: env
+  - CmdLine:
+    - adduser -S cloudflared;         apk add --no-cache ca-certificates bind-tools;         rm
+      -rf /var/cache/apk/*;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: gobuild
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/cloudflare/cloudflared/cmd/cloudflared/cloudflared
+    - /usr/local/bin/cloudflared
+  - Health:
+      Interval: 30000000000
+      StartPeriod: 5000000000
+      Test:
+      - CMD-SHELL
+      - nslookup -po=5054 cloudflare.com 127.0.0.1 || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - Name: user
+    User: cloudflared
+  - CmdLine:
+    - /bin/sh
+    - -c
+    - /usr/local/bin/cloudflared proxy-dns --address 0.0.0.0 --port 5054 --upstream
+      https://${DNS1}/.well-known/dns-query --upstream https://${DNS2}/.well-known/dns-query
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: multiarch/alpine:${ARCH}-edge
+  Name: ""
+  Platform: ""
+  SourceCode: FROM multiarch/alpine:${ARCH}-edge

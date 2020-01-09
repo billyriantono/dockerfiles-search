@@ -1,0 +1,144 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "DIST",
+      "DefaultValue": "alpine",
+      "ProvidedValue": null,
+      "Value": "alpine"
+    },
+    {
+      "Key": "REL",
+      "DefaultValue": "latest",
+      "ProvidedValue": null,
+      "Value": "latest"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "mini",
+      "BaseName": "$DIST:$REL",
+      "SourceCode": "FROM\t$DIST:$REL AS mini",
+      "Platform": "",
+      "As": "mini",
+      "From": {
+        "Image": "$DIST:$REL"
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "mlan"
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Env": [
+            {
+              "Key": "DOCKER_RUNSV_DIR",
+              "Value": "/etc/service"
+            },
+            {
+              "Key": "DOCKER_PERSIST_DIR",
+              "Value": "/srv"
+            },
+            {
+              "Key": "DOCKER_BIN_DIR",
+              "Value": "/usr/local/bin"
+            },
+            {
+              "Key": "SYSLOG_OPTIONS",
+              "Value": "'-S -D'"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "src/*/bin",
+            "$DOCKER_BIN_DIR/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apk --update add \trunit \tpostfix \tpostfix-ldap \t\u0026\u0026 if [ -n \"$(apk search -x cyrus-sasl-plain)\" ]; then apk add \tcyrus-sasl-plain \tcyrus-sasl-login \t; fi \t\u0026\u0026 setup-runit.sh \t\"syslogd -n -O - $SYSLOG_OPTIONS -l 4\" \t\"crond -f -c /etc/crontabs\" \t\"postfix start-fg\" \t\u0026\u0026 mkdir -p /var/mail \u0026\u0026 chown postfix: /var/mail \t\u0026\u0026 mkdir -p /etc/ssl/postfix \t\u0026\u0026 conf imgcfg_mvfile dist /etc/postfix/aliases \t\u0026\u0026 conf imgcfg_cpfile dist /etc/postfix/main.cf /etc/postfix/master.cf \t\u0026\u0026 postconf -e mynetworks_style=subnet \t\u0026\u0026 rm -rf /var/cache/apk/* \t\u0026\u0026 conf imgcfg_cpfile bld /etc/postfix/main.cf /etc/postfix/master.cf \t\u0026\u0026 conf imgdir_persist /etc/postfix /etc/ssl /var/spool/postfix /var/mail"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "25",
+            "465",
+            "587"
+          ]
+        },
+        {
+          "Health": {
+            "Test": [
+              "CMD-SHELL",
+              "sv status ${DOCKER_RUNSV_DIR}/* \u0026\u0026 postfix status"
+            ]
+          },
+          "Name": "healthcheck"
+        },
+        {
+          "CmdLine": [
+            "entrypoint.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    },
+    {
+      "Name": "base",
+      "BaseName": "mini",
+      "SourceCode": "FROM\tmini AS base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Stage": {
+          "Named": "mini",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk --no-cache --update add \tdovecot \tjq \t\u0026\u0026 setup-runit.sh \"dovecot -F\" \t\u0026\u0026 rm -f /etc/ssl/dovecot/* \t\u0026\u0026 addgroup postfix dovecot \u0026\u0026 addgroup dovecot postfix \t\u0026\u0026 conf imgcfg_dovecot_passwdfile \t\u0026\u0026 conf imgdir_persist /etc/dovecot \t\u0026\u0026 mkdir -p /etc/ssl/acme \t\u0026\u0026 conf imgcfg_runit_acme_dump"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "full",
+      "BaseName": "base",
+      "SourceCode": "FROM\tbase AS full",
+      "Platform": "",
+      "As": "full",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk --no-cache --update add \tamavisd-new \tspamassassin \tperl-mail-spf \trazor \tclamav \tclamav-libunrar \tunzip \tunrar \tp7zip \tncurses \ttzdata \t\u0026\u0026 setup-runit.sh \t\"amavisd foreground\" \t\"freshclam -d --quiet\" \t\"-q clamd\" \t\u0026\u0026 mkdir -p /etc/amavis \u0026\u0026 mv /etc/amavisd.conf /etc/amavis \t\u0026\u0026 mkdir /run/amavis \u0026\u0026 chown amavis: /run/amavis \t\u0026\u0026 conf replace /usr/sbin/amavisd /etc/amavisd.conf /etc/amavis/amavisd.conf \t\u0026\u0026 conf imgcfg_cpfile dist /etc/amavis/amavisd.conf /etc/clamav/clamd.conf /etc/clamav/freshclam.conf \t\u0026\u0026 addgroup clamav amavis \u0026\u0026 addgroup amavis clamav \t\u0026\u0026 ln -sf /var/amavis/.spamassassin /root/.spamassassin \t\u0026\u0026 mkdir -p /var/amavis/.razor \u0026\u0026 chown amavis: /var/amavis/.razor \t\u0026\u0026 ln -sf /var/amavis/.razor /root/.razor \t\u0026\u0026 mkdir -p /var/db/dkim \u0026\u0026 chown amavis: /var/db/dkim \t\u0026\u0026 conf addafter /etc/amavis/amavisd.conf '^$mydomain' '$inet_socket_bind = \\x27127.0.0.1\\x27; # limit to ipv4 loopback, no ipv6 support' \t\u0026\u0026 conf addafter /etc/amavis/amavisd.conf '^$inet_socket_bind' '$log_templ = $log_verbose_templ; # verbose log' \t\u0026\u0026 conf addafter /etc/amavis/amavisd.conf '^$log_templ' '# $sa_debug = 0; # debug SpamAssassin' \t\u0026\u0026 conf uncommentsection /etc/amavis/amavisd.conf \"# ### http://www.clamav.net/\" \t\u0026\u0026 conf replace /etc/amavis/amavisd.conf /var/run/clamav/clamd.sock /run/clamav/clamd.sock \t\u0026\u0026 conf modify /etc/amavis/amavisd.conf '\\$pid_file' = '\"/run/amavis/amavisd.pid\";' \t\u0026\u0026 conf imgcfg_amavis_postfix \t\u0026\u0026 mkdir /run/clamav \u0026\u0026 chown clamav: /run/clamav \t\u0026\u0026 conf modify /etc/clamav/clamd.conf Foreground yes \t\u0026\u0026 conf modify /etc/clamav/clamd.conf LogSyslog yes \t\u0026\u0026 conf modify /etc/clamav/clamd.conf LogFacility LOG_MAIL \t\u0026\u0026 conf comment /etc/clamav/clamd.conf LogFile \t\u0026\u0026 conf modify /etc/clamav/freshclam.conf Foreground yes \t\u0026\u0026 conf modify /etc/clamav/freshclam.conf LogSyslog yes \t\u0026\u0026 conf comment /etc/clamav/freshclam.conf UpdateLogFile \t\u0026\u0026 conf modify /etc/clamav/freshclam.conf LogFacility LOG_MAIL \t\u0026\u0026 conf imgcfg_cpfile bld /etc/amavis/amavisd.conf /etc/clamav/clamd.conf \t\t/etc/clamav/freshclam.conf /etc/postfix/main.cf /etc/postfix/master.cf \t\u0026\u0026 conf imgdir_persist /etc/amavis /etc/mail /etc/clamav \t\t/var/amavis /var/db/dkim /var/lib/spamassassin /var/lib/clamav"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    }
+  ]
+}

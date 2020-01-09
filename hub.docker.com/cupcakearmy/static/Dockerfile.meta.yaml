@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine
+  Commands:
+  - Key: DEP_DEV
+    Name: arg
+    Value: '"alpine-sdk zlib-dev pcre-dev openssl-dev gd-dev"'
+  - Key: NGINX_MODULES
+    Name: arg
+    Value: '"--with-http_realip_module --with-threads --with-http_ssl_module --with-http_v2_module
+      --with-http_image_filter_module --with-http_gzip_static_module --with-http_secure_link_module"'
+  - Key: NGINX
+    Name: arg
+    Value: 1.16.1
+  - CmdLine:
+    - apk add --no-cache ${DEP_DEV}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - curl https://nginx.org/download/nginx-${NGINX}.tar.gz | tar xz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv nginx-${NGINX} nginx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --recursive https://github.com/google/ngx_brotli.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build/nginx
+  - CmdLine:
+    - ./configure ${NGINX_MODULES} --add-module=../ngx_brotli
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make && make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine AS builder
+- BaseName: alpine
+  Commands:
+  - Key: DEP_RUN
+    Name: arg
+    Value: '"pcre openssl gd tzdata"'
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/nginx
+    - /usr/local/nginx
+  - CmdLine:
+    - "apk add --no-cache ${DEP_RUN} \t&& ln -sf /dev/stdout /usr/local/nginx/logs/access.log
+      \t&& ln -sf /dev/stderr /usr/local/nginx/logs/error.log"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./conf/nginx.conf
+    - /usr/local/nginx/conf/nginx.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./conf/default.conf
+    - /usr/local/nginx/conf/sites/default.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./html/error.html
+    - /usr/local/nginx/html/error.html
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: stopsignal
+    Signal: SIGTERM
+  - CmdLine:
+    - /usr/local/nginx/sbin/nginx
+    - -g
+    - daemon off;
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

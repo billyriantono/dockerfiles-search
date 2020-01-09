@@ -1,0 +1,146 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:trusty
+  Commands:
+  - Maintainer: Jose Zarazua <jose.zarazua@gmail.com>
+    Name: maintainer
+  - Env:
+    - Key: MM_VERSION
+      Value: 1.9.8
+    Name: env
+  - Env:
+    - Key: MM_CSUM
+      Value: 4a616d12a03f51787ac996392f9279d0398bfb3b
+    Name: env
+  - CmdLine:
+    - apt-get update -qq && apt-get -qqy upgrade
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -qqy install python wget nginx uwsgi uwsgi-plugin-python rsyslog
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -qqy install apache2-utils
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget   https://bitbucket.org/thomaswaldmann/moin-1.9/get/$MM_VERSION.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ "$MM_CSUM" != "$(shasum $MM_VERSION.tar.gz | awk '{print($1)}')" ];  then
+      exit 1; fi;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir moinmoin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xf $MM_VERSION.tar.gz -C moinmoin --strip-components=1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm $MM_VERSION.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd moinmoin && python setup.py install --force --prefix=/usr/local
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - wikiconfig.py
+    - /usr/local/share/moin/
+  - CmdLine:
+    - mkdir /usr/local/share/moin/underlay
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -Rh www-data:www-data /usr/local/share/moin/underlay
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: www-data
+  - CmdLine:
+    - cd /usr/local/share/moin/ && tar xf underlay.tar -C underlay --strip-components=1
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - chown -R www-data:www-data /usr/local/share/moin/data
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - logo.png
+    - /usr/local/lib/python2.7/dist-packages/MoinMoin/web/static/htdocs/common/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - nginx.conf
+    - /etc/nginx/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - moinmoin.conf
+    - /etc/nginx/sites-available/
+  - CmdLine:
+    - mkdir -p /var/cache/nginx/cache
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /etc/nginx/sites-available/moinmoin.conf   /etc/nginx/sites-enabled/moinmoin.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /etc/nginx/sites-enabled/default
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - generate_ssl_key.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - /usr/local/bin/generate_ssl_key.sh moinmoin.example.org
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv cert.pem /etc/ssl/certs/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv key.pem /etc/ssl/private/
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /usr/local/share/moin/data
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: expose
+    Ports:
+    - "443"
+  - CmdLine:
+    - service rsyslog start && service nginx start &&   htpasswd -c /etc/nginx/.htpasswd
+      admin &&   uwsgi --uid www-data     -s /tmp/uwsgi.sock     --plugins python     --pidfile
+      /var/run/uwsgi-moinmoin.pid     --wsgi-file server/moin.wsgi     -M -p 4     --chdir
+      /usr/local/share/moin     --python-path /usr/local/share/moin     --harakiri
+      30     --die-on-term
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:trusty
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:trusty

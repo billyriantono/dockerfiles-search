@@ -1,0 +1,60 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: ocaml/opam2:debian-10-ocaml-4.09
+  Commands:
+  - Env:
+    - Key: EXTRA_PACKAGES
+      Value: '"taglib mad lame vorbis cry opus fdkaac faad flac"'
+    Name: env
+  - CmdLine:
+    - set -eux;     git pull;     opam update;     opam upgrade;     eval $(opam env)
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -eux;     sudo sed -i 's/$/ non-free/' /etc/apt/sources.list;     sudo apt-get
+      update;     opam depext -i $EXTRA_PACKAGES liquidsoap
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -eux;     eval $(opam config env);     mkdir -p /home/opam/root;     mv
+      $(which liquidsoap) /home/opam/root;     opam depext -ln $EXTRA_PACKAGES > /home/opam/root/depexts;     mkdir
+      -p /home/opam/root/$OPAM_SWITCH_PREFIX/lib;     mv $OPAM_SWITCH_PREFIX/share
+      /home/opam/root/$OPAM_SWITCH_PREFIX;     mv $OPAM_SWITCH_PREFIX/lib/liquidsoap
+      /home/opam/root/$OPAM_SWITCH_PREFIX/lib
+    Name: run
+    PrependShell: true
+  From:
+    Image: ocaml/opam2:debian-10-ocaml-4.09
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ocaml/opam2:debian-10-ocaml-4.09 as builder
+- As: runner
+  BaseName: phasecorex/user-debian:10
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/opam/root
+    - /
+  - CmdLine:
+    - set -eux;     sed -i 's/$/ non-free/' /etc/apt/sources.list;     apt-get update;     cat
+      /depexts | xargs apt-get install -y --no-install-recommends;     rm -rf /var/lib/apt/lists/*;     /liquidsoap
+      --version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - user-entrypoint
+    - /liquidsoap
+    Name: entrypoint
+    PrependShell: false
+  - Labels:
+    - Key: maintainer
+      Value: '"Ryan Foster <phasecorex@gmail.com>"'
+    Name: label
+  From:
+    Image: phasecorex/user-debian:10
+  Name: runner
+  Platform: ""
+  SourceCode: FROM phasecorex/user-debian:10 as runner

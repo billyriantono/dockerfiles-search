@@ -1,0 +1,125 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/concourse/semver-resource
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - CmdLine:
+    - go build -o /assets/in github.com/concourse/semver-resource/in
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -o /assets/out github.com/concourse/semver-resource/out
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -o /assets/check github.com/concourse/semver-resource/check
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/concourse/semver-resource
+  - CmdLine:
+    - "set -e; for pkg in $(go list ./...); do \t\tgo test -o \"/tests/$(basename
+      $pkg).test\" -c $pkg; \tdone"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- As: resource
+  BaseName: alpine:edge
+  Commands:
+  - CmdLine:
+    - apk add --no-cache bash tzdata ca-certificates git jq openssh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git config --global user.email "git@localhost"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git config --global user.name "git"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - assets/
+    - /opt/resource/
+  - CmdLine:
+    - chmod +x /opt/resource/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: resource
+  Platform: ""
+  SourceCode: FROM alpine:edge AS resource
+- As: tests
+  BaseName: resource
+  Commands:
+  - Key: SEMVER_TESTING_ACCESS_KEY_ID
+    Name: arg
+    Value: null
+  - Key: SEMVER_TESTING_SECRET_ACCESS_KEY
+    Name: arg
+    Value: null
+  - Key: SEMVER_TESTING_BUCKET
+    Name: arg
+    Value: null
+  - Key: SEMVER_TESTING_REGION
+    Name: arg
+    Value: null
+  - Key: SEMVER_TESTING_V2_SIGNING
+    Name: arg
+    Value: null
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tests
+    - /go-tests
+  - Name: workdir
+    Path: /go-tests
+  - CmdLine:
+    - "set -e; for test in /go-tests/*.test; do \t\t$test; \tdone"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - test/
+    - /opt/resource-tests
+  - CmdLine:
+    - /opt/resource-tests/all.sh
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: resource
+  Name: tests
+  Platform: ""
+  SourceCode: FROM resource AS tests
+- BaseName: resource
+  Commands: null
+  From:
+    Stage:
+      Index: 1
+      Named: resource
+  Name: ""
+  Platform: ""
+  SourceCode: FROM resource

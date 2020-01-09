@@ -1,0 +1,106 @@
+MetaArgs: null
+Stages:
+- As: certs
+  BaseName: alpine:3.10
+  Commands:
+  - CmdLine:
+    - apk --no-cache add ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: certs
+  Platform: ""
+  SourceCode: FROM alpine:3.10 AS certs
+- As: build
+  BaseName: golang:1.13.5-alpine3.10
+  Commands:
+  - CmdLine:
+    - apk --no-cache add git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -u github.com/aws/aws-xray-daemon/...
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/aws/aws-xray-daemon
+  - Env:
+    - Key: XRAY_VERSION
+      Value: 3.2.0
+    Name: env
+  - CmdLine:
+    - git checkout "${XRAY_VERSION}"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/aws/aws-xray-daemon/daemon
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    - Key: GOOS
+      Value: linux
+    - Key: GOARCH
+      Value: arm64
+    Name: env
+  - CmdLine:
+    - go build -ldflags "-s -w" -o /xray
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sf /dev/stdout /var/log/xray-daemon.log
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13.5-alpine3.10
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.13.5-alpine3.10 AS build
+- BaseName: scratch
+  Commands:
+  - Name: expose
+    Ports:
+    - 2000/tcp
+  - Name: expose
+    Ports:
+    - 2000/udp
+  - Chown: ""
+    From: certs
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /var/log
+    - /var/log
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /xray
+    - /usr/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - xray-daemon.yaml
+    - /
+  - CmdLine:
+    - /usr/bin/xray
+    - --config
+    - /xray-daemon.yaml
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --region
+    - us-west-2
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

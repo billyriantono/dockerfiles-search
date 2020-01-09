@@ -1,0 +1,213 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:latest
+  Commands:
+  - Name: workdir
+    Path: /go/src/socks5
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - socks5.go
+    - .
+  - CmdLine:
+    - go get && CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-s'
+      -o ./socks5
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:latest as builder
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - echo "http://dl-4.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories     &&
+      apk upgrade     && apk add --no-cache bash curl wget git iptables     && apk
+      add --no-cache --virtual .build-deps gettext-dev         automake build-base
+      autoconf libtool linux-headers pcre-dev         c-ares-dev mbedtls-dev libev-dev
+      udns-dev libsodium-dev zlib-dev     && git clone --recurse-submodules -j8 https://github.com/shadowsocks/simple-obfs.git     &&
+      git clone --recurse-submodules -j8 https://github.com/shadowsocks/shadowsocks-libev.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd simple-obfs     && ./autogen.sh     && ./configure --prefix=/usr --disable-documentation     &&
+      make install -j8     && cd ..
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - shadowsocks.patch
+    - shadowsocks-libev/
+  - CmdLine:
+    - cd shadowsocks-libev     && patch -p1 < shadowsocks.patch     && ./autogen.sh     &&
+      ./configure --prefix=/usr --disable-documentation     && make install -j8     &&
+      cd ..
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - runDeps="$(         scanelf --needed --nobanner /usr/bin/ss-*             |
+      awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }'             | xargs -r apk
+      info --installed             | sort -u     )"     && apk add --no-cache --virtual
+      .run-deps $runDeps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - socks5-up.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - shadowsocks-up.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/socks5/socks5
+    - /usr/local/bin/
+  - CmdLine:
+    - rm -rf simple-obfs shadowsocks-libev-master     && apk del .build-deps     &&
+      chmod +x         /usr/local/bin/socks5-up.sh         /usr/local/bin/entrypoint.sh         /usr/local/bin/shadowsocks-up.sh     &&
+      mkdir -p /etc/shadowsocks
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SS_SERVER_ADDR
+      Value: '"0.0.0.0"'
+    Name: env
+  - Env:
+    - Key: SS_SERVER_PORT
+      Value: '"1080"'
+    Name: env
+  - Env:
+    - Key: SS_SERVER_PASS
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: SS_METHOD
+      Value: '"chacha20-ietf-poly1305"'
+    Name: env
+  - Env:
+    - Key: SS_OBFS
+      Value: '"plain"'
+    Name: env
+  - Env:
+    - Key: SS_OBFS_HOST
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: SS_OBFS_URI
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: SS_OBFS_HTTP_METHOD
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: SS_KEY
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: SS_TIMEOUT
+      Value: '"300"'
+    Name: env
+  - Env:
+    - Key: SS_USER
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: SS_FAST_OPEN
+      Value: '"false"'
+    Name: env
+  - Env:
+    - Key: SS_REUSE_PORT
+      Value: '"false"'
+    Name: env
+  - Env:
+    - Key: SS_NOFILE
+      Value: '"1024"'
+    Name: env
+  - Env:
+    - Key: SS_DSCP
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: SS_MODE
+      Value: '"tcp_and_udp"'
+    Name: env
+  - Env:
+    - Key: SS_MTU
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: SS_MPTCP
+      Value: '"false"'
+    Name: env
+  - Env:
+    - Key: SS_IPV6_FIRST
+      Value: '"false"'
+    Name: env
+  - Env:
+    - Key: SS_USE_SYSLOG
+      Value: '"false"'
+    Name: env
+  - Env:
+    - Key: SS_NO_DELAY
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: SS_LOCAL_ADDR
+      Value: '"0.0.0.0"'
+    Name: env
+  - Env:
+    - Key: SS_LOCAL_PORT
+      Value: '"1024"'
+    Name: env
+  - Env:
+    - Key: SS_UP
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: SOCKS5_PORT
+      Value: '"1080"'
+    Name: env
+  - Env:
+    - Key: SOCKS5_USER
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: SOCKS5_PASS
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: DAEMON_MODE
+      Value: '"false"'
+    Name: env
+  - Env:
+    - Key: SOCKS5_UP
+      Value: '""'
+    Name: env
+  - CmdLine:
+    - entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

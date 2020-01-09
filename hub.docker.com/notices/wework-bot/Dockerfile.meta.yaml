@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.12-alpine3.10
+  Commands:
+  - Maintainer: Shaddock <hushuang@gmail.com>
+    Name: maintainer
+  - Name: workdir
+    Path: /go/src/github.com/ntfs32/wework-bot
+  - CmdLine:
+    - sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+      &&     apk add --update -t build-deps curl libc-dev gcc libgcc git wget &&     wget
+      -q https://github.com/upx/upx/releases/download/v3.95/upx-3.95-amd64_linux.tar.xz
+      &&     tar xvJf upx-3.95-amd64_linux.tar.xz &&     cp upx-3.95-amd64_linux/upx
+      /usr/local/bin/ &&     chmod +x /usr/local/bin/upx
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Env:
+    - Key: GOPROXY
+      Value: https://goproxy.io
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - for obj in `ls lib/`; do echo "build ./lib/$obj/*.go into /opt/build/$obj ...";
+      go build -o /opt/build/$obj ./lib/$obj/*.go; upx /opt/build/$obj; done &&     chmod
+      +x /opt/build/* &&     apk del --purge build-deps &&     rm -rf /var/cache/apk/*
+      &&     rm -rf /go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12-alpine3.10
+  Name: build
+  Platform: ""
+  SourceCode: FROM        golang:1.12-alpine3.10 AS build
+- BaseName: almir/webhook
+  Commands:
+  - CmdLine:
+    - sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+      &&     apk add bash vim
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - hooks
+    - /opt/hooks
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts
+    - /opt/scripts
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /opt/build/*
+    - /opt/scripts/
+  - CmdLine:
+    - ls /opt/hooks && chmod +x /opt/scripts/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - webhook
+    - -hooks
+    - /opt/hooks/hooks.yaml
+    - -verbose
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: almir/webhook
+  Name: ""
+  Platform: ""
+  SourceCode: FROM almir/webhook

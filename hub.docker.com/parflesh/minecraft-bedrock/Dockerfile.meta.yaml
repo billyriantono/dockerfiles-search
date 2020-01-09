@@ -1,0 +1,106 @@
+MetaArgs: null
+Stages:
+- As: artifact
+  BaseName: ubuntu:rolling
+  Commands:
+  - CmdLine:
+    - apt update &&     apt install -y unzip curl
+    Name: run
+    PrependShell: true
+  - Key: VERSION
+    Name: arg
+    Value: '"1.14.1.4"'
+  - Key: ARCHIVE_FILENAME
+    Name: arg
+    Value: '"bedrock-server-"'
+  - Key: ARCHIVE_EXTENSION
+    Name: arg
+    Value: '".zip"'
+  - Key: BASE_URL
+    Name: arg
+    Value: '"https://minecraft.azureedge.net/bin-linux/"'
+  - Name: workdir
+    Path: '"/tmp"'
+  - Env:
+    - Key: ARCHIVE_DIR
+      Value: '"/tmp/bedrock_server"'
+    Name: env
+  - CmdLine:
+    - if [ "$VERSION" = "latest" ];then VERSION=`curl -v --silent  https://www.minecraft.net/en-us/download/server/bedrock/
+      2>&1 | grep 'https://minecraft.azureedge.net/bin-linux/bedrock-server-.*\.zip'
+      | awk -F'bedrock-server-' '{print $2}' | awk -F'.zip' '{print $1}'`;fi &&     curl
+      -O ${BASE_URL}${ARCHIVE_FILENAME}${VERSION}${ARCHIVE_EXTENSION} &&     unzip
+      ${ARCHIVE_FILENAME}${VERSION}${ARCHIVE_EXTENSION} -d ${ARCHIVE_DIR} &&     mkdir
+      ${ARCHIVE_DIR}/default &&     rm ${ARCHIVE_DIR}/server.properties &&     for
+      i in permissions.json whitelist.json behavior_packs resource_packs;do mv ${ARCHIVE_DIR}/$i
+      ${ARCHIVE_DIR}/default/$i;done &&     chmod -R g=u ${ARCHIVE_DIR}
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:rolling
+  Name: artifact
+  Platform: ""
+  SourceCode: FROM ubuntu:rolling as artifact
+- BaseName: ubuntu:rolling
+  Commands:
+  - Env:
+    - Key: SERVER_DIR
+      Value: '"/opt/minecraft_bedrock"'
+    - Key: DATA_DIR
+      Value: '"/data"'
+    - Key: PATH
+      Value: $PATH:/opt/minecraft_bedrock
+    Name: env
+  - Chown: "1001:0"
+    From: artifact
+    Name: copy
+    SourcesAndDest:
+    - /tmp/bedrock_server
+    - ${SERVER_DIR}
+  - CmdLine:
+    - apt update &&     apt install --no-install-recommends -y libcurl4  &&     apt
+      clean autoclean &&     rm -Rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir ${DATA_DIR} &&     chown 1001:0 ${DATA_DIR} &&     chmod ug+w ${DATA_DIR}
+      &&     chmod ug+w ${SERVER_DIR}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - '*.sh'
+    - ${SERVER_DIR}/
+  - Name: user
+    User: "1001:0"
+  - Name: volume
+    Volumes:
+    - '"${DATA_DIR}"'
+  - Name: expose
+    Ports:
+    - '"19132/udp"'
+  - Name: expose
+    Ports:
+    - '"19133/udp"'
+  - Name: expose
+    Ports:
+    - '"60977/udp"'
+  - Name: expose
+    Ports:
+    - '"36964/udp"'
+  - Name: workdir
+    Path: '"${SERVER_DIR}"'
+  - CmdLine:
+    - entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - startup.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:rolling
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:rolling

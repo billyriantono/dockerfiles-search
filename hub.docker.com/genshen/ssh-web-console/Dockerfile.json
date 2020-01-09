@@ -1,0 +1,135 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "frontend-builder",
+      "BaseName": "node:10-alpine",
+      "SourceCode": "FROM node:10-alpine AS frontend-builder",
+      "Platform": "",
+      "As": "frontend-builder",
+      "From": {
+        "Image": "node:10-alpine"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "web",
+            "web-console/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "cd web-console     \u0026\u0026 yarn install     \u0026\u0026 yarn build"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "builder",
+      "BaseName": "golang:1.13.1-alpine",
+      "SourceCode": "FROM golang:1.13.1-alpine AS builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "golang:1.13.1-alpine"
+      },
+      "Commands": [
+        {
+          "Key": "STATIC_DIR",
+          "Name": "arg",
+          "Value": "dist"
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache git     \u0026\u0026 go get -u github.com/rakyll/statik"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./",
+            "/go/src/github.com/genshen/ssh-web-console/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "frontend-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "web-console/dist",
+            "/go/src/github.com/genshen/ssh-web-console/${STATIC_DIR}/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "cd ./src/github.com/genshen/ssh-web-console/     \u0026\u0026 statik -src=${STATIC_DIR}     \u0026\u0026 go build     \u0026\u0026 go install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "alpine:latest",
+      "SourceCode": "FROM alpine:latest",
+      "Platform": "",
+      "From": {
+        "Image": "alpine:latest"
+      },
+      "Commands": [
+        {
+          "Key": "HOME",
+          "Name": "arg",
+          "Value": "\"/home/web\""
+        },
+        {
+          "CmdLine": [
+            "adduser -D web -h ${HOME}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "web",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/go/bin/ssh-web-console",
+            "${HOME}/ssh-web-console"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "${HOME}"
+        },
+        {
+          "Name": "user",
+          "User": "web"
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "${HOME}/conf"
+          ]
+        },
+        {
+          "CmdLine": [
+            "./ssh-web-console"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

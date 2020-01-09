@@ -1,0 +1,310 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "base",
+      "BaseName": "php:7.3-fpm-alpine",
+      "SourceCode": "FROM php:7.3-fpm-alpine AS base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Image": "php:7.3-fpm-alpine"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk --update add     nginx     supervisor     git     icu-dev     libzip-dev     zip"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "docker-php-ext-install     intl     opcache     pdo     pdo_mysql     zip"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "composer",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/bin/composer",
+            "/usr/bin/composer"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "COMPOSER_ALLOW_SUPERUSER",
+              "Value": "1"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "COMPOSER_MEMORY_LIMIT",
+              "Value": "-1"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "composer global require hirak/prestissimo --no-plugins --no-scripts"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "adduser -D -g 'www' www"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "chown -R www:www /var/lib/nginx /var/tmp/nginx/"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /var/www/html \u0026\u0026 chown -R www /var/www/html"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/var/www/html"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "package.json",
+            "."
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "package-lock.json",
+            "."
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "composer.json",
+            "."
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "composer.lock",
+            "."
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "dependencies",
+      "BaseName": "base",
+      "SourceCode": "FROM base AS dependencies",
+      "Platform": "",
+      "As": "dependencies",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add --update python build-base nodejs nodejs-npm"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "npm install --silent"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "composer install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "build",
+      "BaseName": "dependencies",
+      "SourceCode": "FROM dependencies AS build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Stage": {
+          "Named": "dependencies",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "./node_modules/.bin/encore production"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "release",
+      "BaseName": "base",
+      "SourceCode": "FROM base AS release",
+      "Platform": "",
+      "As": "release",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "rm -rf /var/cache/apk/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/var/www/html/public/build",
+            "./public/build"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "dependencies",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/var/www/html/vendor",
+            "./vendor"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "NODE_ENV",
+              "Value": "production"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "9000"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./config/docker/php/symfony.ini",
+            "/usr/local/etc/php/conf.d/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./config/docker/php/symfony.pool.conf",
+            "/usr/local/etc/php-fpm.d/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./config/docker/nginx/nginx.conf",
+            "/etc/nginx/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./config/docker/nginx/symfony.conf",
+            "/etc/nginx/sites-available/symfony.conf"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./config/docker/supervisord.conf",
+            "/etc/supervisord.conf"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "/usr/bin/supervisord",
+            "-n"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

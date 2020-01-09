@@ -1,0 +1,107 @@
+MetaArgs: null
+Stages:
+- BaseName: behance/docker-nginx:8.7
+  Commands:
+  - Labels:
+    - Key: maintainers
+      Value: '"Behance Team <dev-behance@adobe.com>"'
+    Name: label
+  - Env:
+    - Key: CONF_PHPFPM
+      Value: /etc/php/7.4/fpm/php-fpm.conf
+    - Key: CONF_PHPMODS
+      Value: /etc/php/7.4/mods-available
+    - Key: CONF_FPMPOOL
+      Value: /etc/php/7.4/fpm/pool.d/www.conf
+    - Key: CONF_FPMOVERRIDES
+      Value: /etc/php/7.4/fpm/conf.d/overrides.user.ini
+    - Key: APP_ROOT
+      Value: /app
+    - Key: SERVER_WORKER_CONNECTIONS
+      Value: "3072"
+    - Key: SERVER_CLIENT_BODY_BUFFER_SIZE
+      Value: 128k
+    - Key: SERVER_CLIENT_HEADER_BUFFER_SIZE
+      Value: 1k
+    - Key: SERVER_CLIENT_BODY_BUFFER_SIZE
+      Value: 128k
+    - Key: SERVER_LARGE_CLIENT_HEADER_BUFFERS
+      Value: '"4 256k"'
+    - Key: PHP_FPM_MAX_CHILDREN
+      Value: "4096"
+    - Key: PHP_FPM_START_SERVERS
+      Value: "20"
+    - Key: PHP_FPM_MAX_REQUESTS
+      Value: "1024"
+    - Key: PHP_FPM_MIN_SPARE_SERVERS
+      Value: "5"
+    - Key: PHP_FPM_MAX_SPARE_SERVERS
+      Value: "128"
+    - Key: PHP_FPM_MEMORY_LIMIT
+      Value: 256M
+    - Key: PHP_FPM_MAX_EXECUTION_TIME
+      Value: "60"
+    - Key: PHP_FPM_UPLOAD_MAX_FILESIZE
+      Value: 1M
+    - Key: PHP_OPCACHE_MEMORY_CONSUMPTION
+      Value: "128"
+    - Key: PHP_OPCACHE_INTERNED_STRINGS_BUFFER
+      Value: "16"
+    - Key: PHP_OPCACHE_MAX_WASTED_PERCENTAGE
+      Value: "5"
+    - Key: CFG_APP_DEBUG
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - /bin/bash -e /security_updates.sh &&     apt-get install -yqq --no-install-recommends         gpg-agent         git         curl         wget         software-properties-common         locales     &&     locale-gen
+      en_US.UTF-8 && export LANG=en_US.UTF-8 &&     add-apt-repository ppa:ondrej/php
+      -y &&     echo 'deb http://apt.newrelic.com/debian/ newrelic non-free' | tee
+      /etc/apt/sources.list.d/newrelic.list &&     wget -O- https://download.newrelic.com/548C16BF.gpg
+      | apt-key add - &&     echo newrelic-php5 newrelic-php5/application-name string
+      "REPLACE_NEWRELIC_APP" | debconf-set-selections &&     echo newrelic-php5 newrelic-php5/license-key
+      string "REPLACE_NEWRELIC_LICENSE" | debconf-set-selections &&     apt-get remove
+      --purge -yq         patch         software-properties-common         locales         wget     &&     /bin/bash
+      /clean.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - container/root/usr/local/bin/pecl-install
+    - /usr/local/bin
+  - CmdLine:
+    - apt-get update -q &&     apt-mark hold             apache2             apache2-bin             libapache2-mod-php7.4             php5.6-cli             php5.6-common             php5.6-json             php7.0-cli             php7.0-common             php7.0-json             php7.1-cli             php7.1-common             php7.1-json             php7.2-cli             php7.2-common             php7.2-json             php7.3-cli             php7.3-common             php7.3-json     &&     apt-get
+      -yqq install         php7.4         php7.4-bcmath         php7.4-bz2         php7.4-curl         php7.4-dev         php7.4-fpm         php7.4-gd         php7.4-intl         php7.4-json         php7.4-mbstring         php7.4-memcache         php7.4-mysql         php7.4-pgsql         php7.4-xdebug         php7.4-xml         php7.4-zip         newrelic-php5         newrelic-php5-common         newrelic-daemon         libmemcached-dev         pkg-config         zlib1g-dev         libyaml-dev     &&     phpdismod
+      pdo_pgsql &&     phpdismod pgsql &&     phpdismod xdebug &&     rm -rf /usr/lib/php/20121212
+      &&     rm -rf /usr/lib/php/20131226 &&     rm -rf /usr/lib/php/20151012 &&     rm
+      -rf /usr/lib/php/20160303 &&     rm -rf /usr/lib/php/20170718 &&     rm -rf
+      /usr/lib/php/20180731 &&     rm -rf /usr/lib/php/7.3 &&     curl -sS https://getcomposer.org/installer
+      | php &&     mv composer.phar /usr/local/bin/composer &&     pecl-install         apcu         igbinary         redis         memcached         msgpack         yaml     &&     phpenmod
+      apcu igbinary memcached msgpack &&     apt-get remove --purge -yq         php7.4-dev         build-essential         cpp         cpp-7         gcc     &&     /bin/bash
+      /clean.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./container/root
+    - /
+  - CmdLine:
+    - cp /etc/php/7.0/mods-available/* $CONF_PHPMODS &&     cp /etc/php/7.0/fpm/conf.d/overrides.user.ini
+      $CONF_FPMOVERRIDES &&     ln -s /usr/sbin/php-fpm7.4 /usr/sbin/php-fpm &&     phpenmod
+      overrides &&     phpenmod newrelic &&     /bin/bash -e /prep-php.sh &&     sed
+      -i "s/;decorate_workers_output.*/decorate_workers_output = no/" $CONF_FPMPOOL
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - goss -g /tests/php-fpm/7.4.goss.yaml validate &&     goss -g /tests/php-fpm/base.goss.yaml
+      validate &&     /aufs_hack.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: behance/docker-nginx:8.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM behance/docker-nginx:8.7

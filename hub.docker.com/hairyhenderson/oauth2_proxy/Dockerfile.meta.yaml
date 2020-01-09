@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: download
+  BaseName: alpine:3.11
+  Commands:
+  - CmdLine:
+    - apk --no-cache add curl ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sSL https://github.com/bitly/oauth2_proxy/releases/download/v2.2/oauth2_proxy-2.2.0.linux-amd64.go1.8.1.tar.gz   |
+      tar zxv --strip-components=1 -C /
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 755 /oauth2_proxy
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.11
+  Name: download
+  Platform: ""
+  SourceCode: FROM alpine:3.11 AS download
+- As: compress
+  BaseName: debian:9.8
+  Commands:
+  - CmdLine:
+    - apt-get update -qq
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -yq curl
+      xz-utils ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fsSL -o /tmp/upx.tar.xz https://github.com/upx/upx/releases/download/v3.94/upx-3.94-amd64_linux.tar.xz   &&
+      tar Jxv -C /tmp --strip-components=1 -f /tmp/upx.tar.xz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: download
+    Name: copy
+    SourcesAndDest:
+    - /oauth2_proxy
+    - /
+  - CmdLine:
+    - /tmp/upx --lzma /oauth2_proxy -o /oauth2_proxy-slim
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:9.8
+  Name: compress
+  Platform: ""
+  SourceCode: FROM debian:9.8 AS compress
+- BaseName: alpine:3.11
+  Commands:
+  - Chown: ""
+    From: download
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/ca-certificates.crt
+  - Chown: ""
+    From: compress
+    Name: copy
+    SourcesAndDest:
+    - /oauth2_proxy-slim
+    - /bin/oauth2_proxy
+  - CmdLine:
+    - oauth2_proxy
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.11
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.11

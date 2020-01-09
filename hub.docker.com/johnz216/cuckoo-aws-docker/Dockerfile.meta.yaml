@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:18.04
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"jwilson@hurricanelabs.com"'
+    Name: label
+  - Env:
+    - Key: CUCKOO_REPO
+      Value: https://github.com/cuckoosandbox/cuckoo
+    - Key: TAG
+      Value: 2.0.7
+    - Key: CUCKOO_DIR
+      Value: /opt/cuckoo
+    Name: env
+  - Env:
+    - Key: CUCKOO
+      Value: $CUCKOO_DIR/.cuckoo
+    - Key: VIRTUAL_ENV
+      Value: $CUCKOO_DIR/venv
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get install --no-install-recommends -yqq     build-essential
+      git curl netcat tcpdump libcap2-bin supervisor virtualenv python-dev libpq-dev
+      python-magic libffi-dev libssl-dev libjpeg-dev zlib1g-dev     swig     libguac-client-rdp0
+      guacd &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/conf/config.json
+    - /tmp/config.json
+  - CmdLine:
+    - cd /opt && git clone -b $TAG --single-branch $CUCKOO_REPO &&     sed -i '/import\
+      re/a import\ traceback' $CUCKOO_DIR/cuckoo/common/config.py &&     sed -i '/configuration
+      = {/r /tmp/config.json' $CUCKOO_DIR/cuckoo/common/config.py &&     cd $CUCKOO_DIR
+      && virtualenv venv && useradd -ms /bin/bash cuckoo &&     echo '\n*         hard    nofile      500000\n*         soft    nofile      500000\ncuckoo      hard    nofile      500000\ncuckoo      soft    nofile      500000'
+      >> /etc/security/limits.conf
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $CUCKOO_DIR
+  - Env:
+    - Key: PATH
+      Value: '"$VIRTUAL_ENV/bin:$PATH"'
+    Name: env
+  - CmdLine:
+    - chown -R cuckoo:cuckoo . &&     groupadd pcap && usermod -a -G pcap cuckoo &&     chgrp
+      pcap /usr/sbin/tcpdump && setcap cap_net_raw+ep /usr/sbin/tcpdump
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: cuckoo
+  - CmdLine:
+    - pip install boto3 configparser psycopg2 m2crypto ec2_metadata
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/conf/aws.conf
+    - $CUCKOO_DIR/cuckoo/private/cwd/conf/aws.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/machinery/aws.py
+    - $CUCKOO_DIR/cuckoo/machinery/aws.py
+  - CmdLine:
+    - python stuff/monitor.py &&     python setup.py sdist develop &&     cuckoo -d
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/entrypoint.sh
+    - files/update_conf.py
+    - /
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

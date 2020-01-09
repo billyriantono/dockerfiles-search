@@ -1,0 +1,1 @@
+FROM neworgnandhini/bugbash_upstream:latest

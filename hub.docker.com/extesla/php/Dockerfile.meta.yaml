@@ -1,0 +1,175 @@
+MetaArgs: null
+Stages:
+- BaseName: extesla/alpine:3.10
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Sean Quinn <sean.quinn@extesla.com>"'
+    Name: label
+  - CmdLine:
+    - apk update && apk upgrade
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache --virtual .phpize-deps             autoconf file g++ gcc
+      libc-dev make pkgconf  && apk add --no-cache --virtual .php-deps             bzip2
+      ca-certificates curl gdbm gettext icu icu-libs             libdbi libedit libintl
+      libmcrypt libpng libpng-dev             libxml2 libxslt libressl re2c  && apk
+      add --no-cache --virtual .build-deps             bzip2-dev curl-dev gdbm-dev
+      gettext-dev gnupg icu-dev             libdbi-dev libedit-dev libmcrypt-dev libxml2-dev             libxslt-dev
+      libressl-dev postgresql-dev sqlite-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x  && addgroup -g 82 -S www-data  && adduser -u 82 -D -S -G www-data www-data
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "www-data ALL=(ALL) NOPASSWD:ALL" | tee -a /etc/sudoers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/www  && chown -R www-data:www-data /var/www
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GPG_KEYS
+      Value: A917B1ECDA84AEC2B568FED6F50ABC807BD5DCD0 528995BFEDFBA7191D46839EF9BA0ADA31CBD89E
+        1729F83938DA44E27BA0F4D3DBDB397470D12172
+    Name: env
+  - Env:
+    - Key: PHP_VERSION
+      Value: 7.1.25
+    Name: env
+  - Env:
+    - Key: PHP_FILENAME
+      Value: php-7.1.25.tar.xz
+    Name: env
+  - Env:
+    - Key: PHP_URL
+      Value: '"https://secure.php.net/get/${PHP_FILENAME}/from/this/mirror"'
+    Name: env
+  - Env:
+    - Key: PHP_ASC_URL
+      Value: '"https://secure.php.net/get/${PHP_FILENAME}.asc/from/this/mirror"'
+    Name: env
+  - Env:
+    - Key: PHP_SHA256
+      Value: 0fd8dad1903cd0b2d615a1fe4209f99e53b7292403c8ffa1919c0f4dd1eada88
+    Name: env
+  - CmdLine:
+    - set -xe  && wget -O "$PHP_FILENAME" "$PHP_URL"  && echo "$PHP_SHA256 *$PHP_FILENAME"
+      | sha256sum -c -  && wget -O "$PHP_FILENAME.asc" "$PHP_ASC_URL"  && mkdir -p
+      /tmp/gnupg  && export GNUPGHOME="$(mktemp -d -p /tmp/gnupg)"  && for key in
+      $GPG_KEYS; do       gpg --batch --keyserver ha.pool.sks-keyservers.net --recv-keys
+      "$key" ;     done  && gpg --batch --verify "$PHP_FILENAME.asc" "$PHP_FILENAME"  &&
+      gpgconf --kill all  && rm -rf "$GNUPGHOME" "$PHP_FILENAME.asc"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /usr/src  && tar -Jxf "$PHP_FILENAME" -C /usr/src  && mv "/usr/src/php-$PHP_VERSION"
+      /usr/src/php  && rm "$PHP_FILENAME"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/phpmake
+    - /phpmake
+  - CmdLine:
+    - chmod +x /phpmake
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/usr/local/bin/docker-php-ext-*
+    - /usr/local/bin/
+  - CmdLine:
+    - chmod +x /usr/local/bin/docker-php-ext-*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_INI_DIR
+      Value: /etc/php
+    Name: env
+  - CmdLine:
+    - mkdir -p $PHP_INI_DIR  && mkdir -p $PHP_INI_DIR/conf.d  && mkdir -p $PHP_INI_DIR/mods-available
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/php
+  - CmdLine:
+    - /phpmake -o --with-config-file-path="$PHP_INI_DIR"              -o --with-config-file-scan-dir="$PHP_INI_DIR/conf.d"              -o
+      --enable-fpm              -o --with-fpm-user=www-data              -o --with-fpm-group=www-data              -o
+      --disable-short-tags              -o --enable-bcmath              -o --enable-calendar              -o
+      --enable-exif              -o --enable-ftp              -o --enable-intl              -o
+      --enable-mbstring              -o --enable-mysqlnd              -o --enable-pcntl              -o
+      --enable-sockets              -o --enable-shmop              -o --enable-sysvmsg              -o
+      --with-bz2              -o --with-curl              -o --with-libedit              -o
+      --with-gd              -o --with-gettext              -o --with-mcrypt              -o
+      --with-mhash              -o --with-openssl              -o --with-system-ciphers              -o
+      --with-pdo-mysql              -o --with-pdo-pgsql              -o --with-pdo-sqlite              -o
+      --with-pgsql              -o --with-readline              -o --with-zlib              -o
+      --with-xsl  && apk del .build-deps  && rm -rf /var/cache/apk/*  && cp /usr/src/php/php.ini-production
+      /etc/php/php.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -xe  && cd /etc/php  && if [ -d php-fpm.d ]; then       sed 's!=NONE/!=!g'
+      php-fpm.conf.default | tee php-fpm.conf > /dev/null;       cp php-fpm.d/www.conf.default
+      php-fpm.d/www.conf;     else       mkdir php-fpm.d;       cp php-fpm.conf.default
+      php-fpm.d/www.conf;       {         echo '[global]';         echo 'pid=/var/run/php-fpm.pid';         echo
+      'include=/etc/php/php-fpm.d/*.conf';       } | tee php-fpm.conf;     fi  &&
+      {       echo '[www]';       echo 'user = www-data';       echo 'group = www-data';       echo;       echo
+      '; if we send this to /proc/self/fd/1, it never appears';       echo 'access.log
+      = /proc/self/fd/2';       echo;       echo 'clear_env = no';       echo;       echo
+      'listen = /run/php-fpm.sock';       echo 'listen.owner = www-data';       echo
+      'listen.group = www-data';       echo;       echo 'pm = ondemand';       echo
+      'pm.process_idle_timeout = 30s';       echo 'pm.max_children = 10';       echo
+      'pm.status_path = /status';       echo;       echo 'ping.path = /ping';       echo
+      'ping.response = pong';       echo;       echo '; Ensure worker stdout and stderr
+      are sent to the main error log.';       echo 'catch_workers_output = yes';      }
+      | tee php-fpm.d/www.conf  && {       echo '[global]';       echo 'error_log
+      = /proc/self/fd/2';     } | tee php-fpm.d/docker.conf  && {       echo '[global]';       echo
+      'daemonize = no';     } | tee php-fpm.d/zz-docker.conf
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/etc/init.d/php-fpm
+    - /etc/init.d/php-fpm
+  - CmdLine:
+    - chmod +x /etc/init.d/php-fpm
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/etc/php/mods-available
+    - /etc/php/mods-available
+  - CmdLine:
+    - ln -s /etc/php/mods-available/opcache.ini /etc/php/conf.d/05-opcache.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - php
+    - -a
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: extesla/alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM extesla/alpine:3.10

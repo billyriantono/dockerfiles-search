@@ -1,0 +1,1 @@
+FROM apachesling/sling:latest

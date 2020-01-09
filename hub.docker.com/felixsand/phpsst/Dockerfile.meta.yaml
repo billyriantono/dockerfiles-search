@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- As: frontendbuilder
+  BaseName: node:10
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./frontend
+    - .
+  - CmdLine:
+    - npm install &&     npm run lint &&     npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10
+  Name: frontendbuilder
+  Platform: ""
+  SourceCode: FROM node:10 as frontendBuilder
+- As: backendbuilder
+  BaseName: php:7.3-apache
+  Commands:
+  - Env:
+    - Key: COMPOSER_ALLOW_SUPERUSER
+      Value: "1"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./backend
+    - /backend
+  - CmdLine:
+    - apt-get update &&     apt-get install -y git libzip-dev &&     docker-php-ext-install
+      -j$(nproc) zip &&     curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin
+      --filename=composer
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /backend && composer install && composer build-dist
+    Name: run
+    PrependShell: true
+  From:
+    Image: php:7.3-apache
+  Name: backendbuilder
+  Platform: ""
+  SourceCode: FROM php:7.3-apache as backendBuilder
+- BaseName: php:7.3-apache
+  Commands:
+  - Maintainer: Felix Sandström <felix.sandstrom@me.com>
+    Name: maintainer
+  - Env:
+    - Key: STORAGE
+      Value: '''SQLite'''
+    - Key: REDIS_HOST
+      Value: '''tcp://redis.local:6379'''
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - apache.conf
+    - /etc/apache2/sites-enabled/000-default.conf
+  - Chown: ""
+    From: backendBuilder
+    Name: copy
+    SourcesAndDest:
+    - /backend
+    - /backend
+  - Chown: ""
+    From: frontendBuilder
+    Name: copy
+    SourcesAndDest:
+    - ./dist
+    - /var/www/html/public
+  - CmdLine:
+    - a2enmod rewrite &&     a2enmod headers &&     mv /backend/src/phppst.php /var/www/html/public/phppst.php
+      &&     mv /backend/vendor /var/www/html/vendor &&     mv /backend/src /var/www/html/src
+      &&     rm -Rf /backend &&     mkdir  /var/www/html/src/data &&     chown www-data:staff
+      /var/www/html/src/data &&     chmod 700 /var/www/html/src/data
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  From:
+    Image: php:7.3-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.3-apache

@@ -1,0 +1,90 @@
+MetaArgs:
+- DefaultValue: "7"
+  Key: PHP_VERSION
+  ProvidedValue: null
+  Value: "7"
+- DefaultValue: "3.7"
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: "3.7"
+Stages:
+- BaseName: php:$PHP_VERSION-fpm-alpine$ALPINE_VERSION
+  Commands:
+  - Maintainer: zier <florianzier@users.noreply.github.com>
+    Name: maintainer
+  - Key: HTTP_PROXY_REQUEST_FULLURI
+    Name: arg
+    Value: '"false"'
+  - Key: HTTPS_PROXY_REQUEST_FULLURI
+    Name: arg
+    Value: '"false"'
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/certs
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/php.ini
+    - /usr/local/etc/php/
+  - Key: TZ
+    Name: arg
+    Value: '"UTC"'
+  - Key: INTL
+    Name: arg
+    Value: '"en"'
+  - CmdLine:
+    - apk add --update --no-cache tzdata     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime     &&
+      echo $TZ > /etc/timezone     && (echo "[DATE]" & echo "date.timezone=\"${TZ}\";"
+      & echo "") >> /usr/local/etc/php/php.ini     && (echo "[intl]" & echo "intl.default_locale=\"${INTL}\";"       &
+      echo "intl.use_exceptions=1;" & echo "intl.error_level=E_WARNING;") >> /usr/local/etc/php/php.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache libzip-dev bzip2-dev icu-dev ssmtp     && docker-php-ext-configure
+      mysqli --with-mysqli=mysqlnd     && docker-php-ext-configure pdo_mysql --with-pdo-mysql     &&
+      docker-php-ext-configure zip --with-libzip=/usr/lib     && docker-php-ext-configure
+      intl --enable-intl     && docker-php-ext-install mysqli pdo_mysql zip bz2 intl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache --allow-untrusted --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing
+      gnu-libiconv
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LD_PRELOAD
+      Value: '"/usr/lib/preloadable_libiconv.so php"'
+    Name: env
+  - Env:
+    - Key: COMPOSER_ALLOW_SUPERUSER
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - curl -sS https://getcomposer.org/installer     | php -- --install-dir=/usr/local/bin
+      --filename=composer
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/xdebug.ini
+    - /usr/local/etc/php/conf.d/
+  - CmdLine:
+    - apk add --no-cache --virtual build-dependencies icu-dev g++ make autoconf     &&
+      docker-php-ext-install opcache     && docker-php-source extract     && pecl
+      install xdebug-beta apcu-beta apcu_bc-beta     && docker-php-ext-enable xdebug     &&
+      docker-php-ext-enable apcu --ini-name 10-docker-php-ext-apcu.ini     && docker-php-ext-enable
+      apc  --ini-name 20-docker-php-ext-apc.ini     && docker-php-source delete     &&
+      apk del build-dependencies     && rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: php:$PHP_VERSION-fpm-alpine$ALPINE_VERSION
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:$PHP_VERSION-fpm-alpine$ALPINE_VERSION

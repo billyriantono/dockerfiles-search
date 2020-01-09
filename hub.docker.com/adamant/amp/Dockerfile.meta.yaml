@@ -1,0 +1,147 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: frebib/debian-builder
+  Commands:
+  - Key: SOCAT_VER
+    Name: arg
+    Value: 1.7.3.2
+  - Key: SCREEN_VER
+    Name: arg
+    Value: v.4.6.2
+  - Key: LIBEVENT_VER
+    Name: arg
+    Value: 2.1.8-stable
+  - Key: TMUX_VER
+    Name: arg
+    Value: "2.5"
+  - Key: GLIBC_VER
+    Name: arg
+    Value: "2.26"
+  - Key: PREFIX
+    Name: arg
+    Value: /usr
+  - CmdLine:
+    - dpkg --add-architecture i386  && apt-get update  && apt-get install -qqy dh-autoreconf
+      libncurses5-dev libsqlite3-0 libgcc1 lib32gcc1     linux-libc-dev:i386 g++-multilib  &&
+      mkdir -p /output/${PREFIX}/{bin,lib,lib32}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fL http://www.dest-unreach.org/socat/download/socat-${SOCAT_VER}.tar.gz
+      | tar xz  && cd socat-${SOCAT_VER}  && ./configure --prefix=${PREFIX}  && make
+      -j "$(nproc)"  && mv ./socat /output/${PREFIX}/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fL http://git.savannah.gnu.org/cgit/screen.git/snapshot/screen-${SCREEN_VER}.tar.gz
+      | tar xz  && cd screen-${SCREEN_VER}/src/  && ./autogen.sh  && ./configure --prefix=${PREFIX}  &&
+      make -j "$(nproc)"  && mv ./screen /output/${PREFIX}/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fL https://github.com/libevent/libevent/releases/download/release-${LIBEVENT_VER}/libevent-${LIBEVENT_VER}.tar.gz
+      | tar xz  && cd libevent-${LIBEVENT_VER}  && mkdir build/  && ./configure --prefix=${PREFIX}  &&
+      make -j "$(nproc)"  && make DESTDIR="$(pwd)/build" install  && cp -d ./build/${PREFIX}/lib/*.so*
+      /output${PREFIX}/lib
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fL https://github.com/tmux/tmux/releases/download/${TMUX_VER}/tmux-${TMUX_VER}.tar.gz
+      | tar xz  && cd tmux-${TMUX_VER}/  && export LE_DIR="../libevent-${LIBEVENT_VER}/build/usr"  &&
+      ./configure CFLAGS="-I$LE_DIR/include" LDFLAGS="-L$LE_DIR/lib" --prefix=${PREFIX}  &&
+      make -j "$(nproc)"  && mv ./tmux /output/${PREFIX}/bin
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/glibc/build
+  - Key: CC
+    Name: arg
+    Value: '"gcc -m32 -mstackrealign"'
+  - Key: CXX
+    Name: arg
+    Value: '"g++ -m32 -mstackrealign"'
+  - CmdLine:
+    - curl -fL https://ftp.gnu.org/gnu/glibc/glibc-${GLIBC_VER}.tar.xz         | tar
+      xJ --strip-components=1 -C .. &&         echo "slibdir=${PREFIX}/lib32" >> configparms
+      &&     echo "rtlddir=${PREFIX}/lib32" >> configparms &&     echo "sbindir=${PREFIX}/bin"
+      >> configparms &&     echo "rootsbindir=${PREFIX}/bin" >> configparms &&         export
+      CFLAGS="-march=i686 -O2 -pipe -fstack-protector-strong" &&     export CXXFLAGS="-march=i686
+      -O2 -pipe -fstack-protector-strong" &&         ../configure         --host=i686-pc-linux-gnu         --prefix=${PREFIX}         --libdir="${PREFIX}/lib32"         --libexecdir="${PREFIX}/lib32"         --with-native-system-header-dir=/usr/include/x86_64-linux-gnu         --enable-add-ons         --enable-obsolete-rpc         --enable-kernel=3.10.0         --enable-bind-now         --disable-profile         --enable-stackguard-randomization         --enable-stack-protector=strong         --enable-lock-elision         --enable-multi-arch         --disable-werror
+      &&     make -j "$(nproc)" &&     make -j "$(nproc)" install_root="$(pwd)/out"
+      install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -d out/${PREFIX}/lib32/*.so /output/${PREFIX}/lib32 &&     ln -snv ../lib32/ld-linux.so.2
+      /output/${PREFIX}/lib/ld-linux.so.2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -d /usr/lib32/libgcc_s.so.1 /output${PREFIX}/lib32  && cp -d /lib/$(gcc -print-multiarch)/libgcc_s.so.1
+      /output/${PREFIX}/lib  && cp -d /usr/lib/$(gcc -print-multiarch)/libsqlite3.so.0
+      /output/${PREFIX}/lib  && cp -d /usr/lib/$(gcc -print-multiarch)/libsqlite3.so.0.8.6
+      /output/${PREFIX}/lib
+    Name: run
+    PrependShell: true
+  From:
+    Image: frebib/debian-builder
+  Name: builder
+  Platform: ""
+  SourceCode: FROM frebib/debian-builder as builder
+- BaseName: adamant/busybox:libressl
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /output/
+    - /
+  - CmdLine:
+    - addgroup -S amp  && adduser -SDG amp amp  && mkdir -p /home/amp/.ampdata/instances
+      /ampdata  && ln -s /ampdata /home/amp/.ampdata/instances/instance  && chown
+      -R amp:amp /ampdata /home/amp  && (echo '#!/bin/sh'; echo 'exec /bin/sh "$@"')
+      > /usr/bin/bash  && chmod +x /usr/bin/bash  && echo /usr/lib32 > /etc/ld.so.conf  &&
+      ldconfig && ldconfig -p
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/amp
+  - CmdLine:
+    - wget -q https://cubecoders.com/Downloads/ampinstmgr.zip  && unzip ampinstmgr.zip  &&
+      rm -rf ampinstmgr.zip  && ln -sfv /opt/amp/ampinstmgr /usr/bin
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - start.sh
+    - /start.sh
+  - CmdLine:
+    - chmod +x /start.sh
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: amp
+  - Name: volume
+    Volumes:
+    - /ampdata
+  - Name: workdir
+    Path: /ampdata
+  - CmdLine:
+    - /sbin/tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /start.sh
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "8080"
+  From:
+    Image: adamant/busybox:libressl
+  Name: ""
+  Platform: ""
+  SourceCode: FROM adamant/busybox:libressl

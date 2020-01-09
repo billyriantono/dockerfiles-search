@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- As: frontend-builder
+  BaseName: node:10-alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - web
+    - web-console/
+  - CmdLine:
+    - cd web-console     && yarn install     && yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10-alpine
+  Name: frontend-builder
+  Platform: ""
+  SourceCode: FROM node:10-alpine AS frontend-builder
+- As: builder
+  BaseName: golang:1.13.1-alpine
+  Commands:
+  - Key: STATIC_DIR
+    Name: arg
+    Value: dist
+  - CmdLine:
+    - apk add --no-cache git     && go get -u github.com/rakyll/statik
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - /go/src/github.com/genshen/ssh-web-console/
+  - Chown: ""
+    From: frontend-builder
+    Name: copy
+    SourcesAndDest:
+    - web-console/dist
+    - /go/src/github.com/genshen/ssh-web-console/${STATIC_DIR}/
+  - CmdLine:
+    - cd ./src/github.com/genshen/ssh-web-console/     && statik -src=${STATIC_DIR}     &&
+      go build     && go install
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13.1-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.13.1-alpine AS builder
+- BaseName: alpine:latest
+  Commands:
+  - Key: HOME
+    Name: arg
+    Value: '"/home/web"'
+  - CmdLine:
+    - adduser -D web -h ${HOME}
+    Name: run
+    PrependShell: true
+  - Chown: web
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/ssh-web-console
+    - ${HOME}/ssh-web-console
+  - Name: workdir
+    Path: ${HOME}
+  - Name: user
+    User: web
+  - Name: volume
+    Volumes:
+    - ${HOME}/conf
+  - CmdLine:
+    - ./ssh-web-console
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

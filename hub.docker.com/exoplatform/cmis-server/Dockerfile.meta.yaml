@@ -1,0 +1,130 @@
+MetaArgs:
+- DefaultValue: /opt/cmis-server
+  Key: BASE_DIR
+  ProvidedValue: null
+  Value: /opt/cmis-server
+Stages:
+- As: install
+  BaseName: exoplatform/jdk:8-ubuntu-1804
+  Commands:
+  - Key: BASE_DIR
+    Name: arg
+    Value: null
+  - Env:
+    - Key: TOMCAT_VERSION_MAJOR
+      Value: "8"
+    Name: env
+  - Env:
+    - Key: TOMCAT_VERSION_FULL
+      Value: 8.5.39
+    Name: env
+  - Env:
+    - Key: OPENCMIS_VERSION
+      Value: 1.1.0
+    Name: env
+  - Key: CMIS_SERVER_TYPE
+    Name: arg
+    Value: fileshare
+  - CmdLine:
+    - apt-get update && apt-get install curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x   && mkdir -p /opt   && curl -LO https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_VERSION_MAJOR}/v${TOMCAT_VERSION_FULL}/bin/apache-tomcat-${TOMCAT_VERSION_FULL}.tar.gz   &&
+      curl -LO https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_VERSION_MAJOR}/v${TOMCAT_VERSION_FULL}/bin/apache-tomcat-${TOMCAT_VERSION_FULL}.tar.gz.sha512   &&
+      sha512sum -c apache-tomcat-${TOMCAT_VERSION_FULL}.tar.gz.sha512   && gunzip
+      -c apache-tomcat-${TOMCAT_VERSION_FULL}.tar.gz | tar -xf - -C /opt   && mv -v
+      /opt/apache-tomcat-${TOMCAT_VERSION_FULL} ${BASE_DIR}   && rm -f apache-tomcat-${TOMCAT_VERSION_FULL}.tar.gz
+      apache-tomcat-${TOMCAT_VERSION_FULL}.tar.gz.sha512   && find ${BASE_DIR} -name
+      "*.sh" -exec chmod u+x {} \;   && rm -rf ${BASE_DIR}/webapps/examples ${BASE_DIR}/webapps/docs
+      ${BASE_DIR}/webapps/manager ${BASE_DIR}/webapps/host-manager
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x   && cd /tmp   && curl -LO https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_VERSION_MAJOR}/v${TOMCAT_VERSION_FULL}/bin/extras/catalina-jmx-remote.jar   &&
+      curl -LO https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_VERSION_MAJOR}/v${TOMCAT_VERSION_FULL}/bin/extras/catalina-jmx-remote.jar.sha512   &&
+      sha512sum -c catalina-jmx-remote.jar.sha512   && cp catalina-jmx-remote.jar
+      ${BASE_DIR}/lib
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && cd /tmp     && curl -LO http://central.maven.org/maven2/org/apache/chemistry/opencmis/chemistry-opencmis-server-${CMIS_SERVER_TYPE}/1.1.0/chemistry-opencmis-server-${CMIS_SERVER_TYPE}-${OPENCMIS_VERSION}.war     &&
+      mkdir ${BASE_DIR}/webapps/cmis     && cd ${BASE_DIR}/webapps/cmis     && unzip
+      -qq /tmp/chemistry-opencmis-server-${CMIS_SERVER_TYPE}-${OPENCMIS_VERSION}.war
+      -d .
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/setenv.sh
+    - ${BASE_DIR}/bin
+  From:
+    Image: exoplatform/jdk:8-ubuntu-1804
+  Name: install
+  Platform: ""
+  SourceCode: FROM exoplatform/jdk:8-ubuntu-1804 AS install
+- BaseName: exoplatform/jdk:8-ubuntu-1804
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"eXo Platform <docker@exoplatform.com>"'
+    Name: label
+  - Key: BASE_DIR
+    Name: arg
+    Value: null
+  - Env:
+    - Key: INSTALL_DIR
+      Value: ${BASE_DIR}
+    Name: env
+  - Name: expose
+    Ports:
+    - "8080"
+  - Env:
+    - Key: CMIS_USERS_PASSWORD
+      Value: cm1sp@ssword
+    Name: env
+  - CmdLine:
+    - apt-get -qq update   && apt-get -qq -y upgrade ${_APT_OPTIONS}   && apt-get
+      -qq -y install ${_APT_OPTIONS} xmlstarlet   && apt-get -qq -y autoremove   &&
+      apt-get -qq -y clean   && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x   && groupadd --gid 999 tomcat && useradd --gid tomcat -u 999 -s /bin/bash
+      tomcat   && mkdir -p /opt /data/cmis   && chown -R tomcat:tomcat /data
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - repository-template.properties
+    - /
+  - Chown: "999"
+    From: install
+    Name: copy
+    SourcesAndDest:
+    - ${BASE_DIR}
+    - ${BASE_DIR}
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: user
+    User: tomcat
+  - CmdLine:
+    - /usr/local/bin/tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /opt/cmis-server/bin/catalina.sh
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: exoplatform/jdk:8-ubuntu-1804
+  Name: ""
+  Platform: ""
+  SourceCode: FROM exoplatform/jdk:8-ubuntu-1804

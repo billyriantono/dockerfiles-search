@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- BaseName: php:fpm-alpine
+  Commands:
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - s6-svscan
+    - /etc/s6
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 60000000000
+      Test:
+      - CMD-SHELL
+      - curl -f http://localhost/ || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - apk update && apk add nginx npm composer sqlite s6 --no-cache
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .docker/s6/
+    - /etc/s6/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .docker/nginx.conf
+    - /etc/nginx/
+  - CmdLine:
+    - echo '\ndate.timezone = "UTC"' >> /usr/local/etc/php/php.ini
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: www-data:www-data
+  - Name: workdir
+    Path: /var/www/html/
+  - Chown: www-data:www-data
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - composer.json
+    - composer.lock
+    - ./
+  - CmdLine:
+    - composer install --no-interaction --no-dev --no-autoloader
+    Name: run
+    PrependShell: true
+  - Chown: www-data:www-data
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - package-lock.json
+    - ./
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - Chown: www-data:www-data
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - Env:
+    - Key: DB_DATABASE
+      Value: /var/www/html/database/database.sqlite
+    Name: env
+  - CmdLine:
+    - touch $DB_DATABASE &&     sed --in-place 's/\\n/ /g' /var/www/html/database/database.sql
+      &&     sqlite3 --init /var/www/html/database/database.sql $DB_DATABASE
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - composer install --no-interaction --no-dev --optimize-autoloader && npm run
+      production
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv standalone.env .env
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  From:
+    Image: php:fpm-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:fpm-alpine

@@ -1,0 +1,165 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - apk add --no-cache      ca-certificates      autoconf      automake      build-base      libressl      libtool      gmp-dev      python      python-dev      python3      sqlite-dev      wget      git      file      gnupg      swig      zlib-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt
+  - Key: BITCOIN_VERSION
+    Name: arg
+    Value: 0.17.0
+  - Env:
+    - Key: BITCOIN_TARBALL
+      Value: bitcoin-${BITCOIN_VERSION}-x86_64-linux-gnu.tar.gz
+    Name: env
+  - Env:
+    - Key: BITCOIN_URL
+      Value: https://bitcoincore.org/bin/bitcoin-core-$BITCOIN_VERSION/$BITCOIN_TARBALL
+    Name: env
+  - Env:
+    - Key: BITCOIN_ASC_URL
+      Value: https://bitcoincore.org/bin/bitcoin-core-$BITCOIN_VERSION/SHA256SUMS.asc
+    Name: env
+  - Env:
+    - Key: BITCOIN_PGP_KEY
+      Value: 01EA5486DE18A882D4C2684590C8019E36C2E964
+    Name: env
+  - CmdLine:
+    - mkdir /opt/bitcoin && cd /opt/bitcoin     && wget -qO $BITCOIN_TARBALL "$BITCOIN_URL"     &&
+      gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys "$BITCOIN_PGP_KEY"     &&
+      wget -qO bitcoin.asc "$BITCOIN_ASC_URL"     && gpg --verify bitcoin.asc     &&
+      grep $BITCOIN_TARBALL bitcoin.asc | tee SHA256SUMS.asc     && sha256sum -c SHA256SUMS.asc     &&
+      BD=bitcoin-$BITCOIN_VERSION/bin     && tar -xzvf $BITCOIN_TARBALL $BD/bitcoin-cli
+      --strip-components=1     && rm $BITCOIN_TARBALL
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: VIACOIN_VERSION
+      Value: 0.15.2
+    Name: env
+  - Env:
+    - Key: VIACOIN_URL
+      Value: https://github.com/viacoin/viacoin/releases/download/v0.15.2/viacoin-0.15.2-x86_64-linux-gnu.tar.gz
+    Name: env
+  - Env:
+    - Key: VIACOIN_SHA256
+      Value: bdbd432645a8b4baadddb7169ea4bef3d03f80dc2ce53dce5783d8582ac63bab
+    Name: env
+  - CmdLine:
+    - mkdir /opt/viacoin && cd /opt/viacoin     && wget -qO viacoin.tar.gz "$VIACOIN_URL"     &&
+      echo "$VIACOIN_SHA256  viacoin.tar.gz" | sha256sum -c -     && BD=viacoin-$VIACOIN_VERSION/bin     &&
+      tar -xzvf viacoin.tar.gz $BD/viacoin-cli --strip-components=1 --exclude=*-qt     &&
+      rm viacoin.tar.gz
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LIGHTNINGD_VERSION
+      Value: master
+    Name: env
+  - Name: workdir
+    Path: /opt/lightningd
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /tmp/lightning
+  - CmdLine:
+    - git clone --recursive /tmp/lightning . &&     git checkout $(git --work-tree=/tmp/lightning
+      --git-dir=/tmp/lightning/.git rev-parse HEAD)
+    Name: run
+    PrependShell: true
+  - Key: DEVELOPER
+    Name: arg
+    Value: "0"
+  - CmdLine:
+    - ./configure --prefix=/tmp/lightning_install && make -j3 DEVELOPER=${DEVELOPER}
+      && make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.7 as builder
+- BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - apk add --no-cache      gmp-dev      sqlite-dev      inotify-tools      socat      bash      zlib-dev
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GLIBC_VERSION
+      Value: 2.27-r0
+    Name: env
+  - Env:
+    - Key: GLIBC_SHA256
+      Value: 938bceae3b83c53e7fa9cc4135ce45e04aae99256c5e74cf186c794b97473bc7
+    Name: env
+  - Env:
+    - Key: GLIBCBIN_SHA256
+      Value: 3a87874e57b9d92e223f3e90356aaea994af67fb76b71bb72abfb809e948d0d6
+    Name: env
+  - CmdLine:
+    - 'apk add --update curl &&   curl -Lo /etc/apk/keys/sgerrand.rsa.pub https://github.com/sgerrand/alpine-pkg-glibc/releases/download/$GLIBC_VERSION/sgerrand.rsa.pub
+      &&   curl -Lo glibc.apk "https://github.com/sgerrand/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-${GLIBC_VERSION}.apk"
+      &&   echo "$GLIBC_SHA256  glibc.apk" | sha256sum -c - &&   curl -Lo glibc-bin.apk
+      "https://github.com/sgerrand/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-bin-${GLIBC_VERSION}.apk"
+      &&   echo "$GLIBCBIN_SHA256  glibc-bin.apk" | sha256sum -c - &&   apk add glibc-bin.apk
+      glibc.apk &&   /usr/glibc-compat/sbin/ldconfig /lib /usr/glibc-compat/lib &&   echo
+      ''hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4'' >> /etc/nsswitch.conf
+      &&   apk del curl &&   rm -rf glibc.apk glibc-bin.apk /var/cache/apk/*'
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LIGHTNINGD_DATA
+      Value: /root/.lightning
+    Name: env
+  - Env:
+    - Key: LIGHTNINGD_RPC_PORT
+      Value: "9835"
+    Name: env
+  - Name: volume
+    Volumes:
+    - /root/.lightning
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/lightning_install/
+    - /usr/local/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/bitcoin/bin
+    - /usr/bin
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/viacoin/bin
+    - /usr/bin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tools/docker-entrypoint.sh
+    - entrypoint.sh
+  - Name: expose
+    Ports:
+    - "9735"
+    - "9835"
+  - CmdLine:
+    - ./entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

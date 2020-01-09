@@ -1,0 +1,93 @@
+MetaArgs:
+- DefaultValue: '"alpine"'
+  Key: RESTY_IMAGE_BASE
+  ProvidedValue: null
+  Value: '"alpine"'
+- DefaultValue: '"3.8"'
+  Key: RESTY_IMAGE_TAG
+  ProvidedValue: null
+  Value: '"3.8"'
+Stages:
+- BaseName: ${RESTY_IMAGE_BASE}:${RESTY_IMAGE_TAG}
+  Commands:
+  - Maintainer: Miracle
+    Name: maintainer
+  - Key: OPENWAF_VERSION
+    Name: arg
+    Value: '"0.0.6"'
+  - Key: OPENWAF_PREFIX
+    Name: arg
+    Value: '"/opt"'
+  - Key: OPENRESTY_PREFIX
+    Name: arg
+    Value: '"/usr/local/openresty"'
+  - Key: OPENRESTY_VERSION
+    Name: arg
+    Value: '"1.13.6.2"'
+  - Key: PCRE_VERSION
+    Name: arg
+    Value: '"8.42"'
+  - Key: OPENSSL_VERSION
+    Name: arg
+    Value: '"1.1.0h"'
+  - Key: OPENWAF_J
+    Name: arg
+    Value: '"1"'
+  - Key: OPENWAF_CONFIG_OPTIONS
+    Name: arg
+    Value: '"     --with-pcre-jit --with-ipv6     --with-http_stub_status_module     --with-http_ssl_module     --with-http_realip_module     --with-http_sub_module     --with-http_geoip_module     --with-pcre=${OPENWAF_PREFIX}/pcre-${PCRE_VERSION}     "'
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps         build-base         curl         gd-dev         geoip-dev         libxslt-dev         linux-headers         make         perl-dev         readline-dev         zlib-dev     &&
+      apk add --no-cache         gd         geoip         libgcc         libxslt         zlib     &&
+      mkdir ${OPENWAF_PREFIX}     && cd ${OPENWAF_PREFIX}     && curl -fSL https://ftp.pcre.org/pub/pcre/pcre-${PCRE_VERSION}.tar.gz
+      -o pcre-${PCRE_VERSION}.tar.gz     && curl -fSL https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz
+      -o openssl-${OPENSSL_VERSION}.tar.gz     && curl -fSL https://openresty.org/download/openresty-${OPENRESTY_VERSION}.tar.gz
+      -o openresty-${OPENRESTY_VERSION}.tar.gz     && tar xzf pcre-${PCRE_VERSION}.tar.gz     &&
+      tar xzf openssl-${OPENSSL_VERSION}.tar.gz     && tar xzf openresty-${OPENRESTY_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${OPENWAF_PREFIX}/openssl-${OPENSSL_VERSION}     && ./config no-async     &&
+      make     && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${OPENWAF_PREFIX}     && apk add --no-cache --virtual .openwaf_build_deps
+      git     && apk add --no-cache swig     && git clone https://github.com/titansec/OpenWAF.git     &&
+      mv ${OPENWAF_PREFIX}/OpenWAF/lib/openresty/ngx_openwaf.conf /etc     && mv ${OPENWAF_PREFIX}/OpenWAF/lib/openresty/configure
+      ${OPENWAF_PREFIX}/openresty-${OPENRESTY_VERSION}     && cp -RP ${OPENWAF_PREFIX}/OpenWAF/lib/openresty/*
+      ${OPENWAF_PREFIX}/openresty-${OPENRESTY_VERSION}/bundle/     && cd ${OPENWAF_PREFIX}/OpenWAF     &&
+      make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${OPENWAF_PREFIX}/openresty-${OPENRESTY_VERSION}/     && ./configure -j${OPENWAF_J}
+      ${OPENWAF_CONFIG_OPTIONS}     && make -j${OPENWAF_J}     && make -j${OPENWAF_J}
+      install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${OPENWAF_PREFIX}     && rm -rf         pcre-${PCRE_VERSION}         openssl-${OPENSSL_VERSION}         pcre-${PCRE_VERSION}.tar.gz         openresty-${OPENRESTY_VERSION}         openssl-${OPENSSL_VERSION}.tar.gz         openresty-${OPENRESTY_VERSION}.tar.gz         OpenWAF/doc         OpenWAF/lib/openresty     &&
+      cd OpenWAF     && rm -rf `ls -Fa | grep '^\.\w'`     && rm -f `ls -F | grep
+      -v '/$'`     && apk del .build-deps     && apk del .openwaf_build_deps
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: ${OPENRESTY_PREFIX}/luajit/bin/:${OPENRESTY_PREFIX}/nginx/sbin/:${OPENRESTY_PREFIX}/bin/:$PATH
+    Name: env
+  - CmdLine:
+    - openresty
+    - -c
+    - /etc/ngx_openwaf.conf
+    - -g
+    - daemon off;
+    Name: cmd
+    PrependShell: false
+  - Name: stopsignal
+    Signal: SIGQUIT
+  From:
+    Image: ${RESTY_IMAGE_BASE}:${RESTY_IMAGE_TAG}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${RESTY_IMAGE_BASE}:${RESTY_IMAGE_TAG}

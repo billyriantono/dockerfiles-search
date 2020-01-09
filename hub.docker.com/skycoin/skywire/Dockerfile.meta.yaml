@@ -1,0 +1,99 @@
+MetaArgs:
+- DefaultValue: busybox:1.29-glibc
+  Key: IMAGE_FROM
+  ProvidedValue: null
+  Value: busybox:1.29-glibc
+Stages:
+- As: build-go
+  BaseName: golang:1.10-stretch
+  Commands:
+  - Key: ARCH
+    Name: arg
+    Value: amd64
+  - Key: GOARM
+    Name: arg
+    Value: null
+  - Key: CC
+    Name: arg
+    Value: gcc
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $GOPATH/src/github.com/skycoin/skywire
+  - CmdLine:
+    - apt-get update     && apt-get -y install build-essential crossbuild-essential-armhf
+      crossbuild-essential-arm64 automake gcc-arm-linux-gnueabihf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd $GOPATH/src/github.com/skycoin/skywire &&     GOARCH=$ARCH GOARM=$GOARM GOOS=linux
+      CGO_ENABLED=1 CC=$CC     go install -a -installsuffix cgo ./... &&     sh -c
+      "if test -d $GOPATH/bin/linux_arm ; then mv $GOPATH/bin/linux_arm/* $GOPATH/bin/;
+      fi;            if test -d $GOPATH/bin/linux_arm64 ; then mv $GOPATH/bin/linux_arm64/*
+      $GOPATH/bin/; fi"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10-stretch
+  Name: build-go
+  Platform: ""
+  SourceCode: FROM golang:1.10-stretch AS build-go
+- As: build-node
+  BaseName: node:8.9
+  Commands:
+  - CmdLine:
+    - npm install -g --unsafe @angular/cli &&     git clone https://github.com/skycoin/net.git
+      /home/node/net &&     cd /home/node/net/skycoin-messenger/monitor/web &&     ./build-manager.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8.9
+  Name: build-node
+  Platform: ""
+  SourceCode: FROM node:8.9 AS build-node
+- BaseName: $IMAGE_FROM
+  Commands:
+  - Env:
+    - Key: DATA_DIR
+      Value: /root/.skywire
+    Name: env
+  - Chown: ""
+    From: build-go
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/*
+    - /bin/
+  - Chown: ""
+    From: build-go
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/sockss
+    - .
+  - Chown: ""
+    From: build-node
+    Name: copy
+    SourcesAndDest:
+    - /home/node/net/skycoin-messenger/monitor/web/dist-manager
+    - /usr/local/skycoin/net/skycoin-messenger/monitor/web/dist-manager
+  - Name: volume
+    Volumes:
+    - $DATA_DIR
+  - Name: expose
+    Ports:
+    - "5000"
+    - "5998"
+    - "6001"
+    - "8000"
+  - CmdLine:
+    - manager
+    - -web-dir
+    - /usr/local/skycoin/net/skycoin-messenger/monitor/web/dist-manager
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: $IMAGE_FROM
+  Name: ""
+  Platform: ""
+  SourceCode: FROM $IMAGE_FROM

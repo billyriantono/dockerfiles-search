@@ -1,0 +1,81 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: '"RELEASE.2020-01-03T19-12-21Z"'
+  - Key: CHECKSUM
+    Name: arg
+    Value: '"5676c40de64503c99b48e7738caa5b82c1239b93c76d3319ee11c5b6d37b07ff"'
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/minio/minio/archive/$VERSION.tar.gz
+    - /tmp/minio.tar.gz
+  - CmdLine:
+    - "[ \"$CHECKSUM\" = \"$(sha256sum /tmp/minio.tar.gz | awk '{print $1}')\" ] &&
+      \    tar -C /tmp -xf /tmp/minio.tar.gz &&     mv /tmp/minio-$VERSION /tmp/minio
+      &&     cd /tmp/minio && \t    make build &&     echo \"nogroup:*:100:nobody\"
+      > /tmp/group &&     echo \"nobody:*:100:100:::\" > /tmp/passwd &&     mkdir
+      -p /tmp/data /tmp/config"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1 AS build
+- BaseName: scratch
+  Commands:
+  - Chown: 100:100
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/minio/minio
+    - /
+  - Chown: 100:100
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/data
+    - /data
+  - Chown: 100:100
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/config
+    - /config
+  - Chown: 100:100
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/group
+    - /tmp/passwd
+    - /etc/
+  - Name: user
+    User: 100:100
+  - Name: volume
+    Volumes:
+    - /data
+    - /config
+  - Name: expose
+    Ports:
+    - 9000/tcp
+  - CmdLine:
+    - /minio
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --config-dir
+    - /config
+    - server
+    - /data
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

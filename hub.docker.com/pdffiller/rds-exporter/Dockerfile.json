@@ -1,0 +1,139 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "golang:1.13-alpine3.10",
+      "SourceCode": "FROM golang:1.13-alpine3.10 as builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "golang:1.13-alpine3.10"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk update \u0026\u0026 apk add git make"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "/go/src/github.com/pdffillerdocker/rds_exporter/"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/go/src/github.com/pdffillerdocker/rds_exporter"
+        },
+        {
+          "CmdLine": [
+            "mkdir vendor/github.com/percona/rds_exporter \u0026\u0026     cp -r basic client config enhanced sessions vendor/github.com/percona/rds_exporter/"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "make build"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "alpine:3.10",
+      "SourceCode": "FROM alpine:3.10",
+      "Platform": "",
+      "From": {
+        "Image": "alpine:3.10"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/go/src/github.com/pdffillerdocker/rds_exporter/rds_exporter",
+            "/bin/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache supervisor python3 \u0026\u0026     python3 -m pip install pyyaml boto3==1.7.71"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "generate_rds_list.py",
+            "/etc/rds_exporter/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "supervisord.conf",
+            "/etc/supervisord.conf"
+          ]
+        },
+        {
+          "CmdLine": [
+            "echo \"*/20    *       *       *       *       /etc/rds_exporter/generate_rds_list.py \u0026\u0026 supervisorctl restart rds-exporter\" \u003e\u003e /var/spool/cron/crontabs/root"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "entrypoint.sh",
+            "/etc/rds_exporter"
+          ]
+        },
+        {
+          "CmdLine": [
+            "chmod +x /etc/rds_exporter/entrypoint.sh"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "9042"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/etc/rds_exporter/entrypoint.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "CmdLine": [
+            "/usr/bin/supervisord"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

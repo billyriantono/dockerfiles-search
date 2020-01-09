@@ -1,0 +1,148 @@
+MetaArgs: null
+Stages:
+- As: version
+  BaseName: golang:1
+  Commands:
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .git
+    - .git
+  - CmdLine:
+    - git describe --tags | tee VERSION
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git describe --tags --abbrev=0 | tee TAG
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git rev-parse HEAD | tee GITCOMMIT
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1
+  Name: version
+  Platform: ""
+  SourceCode: FROM golang:1 AS version
+- As: build
+  BaseName: golang:1
+  Commands:
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - go.sum
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Chown: ""
+    From: version
+    Name: copy
+    SourcesAndDest:
+    - /build/VERSION
+    - /build/TAG
+    - /build/GITCOMMIT
+    - ./
+  - CmdLine:
+    - "CGO_ENABLED=0 go build -ldflags \"\t-X \\\"github.com/tsaikd/KDGoLib/version.NAME=gogstash\\\"
+      \t-X \\\"github.com/tsaikd/KDGoLib/version.BUILDTIME=$(date)\\\" \t-X \\\"github.com/tsaikd/KDGoLib/version.VERSION=$(cat
+      VERSION)\\\" \t-X \\\"github.com/tsaikd/KDGoLib/version.GITCOMMIT=$(cat GITCOMMIT)\\\"
+      \t\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./gogstash version
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1 AS build
+- As: release
+  BaseName: golang:1
+  Commands:
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - go get -v "github.com/aktau/github-release"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: version
+    Name: copy
+    SourcesAndDest:
+    - /build/VERSION
+    - /build/TAG
+    - /build/GITCOMMIT
+    - ./
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/gogstash
+    - .
+  - Key: GITHUB_TOKEN
+    Name: arg
+    Value: null
+  - Key: GITHUB_USER
+    Name: arg
+    Value: tsaikd
+  - Key: GITHUB_REPO
+    Name: arg
+    Value: gogstash
+  - CmdLine:
+    - if [ "$(cat VERSION)" != "$(cat TAG)" ]; then echo "--pre-release" > PRERELEASE
+      ; else > PRERELEASE ; fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "if [ \"${GITHUB_TOKEN}\" ]; then \tgithub-release release \t--tag \"$(cat VERSION)\"
+      \t--target \"$(cat GITCOMMIT)\" \t--description \"curl 'https://github.com/${GITHUB_USER}/${GITHUB_REPO}/releases/download/$(cat
+      VERSION)/${GITHUB_REPO}-$(uname -s)-$(uname -m)' -SLo ${GITHUB_REPO} && chmod
+      +x ${GITHUB_REPO}\" \t$(cat PRERELEASE) ; \tgithub-release upload \t--tag \"$(cat
+      VERSION)\" \t--name \"${GITHUB_REPO}-$(uname -s)-$(uname -m)\" \t--file \"${GITHUB_REPO}\"
+      ; \tfi"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1
+  Name: release
+  Platform: ""
+  SourceCode: FROM golang:1 AS release
+- BaseName: alpine:3
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/gogstash
+    - /usr/local/bin/gogstash
+  - CmdLine:
+    - gogstash version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gogstash
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:3
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3

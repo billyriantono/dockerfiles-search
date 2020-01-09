@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- As: builder_pandoc
+  BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk update &&     apk add cabal             zlib-dev             wget             ghc             musl-dev
+      &&     cabal update &&     cabal install --upgrade-dependencies --enable-per-component
+      -j --force-reinstalls pandoc
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: builder_pandoc
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as builder_pandoc
+- As: builder_ytdl
+  BaseName: alpine:3.9
+  Commands:
+  - Chown: ""
+    From: builder_pandoc
+    Name: copy
+    SourcesAndDest:
+    - /root/.cabal
+    - /root/.cabal
+  - CmdLine:
+    - apk update &&     apk add ffmpeg             rtmpdump             mplayer             mpv             python3             git             make             zip
+      &&     ln -s /usr/bin/python3 /usr/bin/python &&     ln -s /root/.cabal/bin/pandoc
+      /usr/local/bin/pandoc &&     git clone https://github.com/ytdl-org/youtube-dl.git
+      &&     cd /youtube-dl &&     make -j &&     make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: builder_ytdl
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as builder_ytdl
+- As: final
+  BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk add --no-cache     font-noto     font-noto-thai     terminus-font
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - fc-cache -fv
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder_ytdl
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/youtube-dl
+    - /usr/local/bin/youtube-dl
+  - Chown: ""
+    From: builder_ytdl
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/man/man1/youtube-dl.1
+    - /usr/local/man/man1/youtube-dl.1
+  - CmdLine:
+    - apk update &&     apk add ffmpeg             rtmpdump             mplayer             mpv             python3             bash             su-exec
+      &&     ln -s /usr/bin/python3 /usr/bin/python &&     youtube-dl --version &&     rm
+      -rf /var/cache/apk/* /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - init
+    - /init
+  - Name: workdir
+    Path: /workdir
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: final
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as final

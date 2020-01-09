@@ -1,0 +1,17 @@
+# container for the environment needed to build and run haskell-rpm
+
+FROM juhp/fedora-haskell-ghc:8.0.2
+
+WORKDIR /root/haskell-rpm
+
+# Package dependencies
+RUN dnf -y install zlib-devel xz-devel libcurl-devel && dnf clean all
+
+RUN cabal update
+
+# Haskell programs used by tests, install to ~/.cabal
+RUN cabal install happy hlint hpc-coveralls
+
+# Install packages needed by haskell-rpm, cached if rpm.cabal does not change
+COPY rpm.cabal /root/haskell-rpm/rpm.cabal
+RUN cabal install --enable-tests --dependencies-only

@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- As: compile_stage
+  BaseName: golang
+  Commands:
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./scripts/*.go
+    - ./
+  - CmdLine:
+    - go mod init nominatim
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - env GOOS=linux go build -o /wait /wait.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang
+  Name: compile_stage
+  Platform: ""
+  SourceCode: FROM golang AS compile_stage
+- BaseName: ubuntu:18.04
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get -qq update && apt-get -qq upgrade -y     apache2     build-essential     cmake     g++     git     libapache2-mod-php     libboost-dev     libboost-filesystem-dev     libboost-system-dev     libbz2-dev     libexpat1-dev     libpq-dev     libproj-dev     libxml2-dev     php     php-intl     php-pgsql     postgresql-10-postgis-2.4     postgresql-10-postgis-scripts     postgresql-contrib-10     postgresql-server-dev-10     zlib1g-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - git clone --recursive https://github.com/openstreetmap/Nominatim ./src
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src/build
+  - CmdLine:
+    - cmake .. && make -j $(nproc)
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - local.php
+    - /src/build/settings/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nominatim.conf
+    - /etc/apache2/conf-available/
+  - CmdLine:
+    - a2enconf nominatim
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./scripts
+    - /scripts
+  - Chown: ""
+    From: compile_stage
+    Name: copy
+    SourcesAndDest:
+    - /wait
+    - /wait
+  - CmdLine:
+    - /wait ${DB_HOST} ${DB_PORT} 60 && /usr/sbin/apache2ctl -D FOREGROUND
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

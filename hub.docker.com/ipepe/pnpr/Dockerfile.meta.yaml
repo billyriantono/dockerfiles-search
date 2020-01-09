@@ -1,0 +1,152 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:16.04
+  Commands:
+  - Maintainer: docker@ipepe.pl
+    Name: maintainer
+  - Key: RUBY_VERSION
+    Name: arg
+    Value: 2.5.7
+  - Key: RAILS_ENV
+    Name: arg
+    Value: production
+  - Key: FRIENDLY_ERROR_PAGES
+    Name: arg
+    Value: "off"
+  - Key: WITH_SUDO
+    Name: arg
+    Value: "false"
+  - Env:
+    - Key: PGDATA
+      Value: /data/db
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: LANG
+      Value: en_US.UTF-8
+    - Key: LANGUAGE
+      Value: en_US:en
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    Name: env
+  - CmdLine:
+    - echo "RUBY_VERSION=${RUBY_VERSION}" >> /etc/environment &&     echo "RAILS_ENV=${RAILS_ENV}"
+      >> /etc/environment &&     echo "FRIENDLY_ERROR_PAGES=${FRIENDLY_ERROR_PAGES}"
+      >> /etc/environment &&     echo "WITH_SUDO=${WITH_SUDO}" >> /etc/environment
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cat /etc/environment
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y locales &&     localedef -i en_US -c -f
+      UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8 &&     echo 'LANG="en_US.UTF-8"'
+      > /etc/default/locale &&     echo 'LANGUAGE="en_US:en"' >> /etc/default/locale
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y     git make gcc g++ nodejs npm openssl
+      libssl-dev curl libpq-dev     cron libreadline-dev libmagickwand-dev imagemagick
+      wget nano htop     openssh-server apt-utils libjpeg-dev libpng-dev redis-server
+      &&     npm install -g n && n 8 && npm install -g npm &&     ln -s /usr/bin/nodejs
+      /usr/bin/node
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "curl -o /usr/local/bin/gosu -SL 'https://github.com/tianon/gosu/releases/download/1.1/gosu'
+      &&     chmod 700 /usr/local/bin/gosu && \techo \"deb http://apt.postgresql.org/pub/repos/apt/
+      xenial-pgdg main\" >> /etc/apt/sources.list.d/pgdg.list &&     wget --quiet
+      -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - &&     apt-get
+      update && apt-get install -y postgresql-10 postgresql-contrib-10 postgresql-client-10
+      &&     mkdir -p /var/run/postgresql && chown -R postgres /var/run/postgresql
+      &&     rm -rf /var/lib/postgresql/10/main"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 561F9B9CAC40B2F7 &&     apt-get
+      update && apt-get install -y apt-transport-https ca-certificates &&     echo
+      "deb https://oss-binaries.phusionpassenger.com/apt/passenger xenial main" >
+      /etc/apt/sources.list.d/passenger.list &&     apt-get update && apt-get install
+      -y nginx-extras passenger
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - passenger-config build-native-support
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/nginx.conf
+    - /etc/nginx/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/webapp.conf
+    - /etc/nginx/sites-enabled/default
+  - CmdLine:
+    - sed -e "s/\${RAILS_ENV}/${RAILS_ENV}/" -e "s/\${FRIENDLY_ERROR_PAGES}/${FRIENDLY_ERROR_PAGES}/"
+      -i /etc/nginx/sites-enabled/default
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd -g 1000 webapp &&     useradd -m -s /bin/bash -g webapp -u 1000 webapp
+      &&     echo "webapp:Password1" | chpasswd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'if [ $WITH_SUDO = "true" ] ; then         apt-get update &&         apt-get
+      install -y sudo &&         usermod -a -G sudo webapp &&         echo "webapp
+      ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/00_webapp_sudo_rules     ; fi'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: webapp
+  - CmdLine:
+    - 'git clone https://github.com/sstephenson/rbenv.git /home/webapp/.rbenv &&     git
+      clone https://github.com/sstephenson/ruby-build.git /home/webapp/.rbenv/plugins/ruby-build
+      &&     echo "export PATH=/home/webapp/.rbenv/bin:/home/webapp/.rbenv/shims:${PATH}"
+      >> /home/webapp/.bashrc &&     echo "export RBENV_ROOT=/home/webapp/.rbenv"
+      >> /home/webapp/.bashrc &&     echo "export RAILS_ENV=${RAILS_ENV}" >> /home/webapp/.bashrc
+      &&     echo "gem: --no-rdoc --no-ri" > /home/webapp/.gemrc &&     /home/webapp/.rbenv/bin/rbenv
+      install ${RUBY_VERSION} &&     /home/webapp/.rbenv/bin/rbenv global ${RUBY_VERSION}
+      &&     /home/webapp/.rbenv/shims/gem install bundler &&     /home/webapp/.rbenv/bin/rbenv
+      rehash'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - mkdir -p /home/webapp/webapp /home/webapp/.ssh &&     chown -R webapp:webapp
+      "/home/webapp" &&     apt-get clean &&     rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - chmod 700 /docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - '"/data"'
+  - Name: expose
+    Ports:
+    - "22"
+    - "5432"
+    - "80"
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:16.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04

@@ -1,0 +1,86 @@
+MetaArgs:
+- DefaultValue: 0.6.0
+  Key: DOCKERIZE_VER
+  ProvidedValue: null
+  Value: 0.6.0
+- DefaultValue: "3.9"
+  Key: ALPINE_VER
+  ProvidedValue: null
+  Value: "3.9"
+Stages:
+- As: dockerize
+  BaseName: jwilder/dockerize:${DOCKERIZE_VER}
+  Commands: null
+  From:
+    Image: jwilder/dockerize:${DOCKERIZE_VER}
+  Name: dockerize
+  Platform: ""
+  SourceCode: FROM jwilder/dockerize:${DOCKERIZE_VER} AS dockerize
+- BaseName: alpine:${ALPINE_VER}
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"jeff@ressourcenkonflikt.de"'
+    Name: label
+  - Labels:
+    - Key: vendor
+      Value: '"https://github.com/jeboehm/docker-mailserver"'
+    Name: label
+  - Labels:
+    - Key: de.ressourcenkonflikt.docker-mailserver.autoheal
+      Value: '"true"'
+    Name: label
+  - Env:
+    - Key: FILTER_VIRUS
+      Value: "false"
+    - Key: FILTER_VIRUS_HOST
+      Value: virus.local
+    - Key: WAITSTART_TIMEOUT
+      Value: 1m
+    - Key: CONTROLLER_PASSWORD
+      Value: changeme
+    Name: env
+  - CmdLine:
+    - apk --no-cache add       openssl       rspamd       rspamd-client       rspamd-controller       rspamd-proxy
+      &&     mkdir /run/rspamd &&     touch       /etc/rspamd/local.d/antivirus.conf       /etc/rspamd/local.d/worker-controller.inc
+      &&     chown -R rspamd       /run/rspamd       /var/lib/rspamd       /etc/rspamd/local.d/antivirus.conf       /etc/rspamd/local.d/worker-controller.inc
+      &&     wget -O /usr/share/rspamd/bayes.spam.sqlite https://rspamd.com/rspamd_statistics/bayes.spam.sqlite
+      &&     wget -O /usr/share/rspamd/bayes.ham.sqlite https://rspamd.com/rspamd_statistics/bayes.ham.sqlite
+      &&     apk --no-cache del       openssl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: dockerize
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/dockerize
+    - /usr/local/bin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs/
+    - /
+  - Name: expose
+    Ports:
+    - "11332"
+    - "11334"
+  - Name: user
+    User: rspamd
+  - Name: volume
+    Volumes:
+    - /var/lib/rspamd
+  - Health:
+      Test:
+      - CMD-SHELL
+      - wget -O- -T 10 http://127.0.0.1:11334/stat
+    Name: healthcheck
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:${ALPINE_VER}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:${ALPINE_VER}

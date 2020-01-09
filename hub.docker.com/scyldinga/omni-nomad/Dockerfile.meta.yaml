@@ -1,0 +1,147 @@
+MetaArgs: null
+Stages:
+- BaseName: docker:17.09-dind
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"DJ Enriquez <denrie.enriquezjr@gmail.com> (@djenriquez)"'
+    Name: label
+  - Env:
+    - Key: GLIBC_VERSION
+      Value: '"2.25-r0"'
+    Name: env
+  - Env:
+    - Key: GOSU_VERSION
+      Value: "1.10"
+    Name: env
+  - Env:
+    - Key: HASHICORP_RELEASES
+      Value: https://releases.hashicorp.com
+    Name: env
+  - CmdLine:
+    - addgroup nomad &&     adduser -S -G nomad nomad
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x &&     apk --update add --no-cache --virtual .gosu-deps dpkg curl gnupg
+      &&     curl -L -o /tmp/glibc-${GLIBC_VERSION}.apk https://github.com/andyshinn/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-${GLIBC_VERSION}.apk
+      &&     apk add --allow-untrusted /tmp/glibc-${GLIBC_VERSION}.apk &&     rm -rf
+      /tmp/glibc-${GLIBC_VERSION}.apk /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x &&     dpkgArch="$(dpkg --print-architecture | awk -F- '{ print $NF }')"
+      &&     curl -L -o /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch"
+      &&     curl -L -o /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch.asc"
+      &&     export GNUPGHOME="$(mktemp -d)" &&     (gpg --keyserver pgp.mit.edu --recv-keys
+      "B42F6819007F00F88E364FD4036A9C25BF357DD4" ||       gpg --keyserver keyserver.pgp.com
+      --recv-keys "B42F6819007F00F88E364FD4036A9C25BF357DD4" ||       gpg --keyserver
+      ha.pool.sks-keyservers.net --recv-keys "B42F6819007F00F88E364FD4036A9C25BF357DD4")
+      &&     gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu &&     rm
+      -rf "$GNUPGHOME" /usr/local/bin/gosu.asc &&     chmod +x /usr/local/bin/gosu
+      &&     gosu nobody true &&     apk del .gosu-deps
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NOMAD_VERSION
+      Value: 0.7.0
+    Name: env
+  - Env:
+    - Key: CONSUL_VERSION
+      Value: 1.0.1
+    Name: env
+  - CmdLine:
+    - set -x   && apk --update add --no-cache --virtual .nomad-deps gnupg curl   &&  mkdir
+      -p /tmp/build   && cd /tmp/build   && curl -L -o nomad_${NOMAD_VERSION}_linux_amd64.zip
+      ${HASHICORP_RELEASES}/nomad/${NOMAD_VERSION}/nomad_${NOMAD_VERSION}_linux_amd64.zip   &&
+      curl -L -o nomad_${NOMAD_VERSION}_SHA256SUMS      ${HASHICORP_RELEASES}/nomad/${NOMAD_VERSION}/nomad_${NOMAD_VERSION}_SHA256SUMS   &&
+      curl -L -o nomad_${NOMAD_VERSION}_SHA256SUMS.sig  ${HASHICORP_RELEASES}/nomad/${NOMAD_VERSION}/nomad_${NOMAD_VERSION}_SHA256SUMS.sig   &&
+      curl -L -o consul_${CONSUL_VERSION}_linux_amd64.zip ${HASHICORP_RELEASES}/consul/${CONSUL_VERSION}/consul_${CONSUL_VERSION}_linux_amd64.zip   &&
+      curl -L -o consul_${CONSUL_VERSION}_SHA256SUMS ${HASHICORP_RELEASES}/consul/${CONSUL_VERSION}/consul_${CONSUL_VERSION}_SHA256SUMS   &&
+      curl -L -o consul_${CONSUL_VERSION}_SHA256SUMS.sig ${HASHICORP_RELEASES}/consul/${CONSUL_VERSION}/consul_${CONSUL_VERSION}_SHA256SUMS.sig    &&
+      export GNUPGHOME="$(mktemp -d)"   && (gpg --keyserver pgp.mit.edu --recv-keys
+      "91A6E7F85D05C65630BEF18951852D87348FFC4C" ||       gpg --keyserver keyserver.pgp.com
+      --recv-keys "91A6E7F85D05C65630BEF18951852D87348FFC4C" ||       gpg --keyserver
+      ha.pool.sks-keyservers.net --recv-keys "91A6E7F85D05C65630BEF18951852D87348FFC4C")   &&
+      gpg --batch --verify nomad_${NOMAD_VERSION}_SHA256SUMS.sig nomad_${NOMAD_VERSION}_SHA256SUMS   &&
+      grep nomad_${NOMAD_VERSION}_linux_amd64.zip nomad_${NOMAD_VERSION}_SHA256SUMS
+      | sha256sum -c   && unzip -d /bin nomad_${NOMAD_VERSION}_linux_amd64.zip   &&
+      chmod +x /bin/nomad   && gpg --batch --verify consul_${CONSUL_VERSION}_SHA256SUMS.sig
+      consul_${CONSUL_VERSION}_SHA256SUMS   && grep consul_${CONSUL_VERSION}_linux_amd64.zip
+      consul_${CONSUL_VERSION}_SHA256SUMS | sha256sum -c   && unzip -d /bin consul_${CONSUL_VERSION}_linux_amd64.zip   &&
+      cd /tmp   && rm -rf "$GNUPGHOME" /tmp/build   && apk del .nomad-deps
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /nomad/data &&     mkdir -p /etc/nomad &&     chown -R nomad:nomad
+      /nomad
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "4646"
+    - "4647"
+    - "4648"
+    - 4648/udp
+  - CmdLine:
+    - addgroup consul &&     adduser -S -G consul consul
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache ca-certificates curl libcap su-exec &&     apk del gnupg
+      openssl &&     rm -rf /root/.gnupg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /consul/data &&     mkdir -p /consul/config &&     chown -R consul:consul
+      /consul
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /consul/data
+  - Name: expose
+    Ports:
+    - "8300"
+  - Name: expose
+    Ports:
+    - "8301"
+    - 8301/udp
+    - "8302"
+    - 8302/udp
+  - Name: expose
+    Ports:
+    - "8500"
+    - "8600"
+    - 8600/udp
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - consul-start.sh
+    - /usr/local/bin/consul-start.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nomad-start.sh
+    - /usr/local/bin/nomad-start.sh
+  - CmdLine:
+    - set -x &&     apk --update add --no-cache --virtual .entrykit-deps curl ca-certificates
+      tar &&     curl -L https://github.com/progrium/entrykit/releases/download/v0.4.0/entrykit_0.4.0_Linux_x86_64.tgz
+      | tar zx &&     chmod +x entrykit &&     mv entrykit /bin/entrykit &&     apk
+      del .entrykit-deps &&     entrykit --symlink
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - codep
+    - /usr/local/bin/dockerd-entrypoint.sh
+    - /usr/local/bin/nomad-start.sh agent -dev
+    - /usr/local/bin/consul-start.sh agent -dev -client 0.0.0.0
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: docker:17.09-dind
+  Name: ""
+  Platform: ""
+  SourceCode: FROM docker:17.09-dind

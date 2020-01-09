@@ -1,0 +1,58 @@
+MetaArgs:
+- DefaultValue: null
+  Key: ARCH
+  ProvidedValue: null
+  Value: null
+Stages:
+- As: gobuild
+  BaseName: golang:alpine
+  Commands:
+  - Key: GOARCH
+    Name: arg
+    Value: null
+  - Key: GOARM
+    Name: arg
+    Value: null
+  - CmdLine:
+    - "apk update; \tapk add git;\tgo get -v github.com/cloudflare/cloudflared/cmd/cloudflared"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/cloudflare/cloudflared/cmd/cloudflared
+  - CmdLine:
+    - GOARCH=${GOARCH} GOARM=${GOARM} go build ./
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: gobuild
+  Platform: ""
+  SourceCode: FROM golang:alpine as gobuild
+- BaseName: multiarch/alpine:${ARCH}-edge
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Jan Collijs"'
+    Name: label
+  - CmdLine:
+    - apk add --no-cache ca-certificates;         rm -rf /var/cache/apk/*;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: gobuild
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/cloudflare/cloudflared/cmd/cloudflared/cloudflared
+    - /usr/local/bin/cloudflared
+  - CmdLine:
+    - /bin/sh
+    - -c
+    - /usr/local/bin/cloudflared proxy-dns --address 0.0.0.0 --port 54 --upstream
+      https://1.1.1.1/.well-known/dns-query --upstream https://1.0.0.1/.well-known/dns-query
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: multiarch/alpine:${ARCH}-edge
+  Name: ""
+  Platform: ""
+  SourceCode: FROM multiarch/alpine:${ARCH}-edge

@@ -1,0 +1,73 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:3
+  Commands:
+  - Env:
+    - Key: QEMU_URL
+      Value: https://github.com/balena-io/qemu/releases/download/v3.0.0%2Bresin/qemu-3.0.0+resin-aarch64.tar.gz
+    Name: env
+  - CmdLine:
+    - apk add curl && curl -L ${QEMU_URL} | tar zxvf - -C . --strip-components 1
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3 AS builder
+- BaseName: arm64v8/alpine:3
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - qemu-aarch64-static
+    - /usr/bin
+  - Key: KEEPALIVED_VERSION
+    Name: arg
+    Value: 2.0.19
+  - Key: KEEPALIVED_URL
+    Name: arg
+    Value: https://www.keepalived.org/software/keepalived-${KEEPALIVED_VERSION}.tar.gz
+  - CmdLine:
+    - apk upgrade --no-cache --update &&     apk add --no-cache ipset libnl3 openssl
+      iptables libnfnetlink gettext tini &&     apk add --no-cache --virtual .build-deps
+      curl gcc make musl-dev ipset-dev libnl3-dev openssl-dev iptables-dev libnfnetlink-dev
+      &&     curl -k -o /tmp/keepalive.tar.gz "${KEEPALIVED_URL}" &&     tar -zxvf
+      /tmp/keepalive.tar.gz -C /tmp &&     cd "/tmp/keepalived-${KEEPALIVED_VERSION}"
+      &&     ./configure &&     make -j4 &&     make install &&     cd /tmp &&     rm
+      -rf "keepalived-${KEEPALIVED_VERSION}" /tmp/keepalive.tar.gz &&     apk del
+      .build-deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/keepalived.conf.template
+    - /etc/keepalived/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/start.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - chmod 0755 /usr/local/bin/start.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/local/bin/start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: arm64v8/alpine:3
+  Name: ""
+  Platform: ""
+  SourceCode: FROM arm64v8/alpine:3

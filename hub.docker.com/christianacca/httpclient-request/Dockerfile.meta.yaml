@@ -1,0 +1,112 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: mcr.microsoft.com/dotnet/core/runtime:2.2
+  Commands:
+  - Name: workdir
+    Path: /app
+  From:
+    Image: mcr.microsoft.com/dotnet/core/runtime:2.2
+  Name: base
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/runtime:2.2 AS base
+- As: build
+  BaseName: mcr.microsoft.com/dotnet/core/sdk:2.2
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - httpclient-request.csproj
+    - .
+  - CmdLine:
+    - dotnet restore
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - dotnet build -c Release --no-restore
+    Name: run
+    PrependShell: true
+  From:
+    Image: mcr.microsoft.com/dotnet/core/sdk:2.2
+  Name: build
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/sdk:2.2 AS build
+- As: publish
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - dotnet publish -c Release -o /app --no-build
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build AS publish
+- As: final
+  BaseName: base
+  Commands:
+  - Key: COMMIT
+    Name: arg
+    Value: '"local-build"'
+  - Key: DATE
+    Name: arg
+    Value: '"1970-01-01T00:00:00Z"'
+  - Key: URL
+    Name: arg
+    Value: '"https://github.com/christianacca/httpclient-request"'
+  - Key: VERSION
+    Name: arg
+    Value: '"dirty"'
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - dotnet
+    - httpclient-request.dll
+    Name: entrypoint
+    PrependShell: false
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - Labels:
+    - Key: org.opencontainers.image.created
+      Value: $DATE
+    - Key: org.opencontainers.image.vendor
+      Value: '"christianacca"'
+    - Key: org.opencontainers.image.title
+      Value: '"christianacca/httpclient-request"'
+    - Key: org.opencontainers.image.description
+      Value: '".net core console application used to make http request using HttpClient
+        created via HttpClientFactory"'
+    - Key: org.opencontainers.image.licenses
+      Value: '"MIT"'
+    - Key: org.opencontainers.image.url
+      Value: '"https://hub.docker.com/r/christianacca/httpclient-request"'
+    - Key: org.opencontainers.image.version
+      Value: '"$VERSION"'
+    - Key: org.opencontainers.image.source
+      Value: $URL
+    - Key: org.opencontainers.image.revision
+      Value: $COMMIT
+    Name: label
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: final
+  Platform: ""
+  SourceCode: FROM base AS final

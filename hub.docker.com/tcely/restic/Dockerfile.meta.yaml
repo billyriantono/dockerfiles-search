@@ -1,0 +1,81 @@
+MetaArgs:
+- DefaultValue: v0.9.5
+  Key: RESTIC_TAG
+  ProvidedValue: null
+  Value: v0.9.5
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - SigningKeys
+    - SigningKeys
+  - Key: RESTIC_TAG
+    Name: arg
+    Value: null
+  - Env:
+    - Key: GOPATH
+      Value: '"${GOPATH:-/go}"'
+    Name: env
+  - CmdLine:
+    - apk --update upgrade &&     apk add ca-certificates &&     apk add --virtual
+      .build-depends       curl git gnupg jq &&     mkdir -v -m 0700 -p /root/.gnupg
+      &&     gpg2 --no-options --verbose --keyid-format 0xlong --keyserver-options
+      auto-key-retrieve=true         --import SigningKeys && rm -f SigningKeys &&     mkdir
+      -v -m 0755 -p "${GOPATH}/src/github.com/restic" &&     git clone --no-checkout
+      --dissociate --reference-if-able /restic.git         'https://github.com/restic/restic.git'         "${GOPATH}/src/github.com/restic/restic"
+      &&     [ -n "$RESTIC_TAG" ] || { curl -sSL 'https://api.github.com/repos/restic/restic/releases/latest'
+      | jq -r '[.["tag_name"],.["prerelease"]]|select(.[1] == false)|"RESTIC_TAG="+.[0]'
+      > /tmp/latest-restic-tag.sh && . /tmp/latest-restic-tag.sh; } &&     (cd "${GOPATH}/src/github.com/restic/restic"
+      && git tag -v "$RESTIC_TAG" && git checkout "$RESTIC_TAG") &&     rm -rf /root/.gnupg
+      &&     apk del --purge .build-depends && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: '"${GOPATH:-/go}/src/github.com/restic/restic"'
+  - CmdLine:
+    - go run build.go && sha256sum restic && ./restic version
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine AS builder
+- BaseName: alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"https://keybase.io/tcely"'
+    Name: label
+  - Env:
+    - Key: GOPATH
+      Value: '"${GOPATH:-/go}"'
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - '"${GOPATH:-/go}"/src/github.com/restic/restic/restic'
+    - /usr/bin/restic
+  - CmdLine:
+    - apk --update upgrade &&     apk add ca-certificates fuse openssh-client &&     rm
+      -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/restic
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

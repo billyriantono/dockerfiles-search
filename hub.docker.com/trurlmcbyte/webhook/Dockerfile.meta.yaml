@@ -1,0 +1,57 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Key: TARGETOS
+    Name: arg
+    Value: linux
+  - Key: TARGETARCH
+    Name: arg
+    Value: amd64
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    - Key: GOOS
+      Value: $TARGETOS
+    - Key: GOARCH
+      Value: $TARGETARCH
+    Name: env
+  - CmdLine:
+    - 'apk add --no-cache git  && echo "Build: GOOS=${GOOS} GOARCH=${GOARCH}"  &&
+      go get -ldflags="-w -s" github.com/adnanh/webhook  && go get -ldflags="-w -s"
+      github.com/digitalocean/doctl/cmd/doctl'
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine AS builder
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk add --no-cache     curl     git     jq     busybox-extras     bash     file     openssh-client   &&
+      KUBERNETES_VERSION=`curl -sL https://storage.googleapis.com/kubernetes-release/release/stable.txt`   &&
+      curl -sfLO https://storage.googleapis.com/kubernetes-release/release/${KUBERNETES_VERSION}/bin/linux/amd64/kubectl    &&
+      chmod +x ./kubectl   && mv ./kubectl /bin/kubectl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/*
+    - /go/bin/
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - /go/bin/webhook
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

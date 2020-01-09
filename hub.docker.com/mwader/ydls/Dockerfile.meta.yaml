@@ -1,0 +1,223 @@
+MetaArgs:
+- DefaultValue: 2020.01.01
+  Key: YDL_VERSION
+  ProvidedValue: null
+  Value: 2020.01.01
+- DefaultValue: 4.2.2
+  Key: FFMPEG_VERSION
+  ProvidedValue: null
+  Value: 4.2.2
+- DefaultValue: 1.13.5
+  Key: GOLANG_VERSION
+  ProvidedValue: null
+  Value: 1.13.5
+- DefaultValue: 3.11.2
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: 3.11.2
+Stages:
+- As: ffmpeg
+  BaseName: mwader/static-ffmpeg:$FFMPEG_VERSION
+  Commands: null
+  From:
+    Image: mwader/static-ffmpeg:$FFMPEG_VERSION
+  Name: ffmpeg
+  Platform: ""
+  SourceCode: FROM mwader/static-ffmpeg:$FFMPEG_VERSION AS ffmpeg
+- As: youtube-dl
+  BaseName: golang:$GOLANG_VERSION-buster
+  Commands:
+  - Key: YDL_VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - curl -L -o /youtube-dl https://yt-dl.org/downloads/$YDL_VERSION/youtube-dl &&   chmod
+      a+x /youtube-dl
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:$GOLANG_VERSION-buster
+  Name: youtube-dl
+  Platform: ""
+  SourceCode: FROM golang:$GOLANG_VERSION-buster AS youtube-dl
+- As: ydls-base
+  BaseName: golang:$GOLANG_VERSION-buster
+  Commands:
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - apt-get update -q &&   apt-get install --no-install-recommends -qy   python3   python3-pycryptodome   rtmpdump   mplayer
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ffmpeg
+    Name: copy
+    SourcesAndDest:
+    - /ffmpeg
+    - /ffprobe
+    - /usr/local/bin/
+  - Chown: ""
+    From: youtube-dl
+    Name: copy
+    SourcesAndDest:
+    - /youtube-dl
+    - /usr/local/bin/
+  From:
+    Image: golang:$GOLANG_VERSION-buster
+  Name: ydls-base
+  Platform: ""
+  SourceCode: FROM golang:$GOLANG_VERSION-buster AS ydls-base
+- As: ydls-dev
+  BaseName: ydls-base
+  Commands:
+  - CmdLine:
+    - apt-get install --no-install-recommends -qy   less   jq   bsdmainutils
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 2
+      Named: ydls-base
+  Name: ydls-dev
+  Platform: ""
+  SourceCode: FROM ydls-base AS ydls-dev
+- As: ydls-builder
+  BaseName: ydls-base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cmd
+    - /src/cmd
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - internal
+    - /src/internal
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ydls.json
+    - /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ydls.json
+    - /etc
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Dockerfile
+    - .git*
+    - /src/.git/
+  - CmdLine:
+    - echo $(git describe --always 2>/dev/null || echo nogit) > .GIT_COMMIT
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CONFIG=/src/ydls.json   TEST_EXTERNAL=1   go test -v -cover -race ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go install   -installsuffix netgo   -tags netgo   -ldflags "-X main.gitCommit=$(cat
+      .GIT_COMMIT)"   ./cmd/ydls
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CONFIG=/etc/ydls.json cmd/ydls/ydls_server_test.sh &&   CONFIG=/etc/ydls.json
+      cmd/ydls/ydls_get_test.sh
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 2
+      Named: ydls-base
+  Name: ydls-builder
+  Platform: ""
+  SourceCode: FROM ydls-base AS ydls-builder
+- BaseName: alpine:$ALPINE_VERSION
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Mattias Wadman mattias.wadman@gmail.com"'
+    Name: label
+  - Env:
+    - Key: PORT
+      Value: "8080"
+    Name: env
+  - Env:
+    - Key: LISTEN
+      Value: :$PORT
+    Name: env
+  - Env:
+    - Key: CONFIG
+      Value: /etc/ydls.json
+    Name: env
+  - CmdLine:
+    - apk add --no-cache   ca-certificates   tini   python3   py3-pycryptodome   rtmpdump   mplayer
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/bin/python3 /usr/bin/python
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ffmpeg
+    Name: copy
+    SourcesAndDest:
+    - /ffmpeg
+    - /ffprobe
+    - /usr/local/bin/
+  - Chown: ""
+    From: youtube-dl
+    Name: copy
+    SourcesAndDest:
+    - /youtube-dl
+    - /usr/local/bin/
+  - Chown: ""
+    From: ydls-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/ydls
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/local/bin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ydls.json
+    - $CONFIG
+  - CmdLine:
+    - ffmpeg -version &&   ffprobe -version &&   youtube-dl --version &&   ydls -version
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: nobody
+  - Name: expose
+    Ports:
+    - $PORT/tcp
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:$ALPINE_VERSION
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:$ALPINE_VERSION

@@ -1,0 +1,135 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: mcr.microsoft.com/dotnet/core/runtime:2.1-stretch-slim
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apt-get update && apt-get -f install && apt-get -y install dumb-init locales
+      wget gnupg2 apt-utils apt-transport-https --fix-missing
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key
+      add -     && sh -c 'echo \"deb [arch=amd64] https://dl.google.com/linux/chrome/deb/
+      stable main\" >> /etc/apt/sources.list.d/google.list'     && apt-get update
+      \   && apt-get install -y google-chrome-unstable fonts-ipafont-gothic fonts-wqy-zenhei
+      fonts-thai-tlwg fonts-kacst ttf-freefont       --no-install-recommends \t  --fix-missing
+      \    && rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PUPPETEER_EXECUTABLE_PATH
+      Value: '"/usr/bin/google-chrome-unstable"'
+    Name: env
+  - Env:
+    - Key: PROXY_ENABLE
+      Value: '{$PROXY_ENABLE}'
+    Name: env
+  - Env:
+    - Key: PROXY_SERVER
+      Value: '{$PROXY_SERVER}'
+    Name: env
+  - Env:
+    - Key: PROXY_USER
+      Value: '{$PROXY_USER}'
+    Name: env
+  - Env:
+    - Key: PROXY_PASS
+      Value: '{$PROXY_PASS}'
+    Name: env
+  - Env:
+    - Key: PROXY_PORT
+      Value: '{$PROXY_PORT}'
+    Name: env
+  - Env:
+    - Key: PROXY_SWITCH
+      Value: '{$PROXY_SWITCH}'
+    Name: env
+  - Env:
+    - Key: TASK_FILE
+      Value: '{$TASK_FILE}'
+    Name: env
+  - Env:
+    - Key: TASK_IP_SWITCH
+      Value: '{$TASK_IP_SWITCH}'
+    Name: env
+  From:
+    Image: mcr.microsoft.com/dotnet/core/runtime:2.1-stretch-slim
+  Name: base
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/runtime:2.1-stretch-slim AS base
+- As: build
+  BaseName: mcr.microsoft.com/dotnet/core/sdk:2.1-stretch
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - BGS/BGS.csproj
+    - BGS/
+  - CmdLine:
+    - dotnet restore BGS/BGS.csproj
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Name: workdir
+    Path: /src/BGS
+  - CmdLine:
+    - dotnet build BGS.csproj -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: mcr.microsoft.com/dotnet/core/sdk:2.1-stretch
+  Name: build
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/sdk:2.1-stretch AS build
+- As: publish
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - dotnet publish BGS.csproj -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build AS publish
+- As: final
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - CmdLine:
+    - /usr/bin/dumb-init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - dotnet BGS.dll ${params}
+    Name: cmd
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: final
+  Platform: ""
+  SourceCode: FROM base AS final

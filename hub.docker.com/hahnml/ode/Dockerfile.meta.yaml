@@ -1,0 +1,64 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: sathwik/apache-buildr:latest-jruby-jdk8
+  Commands:
+  - Env:
+    - Key: JAVA_OPTS
+      Value: '"-Xmx1024M -XX:MaxPermSize=512M"'
+    - Key: BUILDR_ARGS
+      Value: '"-f Rakefile clean package test=no JAVADOC=off"'
+    Name: env
+  - CmdLine:
+    - mkdir /build
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /workspace
+  - CmdLine:
+    - jruby -S bundler install --gemfile=/workspace/Gemfile     && jruby -S bundle
+      update diff-lcs     && buildr $BUILDR_ARGS && cp /workspace/axis2-war/target/ode-axis2-war-1.4-SNAPSHOT.war
+      /build/ode.war
+    Name: run
+    PrependShell: true
+  From:
+    Image: sathwik/apache-buildr:latest-jruby-jdk8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM sathwik/apache-buildr:latest-jruby-jdk8 as builder
+- BaseName: tomcat:8.5-jre8
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Michael Hahn <mhahn.dev@gmail.com>"'
+    Name: label
+  - CmdLine:
+    - apt-get update -qq && apt-get install -qqy unzip
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/ode.war
+    - ${CATALINA_HOME}/webapps
+  - CmdLine:
+    - unzip ${CATALINA_HOME}/webapps/ode.war -d ${CATALINA_HOME}/webapps/ode
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - ${CATALINA_HOME}/bin/catalina.sh run
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: tomcat:8.5-jre8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tomcat:8.5-jre8

@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: python:3.8.0-alpine3.10
+  Commands: null
+  From:
+    Image: python:3.8.0-alpine3.10
+  Name: base
+  Platform: ""
+  SourceCode: FROM python:3.8.0-alpine3.10 as base
+- As: builder
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Env:
+    - Key: PIP_DISABLE_PIP_VERSION_CHECK
+      Value: "1"
+    - Key: POETRY_VERSION
+      Value: 1.0.0b9
+    Name: env
+  - CmdLine:
+    - wget -qO- https://raw.githubusercontent.com/sdispater/poetry/master/get-poetry.py
+      | python
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python -m venv /venv
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pyproject.toml
+    - poetry.lock
+    - ./
+  - CmdLine:
+    - /root/.poetry/bin/poetry export -f requirements.txt | /venv/bin/pip install
+      -r /dev/stdin
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - CmdLine:
+    - /root/.poetry/bin/poetry build && /venv/bin/pip install dist/*.whl
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base as builder
+- As: final
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /venv
+    - /venv
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - /venv/bin/hypermodern-python
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: final
+  Platform: ""
+  SourceCode: FROM base as final

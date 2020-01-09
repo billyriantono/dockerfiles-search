@@ -1,0 +1,103 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:buster-slim
+  Commands:
+  - CmdLine:
+    - apt-get update &&     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends         fakeroot         gettext-base         gnutls-bin         ldap-utils         libcap2-bin         slapd         ssl-cert         time     &&     usermod
+      -aG ssl-cert openldap &&     setcap CAP_NET_BIND_SERVICE=+ep /usr/sbin/slapd
+      &&     rm -rf /tmp/* /var/tmp/* /var/cache/apt/archives/* /var/lib/apt/lists/*
+      &&     rm -rf /var/lib/ldap/* /var/backups/ldap/* /run/slapd/* /etc/ldap/slapd.d
+      &&     install -d -o openldap -g ssl-cert -m 710 /etc/ssl/private &&     install
+      -d -o openldap -g root -m 755 /etc/ssl/certs &&     install -o root -g ssl-cert
+      -m 664 /dev/null /etc/ssl/certs/ssl-cert-snakeoil.pem &&     install -o root
+      -g ssl-cert -m 664 /dev/null /etc/ssl/private/ssl-cert-snakeoil.key &&     install
+      -o root -g ssl-cert -m 664 /dev/null /usr/share/slapd/dh.pem &&     chown openldap
+      /etc/ldap/ldap.conf &&     install -d -o openldap -g openldap /run/slapd &&     install
+      -d -o openldap -g openldap /var/backups/ldap &&     install -d -o openldap -g
+      openldap /var/lib/ldap &&     install -d -o openldap -g openldap /var/lib/ldap/config
+      &&     install -d -o openldap -g openldap /var/lib/ldap/data
+    Name: run
+    PrependShell: true
+  - Chown: root:root
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.ldif
+    - /usr/share/slapd/
+  - Chown: root:root
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - skel.ldif
+    - /usr/share/slapd/
+  - Chown: root:root
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint
+    - /usr/local/sbin/
+  - Chown: root:root
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - backup
+    - /usr/local/sbin/
+  - Name: expose
+    Ports:
+    - "389"
+    - "636"
+  - Name: volume
+    Volumes:
+    - /var/lib/ldap
+  - Name: volume
+    Volumes:
+    - /run/slapd
+  - Name: volume
+    Volumes:
+    - /var/backups/ldap
+  - Env:
+    - Key: LDAP_URLS
+      Value: '"ldap:/// ldapi:/// ldaps:///"'
+    - Key: SLAPD_DEBUG_LEVEL
+      Value: '"stats,stats2,none"'
+    - Key: SSL_CERT_FILE
+      Value: '"/etc/ssl/certs/ssl-cert-snakeoil.pem"'
+    - Key: SSL_KEY_FILE
+      Value: '"/etc/ssl/private/ssl-cert-snakeoil.key"'
+    - Key: SSL_CA_FILE
+      Value: '"/etc/ssl/certs/ssl-cert-snakeoil.pem"'
+    Name: env
+  - Name: workdir
+    Path: /var/lib/ldap
+  - Name: user
+    User: openldap
+  - CmdLine:
+    - entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - slapd
+    - -F
+    - /var/lib/ldap/config
+    - -u
+    - openldap
+    - -g
+    - openldap
+    - -h
+    - '"$LDAP_URLS"'
+    - -d
+    - $SLAPD_DEBUG_LEVEL
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Test:
+      - CMD-SHELL
+      - ldapsearch -b cn=config > /dev/null || exit 1
+    Name: healthcheck
+  - Name: stopsignal
+    Signal: INT
+  From:
+    Image: debian:buster-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:buster-slim

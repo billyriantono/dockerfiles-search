@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- As: node-build
+  BaseName: node:8-slim
+  Commands:
+  - Key: COMMIT
+    Name: arg
+    Value: dev
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends         git     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/zestedesavoir/zds-site.git /zds     && cd /zds     &&
+      git checkout $COMMIT
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /zds
+  - CmdLine:
+    - yarn install     && yarn run build     && rm -rf node_modules
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8-slim
+  Name: node-build
+  Platform: ""
+  SourceCode: FROM node:8-slim AS node-build
+- BaseName: python:3-stretch
+  Commands:
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends         git
+      python3 python3-setuptools libxml2-dev         libxslt-dev libz-dev libjpeg62-turbo
+      libjpeg62-turbo-dev         libfreetype6 libfreetype6-dev libffi-dev sqlite3     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: node-build
+    Name: copy
+    SourcesAndDest:
+    - /zds
+    - /zds
+  - Name: workdir
+    Path: /zds
+  - CmdLine:
+    - pip install -rrequirements-prod.txt     && pip install sqlparse
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DJANGO_SETTINGS_MODULE
+      Value: '"zds.settings.docker_prod"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - settings/temp_docker_prod.py
+    - zds/settings/docker_prod.py
+  - CmdLine:
+    - mkdir -p /zds-static     && python manage.py collectstatic --noinput --clear
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - settings/docker_prod.py
+    - zds/settings/docker_prod.py
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - django_entrypoint.sh
+    - django_entrypoint.sh
+  - CmdLine:
+    - chmod +x django_entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3-stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3-stretch

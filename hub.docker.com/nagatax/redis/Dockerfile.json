@@ -1,0 +1,147 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "common",
+      "BaseName": "nagatax/gcc:latest",
+      "SourceCode": "FROM nagatax/gcc:latest AS common",
+      "Platform": "",
+      "As": "common",
+      "From": {
+        "Image": "nagatax/gcc:latest"
+      },
+      "Commands": null
+    },
+    {
+      "Name": "build",
+      "BaseName": "common",
+      "SourceCode": "FROM common AS  build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Stage": {
+          "Named": "common",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "REDIS",
+              "Value": "\"redis\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "REDIS_VERSION",
+              "Value": "\"5.0.5\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "REDIS_PAKAGE",
+              "Value": "\"${REDIS}-${REDIS_VERSION}\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "REDIS_PAKAGE_FILE",
+              "Value": "\"${REDIS_PAKAGE}.tar.gz\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "REDIS_URL",
+              "Value": "\"http://download.redis.io/releases/${REDIS_PAKAGE_FILE}\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "set -x;   . ~/.bashrc     \u0026\u0026 : \"関連パッケージのインストール\"   \u0026\u0026 yum install -y   make   tcl   tcl-devel   wget   which     \u0026\u0026 : \"必要なフォルダの作成\"   \u0026\u0026 mkdir -p \"${INSTALL_DIR}/${REDIS}\"     \u0026\u0026 : \"redisのインストール\"   \u0026\u0026 cd \"${SRC_DIR}\"   \u0026\u0026 wget \"${REDIS_URL}\"   \u0026\u0026 tar xvf \"${REDIS_PAKAGE_FILE}\"   \u0026\u0026 cd \"${REDIS_PAKAGE}\"   \u0026\u0026 export CC=gcc   \u0026\u0026 make distclean   \u0026\u0026 make -j`nproc` |\u0026 tee make.log   \u0026\u0026 make PREFIX=\"${INSTALL_DIR}/${REDIS}\" install |\u0026 tee make_install.log     \u0026\u0026 : \"設定ファイルのコピーとパスの設定\"   \u0026\u0026 cp -a redis.conf \"${INSTALL_DIR}/${REDIS}\"   \u0026\u0026 echo \"export PATH=${INSTALL_DIR}/${REDIS}/bin\"':${PATH}' \u003e\u003e ~/.bashrc     \u0026\u0026 : \"不要なファイルの削除\"   \u0026\u0026 rm -rf \"${SRC_DIR}/${REDIS_PAKAGE_FILE}\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "release",
+      "BaseName": "common",
+      "SourceCode": "FROM common AS release",
+      "Platform": "",
+      "As": "release",
+      "From": {
+        "Stage": {
+          "Named": "common",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local",
+            "/usr/local"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/root/.bashrc",
+            "/root/.bashrc"
+          ]
+        },
+        {
+          "CmdLine": [
+            "set -x;   . ~/.bashrc     \u0026\u0026 : \"redisユーザの作成\"   \u0026\u0026 groupadd -r redis \u0026\u0026 useradd -g redis -s /sbin/nologin -r redis     \u0026\u0026 : \"関連パッケージのインストール\"   \u0026\u0026 yum install -y   tcl   tcl-devel   which     \u0026\u0026 : \"データフォルダの作成と設定ファイルのコピー\"   \u0026\u0026 mkdir /data   \u0026\u0026 cp -a /usr/local/redis/redis.conf /data   \u0026\u0026 chown redis:redis /data     \u0026\u0026 : \"不要なファイルの削除\"   \u0026\u0026 yum clean all"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/data"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/data"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "6379"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/usr/local/redis/bin/redis-server",
+            "/data/redis.conf"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

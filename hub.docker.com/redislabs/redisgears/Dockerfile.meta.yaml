@@ -1,0 +1,150 @@
+MetaArgs:
+- DefaultValue: 5.0.7
+  Key: REDIS_VER
+  ProvidedValue: null
+  Value: 5.0.7
+- DefaultValue: buster
+  Key: OSNICK
+  ProvidedValue: null
+  Value: buster
+- DefaultValue: debian:buster-slim
+  Key: OS
+  ProvidedValue: null
+  Value: debian:buster-slim
+- DefaultValue: x64
+  Key: ARCH
+  ProvidedValue: null
+  Value: x64
+Stages:
+- As: redis
+  BaseName: redisfab/redis:${REDIS_VER}-${ARCH}-${OSNICK}
+  Commands: null
+  From:
+    Image: redisfab/redis:${REDIS_VER}-${ARCH}-${OSNICK}
+  Name: redis
+  Platform: ""
+  SourceCode: FROM redisfab/redis:${REDIS_VER}-${ARCH}-${OSNICK} AS redis
+- As: builder
+  BaseName: ${OS}
+  Commands:
+  - Key: OSNICK
+    Name: arg
+    Value: null
+  - Key: OS
+    Name: arg
+    Value: null
+  - Key: ARCH
+    Name: arg
+    Value: null
+  - Key: REDIS_VER
+    Name: arg
+    Value: null
+  - CmdLine:
+    - echo "Building for ${OSNICK} (${OS}) for ${ARCH}"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: redis
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/
+    - /usr/local/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /build
+  - CmdLine:
+    - ./deps/readies/bin/getpy2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./system-setup.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make fetch SHOW=1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make all SHOW=1
+    Name: run
+    PrependShell: true
+  - Key: PACK
+    Name: arg
+    Value: "0"
+  - Key: TEST
+    Name: arg
+    Value: "0"
+  - CmdLine:
+    - if [ "$PACK" = "1" ]; then make pack; fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ "$TEST" = "1" ]; then TEST= make test; fi
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${OS}
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ${OS} AS builder
+- BaseName: redisfab/redis:${REDIS_VER}-${ARCH}-${OSNICK}
+  Commands:
+  - Key: OSNICK
+    Name: arg
+    Value: null
+  - Key: OS
+    Name: arg
+    Value: null
+  - Key: ARCH
+    Name: arg
+    Value: null
+  - Key: REDIS_VER
+    Name: arg
+    Value: null
+  - Key: PACK
+    Name: arg
+    Value: null
+  - Env:
+    - Key: REDIS_MODULES
+      Value: /opt/redislabs/lib/modules
+    Name: env
+  - CmdLine:
+    - mkdir -p $REDIS_MODULES/ /opt/redislabs/artifacts
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/redisgears.so
+    - $REDIS_MODULES/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/artifacts/release/*
+    - /opt/redislabs/artifacts/
+  - CmdLine:
+    - tar xzf /opt/redislabs/artifacts/redisgears-dependencies.*.tgz -C /
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ "$PACK" != "1" ]; then rm -rf /opt/redislabs/artifacts; fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - --loadmodule
+    - /opt/redislabs/lib/modules/redisgears.so
+    - PythonHomeDir
+    - /opt/redislabs/lib/modules/python3
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: redisfab/redis:${REDIS_VER}-${ARCH}-${OSNICK}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM redisfab/redis:${REDIS_VER}-${ARCH}-${OSNICK}

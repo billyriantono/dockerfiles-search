@@ -1,0 +1,68 @@
+MetaArgs: null
+Stages:
+- As: build-plugin-aws-es
+  BaseName: jruby:9-alpine
+  Commands:
+  - Env:
+    - Key: LOGSTASH_AWS_ES_VERSION
+      Value: 9cbdde8b4d8ae85f775a204c463cc7802c798a2b
+    Name: env
+  - CmdLine:
+    - wget -O plugin.zip https://github.com/OvalMoney/logstash-output-amazon_es/archive/${LOGSTASH_AWS_ES_VERSION}.zip
+      &&   unzip plugin.zip
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /logstash-output-amazon_es-${LOGSTASH_AWS_ES_VERSION}
+  - CmdLine:
+    - gem build logstash-output-amazon_es.gemspec  &&     mv logstash-output-amazon_es*.gem
+      ..
+    Name: run
+    PrependShell: true
+  From:
+    Image: jruby:9-alpine
+  Name: build-plugin-aws-es
+  Platform: ""
+  SourceCode: FROM jruby:9-alpine as build-plugin-aws-es
+- As: run
+  BaseName: docker.elastic.co/logstash/logstash-oss:6.5.4
+  Commands:
+  - Chown: ""
+    From: build-plugin-aws-es
+    Name: copy
+    SourcesAndDest:
+    - logstash-output-amazon_es*.gem
+    - .
+  - CmdLine:
+    - bin/logstash-plugin install logstash-output-amazon_es*.gem &&     rm -rf vendor/cache/*
+      && rm -rf vendor/bundle/jruby/2.3.0/cache/*
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/logstash.yml
+    - config/logstash.yml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pipeline/logstash.conf
+    - pipeline/logstash.conf
+  - CmdLine:
+    - chown --recursive logstash:logstash config/ pipeline/
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: logstash
+  - Name: expose
+    Ports:
+    - "5044"
+  From:
+    Image: docker.elastic.co/logstash/logstash-oss:6.5.4
+  Name: run
+  Platform: ""
+  SourceCode: FROM docker.elastic.co/logstash/logstash-oss:6.5.4 as run

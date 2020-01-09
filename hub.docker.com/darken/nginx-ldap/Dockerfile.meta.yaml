@@ -1,0 +1,56 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: nginx:alpine
+  Commands:
+  - CmdLine:
+    - wget "http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz" -O nginx.tar.gz
+      &&   wget https://github.com/kvspb/nginx-auth-ldap/archive/master.zip -O nginx-auth-ldap.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps   build-base   curl   pcre-dev   openldap-dev   zlib-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "CONFARGS=$(nginx -V 2>&1 | sed -n -e 's/^.*arguments: //p') \ttar -zxC /usr/src
+      -f nginx.tar.gz &&   unzip -x \"nginx-auth-ldap.zip\" -d \"$(pwd)/\" &&   LDAPDIR=\"$(pwd)/nginx-auth-ldap-master\"
+      &&   cd /usr/src/nginx-$NGINX_VERSION &&   ./configure --with-compat $CONFARGS
+      --add-dynamic-module=$LDAPDIR &&   make -j$(getconf _NPROCESSORS_ONLN) &&   make
+      install &&   install -m755 objs/ngx_http_auth_ldap_module.so /usr/lib/nginx/modules/ngx_http_auth_ldap_module.so
+      &&   strip /usr/lib/nginx/modules/*.so"
+    Name: run
+    PrependShell: true
+  From:
+    Image: nginx:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM nginx:alpine AS builder
+- BaseName: nginx:alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache libldap
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ngx_http_auth_ldap_module.nginx
+    - /etc/nginx/modules.d/
+  - CmdLine:
+    - mkdir -p /etc/nginx/modules.d/ &&     echo "include /etc/nginx/modules.d/*.conf;"
+      >> /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/nginx/modules/ngx_http_auth_ldap_module.so
+    - /usr/lib/nginx/modules/ngx_http_auth_ldap_module.so
+  From:
+    Image: nginx:alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx:alpine

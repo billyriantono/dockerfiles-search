@@ -1,0 +1,104 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: node:alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Martin Krutak <devklingac@gmail.com>"'
+    Name: label
+  - CmdLine:
+    - echo "http://dl-2.alpinelinux.org/alpine/edge/main" > /etc/apk/repositories     &&
+      echo "http://dl-2.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories     &&
+      echo "http://dl-2.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories     &&
+      apk -U --no-cache     --allow-untrusted add     chromium     ttf-freefont     grep     &&
+      apk del --purge --force linux-headers binutils-gold gnupg zlib-dev libc-utils     &&
+      rm -rf /var/lib/apt/lists/*     /var/cache/apk/*     /usr/share/man     /tmp/*     /usr/lib/node_modules/npm/man     /usr/lib/node_modules/npm/doc     /usr/lib/node_modules/npm/html     /usr/lib/node_modules/npm/scripts
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'mkdir -p /home/node/data  #; chown -R chrome:chrome /home/chrome/data'
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HOME
+      Value: /home/node
+    - Key: CHROME_PATH
+      Value: /usr/lib/chromium
+    - Key: CHROME_BIN
+      Value: /usr/bin/chromium-browser
+    - Key: OUTPUT_PATH
+      Value: /home/node/data/
+    - Key: CHROME_FLAGS
+      Value: '"--headless --no-sandbox --disable-gpu"'
+    - Key: LIGHTHOUSE_FLAGS
+      Value: '"--perf --disable-device-emulation --no-enable-error-reporting"'
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - Name: workdir
+    Path: /home/node
+  - Name: user
+    User: node
+  From:
+    Image: node:alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:alpine as base
+- As: builder
+  BaseName: base
+  Commands:
+  - Name: user
+    User: node
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - yarn.lock
+    - ./
+  - CmdLine:
+    - yarn install --production
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base as builder
+- BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /home/node
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/node/node_modules/
+    - ./node_modules/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/node/package.json
+    - /home/node/yarn.lock
+    - ./
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./app/
+    - /home/node/app/
+  - CmdLine:
+    - npm
+    - start
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

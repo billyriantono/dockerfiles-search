@@ -1,0 +1,177 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "ocaml",
+      "BaseName": "ocaml/opam2-staging:alpine",
+      "SourceCode": "FROM ocaml/opam2-staging:alpine as ocaml",
+      "Platform": "",
+      "As": "ocaml",
+      "From": {
+        "Image": "ocaml/opam2-staging:alpine"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/usr/src/app"
+        },
+        {
+          "CmdLine": [
+            "opam install -y depext"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "opam depext -y conf-gmp conf-m4 conf-perl"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "opam install -y yices2"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "opam install -y qbf"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "opam pin add touist -y --dev-repo"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "sudo cp $(opam config var touist:bin)/touist /usr/src/app"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "rust",
+      "BaseName": "clux/muslrust:latest",
+      "SourceCode": "FROM clux/muslrust:latest as rust",
+      "Platform": "",
+      "As": "rust",
+      "From": {
+        "Image": "clux/muslrust:latest"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/usr/src/app"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "Cargo.toml",
+            "Cargo.lock",
+            "dummy.rs",
+            "Rocket.toml",
+            "/usr/src/app/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "cargo build --lib --release"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "/usr/src/app/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "cargo build --release"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "alpine:latest",
+      "SourceCode": "FROM alpine:latest",
+      "Platform": "",
+      "From": {
+        "Image": "alpine:latest"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "rust",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/src/app/target/x86_64-unknown-linux-musl/release/touist-server",
+            "/touist-server"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "ocaml",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/src/app/touist",
+            "/external/"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "PORT",
+              "Value": "8080"
+            },
+            {
+              "Key": "BASE",
+              "Value": "/"
+            },
+            {
+              "Key": "ENV",
+              "Value": "dev"
+            },
+            {
+              "Key": "LOG",
+              "Value": "normal"
+            },
+            {
+              "Key": "ADDRESS",
+              "Value": "0.0.0.0"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "sh",
+            "-c",
+            "ROCKET_PORT=${PORT} ROCKET_ENV=${ENV} ROCKET_BASE=${BASE} ROCKET_ADDRESS=${ADDRESS} ROCKET_LOG=${LOG} /touist-server"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

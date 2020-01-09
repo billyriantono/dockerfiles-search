@@ -1,0 +1,198 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "base",
+      "BaseName": "mcr.microsoft.com/dotnet/core/aspnet:3.0-buster-slim",
+      "SourceCode": "FROM mcr.microsoft.com/dotnet/core/aspnet:3.0-buster-slim AS base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Image": "mcr.microsoft.com/dotnet/core/aspnet:3.0-buster-slim"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "80"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "dotnetbuilder",
+      "BaseName": "mcr.microsoft.com/dotnet/core/sdk:3.0-buster",
+      "SourceCode": "FROM mcr.microsoft.com/dotnet/core/sdk:3.0-buster AS dotnetbuilder",
+      "Platform": "",
+      "As": "dotnetbuilder",
+      "From": {
+        "Image": "mcr.microsoft.com/dotnet/core/sdk:3.0-buster"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/src"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "DashboardIotHome.csproj",
+            "DashboardIotHome/DashboardIotHome.csproj"
+          ]
+        },
+        {
+          "CmdLine": [
+            "dotnet restore DashboardIotHome/DashboardIotHome.csproj"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "./DashboardIotHome"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/src/DashboardIotHome"
+        },
+        {
+          "CmdLine": [
+            "dotnet build DashboardIotHome.csproj -c Release -o /app"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "publish",
+      "BaseName": "dotnetbuilder",
+      "SourceCode": "FROM dotnetbuilder AS publish",
+      "Platform": "",
+      "As": "publish",
+      "From": {
+        "Stage": {
+          "Named": "dotnetbuilder",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "dotnet publish \"DashboardIotHome.csproj\" -c Release -o /app"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        }
+      ]
+    },
+    {
+      "Name": "nodebuilder",
+      "BaseName": "node:12.13",
+      "SourceCode": "FROM node:12.13 as nodebuilder",
+      "Platform": "",
+      "As": "nodebuilder",
+      "From": {
+        "Image": "node:12.13"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./iot-dashboard/package.json",
+            "./package.json"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./iot-dashboard/",
+            "/app"
+          ]
+        },
+        {
+          "CmdLine": [
+            "npm install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "npm run build"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "final",
+      "BaseName": "base",
+      "SourceCode": "FROM base AS final",
+      "Platform": "",
+      "As": "final",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Chown": "",
+          "From": "publish",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app",
+            "."
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "nodebuilder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/build",
+            "./wwwroot"
+          ]
+        },
+        {
+          "CmdLine": [
+            "dotnet",
+            "DashboardIotHome.dll"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

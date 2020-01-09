@@ -1,0 +1,86 @@
+MetaArgs:
+- DefaultValue: 0.1.0
+  Key: GRAFEAS_VERSION
+  ProvidedValue: null
+  Value: 0.1.0
+Stages:
+- As: grafeas-official
+  BaseName: us.gcr.io/grafeas/grafeas-server:${GRAFEAS_VERSION}
+  Commands: null
+  From:
+    Image: us.gcr.io/grafeas/grafeas-server:${GRAFEAS_VERSION}
+  Name: grafeas-official
+  Platform: ""
+  SourceCode: FROM us.gcr.io/grafeas/grafeas-server:${GRAFEAS_VERSION} as grafeas-official
+- As: confd
+  BaseName: alpine:latest
+  Commands:
+  - Key: CONFD_VERSION
+    Name: arg
+    Value: 0.15.0
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/kelseyhightower/confd/releases/download/v${CONFD_VERSION}/confd-${CONFD_VERSION}-linux-amd64
+    - /usr/local/bin/confd
+  - CmdLine:
+    - chmod +x /usr/local/bin/confd
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: confd
+  Platform: ""
+  SourceCode: FROM alpine:latest as confd
+- BaseName: alpine:latest
+  Commands:
+  - Name: workdir
+    Path: /grafeas
+  - CmdLine:
+    - USER=grafeas &&     UID=1234 &&     GID=5678 &&     addgroup -g "$GID" -S "$USER"
+      &&     adduser --disabled-password     -u "$UID" -S "$USER" -G "$USER" &&     chown
+      -R grafeas:grafeas /grafeas
+    Name: run
+    PrependShell: true
+  - Chown: grafeas:grafeas
+    From: confd
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/confd
+    - /usr/local/bin/confd
+  - Chown: grafeas:grafeas
+    From: grafeas-official
+    Name: copy
+    SourcesAndDest:
+    - /grafeas-server
+    - .
+  - Chown: grafeas:grafeas
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build-files
+    - /tmp
+  - CmdLine:
+    - chmod +x /usr/local/bin/confd &&     mv /tmp/confd /etc &&     mv /tmp/entrypoint.sh
+      /grafeas/entrypoint.sh &&     chmod +x /grafeas/entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: grafeas
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - /grafeas/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -config
+    - config.yaml
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

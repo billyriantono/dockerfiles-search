@@ -1,0 +1,153 @@
+MetaArgs:
+- DefaultValue: "6.6"
+  Key: FROM_V8
+  ProvidedValue: null
+  Value: "6.6"
+- DefaultValue: "7.2"
+  Key: FROM_PHP
+  ProvidedValue: null
+  Value: "7.2"
+- DefaultValue: ""
+  Key: FROM_ALPINE
+  ProvidedValue: null
+  Value: ""
+Stages:
+- As: v8build
+  BaseName: alexmasterov/alpine-libv8:$FROM_V8
+  Commands:
+  - CmdLine:
+    - tar cvzf /tmp/libv8.tar.gz -C ${V8_DIR} .
+    Name: run
+    PrependShell: true
+  From:
+    Image: alexmasterov/alpine-libv8:$FROM_V8
+  Name: v8build
+  Platform: ""
+  SourceCode: FROM alexmasterov/alpine-libv8:$FROM_V8 as v8build
+- BaseName: php:${FROM_PHP}-fpm-alpine${FROM_ALPINE}
+  Commands:
+  - CmdLine:
+    - apk add -u --no-cache curl bash su-exec less
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: v8build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/libv8.tar.gz
+    - /tmp/libv8.tar.gz
+  - CmdLine:
+    - "apk add -u --no-cache --virtual .build-deps \t\t$PHPIZE_DEPS \t\tzlib-dev \t\tg++
+      \t\tmake \t&& apk add -u --no-cache \t\t\"libmcrypt-dev>=2.5.6\" \t\tfreetype-dev
+      \t\tgettext-dev \t\ticu-dev \t\timagemagick-dev \t\timagemagick \t\tlibjpeg-turbo-dev
+      \t\tlibpng-dev \t\texpat-dev \t\tlibxslt-dev \t\tlibssh2-dev \t\tlibzip-dev
+      \t&& export CFLAGS=\"$PHP_CFLAGS\" CPPFLAGS=\"$PHP_CPPFLAGS\" LDFLAGS=\"$PHP_LDFLAGS\"
+      \t&& set -x \t&& docker-php-ext-configure gd --with-freetype-dir=/usr/include/
+      --with-jpeg-dir=/usr/include/ \t&& docker-php-ext-configure intl \t&& docker-php-ext-configure
+      pdo_mysql --with-pdo-mysql \t&& docker-php-ext-configure xsl --with-xsl \t&&
+      docker-php-ext-install -j$(nproc) \t\tcalendar \t\texif \t\tgd \t\tgettext \t\tintl
+      \t\tmysqli \t\topcache \t\tpcntl \t\tpdo_mysql \t\tshmop \t\tsockets \t\tsysvmsg
+      \t\tsysvsem \t\tsysvshm \t\twddx \t\txsl \t&& pecl install \t\tapcu \t\tigbinary
+      \t\timagick \t\tmcrypt-1.0.1 \t\tmsgpack \t\tredis \t\tssh2-1.1.2 \t\tzip \t&&
+      docker-php-ext-enable \t\tapcu \t\tigbinary \t\timagick \t\tmcrypt \t\tmsgpack
+      \t\tredis \t\tssh2 \t\tzip \t&& export XHPROF_COMMIT=758773879899af22b87514e40abd042cbb2ab98c
+      \t&& export XHPROF_TMP_DIR=/tmp/xhprof-$XHPROF_COMMIT \t&& curl -L https://github.com/humanmade/xhprof/archive/$XHPROF_COMMIT.zip
+      > /tmp/xhprof.zip \t&& unzip /tmp/xhprof.zip -d /tmp \t&& ( \t\tcd $XHPROF_TMP_DIR/extension
+      \t\t&& phpize \t\t&& ./configure \t\t&& make \t\t&& make install \t) \t&& docker-php-ext-enable
+      xhprof \t&& rm /tmp/xhprof.zip \t&& rm -R $XHPROF_TMP_DIR \t&& export V8_DIR=/usr/local/v8
+      \t&& mkdir -p $V8_DIR \t&& tar xzvf /tmp/libv8.tar.gz -C $V8_DIR \t&& echo $V8_dir
+      | pecl install v8js-2.1.0 \t&& docker-php-ext-enable v8js \t&& rm -rf /tmp/libv8.tar.gz
+      \t&& php -m \t&& apk del .build-deps"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "export WP_CLI_VERSION=2.0.1 \t&& curl -s -o /usr/local/bin/wp -L https://github.com/wp-cli/wp-cli/releases/download/v$WP_CLI_VERSION/wp-cli-$WP_CLI_VERSION.phar
+      \t&& curl -s -o /tmp/sha512 -L https://github.com/wp-cli/wp-cli/releases/download/v$WP_CLI_VERSION/wp-cli-$WP_CLI_VERSION.phar.sha512
+      \t&& chmod +x /usr/local/bin/wp \t&& apk --no-cache add ncurses \t&& [ \"$(cat
+      `which wp` | sha512sum | cut -d' ' -f1)\" == \"$(cat /tmp/sha512)\" ] \t&& rm
+      -rf /tmp/sha512"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "export CAVALCADE_COMMIT=3065001de4180d2082543867c9c6e6cfad026814 \t&& curl
+      -o /tmp/cavalcade.zip -L https://github.com/humanmade/Cavalcade-Runner/archive/$CAVALCADE_COMMIT.zip
+      \t&& unzip /tmp/cavalcade.zip -d /tmp \t&& rm /tmp/cavalcade.zip \t&& mv /tmp/Cavalcade-Runner-$CAVALCADE_COMMIT
+      /etc/cavalcade \t&& ln -s /etc/cavalcade/bin/cavalcade /usr/local/bin/cavalcade"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add -u --no-cache mysql-client
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /usr/src/app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /docker-entrypoint.sh
+  - CmdLine:
+    - chmod +x /docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_INI_FILE
+      Value: /usr/local/etc/php/php.ini
+    Name: env
+  - Env:
+    - Key: PHP_FPM_CONF_FILE
+      Value: /usr/local/etc/php-fpm.conf
+    Name: env
+  - Env:
+    - Key: PHP_FPM_POOL_CONF_FILE
+      Value: /usr/local/etc/php-fpm.d/www.conf
+    Name: env
+  - CmdLine:
+    - rm /usr/local/etc/php-fpm.d/*.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php.ini
+    - $PHP_INI_FILE
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - fpm.conf
+    - $PHP_FPM_CONF_FILE
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - fpm-pool.conf
+    - $PHP_FPM_POOL_CONF_FILE
+  - CmdLine:
+    - "mkdir -p /var/run/php-fpm \t&& chown www-data:www-data /var/run/php-fpm /usr/local/etc/php*"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: www-data
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - php-fpm
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:${FROM_PHP}-fpm-alpine${FROM_ALPINE}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:${FROM_PHP}-fpm-alpine${FROM_ALPINE}

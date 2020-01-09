@@ -1,0 +1,106 @@
+MetaArgs: null
+Stages:
+- As: appfront
+  BaseName: node:alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"282696845@qq.com"'
+    Name: label
+  - Name: workdir
+    Path: /usr/src/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./appfront
+    - .
+  - CmdLine:
+    - npm install && npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:alpine
+  Name: appfront
+  Platform: ""
+  SourceCode: FROM node:alpine as appfront
+- As: build
+  BaseName: maven:alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"282696845@qq.com"'
+    Name: label
+  - Name: workdir
+    Path: /usr/src/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Chown: ""
+    From: appfront
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/dist
+    - ./src/main/resources/static
+  - CmdLine:
+    - mvn -f /usr/src/app/pom.xml clean package -P prod
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM  maven:alpine as BUILD
+- BaseName: java:8-jre-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"282696845@qq.com"'
+    Name: label
+  - CmdLine:
+    - echo http://mirrors.aliyun.com/alpine/v3.6/main > /etc/apk/repositories;    apk
+      --update add --no-cache tzdata curl
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TZ
+      Value: Asia/Shanghai
+    - Key: JAVA_OPTS
+      Value: '""'
+    - Key: SPRING_PROFILES_ACTIVE
+      Value: '"prod"'
+    - Key: APP_PORT
+      Value: "8080"
+    - Key: SPRING_APPLICATION_JSON
+      Value: '''{"server.port":$APP_PORT}'''
+    Name: env
+  - Name: volume
+    Volumes:
+    - /tmp
+  - Chown: ""
+    From: BUILD
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/target/*.jar
+    - app.jar
+  - Name: expose
+    Ports:
+    - $APP_PORT
+  - CmdLine:
+    - exec java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -jar /app.jar
+    Name: entrypoint
+    PrependShell: true
+  - Health:
+      Interval: 10000000000
+      Test:
+      - CMD-SHELL
+      - curl -f http://localhost:$APP_PORT/_sys/health_docker
+    Name: healthcheck
+  From:
+    Image: java:8-jre-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM java:8-jre-alpine

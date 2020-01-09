@@ -1,0 +1,318 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "ALPINE_VERSION",
+      "DefaultValue": "3.10",
+      "ProvidedValue": null,
+      "Value": "3.10"
+    },
+    {
+      "Key": "GO_VERSION",
+      "DefaultValue": "1.13",
+      "ProvidedValue": null,
+      "Value": "1.13"
+    },
+    {
+      "Key": "DOCKER_VERSION",
+      "DefaultValue": "19.03.4",
+      "ProvidedValue": null,
+      "Value": "19.03.4"
+    },
+    {
+      "Key": "DOCKER_COMPOSE_VERSION",
+      "DefaultValue": "1.25.0-rc4-alpine",
+      "ProvidedValue": null,
+      "Value": "1.25.0-rc4-alpine"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "docker-cli",
+      "BaseName": "docker:${DOCKER_VERSION}",
+      "SourceCode": "FROM docker:${DOCKER_VERSION} AS docker-cli",
+      "Platform": "",
+      "As": "docker-cli",
+      "From": {
+        "Image": "docker:${DOCKER_VERSION}"
+      },
+      "Commands": null
+    },
+    {
+      "Name": "docker-compose",
+      "BaseName": "docker/compose:${DOCKER_COMPOSE_VERSION}",
+      "SourceCode": "FROM docker/compose:${DOCKER_COMPOSE_VERSION} AS docker-compose",
+      "Platform": "",
+      "As": "docker-compose",
+      "From": {
+        "Image": "docker/compose:${DOCKER_COMPOSE_VERSION}"
+      },
+      "Commands": null
+    },
+    {
+      "Name": "race",
+      "BaseName": "golang:${GO_VERSION}-alpine${ALPINE_VERSION}",
+      "SourceCode": "FROM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS race",
+      "Platform": "",
+      "As": "race",
+      "From": {
+        "Image": "golang:${GO_VERSION}-alpine${ALPINE_VERSION}"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/tmp/race"
+        },
+        {
+          "CmdLine": [
+            "apk --update -q --progress --no-cache add git g++"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "git clone --single-branch https://llvm.org/git/compiler-rt.git . \u0026\u003e /dev/null"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "git reset --hard fe2c72c59aa7f4afa45e3f65a5d16a374b6cce26 \u0026\u0026     wget -q https://github.com/golang/go/files/3615484/0001-hack-to-make-Go-s-race-flag-work-on-Alpine.patch.gz -O patch.gz \u0026\u0026     gunzip patch.gz \u0026\u0026     patch -p1 -i patch"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd lib/tsan/go \u0026\u0026     ./buildgo.sh \u0026\u003e /dev/null"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "golang:${GO_VERSION}-alpine${ALPINE_VERSION}",
+      "SourceCode": "FROM golang:${GO_VERSION}-alpine${ALPINE_VERSION}",
+      "Platform": "",
+      "From": {
+        "Image": "golang:${GO_VERSION}-alpine${ALPINE_VERSION}"
+      },
+      "Commands": [
+        {
+          "Key": "BUILD_DATE",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "VCS_REF",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "VERSION",
+          "Name": "arg",
+          "Value": "local"
+        },
+        {
+          "Key": "USERNAME",
+          "Name": "arg",
+          "Value": "vscode"
+        },
+        {
+          "Key": "USER_UID",
+          "Name": "arg",
+          "Value": "1000"
+        },
+        {
+          "Key": "USER_GID",
+          "Name": "arg",
+          "Value": "1000"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "org.opencontainers.image.authors",
+              "Value": "\"quentin.mcgaw@gmail.com\""
+            },
+            {
+              "Key": "org.opencontainers.image.created",
+              "Value": "$BUILD_DATE"
+            },
+            {
+              "Key": "org.opencontainers.image.version",
+              "Value": "$VERSION"
+            },
+            {
+              "Key": "org.opencontainers.image.revision",
+              "Value": "$VCS_REF"
+            },
+            {
+              "Key": "org.opencontainers.image.url",
+              "Value": "\"https://github.com/qdm12/godevcontainer\""
+            },
+            {
+              "Key": "org.opencontainers.image.documentation",
+              "Value": "\"https://github.com/qdm12/godevcontainer\""
+            },
+            {
+              "Key": "org.opencontainers.image.source",
+              "Value": "\"https://github.com/qdm12/godevcontainer\""
+            },
+            {
+              "Key": "org.opencontainers.image.title",
+              "Value": "\"Go Dev container\""
+            },
+            {
+              "Key": "org.opencontainers.image.description",
+              "Value": "\"Go development container for Visual Studio Code Remote Containers development\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Name": "workdir",
+          "Path": "/home/${USERNAME}"
+        },
+        {
+          "CmdLine": [
+            "/bin/zsh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "Chown": "",
+          "From": "race",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/tmp/race/lib/tsan/go/race_linux_amd64.syso",
+            "/usr/local/go/src/runtime/race/race_linux_amd64.syso"
+          ]
+        },
+        {
+          "CmdLine": [
+            "adduser $USERNAME -s /bin/sh -D -u $USER_UID $USER_GID \u0026\u0026     mkdir -p /etc/sudoers.d \u0026\u0026     echo $USERNAME ALL=\\(root\\) NOPASSWD:ALL \u003e /etc/sudoers.d/$USERNAME \u0026\u0026     chmod 0440 /etc/sudoers.d/$USERNAME"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "chown ${USERNAME}:${USER_GID} /go/bin /go/src"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "apk add -q --update --progress libstdc++ g++ zsh sudo ca-certificates git openssh-client bash nano"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "vscode",
+          "From": "docker-cli",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/bin/docker",
+            "/usr/local/bin/docker"
+          ]
+        },
+        {
+          "Chown": "vscode",
+          "From": "docker-compose",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/bin/docker-compose",
+            "/usr/local/bin/docker-compose"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "DOCKER_BUILDKIT",
+              "Value": "1"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "([ ${USER_GID} = 1000 ] || (addgroup -g 1000 docker1000 \u0026\u0026 addgroup ${USERNAME} docker1000)) \u0026\u0026     addgroup -g 976 docker976 \u0026\u0026     addgroup -g 102 docker102 \u0026\u0026     addgroup ${USERNAME} docker976 \u0026\u0026     addgroup ${USERNAME} docker102"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "EDITOR",
+              "Value": "nano"
+            },
+            {
+              "Key": "LANG",
+              "Value": "en_US.UTF-8"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "apk add shadow \u0026\u0026     usermod --shell /bin/zsh root \u0026\u0026     usermod --shell /bin/zsh ${USERNAME} \u0026\u0026     apk del shadow"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "vscode",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "shell/.p10k.zsh",
+            "shell/.zshrc",
+            "shell/.welcome.sh",
+            "/home/${USERNAME}/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "ln -s /home/${USERNAME}/.p10k.zsh /root/.p10k.zsh \u0026\u0026     cp /home/${USERNAME}/.zshrc /root/.zshrc \u0026\u0026     cp /home/${USERNAME}/.welcome.sh /root/.welcome.sh \u0026\u0026     sed -i \"s/HOMEPATH/home\\/${USERNAME}/\" /home/${USERNAME}/.zshrc \u0026\u0026     sed -i \"s/HOMEPATH/root/\" /root/.zshrc"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "git clone --single-branch --depth 1 https://github.com/robbyrussell/oh-my-zsh.git /home/${USERNAME}/.oh-my-zsh \u0026\u003e /dev/null \u0026\u0026     rm -rf /home/${USERNAME}/.oh-my-zsh/.git \u0026\u0026     git clone --single-branch --depth 1 https://github.com/romkatv/powerlevel10k.git /home/${USERNAME}/.oh-my-zsh/custom/themes/powerlevel10k \u0026\u003e /dev/null \u0026\u0026     rm -rf /home/${USERNAME}/.oh-my-zsh/custom/themes/powerlevel10k/.git \u0026\u0026     chown -R ${USERNAME}:${USER_GID} /home/${USERNAME}/.oh-my-zsh \u0026\u0026     chmod -R 700 /home/${USERNAME}/.oh-my-zsh \u0026\u0026     cp -r /home/${USERNAME}/.oh-my-zsh /root/.oh-my-zsh \u0026\u0026     chown -R root:root /root/.oh-my-zsh"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "GO111MODULE",
+              "Value": "on"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "go get -v     golang.org/x/tools/gopls@v0.2.0     github.com/ramya-rao-a/go-outline     github.com/acroca/go-symbols     github.com/uudashr/gopkgs/cmd/gopkgs@latest     golang.org/x/tools/cmd/guru     golang.org/x/tools/cmd/gorename     golang.org/x/lint/golint     github.com/go-delve/delve/cmd/dlv     github.com/fatih/gomodifytags     github.com/haya14busa/goplay/cmd/goplay     github.com/josharian/impl     github.com/tylerb/gotype-live     github.com/cweill/gotests/...     github.com/davidrjenni/reftools/cmd/fillstruct     github.com/vektra/mockery/...     github.com/kyoh86/scopelint     2\u003e\u00261 \u0026\u0026     chown ${USERNAME}:${USER_GID} /go/bin/* \u0026\u0026     chmod 500 /go/bin/* \u0026\u0026     rm -rf /go/pkg /go/src/* /root/.cache/go-build"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "user",
+          "User": "${USERNAME}"
+        }
+      ]
+    }
+  ]
+}

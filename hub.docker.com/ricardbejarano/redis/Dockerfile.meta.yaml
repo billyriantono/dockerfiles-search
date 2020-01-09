@@ -1,0 +1,92 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: debian:10
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: '"5.0.7"'
+  - Key: CHECKSUM
+    Name: arg
+    Value: '"61db74eabf6801f057fd24b590232f2f337d422280fd19486eca03be87d3a82b"'
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - http://download.redis.io/releases/redis-$VERSION.tar.gz
+    - /tmp/redis.tar.gz
+  - CmdLine:
+    - '[ "$CHECKSUM" = "$(sha256sum /tmp/redis.tar.gz | awk ''{print $1}'')" ] &&     tar
+      -C /tmp -xf /tmp/redis.tar.gz &&     mv /tmp/redis-$VERSION /tmp/redis'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt update &&     apt install -y gcc make &&     cd /tmp/redis &&       grep
+      -q '^#define CONFIG_DEFAULT_PROTECTED_MODE 1$' src/server.h;       sed -ri 's!^(#define
+      CONFIG_DEFAULT_PROTECTED_MODE) 1$!\1 0!' src/server.h;       grep -q '^#define
+      CONFIG_DEFAULT_PROTECTED_MODE 0$' src/server.h;       make         CFLAGS="-fstack-protector-all"         LDFLAGS="-z
+      relro -z now" &&     echo "nogroup:*:100:nobody" > /tmp/group &&     echo "nobody:*:100:100:::"
+      > /tmp/passwd &&     mkdir -p /tmp/data
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:10
+  Name: build
+  Platform: ""
+  SourceCode: FROM debian:10 AS build
+- BaseName: scratch
+  Commands:
+  - Chown: 100:100
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/redis/src/redis-server
+    - /tmp/redis/src/redis-cli
+    - /
+  - Chown: 100:100
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/data
+    - /data
+  - Chown: 100:100
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /lib/x86_64-linux-gnu/libc.so.6
+    - /lib/x86_64-linux-gnu/libdl.so.2
+    - /lib/x86_64-linux-gnu/libm.so.6
+    - /lib/x86_64-linux-gnu/librt.so.1
+    - /lib/x86_64-linux-gnu/libpthread.so.0
+    - /lib/x86_64-linux-gnu/
+  - Chown: 100:100
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /lib64/ld-linux-x86-64.so.2
+    - /lib64/
+  - Chown: 100:100
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/group
+    - /tmp/passwd
+    - /etc/
+  - Name: user
+    User: 100:100
+  - Name: workdir
+    Path: /data
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: expose
+    Ports:
+    - 6379/tcp
+  - CmdLine:
+    - /redis-server
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

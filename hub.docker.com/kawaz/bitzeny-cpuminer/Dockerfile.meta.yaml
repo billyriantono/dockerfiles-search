@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: ubuntu:17.04
+  Commands:
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y git automake autoconf pkg-config libcurl4-openssl-dev libjansson-dev
+      libssl-dev libgmp-dev make g++
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - git clone --depth 1 https://github.com/bitzeny/cpuminer.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd cpuminer &&   ./autogen.sh &&   ./configure CFLAGS="-O3 -march=native -funroll-loops
+      -fomit-frame-pointer" &&   make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /build/cpuminer/minerd /usr/bin/minerd &&   ldd /usr/bin/minerd | grep -Eo
+      '/[^ ]+' > minerd.dep_ldd &&   dpkg -S $(cat minerd.dep_ldd) | perl -pe's/:.*//'
+      | sort -u > minerd.dep_packages
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:17.04
+  Name: build
+  Platform: ""
+  SourceCode: FROM ubuntu:17.04 AS BUILD
+- As: main
+  BaseName: ubuntu:17.04
+  Commands:
+  - Chown: ""
+    From: BUILD
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/minerd
+    - /usr/bin/
+  - Chown: ""
+    From: BUILD
+    Name: copy
+    SourcesAndDest:
+    - /build/minerd.dep_packages
+    - /
+  - CmdLine:
+    - apt-get update && apt-get install -y inetutils-ping ca-certificates $(cat /*.dep_packages)
+      --no-install-recommends &&   apt-get clean && rm -rf /var/lib/apt/lists/* /*.dep_packages
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ALGO
+      Value: yescrypt
+    - Key: USER
+      Value: kawazzz
+    - Key: WORKER
+      Value: donation
+    - Key: USERNAME
+      Value: ""
+    - Key: PASSWORD
+      Value: x
+    - Key: POOL
+      Value: stratum+tcp://jp.lapool.me:3014
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - bootstrap.sh
+    - bootstrap.sh
+  - CmdLine:
+    - ./bootstrap.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:17.04
+  Name: main
+  Platform: ""
+  SourceCode: FROM ubuntu:17.04 AS MAIN

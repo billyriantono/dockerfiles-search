@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- As: build-containerd
+  BaseName: golang:1.13
+  Commands:
+  - CmdLine:
+    - apt-get update -q && apt-get install -yq libseccomp-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/containerd/containerd
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/containerd/containerd
+  - CmdLine:
+    - BUILDTAGS='seccomp apparmor no_btrfs no_cri' make
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13
+  Name: build-containerd
+  Platform: ""
+  SourceCode: FROM golang:1.13 AS build-containerd
+- As: build-criu
+  BaseName: debian:stretch
+  Commands:
+  - CmdLine:
+    - apt-get update -q && apt-get install -yq --no-install-recommends curl build-essential
+      libprotobuf-dev     libprotobuf-c0-dev protobuf-c-compiler protobuf-compiler
+      python-protobuf libnl-3-dev pkg-config python-ipaddr     iproute2 libcap-dev
+      libnet1-dev ca-certificates git asciidoc xmlto
+    Name: run
+    PrependShell: true
+  - Key: CRIU_VERSION
+    Name: arg
+    Value: "3.13"
+  - CmdLine:
+    - curl -sSL https://github.com/checkpoint-restore/criu/archive/v${CRIU_VERSION}.tar.gz
+      | tar xzv --strip-components=1 -C /tmp
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp && make && make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch
+  Name: build-criu
+  Platform: ""
+  SourceCode: FROM debian:stretch AS build-criu
+- BaseName: fermayo/runc:debian
+  Commands:
+  - CmdLine:
+    - apt-get update -q && apt-get install -yq libseccomp2 ca-certificates libprotobuf-c1
+      libnl-3-200 iproute2 libcap2 libnet1 iptables
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/lib
+  - Chown: ""
+    From: build-criu
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/sbin/criu
+    - /usr/local/sbin/
+  - Chown: ""
+    From: build-containerd
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/containerd/containerd/bin/*
+    - /usr/local/bin/
+  - CmdLine:
+    - ctr
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: fermayo/runc:debian
+  Name: ""
+  Platform: ""
+  SourceCode: FROM fermayo/runc:debian

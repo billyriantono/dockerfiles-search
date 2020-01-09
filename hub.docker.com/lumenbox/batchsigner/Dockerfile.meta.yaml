@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: centos
+  Commands:
+  - Env:
+    - Key: SUPERCRONIC_URL
+      Value: https://github.com/aptible/supercronic/releases/download/v0.1.5/supercronic-linux-amd64
+    - Key: SUPERCRONIC
+      Value: supercronic-linux-amd64
+    - Key: SUPERCRONIC_SHA1SUM
+      Value: 9aeb41e00cc7b71d30d33c57a2333f2c2581a201
+    Name: env
+  - CmdLine:
+    - curl -fsSLO "$SUPERCRONIC_URL"  && echo "${SUPERCRONIC_SHA1SUM}  ${SUPERCRONIC}"
+      | sha1sum -c -  && chmod +x "$SUPERCRONIC"  && mv "$SUPERCRONIC" "/usr/local/bin/supercronic"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/
+  - Key: CONFD_VERSION
+    Name: arg
+    Value: 0.15.0
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/kelseyhightower/confd/releases/download/v${CONFD_VERSION}/confd-${CONFD_VERSION}-linux-amd64
+    - /confd
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/confd
+    - /etc/confd
+  - CmdLine:
+    - chmod 755 /confd &&     chmod 755 /etc/confd/confd-wrapper.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: centos
+  Name: builder
+  Platform: ""
+  SourceCode: FROM centos as builder
+- BaseName: python:2-alpine
+  Commands:
+  - Name: workdir
+    Path: /usr/src/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/requirements.txt
+    - ./
+  - CmdLine:
+    - apk --update --no-cache add ca-certificates bash postgresql-libs libffi &&     apk
+      --update --no-cache add --virtual .build-deps gcc postgresql-dev musl-dev libffi-dev
+      make &&     pip install --no-cache-dir -r requirements.txt &&     apk --purge
+      del .build-deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - batchsigner.py
+    - log.py
+    - sshtunnel.py
+    - ./
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - federationxdr
+    - federationxdr
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/supercronic
+    - /confd
+    - /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/confd
+    - /etc/confd
+  - CmdLine:
+    - /etc/confd/confd-wrapper.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:2-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:2-alpine

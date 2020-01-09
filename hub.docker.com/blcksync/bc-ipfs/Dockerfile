@@ -1,0 +1,146 @@
+FROM blcksync/go11-node:latest as builder
+
+ENV SHELL=/bin/bash \
+    IPFS_USER=ipfsuser \
+    IPFS_UID=3888 \
+    IPFS_GID=4888 \
+    GOPATH=/go
+ENV HOME=/home/$IPFS_USER
+ARG BUILD_BRANCH=$BUILD_BRANCH
+
+WORKDIR /root
+
+RUN addgroup -g $IPFS_GID $IPFS_USER && \
+    adduser -u $IPFS_UID -g $IPFS_GID -h $HOME -S -s /bin/bash $IPFS_USER && \
+    chmod g+w /etc/passwd /etc/group && \
+    source /etc/profile.d/go_path.sh && \
+    chown -R $IPFS_UID:$IPFS_GID $HOME && \
+    apk update && apk upgrade && \
+    apk add --no-cache bash git \
+    busybox-extras \
+    python \
+    python-dev \
+    py-pip \
+    libtool \
+    autoconf \
+    automake \
+    build-base \
+    make gcc musl-dev linux-headers \
+    && rm -rf /var/cache/apk/* && \
+    echo "export PATH=/usr/local/go/bin:\$GOPATH/bin:\$PATH:\$HOME/bin" > /etc/profile.d/go_path.sh
+
+# Install go-ipfs and gx
+RUN source /etc/profile.d/go_path.sh && \
+    go get -u -d github.com/ipfs/go-ipfs && cd $GOPATH/src/github.com/ipfs/go-ipfs && \
+    git checkout fix/disable-keepalives && \
+    make install_unsupported
+
+# Install geth
+RUN cd /root; \
+    git clone -b release/1.8 --depth 1 https://github.com/matr1xc0in/go-ethereum.git && \
+    cd /root/go-ethereum && make geth
+
+COPY bc-ipfs $HOME/bc-ipfs
+
+RUN chown -R $IPFS_UID:$IPFS_GID $HOME/bc-ipfs
+
+USER $IPFS_UID
+
+WORKDIR $HOME
+
+# Install ipfs JS API
+RUN mkdir $HOME/bin && \
+    npm install --save \
+    bignumber.js@7.2.1 \
+    bn.js@4.11.8 \
+    secp256k1@3.4.0 \
+    debug@3.1.0 \
+    ipfs-http-client@28.1.0 \
+    dat@13.10.0 \
+    && ln -s $HOME/node_modules/dat/bin/cli.js $HOME/bin/dat ; \
+    cd $HOME/bc-ipfs; \
+    npm install; \
+    npm install -S react@16.6.3 \
+    @types/react@16.7.3 \
+    react-router-dom@4.3.1 \
+    crypto-js@3.1.9-1 \
+    ethereumjs-tx@1.3.7 \
+    ipfs-http-client@28.1.0 \
+    jquery@3.3.1 \
+    js-sha256@0.9.0 \
+    react-bootstrap@0.32.4 \
+    react-dom@16.6.3 \
+    react-confirm-alert@2.0.7 \
+    react-hotjar@1.0.11 \
+    url-parse@1.4.4 \
+    web3@1.0.0-beta.36 \
+    whatwg-fetch@3.0.0 \
+    config-webpack@1.0.4 \
+    config@1.30.0 \
+    bignumber.js@8.0.1 \
+    bootstrap@3.3.7 \
+    && npm install -S @types/react-dom@16.0.9 \
+    babel-core@6.26.3 \
+    babel-loader@7.1.5 \
+    babel-preset-env@1.7.0 \
+    babel-preset-react@6.24.1 \
+    css-loader@1.0.1 \
+    file-loader@1.1.11 \
+    html-loader@0.5.5 \
+    html-webpack-plugin@3.2.0 \
+    style-loader@0.21.0 \
+    webpack@4.25.1 \
+    webpack-cli@3.1.2 \
+    webpack-dev-server@3.1.10
+
+FROM blcksync/alpine-node:latest
+
+LABEL maintainer="matr1xc0in"
+
+ENV SHELL=/bin/bash \
+    IPFS_USER=ipfsuser \
+    IPFS_UID=3888 \
+    IPFS_GID=4888 \
+    GOPATH=/go
+ENV HOME=/home/$IPFS_USER
+
+USER root
+WORKDIR /root
+
+RUN apk update && apk upgrade && \
+    apk add --no-cache ca-certificates bash git busybox-extras && \
+    rm -rf /var/cache/apk/* && \
+    echo "export PATH=/usr/local/go/bin:\$GOPATH/bin:\$PATH:\$HOME/bin" > /etc/profile.d/go_path.sh
+
+COPY --from=builder /usr/local/go/bin/* /usr/local/go/bin/
+COPY --from=builder /go/bin/* /go/bin/
+COPY --from=builder /root/go-ethereum/build/bin/geth /usr/local/bin/
+COPY --from=builder $HOME/bc-ipfs $HOME/
+
+# Install go-ipfs and gx
+RUN addgroup -g $IPFS_GID $IPFS_USER && \
+    adduser -u $IPFS_UID -g $IPFS_GID -h $HOME -S -s /bin/bash $IPFS_USER && \
+    chmod g+w /etc/passwd /etc/group && \
+    source /etc/profile.d/go_path.sh && \
+    chown -R $IPFS_UID:$IPFS_GID $HOME && \
+    chown -R $IPFS_UID:$IPFS_GID /usr/local/bin/geth && \
+    chown -R $IPFS_UID:$IPFS_GID /usr/local/go/bin/* && \
+    chown -R $IPFS_UID:$IPFS_GID /go/bin/* && \
+    mkdir -p $HOME/ipfs && chown -R $IPFS_UID:$IPFS_GID $HOME/ipfs ; \
+    echo "export IPFS_PATH=$HOME/ipfs" > /etc/profile.d/ipfs_path.sh
+
+ENV IPFS_VERSION=0.4.15 \
+    IPFS_SHA256=48a81cfc34d3a12c8563dbdfae8681be6e4d23c0664d6a192bc2758c4e4ef377
+
+USER $IPFS_UID
+
+WORKDIR $HOME
+
+COPY ./bin/*.sh $HOME/bin/
+
+CMD ["npm start"]
+
+EXPOSE 3000
+
+# Geth ports
+EXPOSE 8545 8546 30303 30303/udp

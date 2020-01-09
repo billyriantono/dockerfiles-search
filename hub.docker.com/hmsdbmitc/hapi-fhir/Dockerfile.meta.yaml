@@ -1,0 +1,175 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: maven:3.5-jdk-8-alpine
+  Commands:
+  - Key: HAPI_FHIR_SRC
+    Name: arg
+    Value: hapi-fhir-3.x
+  - Key: DBMI_HAPI_FHIR_VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: DBMI_HAPI_FHIR_VERSION
+      Value: ${DBMI_HAPI_FHIR_VERSION}
+    Name: env
+  - Key: HAPI_FHIR_VERSION
+    Name: arg
+    Value: 3.5.0
+  - Env:
+    - Key: HAPI_FHIR_VERSION
+      Value: ${HAPI_FHIR_VERSION}
+    Name: env
+  - Key: HAPI_FHIR_PROFILE
+    Name: arg
+    Value: overlay
+  - Key: JWT_AUTH_ENABLED
+    Name: arg
+    Value: "true"
+  - Env:
+    - Key: JWT_AUTH_ENABLED
+      Value: ${JWT_AUTH_ENABLED}
+    Name: env
+  - Name: workdir
+    Path: /usr/src/app/fhir-server
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ${HAPI_FHIR_SRC}/pom.xml
+    - /usr/src/app/fhir-server/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ${HAPI_FHIR_SRC}/settings.xml
+    - /usr/src/app/fhir-server/
+  - CmdLine:
+    - mvn verify clean --fail-never -s /usr/src/app/fhir-server/settings.xml -P ${HAPI_FHIR_PROFILE}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ${HAPI_FHIR_SRC}
+    - /usr/src/app/fhir-server
+  - CmdLine:
+    - mvn package -s /usr/src/app/fhir-server/settings.xml -P ${HAPI_FHIR_PROFILE}
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.5-jdk-8-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM maven:3.5-jdk-8-alpine AS builder
+- BaseName: tomcat:8-alpine
+  Commands:
+  - CmdLine:
+    - "addgroup -S nginx \t&& adduser -D -S -h /var/cache/nginx -s /sbin/nologin -G
+      nginx nginx \t&& apk -Uuv add     nginx     curl     jq     python3     py3-pip
+      \    openssl     dumb-init     && pip3 install awscli shinto-cli     && rm -rf
+      /var/cache/apk/*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker-entrypoint-templates.d/
+    - /docker-entrypoint-templates.d/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker-entrypoint-resources.d/
+    - /docker-entrypoint-resources.d/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker-entrypoint-init.d/
+    - /docker-entrypoint-init.d/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker-entrypoint.d/
+    - /docker-entrypoint.d/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /docker-entrypoint.sh
+  - CmdLine:
+    - chmod a+x /docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DBMI_ENV
+      Value: prod
+    Name: env
+  - Env:
+    - Key: DBMI_PARAMETER_STORE_PREFIX
+      Value: dbmi.fhir.${DBMI_ENV}
+    Name: env
+  - Env:
+    - Key: DBMI_PARAMETER_STORE_PRIORITY
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: DBMI_AWS_REGION
+      Value: us-east-1
+    Name: env
+  - Env:
+    - Key: DBMI_LB
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: DBMI_SSL
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: DBMI_CREATE_SSL
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: DBMI_HEALTHCHECK
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: DBMI_HEALTHCHECK_PATH
+      Value: /healthcheck
+    Name: env
+  - Env:
+    - Key: DBMI_APP_HEALTHCHECK_PATH
+      Value: /baseDstu3/metadata
+    Name: env
+  - Env:
+    - Key: FHIR_SERVER_URL
+      Value: https://${DBMI_APP_DOMAIN}/baseDstu3
+    Name: env
+  - Env:
+    - Key: FHIR_SERVER_NAME
+      Value: '"DBMI FHIR Server"'
+    Name: env
+  - CmdLine:
+    - rm -rf $CATALINA_HOME/webapps/ROOT
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/fhir-server/target/fhir-server.war
+    - $CATALINA_HOME/webapps/ROOT.war
+  - CmdLine:
+    - dumb-init
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - $CATALINA_HOME/bin/catalina.sh run
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: tomcat:8-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tomcat:8-alpine

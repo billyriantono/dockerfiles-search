@@ -1,0 +1,87 @@
+MetaArgs: null
+Stages:
+- As: buildspigot
+  BaseName: openjdk:8-jdk-alpine
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: 1.14.4
+  - CmdLine:
+    - apk add --update --no-cache git wget  && cd /tmp  && wget https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar  &&
+      java -jar BuildTools.jar --rev $VERSION  && mv spigot-*.jar spigot.jar
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8-jdk-alpine
+  Name: buildspigot
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-alpine as buildspigot
+- As: starter
+  BaseName: openjdk:8-jdk-alpine
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache wget  && cd /tmp/  && wget https://raw.githubusercontent.com/marcermarc/DockerMinecraft/master/StartProgram/Start.java  &&
+      javac Start.java  && chmod +x Start.class
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8-jdk-alpine
+  Name: starter
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-alpine as starter
+- BaseName: alpine:latest
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"docker@marcermarc.de"'
+    Name: label
+  - Env:
+    - Key: WORKDIR
+      Value: '"/mnt/minecraft"'
+    - Key: COMMAND
+      Value: '"java -Xmx8G -Xms8G -XX:+UseG1GC -XX:+UnlockExperimentalVMOptions -XX:MaxGCPauseMillis=100
+        -XX:+DisableExplicitGC -XX:TargetSurvivorRatio=90 -XX:G1NewSizePercent=50
+        -XX:G1MaxNewSizePercent=80 -XX:InitiatingHeapOccupancyPercent=10 -XX:G1MixedGCLiveThresholdPercent=50
+        -XX:+AggressiveOpts -XX:+AlwaysPreTouch -XX:+UseLargePagesInMetaspace -d64
+        -Dcom.mojang.eula.agree=true -Dfile.encoding=UTF-8 -jar /opt/minecraft/spigot.jar
+        nogui"'
+    - Key: CLASSPATH
+      Value: /opt/start
+    Name: env
+  - Chown: ""
+    From: buildspigot
+    Name: copy
+    SourcesAndDest:
+    - /tmp/spigot.jar
+    - /opt/minecraft/
+  - Chown: ""
+    From: starter
+    Name: copy
+    SourcesAndDest:
+    - /tmp/*.class
+    - /opt/start/
+  - CmdLine:
+    - mkdir -p /mnt/minecraft  && apk add --no-cache openjdk8-jre-base nss nano  &&
+      adduser -D minecraft -h /opt  && chown -R minecraft /mnt/minecraft /opt  &&
+      chmod -R 777 /mnt/minecraft /opt
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - 25565:25565/tcp
+    - 25565:25565/udp
+  - Name: volume
+    Volumes:
+    - /mnt/minecraft
+  - Name: workdir
+    Path: /mnt/minecraft
+  - CmdLine:
+    - java
+    - Start
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

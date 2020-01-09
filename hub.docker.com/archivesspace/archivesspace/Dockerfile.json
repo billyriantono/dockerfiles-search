@@ -1,0 +1,138 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "build_release",
+      "BaseName": "ubuntu:18.04",
+      "SourceCode": "FROM ubuntu:18.04 as build_release",
+      "Platform": "",
+      "As": "build_release",
+      "From": {
+        "Image": "ubuntu:18.04"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "DEBIAN_FRONTEND=noninteractive     apt-get update \u0026\u0026     apt-get -y install --no-install-recommends       build-essential       git       openjdk-8-jre-headless       wget       unzip"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "/source"
+          ]
+        },
+        {
+          "CmdLine": [
+            "cd /source \u0026\u0026     ARCHIVESSPACE_VERSION=${SOURCE_BRANCH:-`git symbolic-ref -q --short HEAD || git describe --tags --match v*`} \u0026\u0026     ARCHIVESSPACE_VERSION=${ARCHIVESSPACE_VERSION#\"heads/\"} \u0026\u0026     echo \"Using version: $ARCHIVESSPACE_VERSION\" \u0026\u0026     ./scripts/build_release $ARCHIVESSPACE_VERSION \u0026\u0026     mv ./*.zip / \u0026\u0026     cd / \u0026\u0026     unzip /*.zip -d / \u0026\u0026     wget http://central.maven.org/maven2/mysql/mysql-connector-java/5.1.39/mysql-connector-java-5.1.39.jar \u0026\u0026     cp /mysql-connector-java-5.1.39.jar /archivesspace/lib/"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "docker-startup.sh",
+            "/archivesspace/startup.sh"
+          ]
+        },
+        {
+          "CmdLine": [
+            "chmod u+x /archivesspace/startup.sh"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "ubuntu:18.04",
+      "SourceCode": "FROM ubuntu:18.04",
+      "Platform": "",
+      "From": {
+        "Image": "ubuntu:18.04"
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"ArchivesSpaceHome@lyrasis.org\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Env": [
+            {
+              "Key": "ARCHIVESSPACE_LOGS",
+              "Value": "/dev/null"
+            },
+            {
+              "Key": "LANG",
+              "Value": "C.UTF-8"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "build_release",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/archivesspace",
+            "/archivesspace"
+          ]
+        },
+        {
+          "CmdLine": [
+            "DEBIAN_FRONTEND=noninteractive     apt-get update \u0026\u0026     apt-get -y install --no-install-recommends       ca-certificates       openjdk-8-jre-headless       wget       unzip \u0026\u0026     rm -rf /var/lib/apt/lists/* \u0026\u0026     groupadd -g 1000 archivesspace \u0026\u0026     useradd -l -M -u 1000 -g archivesspace archivesspace \u0026\u0026     chown -R archivesspace:archivesspace /archivesspace"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "user",
+          "User": "archivesspace"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "8080",
+            "8081",
+            "8089",
+            "8090",
+            "8092"
+          ]
+        },
+        {
+          "Health": {
+            "Interval": 60000000000,
+            "Retries": 2,
+            "StartPeriod": 300000000000,
+            "Test": [
+              "CMD-SHELL",
+              "wget -q --spider http://localhost:8089/ || exit 1"
+            ],
+            "Timeout": 5000000000
+          },
+          "Name": "healthcheck"
+        },
+        {
+          "CmdLine": [
+            "/archivesspace/startup.sh"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

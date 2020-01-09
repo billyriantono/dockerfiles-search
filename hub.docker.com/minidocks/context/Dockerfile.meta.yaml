@@ -1,0 +1,168 @@
+MetaArgs:
+- DefaultValue: beta
+  Key: version
+  ProvidedValue: null
+  Value: beta
+Stages:
+- BaseName: minidocks/base
+  Commands:
+  - Key: version
+    Name: arg
+    Value: null
+  - Key: platform
+    Name: arg
+    Value: linuxmusl-64
+  - Env:
+    - Key: PATH
+      Value: $PATH:/usr/share/bin
+    Name: env
+  - CmdLine:
+    - apk --update --no-cache add rsync
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rsync -rlptv rsync://contextgarden.net/minimals/setup/$platform/bin /usr/local
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /usr/local/bin && wget -O luatex-bin-x86_64-musl.tar.gz https://github.com/TeX-Live/luatex/releases/download/1.10.1-svn7143/luatex-bin-x86_64-musl.tar.gz     &&
+      tar -xzvf luatex-bin-x86_64-musl.tar.gz && rm -rf *.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /usr/share/tex && cd /usr/share/tex && CONTEXTROOT=/usr/share/tex PATH="$CONTEXTROOT/texmf-$platform/bin:$PATH"
+      MTX_PLATFORM="$platform"     mtxrun --script /usr/local/bin/mtx-update.lua --force
+      --update --make --context=$version --engine=luatex --modules=all --platform="$platform"
+      --texroot="$CONTEXTROOT"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /usr/local/bin/luatex /usr/share/tex/texmf-linuxmusl-64/bin && cp /usr/local/bin/luajittex
+      /usr/share/tex/texmf-linuxmusl-64/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /usr/share/tex/texmf-modules/doc /usr/share/texmf-modules-doc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /usr/share/tex/texmf-context/doc /usr/share/texmf-context-doc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /usr/share/texmf-fonts && for dir in opentype truetype type1; do mv
+      "/usr/share/tex/texmf/fonts/$dir/" /usr/share/texmf-fonts/; done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /usr/share/tex/texmf-cache/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: minidocks/base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM minidocks/base
+- As: latest
+  BaseName: minidocks/base
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Martin Hasoň <martin.hason@gmail.com>"'
+    Name: label
+  - Env:
+    - Key: CONTEXT_HOME
+      Value: /usr/share
+    - Key: PATH
+      Value: $PATH:/usr/share/tex/texmf-linuxmusl-64/bin
+    - Key: TEXMFCACHE
+      Value: /usr/share/tex/texmf-cache
+    - Key: MTX_FONTS_AUTOLOAD
+      Value: "yes"
+    Name: env
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/tex
+    - /usr/share/tex
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/texmf-fonts/opentype/public/lm
+    - /usr/share/tex/texmf/fonts/opentype/public/lm
+  - CmdLine:
+    - mtxrun --generate && context --make cont-en && mtxrun --script fonts --reload     &&
+      find "$TEXMFCACHE" -type d -exec chmod 777 {} \;     && find "$TEXMFCACHE" -type
+      f -exec chmod 666 {} \;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs
+    - /
+  - CmdLine:
+    - context
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: minidocks/base
+  Name: latest
+  Platform: ""
+  SourceCode: FROM minidocks/base AS latest
+- As: fonts
+  BaseName: latest
+  Commands:
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/texmf-fonts
+    - /usr/share/tex/texmf/fonts
+  - CmdLine:
+    - context --make cont-en && mtxrun --script fonts --reload     && find "$TEXMFCACHE"
+      -type d -exec chmod 777 {} \;     && find "$TEXMFCACHE" -type f -exec chmod
+      666 {} \;
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: latest
+  Name: fonts
+  Platform: ""
+  SourceCode: FROM latest AS fonts
+- As: docs
+  BaseName: latest
+  Commands:
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/texmf-context-doc
+    - /usr/share/tex/texmf-context/doc
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/texmf-modules-doc
+    - /usr/share/tex/texmf-modules/doc
+  From:
+    Stage:
+      Index: 1
+      Named: latest
+  Name: docs
+  Platform: ""
+  SourceCode: FROM latest AS docs
+- BaseName: latest
+  Commands: null
+  From:
+    Stage:
+      Index: 1
+      Named: latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM latest

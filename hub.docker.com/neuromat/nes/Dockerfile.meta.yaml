@@ -1,0 +1,165 @@
+MetaArgs: null
+Stages:
+- As: wheeler
+  BaseName: alpine:3.9
+  Commands:
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - "apk add --no-cache \t\tlibpng-dev \t\tfreetype-dev \t\tbuild-base \t\tgit \t\tpostgresql-dev
+      \t\topenblas-dev \t\tlibjpeg-turbo-dev \t\tpython3-dev && \tapk add --no-cache
+      \t\t--repository http://dl-cdn.alpinelinux.org/alpine/edge/testing \t\thdf5-dev
+      && \trm -rf /var/cache/apk/* && \tln -s /usr/include/locale.h /usr/include/xlocale.h"
+    Name: run
+    PrependShell: true
+  - Key: NES_TAG
+    Name: arg
+    Value: unset
+  - Key: NES_BRANCH
+    Name: arg
+    Value: unset
+  - Key: NES_DIR
+    Name: arg
+    Value: /nes
+  - Env:
+    - Key: NES_DIR
+      Value: $NES_DIR
+    Name: env
+  - CmdLine:
+    - "mkdir -p \"$NES_DIR\"  && \t\tif [ \"$NES_TAG\" != \"unset\" ]; then \t\t\twget
+      https://github.com/neuromat/nes/archive/TAG-\"${NES_TAG}\".tar.gz -qO - | \t\t\t\ttar
+      xzv --strip-components=1 -C \"$NES_DIR\" ;\t\t\tsed -i 's/\\(psycopg2==\\)[0-9.]\\+/\\12.7.5/'
+      /nes/patientregistrationsystem/qdc/requirements.txt ;\t\t\tsed -i '1isetuptools>=40.6.3'
+      /nes/patientregistrationsystem/qdc/requirements.txt ;\t\t\tsed -i '1ipip>=18.1'
+      /nes/patientregistrationsystem/qdc/requirements.txt ;\t\t\techo 'mne>=0.17.0'
+      >> /nes/patientregistrationsystem/qdc/requirements.txt ;\t\t\techo '-e \"git+https://github.com/AllenInstitute/nwb-api.git#egg=nwb&subdirectory=ainwb\"'
+      >> /nes/patientregistrationsystem/qdc/requirements.txt ;\t\telif [ \"$NES_BRANCH\"
+      != \"unset\" ]; then \t\t\tgit clone -j $(nproc) -b \"$NES_BRANCH\"  https://github.com/neuromat/nes.git
+      \"$NES_DIR\" ;\t\telse \t\t\tgit clone -j $(nproc) https://github.com/neuromat/nes.git
+      \"$NES_DIR\" ;\t\tfi"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir -p /wheels/requirement && \t\tcp /nes/patientregistrationsystem/qdc/requirements.txt
+      /wheels/requirement"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /wheels
+  - CmdLine:
+    - "pip3 install -r requirement/requirements.txt && \t\tpip3 install -U wheel &&
+      \t\tpip3 wheel -r requirement/requirements.txt"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: wheeler
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as wheeler
+- BaseName: alpine:3.9
+  Commands:
+  - Name: shell
+    Shell:
+    - /bin/sh
+    - -exc
+  - CmdLine:
+    - "apk update && \t\tapk add --no-cache \t\tpostgresql \t\tapache2 \t\tphp7 \t\tphp7-apache2
+      \t\tphp7-ctype \t\tphp7-gd \t\tphp7-imap \t\tphp7-json \t\tphp7-ldap \t\tphp7-mbstring
+      \t\tphp7-pdo_pgsql \t\tphp7-session \t\tphp7-simplexml \t\tphp7-xml \t\tphp7-zip
+      \t\tgit \t\tpython3 \t\tsupervisor \t\tgraphviz \t\topenblas-dev && \t\tapk
+      add --no-cache \t\t\t--repository http://dl-cdn.alpinelinux.org/alpine/edge/testing
+      \t\t\thdf5-dev && \t\trm -rf /var/cache/apk/*"
+    Name: run
+    PrependShell: true
+  - Key: PGDATA
+    Name: arg
+    Value: /var/lib/postgresql/data
+  - Env:
+    - Key: PGDATA
+      Value: $PGDATA
+    Name: env
+  - CmdLine:
+    - "mkdir -p /var/run/postgresql  && \t\tchown -R postgres:postgres /var/run/postgresql
+      \ && \t\tchmod 2777 /var/run/postgresql  && \t\tmkdir -p \"$PGDATA\"  && \t\tchown
+      -R postgres:postgres \"$PGDATA\"  && \t\tchmod 700 \"$PGDATA\""
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - $PGDATA
+  - Key: LIMESURVEY_URL_DOWNLOAD
+    Name: arg
+    Value: https://github.com/LimeSurvey/LimeSurvey/archive/2.73.0+171219.tar.gz
+  - Key: LIMESURVEY_DIR
+    Name: arg
+    Value: /var/www/limesurvey
+  - Env:
+    - Key: LIMESURVEY_DIR
+      Value: $LIMESURVEY_DIR
+    Name: env
+  - CmdLine:
+    - "mkdir -p \"$LIMESURVEY_DIR\" && \t\twget \"$LIMESURVEY_URL_DOWNLOAD\" -qO -
+      | \t\t\ttar xzv --strip-components=1 -C \"$LIMESURVEY_DIR\" && \t\tchown -R
+      apache:apache \"$LIMESURVEY_DIR\" && \t\tchmod -R o-rwx \"$LIMESURVEY_DIR\"
+      && \t\tchmod -R 770 \"${LIMESURVEY_DIR}\"/application/config/ && \t\tchmod -R
+      770 \"${LIMESURVEY_DIR}\"/upload/ && \t\tchmod -R 770 \"${LIMESURVEY_DIR}\"/tmp/
+      && \t\tmkdir -p /run/apache2"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - $LIMESURVEY_DIR
+  - Key: NES_DIR
+    Name: arg
+    Value: /nes
+  - Env:
+    - Key: NES_DIR
+      Value: $NES_DIR
+    Name: env
+  - Chown: ""
+    From: wheeler
+    Name: copy
+    SourcesAndDest:
+    - /wheels
+    - /wheels
+  - Chown: ""
+    From: wheeler
+    Name: copy
+    SourcesAndDest:
+    - $NES_DIR
+    - $NES_DIR
+  - CmdLine:
+    - "pip3 install -r /wheels/requirement/requirements.txt -f /wheels && \t\trm -rf
+      /wheels && \t\trm -rf /root/.cache/pip*"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - $NES_DIR
+  - Env:
+    - Key: SUPERVISOR_CONF_DIR
+      Value: ${SUPERVISOR_CONF_DIR:-"/etc/supervisor"}
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./entrypoint.sh
+    - /
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /bin/sh
+    - -c
+    - /usr/bin/supervisord -c ${SUPERVISOR_CONF_DIR}/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

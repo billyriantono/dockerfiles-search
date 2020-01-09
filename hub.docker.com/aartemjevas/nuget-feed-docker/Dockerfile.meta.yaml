@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- BaseName: nginx
+  Commands:
+  - Env:
+    - Key: APP_BASE
+      Value: /var/www
+    Name: env
+  - Env:
+    - Key: APP_BRANCH
+      Value: master
+    Name: env
+  - Env:
+    - Key: DEBIAN_VERSION
+      Value: jessie
+    Name: env
+  - CmdLine:
+    - apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0x5a16e7281be7a449
+      &&     echo deb http://dl.hhvm.com/debian $DEBIAN_VERSION main | tee /etc/apt/sources.list.d/hhvm.list
+      &&     apt-get update &&     apt-get install -y --no-install-recommends hhvm       php5-mysql
+      php5-sqlite       supervisor
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf $APP_BASE
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - simple-nuget-server
+    - $APP_BASE
+  - CmdLine:
+    - rm -rf $APP_BASE/.git &&   chown www-data:www-data $APP_BASE/db $APP_BASE/packagefiles
+      &&   chown 0770 $APP_BASE/db $APP_BASE/packagefiles
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /etc/nginx/conf.d/default*.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/nuget.conf
+    - /etc/nginx/conf.d/
+  - CmdLine:
+    - "echo \"post_max_size = 2048M\" >> /etc/hhvm/php.ini &&     echo \"upload_max_filesize
+      = 2048M\" >> /etc/hhvm/php.ini && \techo \"max_execution_time = 600000\" >>
+      /etc/hhvm/php.ini && \techo \"hhvm.server.upload.upload_max_file_size = 2048M\"
+      >> /etc/hhvm/server.ini && \techo \"hhvm.server.max_post_size = 2048M\" >> /etc/hhvm/server.ini
+      &&     perl -pi -e 's/^(\\s*)(root.+?;)/\\1\\2\\n\\1client_max_body_size 2048M;/'
+      /etc/nginx/conf.d/nuget.conf"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/supervisord.conf
+    - /etc/supervisor/conf.d/supervisord.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/*.sh
+    - /tmp/
+  - CmdLine:
+    - chmod +x /tmp/*.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: BASE_URL
+      Value: /
+    Name: env
+  - CmdLine:
+    - 'echo $(date +%s | sha256sum | base64 | head -c 32; echo) > $APP_BASE/.api-key
+      &&     echo "Auto-Generated NuGet API key: $(cat $APP_BASE/.api-key)" &&     sed
+      -i $APP_BASE/inc/config.php -e "s/ChangeThisKey/$(cat $APP_BASE/.api-key)/"'
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - $APP_BASE/db
+    - $APP_BASE/packagefiles
+  - CmdLine:
+    - supervisord
+    - -n
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginx
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx

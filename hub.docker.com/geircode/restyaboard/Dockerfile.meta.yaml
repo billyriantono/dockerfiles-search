@@ -1,0 +1,172 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: php:7-cli
+  Commands:
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y gnupg2 dos2unix
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL https://deb.nodesource.com/setup_10.x | bash -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y nodejs
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install -g grunt-cli
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find . -type f -print0 | xargs -0 dos2unix
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run docker:prebuild
+    Name: run
+    PrependShell: true
+  From:
+    Image: php:7-cli
+  Name: builder
+  Platform: ""
+  SourceCode: FROM php:7-cli as builder
+- BaseName: debian:stretch
+  Commands:
+  - CmdLine:
+    - apt-get update &&     echo "postfix postfix/mailname string localhost" | debconf-set-selections
+      &&     echo "postfix postfix/main_mailer_type string 'Internet Site'" | debconf-set-selections
+      &&     TERM=linux DEBIAN_FRONTEND=noninteractive apt-get install -y     cron     curl     imagemagick     jq     libpq5     nginx     postfix     postgresql-client     unzip     wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt install -y apt-transport-https lsb-release ca-certificates &&     wget -O
+      /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg &&     sh
+      -c 'echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
+      &&     apt update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y dos2unix    php7.2     php7.2-cli     php7.2-common     php7.2-curl     php7.2-fpm     php7.2-imagick     php7.2-imap     php7.2-ldap     php7.2-mbstring     php7.2-pgsql     php7.2-xml
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ROOT_DIR
+      Value: /usr/share/nginx/html
+    - Key: CONF_FILE
+      Value: /etc/nginx/conf.d/restyaboard.conf
+    - Key: SMTP_DOMAIN
+      Value: localhost
+    - Key: SMTP_USERNAME
+      Value: root
+    - Key: SMTP_PASSWORD
+      Value: root
+    - Key: SMTP_SERVER
+      Value: localhost
+    - Key: SMTP_PORT
+      Value: "465"
+    - Key: TZ
+      Value: Etc/UTC
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/restyaboard-docker.zip
+    - /tmp/restyaboard.zip
+  - CmdLine:
+    - unzip /tmp/restyaboard.zip -d ${ROOT_DIR} &&     rm /tmp/restyaboard.zip &&     chown
+      -R www-data:www-data ${ROOT_DIR}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-scripts/install_apps.sh
+    - /tmp/
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - find . -type f -print0 | xargs -0 dos2unix
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - chmod +x /tmp/install_apps.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - . /tmp/install_apps.sh &&     chown -R www-data:www-data ${ROOT_DIR}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${ROOT_DIR}
+  - CmdLine:
+    - "rm /etc/nginx/sites-enabled/default &&     cp restyaboard.conf ${CONF_FILE}
+      &&     sed -i \"s/server_name.*$/server_name \\\"localhost\\\";/\" ${CONF_FILE}
+      && \tsed -i \"s|listen 80.*$|listen 80;|\" ${CONF_FILE} &&     sed -i \"s|root.*html|root
+      ${ROOT_DIR}|\" ${CONF_FILE}"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get autoremove -y --purge &&     apt-get clean
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: POSTGRES_HOST
+      Value: postgres
+    - Key: POSTGRES_PORT
+      Value: "5432"
+    - Key: POSTGRES_USER
+      Value: admin
+    - Key: POSTGRES_PASSWORD
+      Value: admin
+    - Key: POSTGRES_DB
+      Value: restyaboard
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-scripts/docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - dos2unix /docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - start
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch

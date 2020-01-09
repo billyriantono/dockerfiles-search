@@ -1,0 +1,258 @@
+MetaArgs: null
+Stages:
+- BaseName: sequenceiq/spark:1.6.0
+  Commands:
+  - CmdLine:
+    - /bin/bash -c 'yum -y install wget java-1.8.0-openjdk-headless.x86_64; exit 0'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/MariaDB.repo
+    - /etc/yum.repos.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/setup_mysql.sh
+    - .
+  - CmdLine:
+    - chmod +x setup_mysql.sh && ./setup_mysql.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash -c 'useradd -r -m -s /bin/bash nifi; useradd -r -m -s /bin/bash kylo;
+      useradd -r -m -s /bin/bash activemq'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash -c 'echo \"Downloading the RPM\";wget http://bit.ly/2oVaQJE -O kylo-0.8.0.1.rpm;rpm
+      -ivh kylo-0.8.0.1.rpm;rm kylo-0.8.0.1.rpm'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - service mysql start && echo "Setup database in MySQL" && /opt/kylo/setup/sql/mysql/setup-mysql.sh
+      localhost root hadoop
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Install Elasticsearch" && /opt/kylo/setup/elasticsearch/install-elasticsearch.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Install activemq" && /opt/kylo/setup/activemq/install-activemq.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Install NiFi" && /opt/kylo/setup/nifi/install-nifi.sh && echo "Install
+      Kylo" && service mysql start && /opt/kylo/setup/nifi/install-kylo-components.sh
+      && rm -f /opt/nifi/nifi-1.0.0-bin.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Creating the dropzone folder" && mkdir -p /var/dropzone
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown nifi:nifi /var/dropzone
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 774 /var/dropzone/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Creating the sample data folder" && mkdir -p /var/sampledata
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sample_data/*
+    - /var/sampledata/
+  - CmdLine:
+    - chown -R kylo:kylo /var/sampledata
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: KYLO_HOME
+      Value: /opt/kylo
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:$KYLO_HOME
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/application.properties
+    - /opt/kylo/kylo-services/conf/
+  - CmdLine:
+    - jwtkey=$(grep 'security.jwt.key' /opt/kylo/kylo-ui/conf/application.properties
+      | awk -F  "=" '/1/ {print $2}') && sed -i "s/security\.jwt\.key=<insert-256-bit-secret-key-here>/security\.jwt\.key=${jwtkey}/"
+      /opt/kylo/kylo-services/conf/application.properties
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Kylo Installation complete"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "export PATH=$PATH:/usr/java/default/bin:/usr/local/spark/bin:/usr/local/hadoop/bin"
+      >> /etc/profile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget http://apache.mirrors.spacedump.net/hive/hive-2.1.1/apache-hive-2.1.1-bin.tar.gz
+      && tar xvf apache-hive-2.1.1-bin.tar.gz && rm ./apache-hive-2.1.1-bin.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv ./apache-hive-2.1.1-bin /usr/local/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/local/apache-hive-2.1.1-bin /usr/local/hive
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/hive-site.xml
+    - /usr/local/hive/conf
+  - CmdLine:
+    - echo "export HIVE_HOME=/usr/local/hive" >> /etc/profile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "export PATH=$PATH:/usr/local/hive/bin">> /etc/profile
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HIVE_HOME
+      Value: /usr/local/hive
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:$HIVE_HOME/bin
+    Name: env
+  - CmdLine:
+    - mkdir -p /var/log/hive
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/hive-env.sh
+    - /usr/local/hive/conf/
+  - CmdLine:
+    - groupadd supergroup
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - usermod -a -G supergroup kylo
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - usermod -a -G supergroup nifi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "HADOOP_HOME=/usr/local/hadoop" >> /usr/local/hive/bin/hive-config.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget http://central.maven.org/maven2/mysql/mysql-connector-java/5.1.41/mysql-connector-java-5.1.41.jar
+      && mv mysql-connector-java-5.1.41.jar /usr/local/apache-hive-2.1.1-bin/lib/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - service mysql start && cd /usr/local/hive/scripts/metastore/upgrade/mysql/ &&
+      mysql -uroot -phadoop -e "CREATE DATABASE hive;" && mysql -uroot -phadoop hive
+      < ./hive-schema-2.1.0.mysql.sql
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/hive-server2
+    - /etc/init.d/
+  - CmdLine:
+    - chmod +x /etc/init.d/hive-server2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chkconfig --add /etc/init.d/hive-server2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /usr/local/hadoop/etc/hadoop/hdfs-site.xml /usr/local/spark/conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /usr/local/hive/conf/hive-site.xml /usr/local/spark/conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /usr/local/hive/lib/mysql-connector-java-5.1.41.jar /usr/local/spark/lib
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /usr/local/apache-hive-2.1.1-bin/lib/mysql-connector-java-5.1.41.jar /opt/nifi/mysql/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/share
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/share
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/core-site.xml.template2
+    - /usr/local/hadoop/etc/hadoop/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/bootstrap.sh
+    - /etc/bootstrap.sh
+  - CmdLine:
+    - chown root.root /etc/bootstrap.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 700 /etc/bootstrap.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /etc/bootstrap.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "8400"
+  - Name: expose
+    Ports:
+    - "8079"
+  - Name: expose
+    Ports:
+    - "10000"
+  - Name: expose
+    Ports:
+    - "3306"
+  From:
+    Image: sequenceiq/spark:1.6.0
+  Name: ""
+  Platform: ""
+  SourceCode: FROM sequenceiq/spark:1.6.0

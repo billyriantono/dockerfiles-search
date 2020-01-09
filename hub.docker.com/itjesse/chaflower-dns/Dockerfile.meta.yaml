@@ -1,0 +1,129 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:14.04
+  Commands:
+  - Maintainer: patrick@oberdorf.net
+    Name: maintainer
+  - Env:
+    - Key: VERSION
+      Value: 1.5.9
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: DNS_SERVER
+      Value: 223.5.5.5
+    Name: env
+  - Name: workdir
+    Path: /usr/local/src/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - assets/sha256checksum
+    - sha256checksum
+  - CmdLine:
+    - "apt-get update && apt-get install -y \tbuild-essential \ttar \twget \tlibssl-dev
+      \tlibevent-dev \tlibevent-2.0-5 \tlibexpat1-dev \tdnsutils \tbyacc \tsupervisor
+      \tsubversion \tgit \t&& svn co http://unbound.nlnetlabs.nl/svn/branches/edns-subnet/
+      \t&& cd edns-subnet \t&& ./configure --enable-subnet --prefix=/usr/local --with-libevent
+      \t&& make -j2\t&& make install \t&& cd ../ \t&& apt-get -y install software-properties-common
+      \t&& add-apt-repository ppa:anton+/dnscrypt \t&& apt-get update && apt-get -y
+      --force-yes install dnscrypt-proxy  \t&& git clone --depth=1 https://github.com/felixonmars/dnsmasq-china-list.git
+      \t&& apt-get autoremove build-essential subversion git --purge -y \t&& apt-get
+      clean"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd dnsmasq-china-list \t&& sed -e \"s|^server=/\\(.*\\)/114.114.114.114$$|\\1|\"
+      accelerated-domains.china.conf | egrep -v '^#' > accelerated-domains.china.raw.txt
+      \t&& sed -e \"s|^server=/\\(.*\\)/114.114.114.114$$|\\1|\" google.china.conf
+      | egrep -v '^#' > google.china.raw.txt \t&& sed -e \"s|\\(.*\\)|forward-zone:\\n
+      \ name: \\\"\\1.\\\"\\n  forward-addr: ${DNS_SERVER}\\n|\" accelerated-domains.china.raw.txt
+      > accelerated-domains.china.unbound.conf \t&& sed -e \"s|\\(.*\\)|forward-zone:\\n
+      \ name: \\\"\\1.\\\"\\n  forward-addr: ${DNS_SERVER}\\n|\" google.china.raw.txt
+      > google.china.unbound.conf \t&& cp ./accelerated-domains.china.unbound.conf
+      /usr/local/etc/unbound/accelerated-domains.china.unbound.conf \t&& cp ./google.china.unbound.conf
+      /usr/local/etc/unbound/google.china.unbound.conf \t&& rm -rf /var/lib/apt/lists/*
+      /tmp/* /var/tmp/* /usr/local/src/*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - assets/dnscrypt-proxy
+    - /etc/default/dnscrypt-proxy
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - assets/unbound.conf
+    - /usr/local/etc/unbound/unbound.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - assets/custom.conf
+    - /usr/local/etc/unbound/custom.conf
+  - CmdLine:
+    - useradd --system unbound --home /home/unbound --create-home
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R unbound:unbound /usr/local/etc/unbound/
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: $PATH:/usr/local/lib
+    Name: env
+  - CmdLine:
+    - ldconfig
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: unbound
+  - CmdLine:
+    - unbound-anchor -a /usr/local/etc/unbound/root.key ; true
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "unbound-control-setup \t&& wget ftp://FTP.INTERNIC.NET/domain/named.cache -O
+      /usr/local/etc/unbound/root.hints"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - mkdir -p /var/log/supervisor
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /assets/supervisord.conf
+    - /etc/supervisor/conf.d/supervisord.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - start.sh
+    - /start.sh
+  - CmdLine:
+    - chmod +x /start.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - 53/udp
+  - Name: expose
+    Ports:
+    - "53"
+  - CmdLine:
+    - /start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:14.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:14.04

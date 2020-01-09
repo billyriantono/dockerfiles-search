@@ -1,0 +1,245 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "ELIXIR_VERSION",
+      "DefaultValue": "1.7.3",
+      "ProvidedValue": null,
+      "Value": "1.7.3"
+    },
+    {
+      "Key": "SOURCE_COMMIT",
+      "DefaultValue": null,
+      "ProvidedValue": null,
+      "Value": null
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "elixir:${ELIXIR_VERSION}",
+      "SourceCode": "FROM elixir:${ELIXIR_VERSION} as builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "elixir:${ELIXIR_VERSION}"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "LANG",
+              "Value": "C.UTF-8"
+            },
+            {
+              "Key": "LC_ALL",
+              "Value": "C.UTF-8"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "apt-get update -q \u0026\u0026 apt-get install -y build-essential libtool autoconf curl git"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "DEBIAN_CODENAME=$(sed -n 's/VERSION=.*(\\(.*\\)).*/\\1/p' /etc/os-release) \u0026\u0026     curl -q https://deb.nodesource.com/gpgkey/nodesource.gpg.key | apt-key add - \u0026\u0026     echo \"deb http://deb.nodesource.com/node_8.x $DEBIAN_CODENAME main\" | tee /etc/apt/sources.list.d/nodesource.list \u0026\u0026     apt-get update -q \u0026\u0026     apt-get install -y nodejs"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mix local.hex --force \u0026\u0026     mix local.rebar --force \u0026\u0026     mix hex.info"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/src"
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "./",
+            "/src/"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "ALLOW_PRIVATE_REPOS",
+              "Value": "true"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "MIX_ENV",
+              "Value": "prod"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "mix deps.get"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd /src/ \u0026\u0026 npm install \u0026\u0026 npm run deploy"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mix phx.digest"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mix distillery.release --env=$MIX_ENV"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "if [ -d .git ]; then         mkdir /src/_build/prod/rel/bors/.git \u0026\u0026         git rev-parse --short HEAD \u003e /src/_build/prod/rel/bors/.git/HEAD;     elif [ -n ${SOURCE_COMMIT} ]; then         mkdir /src/_build/prod/rel/bors/.git \u0026\u0026         echo ${SOURCE_COMMIT} \u003e /src/_build/prod/rel/bors/.git/HEAD;     fi"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "debian:stretch-slim",
+      "SourceCode": "FROM debian:stretch-slim",
+      "Platform": "",
+      "From": {
+        "Image": "debian:stretch-slim"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update -q \u0026\u0026 apt-get install -y git-core libssl1.1 curl ca-certificates"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "DOCKERIZE_VERSION",
+              "Value": "v0.6.0"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "curl -Ls https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz |     tar xzv -C /usr/local/bin"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "./script/docker-entrypoint",
+            "/usr/local/bin/bors-ng-entrypoint"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/src/_build/prod/rel/",
+            "/app/"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "LANG",
+              "Value": "C.UTF-8"
+            },
+            {
+              "Key": "LC_ALL",
+              "Value": "C.UTF-8"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PORT",
+              "Value": "4000"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "DATABASE_AUTO_MIGRATE",
+              "Value": "true"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "ALLOW_PRIVATE_REPOS",
+              "Value": "true"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "CmdLine": [
+            "/usr/local/bin/bors-ng-entrypoint"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "CmdLine": [
+            "./bors/bin/bors",
+            "foreground"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "4000"
+          ]
+        }
+      ]
+    }
+  ]
+}

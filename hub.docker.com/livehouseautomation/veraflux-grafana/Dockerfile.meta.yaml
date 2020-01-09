@@ -1,0 +1,150 @@
+MetaArgs: null
+Stages:
+- As: grafana_builder
+  BaseName: ubuntu:bionic
+  Commands:
+  - CmdLine:
+    - apt-get update -y &&     apt-get install -y golang git-sh nodejs npm phantomjs
+      build-essential ca-certificates ruby ruby-dev curl &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOPATH
+      Value: /usr/local/src/grafana
+    Name: env
+  - Name: workdir
+    Path: ${GOPATH}/src/github.com/grafana/
+  - CmdLine:
+    - git clone -v -b v5.1.x https://github.com/grafana/grafana.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${GOPATH}/src/github.com/grafana/grafana
+  - CmdLine:
+    - go run build.go setup && go run build.go build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install -g yarn
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - gem install fpm
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: QT_QPA_PLATFORM
+      Value: offscreen
+    Name: env
+  - CmdLine:
+    - yarn install --pure-lockfile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go run build.go -includeBuildNumber=false pkg-deb
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/lib/grafana-plugins
+  - CmdLine:
+    - git clone https://github.com/pR0Ps/grafana-trackmap-panel.git grafana-trackmap-panel
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/lib/grafana-plugins/grafana-trackmap-panel
+  - CmdLine:
+    - npm install findup-sync &&     npm install grunt-cli &&     npm install &&     npm
+      run build &&     npm run build &&     chown -R 472 /var/lib/grafana-plugins/grafana-trackmap-panel
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:bionic
+  Name: grafana_builder
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic as grafana_builder
+- BaseName: ubuntu:bionic
+  Commands:
+  - Name: volume
+    Volumes:
+    - /var/lib/grafana
+    - /etc/grafana
+    - /var/lib/grafana-plugins
+  - Name: expose
+    Ports:
+    - 3000/tcp
+  - Key: GF_UID
+    Name: arg
+    Value: '"472"'
+  - Key: GF_GID
+    Name: arg
+    Value: '"472"'
+  - Env:
+    - Key: PATH
+      Value: /usr/share/grafana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    - Key: GF_PATHS_CONFIG
+      Value: '"/etc/grafana/grafana.ini"'
+    - Key: GF_PATHS_DATA
+      Value: '"/var/lib/grafana"'
+    - Key: GF_PATHS_HOME
+      Value: '"/usr/share/grafana"'
+    - Key: GF_PATHS_LOGS
+      Value: '"/var/log/grafana"'
+    - Key: GF_PATHS_PLUGINS
+      Value: '"/var/lib/grafana-plugins"'
+    - Key: GF_PATHS_PROVISIONING
+      Value: '"/etc/grafana/provisioning"'
+    Name: env
+  - CmdLine:
+    - apt-get update -y && apt-get install -y tar libfontconfig curl ca-certificates
+      &&  rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /grafana_install
+  - Chown: ""
+    From: grafana_builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/src/grafana/src/github.com/grafana/grafana/dist/*.tar.gz
+    - .
+  - CmdLine:
+    - mkdir -p "$GF_PATHS_HOME/.aws" &&     cd /grafana_install &&     tar xfvz *.tar.gz
+      --strip-components=1 -C "$GF_PATHS_HOME" &&     groupadd -r -g $GF_GID grafana
+      &&     useradd -r -u $GF_UID -g grafana grafana &&     mkdir -p "$GF_PATHS_PROVISIONING/datasources"              "$GF_PATHS_PROVISIONING/dashboards"              "$GF_PATHS_LOGS"              "$GF_PATHS_PLUGINS"              "$GF_PATHS_DATA"
+      &&     cp -v ${GF_PATHS_HOME}/conf/sample.ini ${GF_PATHS_CONFIG} &&     cp -v
+      ${GF_PATHS_HOME}/conf/ldap.toml /etc/grafana/ldap.toml
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: grafana_builder
+    Name: copy
+    SourcesAndDest:
+    - /var/lib/grafana-plugins/grafana-trackmap-panel
+    - ${GF_PATHS_PLUGINS}/grafana-trackmap-panel
+  - CmdLine:
+    - chown -R grafana:grafana "$GF_PATHS_DATA" "$GF_PATHS_HOME/.aws" "$GF_PATHS_LOGS"
+      "$GF_PATHS_PLUGINS" &&     chmod 777 "$GF_PATHS_DATA" "$GF_PATHS_HOME/.aws"
+      "$GF_PATHS_LOGS" "$GF_PATHS_PLUGINS" &&     rm -rf /grafana_install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: grafana/grafana:latest
+    Name: copy
+    SourcesAndDest:
+    - /run.sh
+    - /run.sh
+  - Name: user
+    User: grafana
+  - CmdLine:
+    - /run.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:bionic
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic

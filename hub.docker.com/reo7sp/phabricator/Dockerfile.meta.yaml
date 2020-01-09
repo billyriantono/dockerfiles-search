@@ -1,0 +1,110 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - Maintainer: Oleg Morozenkov
+    Name: maintainer
+  - CmdLine:
+    - "echo \"deb-src http://httpredir.debian.org/debian jessie main\" >> /etc/apt/sources.list
+      && \tapt-get update && \tapt-get install -y sudo ssh git jq supervisor mysql-client
+      uwsgi-plugin-php php5-cli php5-mysql php5-gd php5-curl php5-json php5-apcu python-pygments
+      && \t(test `php -r \"echo extension_loaded('pcntl');\"` -eq \"1\" || (apt-get
+      source php5 && cd `ls -1F | grep '^php5-.*/$'`/ext/pcntl && phpize && ./configure
+      && make && make install)) && \tapt-get clean && \trm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src
+  - CmdLine:
+    - "git clone -b stable --depth 1 https://github.com/phacility/libphutil.git &&
+      \tgit clone -b stable --depth 1 https://github.com/phacility/arcanist.git &&
+      \tgit clone -b stable --depth 1 https://github.com/phacility/phabricator.git
+      && \trm -rf libphutil/.git arcanist/.git phabricator/.git"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/sshd_config
+    - /etc/ssh/sshd_config
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/sudoers
+    - /etc/sudoers
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/supervisor.conf
+    - /etc/supervisor.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/uwsgi.conf
+    - /etc/uwsgi.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/phabricator-ssh-hook.sh
+    - /usr/libexec/phabricator-ssh-hook.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/mysql-wait.sh
+    - /mysql-wait.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - main.sh
+    - /main.sh
+  - CmdLine:
+    - mkdir -p /phabricator-docker/{on_pre_setup,on_post_setup,on_mysql,on_pre_start,on_stop}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/phabricator
+  - CmdLine:
+    - "mkdir -p /var/run/sshd && \tchmod 755 /usr/libexec/phabricator-ssh-hook.sh"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "useradd phabricator-vcs && \tmkdir -p /home/phabricator-vcs && \tchsh -s /bin/sh
+      phabricator-vcs && \tsed -i 's/phabricator-vcs:!!*:/phabricator-vcs:NP:/g' /etc/shadow
+      && \tbin/config set diffusion.ssh-user phabricator-vcs"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "useradd phabricator-daemon && \tchsh -s /bin/sh phabricator-daemon && \tbin/config
+      set phd.user phabricator-daemon"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "bin/config set phd.taskmasters 1 && \tbin/config set repository.default-local-path
+      /var/lib/phabricator/repo && \tbin/config set storage.local-disk.path /var/lib/phabricator/storage
+      && \tbin/config set pygments.enabled true"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/lib/phabricator
+  - Name: expose
+    Ports:
+    - "22"
+    - "80"
+  - CmdLine:
+    - bash
+    - /main.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

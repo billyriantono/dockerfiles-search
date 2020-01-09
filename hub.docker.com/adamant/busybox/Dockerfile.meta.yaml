@@ -1,0 +1,116 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:jessie-slim
+  Commands:
+  - Key: ARCH
+    Name: arg
+    Value: x86_64
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - Key: GLIBC_VER
+    Name: arg
+    Value: "2.25"
+  - Key: BUSYB_VER
+    Name: arg
+    Value: 1.26.2
+  - Key: SU_EXEC_VER
+    Name: arg
+    Value: v0.2
+  - Key: TINI_VER
+    Name: arg
+    Value: v0.14.0
+  - Key: PREFIX
+    Name: arg
+    Value: /output
+  - Name: workdir
+    Path: $PREFIX
+  - CmdLine:
+    - apt-get update -qy &&     apt-get install -qy curl build-essential gawk linux-libc-dev
+      &&     mkdir -p bin dev etc home lib proc root sbin tmp usr/bin usr/sbin usr/lib
+      var &&     ln -sv lib lib64
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L https://busybox.net/downloads/binaries/$BUSYB_VER-defconfig-multiarch/busybox-$ARCH
+      > bin/busybox &&     curl -L https://github.com/javabean/su-exec/releases/download/${SU_EXEC_VER}/su-exec.amd64
+      > sbin/su-exec &&     curl -L https://github.com/krallin/tini/releases/download/${TINI_VER}/tini-amd64
+      > sbin/tini &&     chmod +x bin/busybox sbin/su-exec sbin/tini &&     bin/busybox
+      --list-full | xargs -i ln -s /bin/busybox "$PREFIX/{}"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - Key: CFLAGS
+    Name: arg
+    Value: '"-Os -pipe -fstack-protector-strong"'
+  - Key: LDFLAGS
+    Name: arg
+    Value: '"-Wl,-O1,--sort-common -Wl,-s"'
+  - CmdLine:
+    - "curl -L https://ftp.gnu.org/gnu/glibc/glibc-$GLIBC_VER.tar.xz | tar xJ &&     mkdir
+      -p glibc-build && cd glibc-build && \t    echo \"slibdir=/lib\" >> configparms
+      &&     echo \"rtlddir=/lib\" >> configparms &&     echo \"sbindir=/bin\" >>
+      configparms &&     echo \"rootsbindir=/bin\" >> configparms && \t    rm -rf
+      /usr/include/x86_64-linux-gnu/c++ &&     ln -s /usr/include/x86_64-linux-gnu/*
+      /usr/include &&         ../glibc-$GLIBC_VER/configure         --prefix=\"$(pwd)/root\"
+      \        --libdir=\"$(pwd)/root/lib\"         --libexecdir=/lib         --with-headers=/usr/include
+      \        --enable-add-ons         --enable-obsolete-rpc         --enable-kernel=3.10.0
+      \        --enable-bind-now         --disable-profile         --enable-stackguard-randomization
+      \        --enable-stack-protector=strong         --enable-lock-elision         --enable-multi-arch
+      \        --disable-werror &&     make && make install_root=$(pwd)/out install"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -d glibc-build/out/lib/*.so "$PREFIX/lib" &&     echo '/usr/lib' > "$PREFIX/etc/ld.so.conf"
+      &&     ldconfig -r "$PREFIX"
+    Name: run
+    PrependShell: true
+  - Key: LIBRE_VER
+    Name: arg
+    Value: 2.5.4
+  - CmdLine:
+    - mkdir -p libressl/build && cd libressl &&     curl -L https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-${LIBRE_VER}.tar.gz         |
+      tar xz --strip-components=1 &&     ./config --prefix="$(pwd)/build" &&     make
+      && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -d libressl/build/lib/*.so* "$PREFIX/lib" &&     cp -d libressl/build/bin/openssl
+      "$PREFIX/bin" &&     ln -s /lib/libssl.so "$PREFIX/libssl.so.1.0.0" &&     ln
+      -s /lib/libtls.so "$PREFIX/libtls.so.1.0.0" &&     ln -s /lib/libcrypto.so "$PREFIX/libcrypto.so.1.0.0"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $PREFIX
+  - CmdLine:
+    - echo 'root:x:0:0:root:/root:/bin/sh'\\n         'nobody:x:65534:65534:nobody:/:/sbin/nologin'         >
+      etc/passwd &&     echo 'root:::0:::::\nnobody:!::0:::::'         > etc/shadow
+      &&     echo 'root:x:0:root\nnogroup:x:65533\nnobody:x:65544'         > etc/group
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:jessie-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:jessie-slim as builder
+- BaseName: scratch
+  Commands:
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /output/
+    - /
+  - CmdLine:
+    - sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

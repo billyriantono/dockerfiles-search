@@ -1,0 +1,183 @@
+MetaArgs: null
+Stages:
+- As: airflow-base
+  BaseName: python:3.6-slim
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Anders Åslund <anders.aslund@teknoir.se>"'
+    Name: label
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: TERM
+      Value: linux
+    Name: env
+  - Key: AIRFLOW_VERSION
+    Name: arg
+    Value: 1.10.4
+  - Key: AIRFLOW_DEPS
+    Name: arg
+    Value: '""'
+  - Key: PYTHON_DEPS
+    Name: arg
+    Value: '""'
+  - Env:
+    - Key: AIRFLOW_HOME
+      Value: /usr/local/airflow
+    Name: env
+  - Env:
+    - Key: AIRFLOW_GPL_UNIDECODE
+      Value: "yes"
+    Name: env
+  - Env:
+    - Key: LANGUAGE
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: LC_CTYPE
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: LC_MESSAGES
+      Value: en_US.UTF-8
+    Name: env
+  - CmdLine:
+    - set -ex     && buildDeps='         freetds-dev         python3-dev         libkrb5-dev         libsasl2-dev         libssl-dev         libffi-dev         libpq-dev         git     '     &&
+      apt-get update -yqq     && apt-get upgrade -yqq     && apt-get install -yqq
+      --no-install-recommends         $buildDeps         freetds-bin         build-essential         python3-pip         python3-requests         default-libmysqlclient-dev         apt-utils         curl         rsync         netcat         locales     &&
+      sed -i 's/^# en_US.UTF-8 UTF-8$/en_US.UTF-8 UTF-8/g' /etc/locale.gen     &&
+      locale-gen     && update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8     && useradd
+      -ms /bin/bash -d ${AIRFLOW_HOME} airflow     && pip install -U pip setuptools
+      wheel     && pip install pytz     && pip install pyOpenSSL     && pip install
+      ndg-httpsclient     && pip install pyasn1     && if [ "$AIRFLOW_VERSION" = "master"
+      ]; then           pip3.6 install git+https://github.com/apache/incubator-airflow.git@master#egg=apache-airflow[crypto,postgres,hive,jdbc,kubernetes,async,hdfs,password,ssh${AIRFLOW_DEPS:+,}${AIRFLOW_DEPS}];       elif
+      [ "$AIRFLOW_VERSION" = "develop" ]; then           pip3.6 install git+https://github.com/tekn0ir/incubator-airflow.git@patch_try_number#egg=apache-airflow[crypto,postgres,hive,jdbc,kubernetes,async,hdfs,password,ssh${AIRFLOW_DEPS:+,}${AIRFLOW_DEPS}];       elif
+      [ -n "$AIRFLOW_VERSION" ]; then           pip3.6 install --no-cache-dir apache-airflow[crypto,postgres,hive,jdbc,kubernetes,async,hdfs,password,ssh${AIRFLOW_DEPS:+,}${AIRFLOW_DEPS}]==$AIRFLOW_VERSION;       else           pip3.6
+      install --no-cache-dir apache-airflow[crypto,postgres,hive,jdbc,kubernetes,async,hdfs,password,ssh${AIRFLOW_DEPS:+,}${AIRFLOW_DEPS}];       fi    &&
+      if [ -n "${PYTHON_DEPS}" ]; then pip install ${PYTHON_DEPS}; fi     && apt-get
+      purge --auto-remove -yqq $buildDeps     && apt-get autoremove -yqq --purge     &&
+      apt-get clean     && rm -rf         /var/lib/apt/lists/*         /tmp/*         /var/tmp/*         /usr/share/man         /usr/share/doc         /usr/share/doc-base
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - 'chown -R airflow: ${AIRFLOW_HOME}'
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "5555"
+    - "8080"
+    - "8793"
+  - Name: user
+    User: airflow
+  - Name: workdir
+    Path: ${AIRFLOW_HOME}
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - webserver
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3.6-slim
+  Name: airflow-base
+  Platform: ""
+  SourceCode: FROM python:3.6-slim as airflow-base
+- As: airflow-rs
+  BaseName: airflow-base
+  Commands:
+  - Name: user
+    User: root
+  - CmdLine:
+    - set -ex     && mkdir -p /usr/share/man/man1     && apt-get update -yqq     &&
+      apt-get upgrade -yqq     && apt-get install -yqq --no-install-recommends         git         openjdk-11-jre-headless     &&
+      pip install prometheus_client     && pip install awscli     && pip install JayDeBeApi==1.1.1     &&
+      apt-get autoremove -yqq --purge     && apt-get clean     && rm -rf         /var/lib/apt/lists/*         /tmp/*         /var/tmp/*         /usr/share/man         /usr/share/doc         /usr/share/doc-base
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i.bak s/"supports_autocommit = True"/"supports_autocommit = False"/ /usr/local/lib/python3.6/site-packages/airflow/hooks/jdbc_hook.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'sed -i.bak s@"''AIRFLOW__CORE__DAGS_FOLDER'': ''/tmp/dags'',"@"''AIRFLOW__CORE__DAGS_FOLDER'':
+      ''/usr/local/airflow/dags'',"@ /usr/local/lib/python3.6/site-packages/airflow/contrib/kubernetes/worker_configuration.py'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'sed -i.bak s@"''mountPath'': dag_volume_mount_path,"@"''mountPath'': ''/tmp/dags'',"@
+      /usr/local/lib/python3.6/site-packages/airflow/contrib/kubernetes/worker_configuration.py'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i.bak s/"if self.kube_config.dags_volume_claim:"/"if True:"/ /usr/local/lib/python3.6/site-packages/airflow/contrib/kubernetes/worker_configuration.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${AIRFLOW_HOME}/plugins && curl -L -s -N https://github.com/epoch8/airflow-exporter/raw/master/airflow_exporter/prometheus_exporter.py
+      -o ${AIRFLOW_HOME}/plugins/prometheus_exporter.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${AIRFLOW_HOME}/drivers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fsSL https://s3.amazonaws.com/redshift-downloads/drivers/jdbc/1.2.15.1025/RedshiftJDBC42-no-awssdk-1.2.15.1025.jar
+      -o ${AIRFLOW_HOME}/drivers/RedshiftJDBC42-no-awssdk-1.2.15.1025.jar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R airflow.airflow ${AIRFLOW_HOME}
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: airflow
+  From:
+    Stage:
+      Index: 0
+      Named: airflow-base
+  Name: airflow-rs
+  Platform: ""
+  SourceCode: FROM airflow-base as airflow-rs
+- As: airflow-example-dags
+  BaseName: airflow-rs
+  Commands:
+  - CmdLine:
+    - set -ex     && mkdir -p ${AIRFLOW_HOME}/dags     && cd /usr/local/airflow/dags     &&
+      curl -L -s -N https://github.com/apache/incubator-airflow/raw/master/airflow/contrib/example_dags/example_kubernetes_executor.py
+      -o example_kubernetes_executor.py     && curl -L -s -N https://github.com/apache/incubator-airflow/raw/master/airflow/contrib/example_dags/example_kubernetes_operator.py
+      -o example_kubernetes_operator.py     && curl -L -s -N https://github.com/apache/incubator-airflow/raw/master/airflow/example_dags/example_bash_operator.py
+      -o example_bash_operator.py     && curl -L -s -N https://github.com/apache/incubator-airflow/raw/master/airflow/example_dags/example_branch_operator.py
+      -o example_branch_operator.py     && curl -L -s -N https://github.com/apache/incubator-airflow/raw/master/airflow/example_dags/example_python_operator.py
+      -o example_python_operator.py     && curl -L -s -N https://github.com/apache/incubator-airflow/raw/master/airflow/example_dags/example_latest_only.py
+      -o example_latest_only.py     && curl -L -s -N https://github.com/apache/incubator-airflow/raw/master/airflow/example_dags/example_trigger_controller_dag.py
+      -o example_trigger_controller_dag.py
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: airflow-rs
+  Name: airflow-example-dags
+  Platform: ""
+  SourceCode: FROM airflow-rs as airflow-example-dags

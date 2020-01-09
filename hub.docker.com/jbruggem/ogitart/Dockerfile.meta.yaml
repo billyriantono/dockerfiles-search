@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- As: tini
+  BaseName: alpine
+  Commands:
+  - Env:
+    - Key: TINI_VERSION
+      Value: v0.18.0
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static
+    - /tini
+  - CmdLine:
+    - chmod +x /tini
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: tini
+  Platform: ""
+  SourceCode: FROM alpine AS tini
+- As: build-ogitart
+  BaseName: node:10.12.0-stretch
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /opt/ogitart
+  - Name: workdir
+    Path: /opt/ogitart
+  - CmdLine:
+    - apt-get update     && apt-get install -y openjdk-8-jre-headless     && npm install     &&
+      ./build.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.12.0-stretch
+  Name: build-ogitart
+  Platform: ""
+  SourceCode: FROM node:10.12.0-stretch as build-ogitart
+- As: final
+  BaseName: node:10.12.0-alpine
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - Chown: ""
+    From: tini
+    Name: copy
+    SourcesAndDest:
+    - /tini
+    - /tini
+  - Chown: ""
+    From: build-ogitart
+    Name: copy
+    SourcesAndDest:
+    - /opt/ogitart
+    - /opt/ogitart
+  - Name: workdir
+    Path: /opt/ogitart
+  - Name: expose
+    Ports:
+    - "8547"
+  - CmdLine:
+    - /tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - node
+    - ogitart.js
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: node:10.12.0-alpine
+  Name: final
+  Platform: ""
+  SourceCode: FROM node:10.12.0-alpine as final

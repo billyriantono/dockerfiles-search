@@ -1,0 +1,125 @@
+MetaArgs:
+- DefaultValue: "7.3"
+  Key: PHP_VERSION
+  ProvidedValue: null
+  Value: "7.3"
+- DefaultValue: "1.17"
+  Key: NGINX_VERSION
+  ProvidedValue: null
+  Value: "1.17"
+Stages:
+- As: silverstripe_php
+  BaseName: php:${PHP_VERSION}-fpm-alpine
+  Commands:
+  - CmdLine:
+    - "set -xe     && apk add --no-cache --update         bash         freetype         icu
+      \        libjpeg         libpng         libxpm         libzip         tidyhtml
+      \    && apk add --no-cache --virtual .php-deps         make     && apk add --no-cache
+      --virtual .build-deps         $PHPIZE_DEPS         freetype-dev         icu-dev
+      \        libjpeg-turbo-dev         libpng-dev         libxpm-dev         libzip-dev
+      \        tidyhtml-dev         g++     && docker-php-ext-configure gd --with-png-dir=/usr/include
+      --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/      && docker-php-ext-configure
+      intl     && docker-php-ext-configure mysqli --with-mysqli=mysqlnd     && docker-php-ext-configure
+      pdo_mysql --with-pdo-mysql=mysqlnd     && docker-php-ext-install -j$(nproc)
+      \ \t\tintl  \t\tgd  \t\tmysqli  \t\tpdo  \t\tpdo_mysql  \t\ttidy     && docker-php-ext-enable
+      \ \t\tintl  \t\tgd  \t\tmysqli  \t\tpdo  \t\tpdo_mysql  \t\ttidy     && apk
+      del .build-deps     && rm -rf /tmp/* /usr/local/lib/php/doc/* /var/cache/apk/*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/php/docker-php-entrypoint
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/php/php.ini
+    - ${PHP_INI_DIR}/php.ini
+  - Chown: ""
+    From: composer:latest
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/composer
+    - /usr/bin/composer
+  - Env:
+    - Key: COMPOSER_ALLOW_SUPERUSER
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - "set -eux; \tcomposer global require \"hirak/prestissimo:^0.3\" --prefer-dist
+      --no-progress --no-suggest --classmap-authoritative; \tcomposer clear-cache"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: '"${PATH}:/root/.composer/vendor/bin"'
+    Name: env
+  - Name: workdir
+    Path: /srv/silverstripe
+  - Key: SS_ENVIRONMENT_TYPE
+    Name: arg
+    Value: live
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - composer.json
+    - composer.lock
+    - ./
+  - CmdLine:
+    - "set -eux; \tcomposer install --prefer-dist --optimize-autoloader --no-scripts
+      --no-progress --no-suggest; \tcomposer clear-cache"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./public
+    - ./public
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./app
+    - ./app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./themes
+    - ./themes
+  - CmdLine:
+    - /usr/bin/composer vendor-expose copy
+    Name: run
+    PrependShell: true
+  From:
+    Image: php:${PHP_VERSION}-fpm-alpine
+  Name: silverstripe_php
+  Platform: ""
+  SourceCode: FROM php:${PHP_VERSION}-fpm-alpine AS silverstripe_php
+- As: silverstripe_nginx
+  BaseName: nginx:${NGINX_VERSION}-alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/nginx/conf.d/default.conf
+    - /etc/nginx/conf.d/
+  - Name: workdir
+    Path: /srv/silverstripe
+  - Chown: ""
+    From: silverstripe_php
+    Name: copy
+    SourcesAndDest:
+    - /srv/silverstripe/public
+    - public/
+  From:
+    Image: nginx:${NGINX_VERSION}-alpine
+  Name: silverstripe_nginx
+  Platform: ""
+  SourceCode: FROM nginx:${NGINX_VERSION}-alpine AS silverstripe_nginx

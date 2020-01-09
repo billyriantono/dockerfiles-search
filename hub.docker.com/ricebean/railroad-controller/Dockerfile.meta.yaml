@@ -1,0 +1,125 @@
+MetaArgs: null
+Stages:
+- As: client-builder
+  BaseName: trion/ng-cli
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/main/client
+    - /app
+  - CmdLine:
+    - ls -l
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npx ng version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npx ng build --prod=true --outputPath=/app/static --optimization=true
+    Name: run
+    PrependShell: true
+  From:
+    Image: trion/ng-cli
+  Name: client-builder
+  Platform: ""
+  SourceCode: FROM trion/ng-cli as client-builder
+- As: java-builder
+  BaseName: openjdk:11-jdk-slim
+  Commands:
+  - CmdLine:
+    - mkdir -p /work/src     && mkdir -p /work/gradle     && mkdir -p /work/.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y git     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .git
+    - /work/.git
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /work/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - gradle
+    - /work/gradle
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build.gradle
+    - settings.gradle
+    - gradlew
+    - /work/
+  - CmdLine:
+    - rm -rf /work/src/main/resources/static
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: client-builder
+    Name: copy
+    SourcesAndDest:
+    - /app/static
+    - /work/src/main/resources/static
+  - Name: workdir
+    Path: /work
+  - CmdLine:
+    - ./gradlew build --no-daemon
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:11-jdk-slim
+  Name: java-builder
+  Platform: ""
+  SourceCode: FROM openjdk:11-jdk-slim as java-builder
+- BaseName: openjdk:11-jre-slim
+  Commands:
+  - Env:
+    - Key: TTY
+      Value: '"/opt/ttyV0"'
+    Name: env
+  - Env:
+    - Key: IP_BASE_STATION
+      Value: '"192.168.42.240:2001"'
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y socat     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: java-builder
+    Name: copy
+    SourcesAndDest:
+    - /work/build/libs/*.jar
+    - /opt/RailwayController.jar
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: workdir
+    Path: /opt
+  - CmdLine:
+    - socat pty,link=$TTY,nonblock,raw,echo=0,ignoreof,waitslave tcp:$IP_BASE_STATION
+      & exec java -Xmx4g -jar /opt/RailwayController.jar
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: openjdk:11-jre-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:11-jre-slim

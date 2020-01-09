@@ -1,0 +1,76 @@
+MetaArgs: null
+Stages:
+- BaseName: huijitec/alpine:3.10
+  Commands:
+  - CmdLine:
+    - addgroup -S -g 1000 redis && adduser -S -G redis -u 999 redis
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apk add --no-cache \t\t'su-exec>=0.2' \t\ttzdata"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: REDIS_VERSION
+      Value: 5.0.6
+    Name: env
+  - Env:
+    - Key: REDIS_DOWNLOAD_URL
+      Value: http://download.redis.io/releases/redis-5.0.6.tar.gz
+    Name: env
+  - Env:
+    - Key: REDIS_DOWNLOAD_SHA
+      Value: 6624841267e142c5d5d5be292d705f8fb6070677687c5aad1645421a936d22b3
+    Name: env
+  - CmdLine:
+    - "set -eux; \t\tapk add --no-cache --virtual .build-deps \t\tcoreutils \t\tgcc
+      \t\tlinux-headers \t\tmake \t\tmusl-dev \t; \t\twget -O redis.tar.gz \"$REDIS_DOWNLOAD_URL\";
+      \techo \"$REDIS_DOWNLOAD_SHA *redis.tar.gz\" | sha256sum -c -; \tmkdir -p /usr/src/redis;
+      \ttar -xzf redis.tar.gz -C /usr/src/redis --strip-components=1; \trm redis.tar.gz;
+      \t\tgrep -q '^#define CONFIG_DEFAULT_PROTECTED_MODE 1$' /usr/src/redis/src/server.h;
+      \tsed -ri 's!^(#define CONFIG_DEFAULT_PROTECTED_MODE) 1$!\\1 0!' /usr/src/redis/src/server.h;
+      \tgrep -q '^#define CONFIG_DEFAULT_PROTECTED_MODE 0$' /usr/src/redis/src/server.h;
+      \t\tmake -C /usr/src/redis -j \"$(nproc)\"; \tmake -C /usr/src/redis install;
+      \t\tserverMd5=\"$(md5sum /usr/local/bin/redis-server | cut -d' ' -f1)\"; export
+      serverMd5; \tfind /usr/local/bin/redis* -maxdepth 0 \t\t-type f -not -name redis-server
+      \t\t-exec sh -eux -c ' \t\t\tmd5=\"$(md5sum \"$1\" | cut -d\" \" -f1)\"; \t\t\ttest
+      \"$md5\" = \"$serverMd5\"; \t\t' -- '{}' ';' \t\t-exec ln -svfT 'redis-server'
+      '{}' ';' \t; \t\trm -r /usr/src/redis; \t\trunDeps=\"$( \t\tscanelf --needed
+      --nobanner --format '%n#p' --recursive /usr/local \t\t\t| tr ',' '\\n' \t\t\t|
+      sort -u \t\t\t| awk 'system(\"[ -e /usr/local/lib/\" $1 \" ]\") == 0 { next
+      } { print \"so:\" $1 }' \t)\"; \tapk add --no-network --virtual .redis-rundeps
+      $runDeps; \tapk del --no-network .build-deps; \t\tredis-cli --version; \tredis-server
+      --version"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /data && chown redis:redis /data
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: workdir
+    Path: /data
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "6379"
+  - CmdLine:
+    - redis-server
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: huijitec/alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM huijitec/alpine:3.10

@@ -1,0 +1,283 @@
+MetaArgs: null
+Stages:
+- As: buster-mcode
+  BaseName: ghdl/pkg:buster-mcode
+  Commands: null
+  From:
+    Image: ghdl/pkg:buster-mcode
+  Name: buster-mcode
+  Platform: ""
+  SourceCode: FROM ghdl/pkg:buster-mcode AS buster-mcode
+- As: do-ghdl
+  BaseName: openjdk:8-jdk-stretch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: ”carlos.silva@rapttouch.com”
+    Name: label
+  - Name: user
+    User: root
+  - CmdLine:
+    - echo '# deb http://snapshot.debian.org/archive/debian/20190610T000000Z buster
+      main' >> /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'deb http://deb.debian.org/debian buster main' >> /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo '# deb http://snapshot.debian.org/archive/debian-security/20190610T000000Z
+      buster/updates main' >> /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'deb http://security.debian.org/debian-security buster/updates main' >>
+      /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo '# deb http://snapshot.debian.org/archive/debian/20190610T000000Z buster-updates
+      main' >> /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'deb http://deb.debian.org/debian buster-updates main' >> /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${user}
+  - CmdLine:
+    - apt-get update -qq && apt-get -y install libgnat-8 gcc libc6-dev curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get autoclean -y && apt-get clean -y && apt-get autoremove -y
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: buster-mcode
+    Name: copy
+    SourcesAndDest:
+    - ./*.tgz
+    - /tmp/
+  - CmdLine:
+    - GHDL_TGZ=`ls /tmp/ghdl-*`  && tar -xzf "$GHDL_TGZ" -C /usr/local  && rm -f "$GHDL_TGZ"
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8-jdk-stretch
+  Name: do-ghdl
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-stretch AS do-ghdl
+- As: do_python
+  BaseName: do-ghdl
+  Commands:
+  - CmdLine:
+    - apt-get -y install python3 python3-pip
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: do-ghdl
+  Name: do_python
+  Platform: ""
+  SourceCode: FROM do-ghdl AS do_python
+- As: do_vunit
+  BaseName: do_python
+  Commands:
+  - CmdLine:
+    - pip3 install vunit_hdl
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 2
+      Named: do_python
+  Name: do_vunit
+  Platform: ""
+  SourceCode: FROM do_python AS do_vunit
+- As: do-jenkins
+  BaseName: do_vunit
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get upgrade -y && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Key: user
+    Name: arg
+    Value: jenkins
+  - Key: group
+    Name: arg
+    Value: jenkins
+  - Key: uid
+    Name: arg
+    Value: "1000"
+  - Key: gid
+    Name: arg
+    Value: "1000"
+  - Key: http_port
+    Name: arg
+    Value: "8080"
+  - Key: agent_port
+    Name: arg
+    Value: "50000"
+  - Key: JENKINS_HOME
+    Name: arg
+    Value: /var/jenkins_home
+  - Env:
+    - Key: JENKINS_HOME
+      Value: $JENKINS_HOME
+    Name: env
+  - Env:
+    - Key: JENKINS_SLAVE_AGENT_PORT
+      Value: ${agent_port}
+    Name: env
+  - Env:
+    - Key: JAVA_OPTS
+      Value: '"-Xms1024m -Xmx1024m"'
+    Name: env
+  - CmdLine:
+    - mkdir -p $JENKINS_HOME   && chown ${uid}:${gid} $JENKINS_HOME   && groupadd
+      -g ${gid} ${group}   && useradd -d "$JENKINS_HOME" -u ${uid} -g ${gid} -m -s
+      /bin/bash ${user}
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - $JENKINS_HOME
+  - CmdLine:
+    - mkdir -p /usr/share/jenkins/ref/init.groovy.d
+    Name: run
+    PrependShell: true
+  - Key: TINI_VERSION
+    Name: arg
+    Value: v0.16.1
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tini_pub.gpg
+    - ${JENKINS_HOME}/tini_pub.gpg
+  - CmdLine:
+    - curl -fsSL https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-$(dpkg
+      --print-architecture) -o /sbin/tini   && curl -fsSL https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-$(dpkg
+      --print-architecture).asc -o /sbin/tini.asc   && gpg --no-tty --import ${JENKINS_HOME}/tini_pub.gpg   &&
+      gpg --verify /sbin/tini.asc   && rm -rf /sbin/tini.asc /root/.gnupg   && chmod
+      +x /sbin/tini
+    Name: run
+    PrependShell: true
+  - Key: JENKINS_VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: JENKINS_VERSION
+      Value: ${JENKINS_VERSION:-2.176.2}
+    Name: env
+  - Key: JENKINS_SHA
+    Name: arg
+    Value: 33a6c3161cf8de9c8729fd83914d781319fd1569acf487c7b1121681dba190a5
+  - Key: JENKINS_URL
+    Name: arg
+    Value: https://repo.jenkins-ci.org/public/org/jenkins-ci/main/jenkins-war/${JENKINS_VERSION}/jenkins-war-${JENKINS_VERSION}.war
+  - CmdLine:
+    - curl -fsSL ${JENKINS_URL} -o /usr/share/jenkins/jenkins.war   && echo "${JENKINS_SHA}  /usr/share/jenkins/jenkins.war"
+      | sha256sum -c -
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JENKINS_UC
+      Value: https://updates.jenkins.io
+    Name: env
+  - Env:
+    - Key: JENKINS_UC_EXPERIMENTAL
+      Value: https://updates.jenkins.io/experimental
+    Name: env
+  - Env:
+    - Key: JENKINS_INCREMENTALS_REPO_MIRROR
+      Value: https://repo.jenkins-ci.org/incrementals
+    Name: env
+  - CmdLine:
+    - chown -R ${user} "$JENKINS_HOME" /usr/share/jenkins/ref
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - ${http_port}
+  - Name: expose
+    Ports:
+    - ${agent_port}
+  - Env:
+    - Key: COPY_REFERENCE_FILE_LOG
+      Value: $JENKINS_HOME/copy_reference_file.log
+    Name: env
+  - Name: user
+    User: root
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - jenkins-support
+    - /usr/local/bin/jenkins-support
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - jenkins.sh
+    - /usr/local/bin/jenkins.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tini-shim.sh
+    - /bin/tini
+  - CmdLine:
+    - chown -R ${user} /usr/local/bin/jenkins.sh && chmod +x /usr/local/bin/jenkins.sh
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${user}
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /usr/local/bin/jenkins.sh
+    Name: entrypoint
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - plugins.sh
+    - /usr/local/bin/plugins.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - install-plugins.sh
+    - /usr/local/bin/install-plugins.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - plugins.txt
+    - /usr/share/jenkins/ref/plugins.txt
+  - Name: user
+    User: root
+  - CmdLine:
+    - chmod +x /usr/local/bin/install-plugins.sh
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${user}
+  - CmdLine:
+    - /usr/local/bin/install-plugins.sh < /usr/share/jenkins/ref/plugins.txt
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 3
+      Named: do_vunit
+  Name: do-jenkins
+  Platform: ""
+  SourceCode: FROM do_vunit AS do-jenkins

@@ -1,0 +1,124 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: erlang:21-alpine
+  Commands:
+  - Name: workdir
+    Path: /vernemq-build
+  - Key: VERNEMQ_GIT_REF
+    Name: arg
+    Value: 1.8.0
+  - Key: TARGET
+    Name: arg
+    Value: rel
+  - Key: VERNEMQ_REPO
+    Name: arg
+    Value: https://github.com/vernemq/vernemq.git
+  - Env:
+    - Key: DOCKER_VERNEMQ_KUBERNETES_LABEL_SELECTOR
+      Value: '"app=vernemq"'
+    - Key: DOCKER_VERNEMQ_LOG__CONSOLE
+      Value: console
+    Name: env
+  - CmdLine:
+    - apk --no-cache --update --available upgrade &&     apk add --no-cache git autoconf
+      build-base bsd-compat-headers cmake openssl-dev bash &&     git clone -b $VERNEMQ_GIT_REF
+      --single-branch --depth 1 $VERNEMQ_REPO .
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/build.sh
+    - build.sh
+  - CmdLine:
+    - ./build.sh $TARGET
+    Name: run
+    PrependShell: true
+  From:
+    Image: erlang:21-alpine
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM erlang:21-alpine AS build-env
+- BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk --no-cache --update --available upgrade &&     apk add --no-cache ncurses-libs
+      openssl libstdc++ jq curl bash &&     addgroup --gid 10000 vernemq &&     adduser
+      --uid 10000 -H -D -G vernemq -h /vernemq vernemq &&     install -d -o vernemq
+      -g vernemq /vernemq
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DOCKER_VERNEMQ_KUBERNETES_LABEL_SELECTOR
+      Value: '"app=vernemq"'
+    - Key: DOCKER_VERNEMQ_LOG__CONSOLE
+      Value: console
+    - Key: PATH
+      Value: '"/vernemq/bin:$PATH"'
+    Name: env
+  - Name: workdir
+    Path: /vernemq
+  - Chown: 10000:10000
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/vernemq.sh
+    - /usr/sbin/start_vernemq
+  - Chown: 10000:10000
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/vm.args
+    - /vernemq/etc/vm.args
+  - Chown: 10000:10000
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /vernemq-build/release
+    - /vernemq
+  - CmdLine:
+    - ln -s /vernemq/etc /etc/vernemq &&     ln -s /vernemq/data /var/lib/vernemq
+      &&     ln -s /vernemq/log /var/log/vernemq
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "1883"
+    - "4369"
+    - "44053"
+    - "8080"
+    - "8883"
+    - "8888"
+    - "9100"
+    - "9101"
+    - "9102"
+    - "9103"
+    - "9104"
+    - "9105"
+    - "9106"
+    - "9107"
+    - "9108"
+    - "9109"
+  - Name: volume
+    Volumes:
+    - /vernemq/log
+    - /vernemq/data
+    - /vernemq/etc
+  - Health:
+      Test:
+      - CMD-SHELL
+      - vernemq ping | grep -q pong
+    Name: healthcheck
+  - Name: user
+    User: vernemq
+  - CmdLine:
+    - start_vernemq
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

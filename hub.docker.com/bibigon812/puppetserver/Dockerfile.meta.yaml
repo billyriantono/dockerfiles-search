@@ -1,0 +1,115 @@
+MetaArgs:
+- DefaultValue: xenial
+  Key: code_name
+  ProvidedValue: null
+  Value: xenial
+Stages:
+- BaseName: ubuntu:${code_name}
+  Commands:
+  - Env:
+    - Key: CACHE_DIR
+      Value: '"/var/cache/r10k"'
+    - Key: CODE_NAME
+      Value: ${code_name:-xenial}
+    - Key: DUMB_INIT_VERSION
+      Value: '"1.2.1"'
+    - Key: ENVIRONMENTS_BASE_DIR
+      Value: '"/etc/puppetlabs/code/environments"'
+    - Key: GIT_TEMP_DIR
+      Value: '"/tmp/git"'
+    - Key: GIT_TIMEOUT
+      Value: "30"
+    - Key: HEALTHCHECK_ENVIRONMENT
+      Value: '"production"'
+    - Key: JAVA_ARGS
+      Value: '"-Xms1g -Xmx1g"'
+    - Key: PATH
+      Value: /opt/puppetlabs/server/bin:/opt/puppetlabs/puppet/bin:/opt/puppetlabs/bin:$PATH
+    - Key: R10K_CONFIG_DIR
+      Value: '"/etc/puppetlabs/r10k"'
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get install -y wget &&     wget https://apt.puppetlabs.com/puppet5-release-"$CODE_NAME".deb
+      &&     wget https://github.com/Yelp/dumb-init/releases/download/v"$DUMB_INIT_VERSION"/dumb-init_"$DUMB_INIT_VERSION"_amd64.deb
+      &&     dpkg -i puppet5-release-"$CODE_NAME".deb &&     dpkg -i dumb-init_"$DUMB_INIT_VERSION"_amd64.deb
+      &&     rm puppet5-release-"$CODE_NAME".deb dumb-init_"$DUMB_INIT_VERSION"_amd64.deb
+      &&     apt-get update &&     apt-get install --no-install-recommends --assume-yes
+      git puppetserver &&     apt-get clean &&     rm -rf /var/lib/apt/lists/* &&     gem
+      install --no-rdoc --no-ri librarian-puppet &&     gem install --no-rdoc --no-ri
+      r10k &&     rm -rf /usr/share/man
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - puppetserver
+    - /etc/default/puppetserver
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - auth.conf
+    - /etc/puppetlabs/puppetserver/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - logback.xml
+    - /etc/puppetlabs/puppetserver/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - request-logging.xml
+    - /etc/puppetlabs/puppetserver/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - init.rb
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /
+  - CmdLine:
+    - puppet config set autosign true --section master
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8140"
+  - CmdLine:
+    - dumb-init
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - foreground
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 10000000000
+      Retries: 90
+      Test:
+      - CMD-SHELL
+      - 'curl --fail -H ''Accept: pson''     --resolve ''puppet:8140:127.0.0.1''     --cert   $(puppet
+        config print hostcert)     --key    $(puppet config print hostprivkey)     --cacert
+        $(puppet config print localcacert)     https://puppet:8140/${HEALTHCHECK_ENVIRONMENT}/status/test     |  grep
+        -q ''"is_alive":true''     || exit 1'
+      Timeout: 10000000000
+    Name: healthcheck
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Dockerfile
+    - /
+  From:
+    Image: ubuntu:${code_name}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:${code_name}

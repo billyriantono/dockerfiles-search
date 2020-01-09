@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - Maintainer: Dino.Korah@RedMatter.com
+    Name: maintainer
+  - Env:
+    - Key: TZ
+      Value: '"Europe/London"'
+    - Key: BITBUCKET_USER
+      Value: daemon
+    - Key: BITBUCKET_GROUP
+      Value: daemon
+    - Key: BITBUCKET_BACKUP_HOME
+      Value: /app/atlassian/bitbucket/backup
+    - Key: BITBUCKET_BACKUP_USER
+      Value: backup
+    - Key: BITBUCKET_BACKUP_PASS
+      Value: letmein
+    - Key: BITBUCKET_URL
+      Value: http://bitbucket
+    - Key: MYSQL_HOST
+      Value: mysql
+    - Key: MYSQL_DATABASE
+      Value: bitbucket
+    - Key: MYSQL_USER
+      Value: atlbitbucket
+    - Key: MYSQL_PASSWORD
+      Value: letmein
+    Name: env
+  - Env:
+    - Key: BITBUCKET_BACKUP_LOG
+      Value: ${BITBUCKET_BACKUP_HOME}/log/bitbucket-backup.log
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://bitbucket.org/redmatter-uk/atlassian-bitbucket-diy-backup/get/b51c17ca285b.zip
+    - /tmp/files.zip
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start-cron.sh
+    - bash_set_u.patch
+    - bitbucket.diy-backup.vars.sh
+    - rotate-log.sh
+    - /tmp/
+  - CmdLine:
+    - "( \t\texport DEBIAN_FRONTEND=noninteractive; \t\texport BUILD_DEPS=\"patch
+      unzip\"; \t\texport APP_DEPS=\"tar mysql-client jq rsync bash curl cron sudo
+      ca-certificates\"; \t\tset -e -x; \t\tapt-get update; \t\tapt-get upgrade -y;
+      \t\tapt-get install --no-install-recommends -y $BUILD_DEPS $APP_DEPS ; \t\tif
+      id -u ${BITBUCKET_USER} &>/dev/null; then \t\t\t_groups=\" $(id -nG ${BITBUCKET_USER})
+      \"; \t\t\t(echo \"$_groups\" | grep -q \" ${BITBUCKET_GROUP} \") || usermod
+      -aG ${BITBUCKET_GROUP} ${BITBUCKET_USER}; \t\t\t(echo \"$_groups\" | grep -q
+      \" crontab \") || usermod -aG crontab ${BITBUCKET_USER}; \t\telse \t\t\tgroupadd
+      -rg 167 ${BITBUCKET_GROUP} ; \t\t\tuseradd -mrg ${BITBUCKET_GROUP} -G crontab
+      -u 167 ${BITBUCKET_USER}; \t\tfi; \t\tmkdir -p ${BITBUCKET_BACKUP_HOME} ; \t\tcd
+      ${BITBUCKET_BACKUP_HOME} ; \t\tmkdir -p log bin archives tmp tmp/bitbucket-db
+      tmp/bitbucket-home /var/atlassian/application-data/bitbucket ; \t\ttouch ${BITBUCKET_BACKUP_LOG}
+      ; \t\tunzip -j -d bin /tmp/files.zip ; \t\tpatch -d bin -p1 < /tmp/bash_set_u.patch
+      ; \t\trm /tmp/files.zip /tmp/bash_set_u.patch ; \t\tmv /tmp/bitbucket.diy-backup.vars.sh
+      /tmp/rotate-log.sh bin ; \t\tchown -R ${BITBUCKET_USER}:${BITBUCKET_GROUP} .
+      /var/atlassian/application-data/bitbucket ; \t\tchmod -R go-rwx bin tmp archives
+      /var/atlassian/application-data/bitbucket ; \t\tmv /tmp/start-cron.sh /. ; \t\tchmod
+      -R go-w /start-cron.sh ; \t\trm -f /etc/cron.daily/* ; \t\techo \"${BITBUCKET_USER}
+      ALL=(ALL) NOPASSWD:SETENV: /start-cron.sh\" > /etc/sudoers.d/cron ; \t\t( \t\t\techo
+      \"0 0 * * * ${BITBUCKET_BACKUP_HOME}/bin/bitbucket.diy-backup.sh >${BITBUCKET_BACKUP_LOG}
+      2>&1\"; \t\t\techo \"50 23 * * * ${BITBUCKET_BACKUP_HOME}/bin/rotate-log.sh
+      >/dev/null 2>&1\"; \t\t) | /usr/bin/crontab -u ${BITBUCKET_USER} - ; \t\tchmod
+      go-rwx /var/spool/cron/crontabs/${BITBUCKET_USER} ; \t\tchown ${BITBUCKET_USER}:crontab
+      /var/spool/cron/crontabs/${BITBUCKET_USER} ; \t\tapt-get remove -y $BUILD_DEPS
+      ; \t\tapt-get autoremove -y ; \t\tapt-get clean; \t\trm -rf /var/lib/{apt,dpkg,cache,log}/;
+      \t)"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${BITBUCKET_BACKUP_HOME}
+  - Name: volume
+    Volumes:
+    - ${BITBUCKET_BACKUP_HOME}/archives
+    - ${BITBUCKET_BACKUP_HOME}/log
+    - /var/atlassian/application-data/bitbucket
+  - Name: user
+    User: ${BITBUCKET_USER}
+  - CmdLine:
+    - sudo
+    - -E
+    - /start-cron.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

@@ -1,0 +1,206 @@
+MetaArgs: null
+Stages:
+- As: berkeleydb
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache add autoconf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --no-cache add automake
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --no-cache add build-base
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --no-cache add openssl
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: BERKELEYDB_VERSION
+      Value: db-4.8.30.NC
+    Name: env
+  - Env:
+    - Key: BERKELEYDB_PREFIX
+      Value: /opt/berkleydb
+    Name: env
+  - CmdLine:
+    - wget -q https://download.oracle.com/berkeley-db/${BERKELEYDB_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar -xzf *.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed s/__atomic_compare_exchange/__atomic_compare_exchange_db/g -i ${BERKELEYDB_VERSION}/dbinc/atomic.h
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${BERKELEYDB_PREFIX}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /${BERKELEYDB_VERSION}/build_unix
+  - CmdLine:
+    - ../dist/configure --enable-cxx --disable-shared --with-pic --prefix=${BERKELEYDB_PREFIX}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -j4
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf ${BERKELEYDB_PREFIX}/docs
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: berkeleydb
+  Platform: ""
+  SourceCode: FROM alpine as berkeleydb
+- As: peercoin-build
+  BaseName: alpine
+  Commands:
+  - Chown: ""
+    From: berkeleydb
+    Name: copy
+    SourcesAndDest:
+    - /opt/
+    - /opt/
+  - CmdLine:
+    - apk --no-cache add autoconf     automake     boost-dev     build-base     chrpath     file     libevent-dev     openssl     openssl-dev     libtool     linux-headers     zeromq-dev     protobuf-dev
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PEERCOIN_VERSION
+      Value: 0.8.4
+    - Key: PEERCOIN_SHA
+      Value: 1f422c0da64f416f2b653138de2c80eb38494c5b28c1fc386d38e430bcc28852
+    - Key: PEERCOIN_PREFIX
+      Value: /opt/peercoin
+    Name: env
+  - CmdLine:
+    - wget -q -O peercoin.tar.gz https://github.com/peercoin/peercoin/archive/v${PEERCOIN_VERSION}ppc.tar.gz     &&
+      echo "${PEERCOIN_SHA}  peercoin.tar.gz" | sha256sum -c -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar -xzf peercoin.tar.gz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /peercoin-${PEERCOIN_VERSION}ppc
+  - CmdLine:
+    - ln -s /opt/berkleydb /usr/include/db4.8     && ln -s /opt/berkleydb/include/*
+      /usr/include      && ln -s /opt/berkleydb/lib/* /usr/lib
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./autogen.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./configure     --prefix=${PEERCOIN_PREFIX}     --mandir=/usr/share/man     --disable-tests     --disable-bench     --disable-ccache     --with-gui=no     --with-utils     --with-libs     --with-daemon
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -j4
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip ${PEERCOIN_PREFIX}/bin/peercoin-cli
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip ${PEERCOIN_PREFIX}/bin/peercoin-tx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip ${PEERCOIN_PREFIX}/bin/peercoind
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip ${PEERCOIN_PREFIX}/lib/libpeercoinconsensus.a
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip ${PEERCOIN_PREFIX}/lib/libpeercoinconsensus.so.0.0.0
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: peercoin-build
+  Platform: ""
+  SourceCode: FROM alpine as peercoin-build
+- BaseName: alpine
+  Commands:
+  - CmdLine:
+    - adduser -S peercoin &&   apk --no-cache add     boost     boost-program_options     libevent     openssl     libzmq     su-exec     bash
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PPC_DATA
+      Value: /data
+    Name: env
+  - Env:
+    - Key: PEERCOIN_PREFIX
+      Value: /opt/peercoin
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: ${PEERCOIN_PREFIX}/bin:$PATH
+    Name: env
+  - Env:
+    - Key: RPC_PASSWORD
+      Value: ppcpass
+    Name: env
+  - Env:
+    - Key: RPC_USER
+      Value: ppcuser
+    Name: env
+  - Chown: ""
+    From: peercoin-build
+    Name: copy
+    SourcesAndDest:
+    - /opt
+    - /opt
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /entrypoint.sh
+  - Name: volume
+    Volumes:
+    - '[${PPC_DATA}]'
+  - Name: expose
+    Ports:
+    - "9901"
+    - "9902"
+    - "9903"
+    - "9904"
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - peercoind
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

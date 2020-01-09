@@ -1,0 +1,168 @@
+MetaArgs:
+- DefaultValue: "3.7"
+  Key: PYTHON_TAG
+  ProvidedValue: null
+  Value: "3.7"
+Stages:
+- As: base
+  BaseName: python:${PYTHON_TAG}
+  Commands:
+  - Labels:
+    - Key: app.name
+      Value: '"InterPlanetary Wayback (IPWB)"'
+    - Key: app.description
+      Value: '"A distributed and persistent archive replay system using IPFS"'
+    - Key: app.license
+      Value: '"MIT License"'
+    - Key: app.license.url
+      Value: '"https://github.com/oduwsdl/ipwb/blob/master/LICENSE"'
+    - Key: app.repo.url
+      Value: '"https://github.com/oduwsdl/ipwb"'
+    - Key: app.authors
+      Value: '"Mat Kelly <@machawk1> and Sawood Alam <@ibnesayeed>"'
+    Name: label
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - chmod a+x /usr/local/bin/entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - mkdir -p /data/{warc,cdxj,ipfs}
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: IPFS_PATH
+      Value: /data/ipfs
+    Name: env
+  - Key: IPFS_VERSION
+    Name: arg
+    Value: v0.4.22
+  - CmdLine:
+    - cd /tmp            && wget -q https://dist.ipfs.io/go-ipfs/${IPFS_VERSION}/go-ipfs_${IPFS_VERSION}_linux-amd64.tar.gz            &&
+      tar xvfz go-ipfs*.tar.gz            && mv go-ipfs/ipfs /usr/local/bin/ipfs            &&
+      rm -rf go-ipfs*            && ipfs init
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt update && apt install -y locales            && rm -rf /var/lib/apt/lists/*            &&
+      echo "en_US.UTF-8 UTF-8" > /etc/locale.gen            && locale-gen
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /ipwb
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - ./
+  - CmdLine:
+    - pip install -r requirements.txt
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:${PYTHON_TAG}
+  Name: base
+  Platform: ""
+  SourceCode: FROM       python:${PYTHON_TAG} AS base
+- BaseName: node
+  Commands:
+  - Name: workdir
+    Path: /ipwb
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - Key: SKIPTEST
+    Name: arg
+    Value: "false"
+  - CmdLine:
+    - $SKIPTEST || npm install -g standard
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - $SKIPTEST || standard
+    Name: run
+    PrependShell: true
+  From:
+    Image: node
+  Name: ""
+  Platform: ""
+  SourceCode: FROM       node
+- As: test
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - test-requirements.txt
+    - ./
+  - CmdLine:
+    - pip install -r test-requirements.txt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - Key: SKIPTEST
+    Name: arg
+    Value: "false"
+  - CmdLine:
+    - $SKIPTEST || pycodestyle
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - $SKIPTEST || (ipfs daemon & while ! curl -s localhost:5001 > /dev/null; do sleep
+      1; done && py.test -s --cov=./)
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: test
+  Platform: ""
+  SourceCode: FROM base AS test
+- BaseName: base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - CmdLine:
+    - python setup.py install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - ipwb
+    - replay
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

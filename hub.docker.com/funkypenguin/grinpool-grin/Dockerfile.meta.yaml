@@ -1,0 +1,211 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: rust:1.31
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: REPO
+    Name: arg
+    Value: mimblewimble/grin
+  - Env:
+    - Key: REPO
+      Value: ${REPO}
+    Name: env
+  - Key: TAG
+    Name: arg
+    Value: v1.0.3
+  - Env:
+    - Key: TAG
+      Value: ${TAG}
+    Name: env
+  - CmdLine:
+    - rustup update &&     set -ex &&     apt-get update &&     apt-get --no-install-recommends
+      --yes install         clang         libclang-dev         llvm-dev         libncurses5         libncursesw5         cmake         git         libssl-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/grin
+  - CmdLine:
+    - git clone --recursive --branch $TAG https://github.com/mimblewimble/grin.git
+      .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/127\.0\.0\.1:13420/0.0.0.0:13420/g' wallet/src/command.rs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cargo build --release
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /root/.grin &&     cd /root/.grin &&         ln -s . main
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - target/release/grin ${NET_FLAG} server config &&     echo dummy > dummy &&     echo
+      dummy >> dummy &&     target/release/grin ${NET_FLAG} wallet init  < dummy
+    Name: run
+    PrependShell: true
+  From:
+    Image: rust:1.31
+  Name: builder
+  Platform: ""
+  SourceCode: FROM rust:1.31 as builder
+- BaseName: funkypenguin/grinpool-keybase
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/funkypenguin/grinpool.git"'
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.schema-version
+      Value: '"2.2-r1"'
+    Name: label
+  - CmdLine:
+    - apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y     locales     procps     libssl-dev     vim     telnet     curl     python3       &&     apt-get
+      autoremove -y &&     rm -rf /var/cache/apt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen &&     dpkg-reconfigure
+      --frontend=noninteractive locales &&     update-locale LANG=en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/grin/target/release/grin
+    - /usr/local/bin/grin
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/grin/grin-server.toml
+    - /usr/src/grin/grin-server.toml
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /root/.grin/grin-wallet.toml
+    - /usr/src/grin/grin-wallet.toml
+  - CmdLine:
+    - sed -i 's/^db_root = .*$/db_root = "\/server\/.grin"/' /usr/src/grin/grin-server.toml
+      &&     sed -i 's/^api_http_addr = .*$/api_http_addr = "0.0.0.0:13413"/' /usr/src/grin/grin-server.toml
+      &&     sed -i 's/^api_secret_path = .*$/api_secret_path = "\/root\/.grin\/.api_secret"/'
+      /usr/src/grin/grin-server.toml &&     sed -i 's/^archive_mode = .*$/archive_mode
+      = true/' /usr/src/grin/grin-server.toml &&     sed -i 's/^skip_sync_wait = .*$/skip_sync_wait
+      = false/' /usr/src/grin/grin-server.toml &&     sed -i 's/^run_tui = .*$/run_tui
+      = false/' /usr/src/grin/grin-server.toml &&     sed -i 's/^run_test_miner =
+      .*$/run_test_miner = false/' /usr/src/grin/grin-server.toml &&     sed -i 's/^host
+      = .*$/host = "0.0.0.0"/' /usr/src/grin/grin-server.toml &&     sed -i 's/^port
+      = .*$/port = 3414/' /usr/src/grin/grin-server.toml &&     sed -i 's/^#peer_max_count
+      = .*$/peer_max_count = 250/' /usr/src/grin/grin-server.toml &&     sed -i 's/^#peer_min_preferred_count
+      = .*$/peer_min_preferred_count = 16/' /usr/src/grin/grin-server.toml &&     sed
+      -i 's/^enable_stratum_server = .*$/enable_stratum_server = true/' /usr/src/grin/grin-server.toml
+      &&     sed -i 's/^stratum_server_addr = .*$/stratum_server_addr = "0.0.0.0:13416"/'
+      /usr/src/grin/grin-server.toml &&     sed -i 's/^attempt_time_per_block = .*$/attempt_time_per_block
+      = 300/' /usr/src/grin/grin-server.toml &&     sed -i 's/^minimum_share_difficulty
+      = .*$/minimum_share_difficulty = 1/' /usr/src/grin/grin-server.toml &&     sed
+      -i 's/^wallet_listener_url = .*$/wallet_listener_url = "http:\/\/grinwallet:13415"/'
+      /usr/src/grin/grin-server.toml &&     sed -i 's/^burn_reward = .*$/burn_reward
+      = false/' /usr/src/grin/grin-server.toml &&     sed -i 's/^log_to_stdout = .*$/log_to_stdout
+      = true/' /usr/src/grin/grin-server.toml &&     sed -i 's/^stdout_log_level =
+      .*$/stdout_log_level = "Debug"/' /usr/src/grin/grin-server.toml &&     sed -i
+      's/^log_to_file = .*$/log_to_file = true/' /usr/src/grin/grin-server.toml &&     sed
+      -i 's/^file_log_level = .*$/file_log_level = "Debug"/' /usr/src/grin/grin-server.toml
+      &&     sed -i 's/^log_file_path = .*$/log_file_path = "\/server\/grin.log"/'
+      /usr/src/grin/grin-server.toml &&     sed -i 's/^log_file_append = .*$/log_file_append
+      = true/' /usr/src/grin/grin-server.toml &&     sed -i 's/^log_max_size = .*$/log_max_size
+      = 16777216/' /usr/src/grin/grin-server.toml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/^api_listen_interface = .*$/api_listen_interface = "0.0.0.0"/' /usr/src/grin/grin-wallet.toml
+      &&     sed -i 's/^api_listen_port = .*$/api_listen_port = 13415/' /usr/src/grin/grin-wallet.toml
+      &&     sed -i 's/^api_secret_path = .*$/api_secret_path = "\/root\/.grin\/.api_secret"/'
+      /usr/src/grin/grin-wallet.toml &&     sed -i 's/^node_api_secret_path = .*$/node_api_secret_path
+      = "\/root\/.grin\/.api_secret"/' /usr/src/grin/grin-wallet.toml &&     sed -i
+      's/^check_node_api_http_addr = .*$/check_node_api_http_addr = "http:\/\/grin:13413"/'
+      /usr/src/grin/grin-wallet.toml &&     sed -i 's/^data_file_dir = .*$/data_file_dir
+      = "\/wallet\/wallet_data"/' /usr/src/grin/grin-wallet.toml &&     sed -i 's/^keybase_notify_ttl
+      = .*$/keybase_notify_ttl = 1440/' /usr/src/grin/grin-wallet.toml &&     sed
+      -i 's/^log_to_stdout = .*$/log_to_stdout = true/' /usr/src/grin/grin-wallet.toml
+      &&     sed -i 's/^stdout_log_level = .*$/stdout_log_level = "Debug"/' /usr/src/grin/grin-wallet.toml
+      &&     sed -i 's/^log_to_file = .*$/log_to_file = true/' /usr/src/grin/grin-wallet.toml
+      &&     sed -i 's/^file_log_level = .*$/file_log_level = "Debug"/' /usr/src/grin/grin-wallet.toml
+      &&     sed -i 's/^log_file_path = .*$/log_file_path = "\/wallet\/grin-wallet.log"/'
+      /usr/src/grin/grin-wallet.toml &&     sed -i 's/^log_file_append = .*$/log_file_append
+      = true/' /usr/src/grin/grin-wallet.toml &&     sed -i 's/^log_max_size = .*$/log_max_size
+      = 16777216/' /usr/src/grin/grin-wallet.toml
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "13413"
+  - Name: expose
+    Ports:
+    - "13414"
+  - Name: expose
+    Ports:
+    - "13415"
+  - Name: expose
+    Ports:
+    - "13416"
+  - Name: expose
+    Ports:
+    - "3413"
+  - Name: expose
+    Ports:
+    - "3414"
+  - Name: expose
+    Ports:
+    - "3415"
+  - Name: expose
+    Ports:
+    - "3416"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run-wallet.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - libheath.py
+    - /
+  - CmdLine:
+    - /run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: funkypenguin/grinpool-keybase
+  Name: ""
+  Platform: ""
+  SourceCode: FROM funkypenguin/grinpool-keybase

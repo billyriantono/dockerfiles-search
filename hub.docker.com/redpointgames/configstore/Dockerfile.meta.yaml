@@ -1,0 +1,445 @@
+MetaArgs: null
+Stages:
+- As: protocol_build
+  BaseName: networknext/grpc-toolkit:latest
+  Commands:
+  - CmdLine:
+    - mkdir /grpc_runtime_out &&   cd /grpc_runtime_out &&   tar -xvf /grpc-web.tar.gz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server/meta.proto
+    - /workdir_ts/
+  - Name: workdir
+    Path: /workdir_ts/
+  - CmdLine:
+    - mkdir -p /workdir_ts/api /workdir_ts/api_grpc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /protoc/bin/protoc   --plugin="protoc-gen-ts=$(yarn global bin)/protoc-gen-ts"   --js_out="import_style=commonjs:api/"   --grpc-web_out="import_style=commonjs+dts,mode=grpcwebtext:api_grpc/"   *.proto
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv api_grpc/* api/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -Rf api_grpc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i '1s@^@/* eslint-disable */\n@' api/*.js
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server/meta.proto
+    - /workdir_go/
+  - Name: workdir
+    Path: /workdir_go/
+  - CmdLine:
+    - ls /workdir_go/ && /protoc/bin/protoc --go_out=plugins=grpc:. meta.proto
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/package meta/package main/' /workdir_go/meta.pb.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: networknext/grpc-toolkit:latest
+  Name: protocol_build
+  Platform: ""
+  SourceCode: FROM networknext/grpc-toolkit:latest AS protocol_build
+- As: go_install
+  BaseName: ubuntu:18.04
+  Commands:
+  - Env:
+    - Key: GOROOT
+      Value: /usr/local/go
+    Name: env
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"/go/bin:/usr/local/go/bin:${PATH}"'
+    Name: env
+  - CmdLine:
+    - apt update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt install -y wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt install -y git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp &&   wget https://dl.google.com/go/go1.12.linux-amd64.tar.gz &&   tar
+      -xvf go1.12.linux-amd64.tar.gz &&   mv go /usr/local
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: go_install
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 AS go_install
+- As: build_server
+  BaseName: ubuntu:18.04
+  Commands:
+  - Env:
+    - Key: GOROOT
+      Value: /usr/local/go
+    Name: env
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"/go/bin:/usr/local/go/bin:${PATH}"'
+    Name: env
+  - Chown: ""
+    From: go_install
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/go
+    - /usr/local/go
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server
+    - /src
+  - Chown: ""
+    From: protocol_build
+    Name: copy
+    SourcesAndDest:
+    - /workdir_go/meta.pb.go
+    - /src/meta.pb.go
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static"' -mod vendor
+      -o /server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp generator_gosdk_template.gotxt /generator_gosdk_template.gotxt
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: build_server
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 AS build_server
+- As: prerun_client
+  BaseName: ubuntu:18.04
+  Commands:
+  - Env:
+    - Key: CONFIGSTORE_GOOGLE_CLOUD_PROJECT_ID
+      Value: '"configstore-test-001"'
+    Name: env
+  - Env:
+    - Key: CONFIGSTORE_GRPC_PORT
+      Value: '"13389"'
+    Name: env
+  - Env:
+    - Key: CONFIGSTORE_HTTP_PORT
+      Value: '"13390"'
+    Name: env
+  - Env:
+    - Key: CONFIGSTORE_SCHEMA_PATH
+      Value: '"/schema.json"'
+    Name: env
+  - Chown: ""
+    From: build_server
+    Name: copy
+    SourcesAndDest:
+    - /generator_gosdk_template.gotxt
+    - /generator_gosdk_template.gotxt
+  - Chown: ""
+    From: build_server
+    Name: copy
+    SourcesAndDest:
+    - /server
+    - /server
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server/schema.json
+    - /schema.json
+  - CmdLine:
+    - /server -generate > /client.go
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client
+    - /client-src
+  - CmdLine:
+    - mv /client.go /client-src/client.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: prerun_client
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 AS prerun_client
+- As: build_server_ui
+  BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - apt update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt install -y curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt install -y unzip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt install -y gnupg2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL https://deb.nodesource.com/setup_10.x | bash -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y nodejs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install yarn
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server-ui
+    - /src
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - yarn
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: protocol_build
+    Name: copy
+    SourcesAndDest:
+    - /workdir_ts/api
+    - /src/api
+  - CmdLine:
+    - yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: build_server_ui
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 AS build_server_ui
+- As: test
+  BaseName: google/cloud-sdk:234.0.0
+  Commands:
+  - Env:
+    - Key: PATH
+      Value: '"/root/google-cloud-sdk/bin:${PATH}"'
+    Name: env
+  - Env:
+    - Key: GOROOT
+      Value: /usr/local/go
+    Name: env
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"/go/bin:/usr/local/go/bin:${PATH}"'
+    Name: env
+  - Env:
+    - Key: CONFIGSTORE_GOOGLE_CLOUD_PROJECT_ID
+      Value: '"configstore-test-001"'
+    Name: env
+  - Env:
+    - Key: CONFIGSTORE_GRPC_PORT
+      Value: '"13389"'
+    Name: env
+  - Env:
+    - Key: CONFIGSTORE_HTTP_PORT
+      Value: '"13390"'
+    Name: env
+  - Env:
+    - Key: CONFIGSTORE_SCHEMA_PATH
+      Value: '"/schema.json"'
+    Name: env
+  - Env:
+    - Key: FIRESTORE_EMULATOR_HOST
+      Value: 127.0.0.1:8432
+    Name: env
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get remove -y --purge   kubectl   google-cloud-sdk   google-cloud-sdk-app-engine-grpc   google-cloud-sdk-pubsub-emulator   google-cloud-sdk-app-engine-go   google-cloud-sdk-cloud-build-local   google-cloud-sdk-datastore-emulator   google-cloud-sdk-app-engine-python   google-cloud-sdk-cbt   google-cloud-sdk-bigtable-emulator   google-cloud-sdk-app-engine-python-extras   google-cloud-sdk-datalab   google-cloud-sdk-app-engine-java
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://sdk.cloud.google.com | bash
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gcloud components install beta
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gcloud components install cloud-firestore-emulator
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: go_install
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/go
+    - /usr/local/go
+  - CmdLine:
+    - go get -v   "github.com/rs/xid"   "github.com/golang/protobuf/ptypes/timestamp"   "google.golang.org/grpc"   "gotest.tools/assert"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build_server
+    Name: copy
+    SourcesAndDest:
+    - /server
+    - /server
+  - Chown: ""
+    From: build_server
+    Name: copy
+    SourcesAndDest:
+    - /generator_gosdk_template.gotxt
+    - /generator_gosdk_template.gotxt
+  - Chown: ""
+    From: prerun_client
+    Name: copy
+    SourcesAndDest:
+    - /schema.json
+    - /schema.json
+  - Chown: ""
+    From: prerun_client
+    Name: copy
+    SourcesAndDest:
+    - /client-src
+    - /client-src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - extra/adc.json
+    - /adc.json
+  - Env:
+    - Key: GOOGLE_APPLICATION_CREDENTIALS
+      Value: /adc.json
+    Name: env
+  - CmdLine:
+    - gcloud beta emulators firestore start --host-port=127.0.0.1:8432 &   sleep 5
+      && /server &   sleep 5 && cd /client-src && go test
+    Name: run
+    PrependShell: true
+  From:
+    Image: google/cloud-sdk:234.0.0
+  Name: test
+  Platform: ""
+  SourceCode: FROM google/cloud-sdk:234.0.0 AS test
+- As: resources
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk add --no-cache ca-certificates && update-ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -D -g '' configstore
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: resources
+  Platform: ""
+  SourceCode: FROM alpine AS resources
+- As: final
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: test
+    Name: copy
+    SourcesAndDest:
+    - /server
+    - /server
+  - Chown: ""
+    From: test
+    Name: copy
+    SourcesAndDest:
+    - /generator_gosdk_template.gotxt
+    - /generator_gosdk_template.gotxt
+  - Chown: ""
+    From: build_server_ui
+    Name: copy
+    SourcesAndDest:
+    - /src/build
+    - /server-ui
+  - Chown: ""
+    From: busybox
+    Name: copy
+    SourcesAndDest:
+    - /bin/sh
+    - /bin/sh
+  - Chown: ""
+    From: resources
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: resources
+    Name: copy
+    SourcesAndDest:
+    - /etc/passwd
+    - /etc/passwd
+  - Name: user
+    User: configstore
+  - CmdLine:
+    - /server
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: final
+  Platform: ""
+  SourceCode: FROM scratch AS final

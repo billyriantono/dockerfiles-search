@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:wheezy
+  Commands:
+  - Maintainer: Valeriy Solovyov <weldpua2008@gmail.com>
+    Name: maintainer
+  - Name: workdir
+    Path: /var/www/html
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-ext-*
+    - /usr/local/bin/
+  - Name: volume
+    Volumes:
+    - /var/www/html
+  - CmdLine:
+    - "export DEBIAN_FRONTEND=noninteractive && \texport DEBIAN_RELEASE=$(awk -F'[\"
+      ]' '/VERSION=/{print $3}'  /etc/os-release | tr -cd '[[:alnum:]]._-' ) &&     [[
+      \"x${DEBIAN_RELEASE}\" = \"x\" ]] && export DEBIAN_RELEASE=\"unstable\" || echo
+      \"it's ok\" &&     echo \"deb http://httpredir.debian.org/debian ${DEBIAN_RELEASE}
+      main  contrib non-free \" > /etc/apt/sources.list &&     echo \"deb http://httpredir.debian.org/debian
+      ${DEBIAN_RELEASE}-updates main  contrib non-free \" >> /etc/apt/sources.list
+      &&     echo \"deb http://security.debian.org ${DEBIAN_RELEASE}/updates main
+      \ contrib non-free\" >> /etc/apt/sources.list &&     echo \"deb-src  http://httpredir.debian.org/debian
+      ${DEBIAN_RELEASE} main  contrib non-free\" >> /etc/apt/sources.list &&     echo
+      \"deb-src  http://httpredir.debian.org/debian ${DEBIAN_RELEASE}-updates main
+      \ contrib non-free\" >> /etc/apt/sources.list &&     echo \"deb-src  http://security.debian.org
+      ${DEBIAN_RELEASE}/updates main  contrib non-free\" >> /etc/apt/sources.list
+      &&     apt-get update && \tapt-get install -y apt-utils autoconf file g++ \tgcc
+      libc6-dev make pkg-config re2c --no-install-recommends\t&&     apt-get install
+      -y ca-certificates curl libedit2 libsqlite3-0 libxml2 --no-install-recommends
+      &&     export PHP_INI_DIR=/usr/local/etc/php &&     mkdir -p $PHP_INI_DIR/conf.d
+      &&     export PHP_EXTRA_CONFIGURE_ARGS=\" --enable-fpm --with-fpm-user=www-data
+      --with-fpm-group=www-data\" &&     export GPG_KEYS=\"0B96609E270F565C13292B24C13C70B87267B52D
+      0BD78B5F97500D450838F95DFE857D9A90D90EC1 F38252826ACD957EF380D39F2F7956BC5DA04B5D\"
+      &&     export PHP_VERSION=5.3.27 &&     export PHP_FILENAME=php-5.3.27.tar.bz2
+      &&     export PHP_MD5=25ae23a5b9615fe8d33de5b63e1bb788 &&   set -xe && \texport
+      buildDeps=\"$PHP_EXTRA_BUILD_DEPS libcurl4-openssl-dev libedit-dev libsqlite3-dev
+      libssl-dev libxml2-dev xz-utils bzip2\" && \tapt-get install -y $buildDeps --no-install-recommends
+      && \trm -rf /var/lib/apt/lists/* && \tcurl -fSL \"http://php.net/get/$PHP_FILENAME/from/this/mirror\"
+      -o \"$PHP_FILENAME\" && \techo \"$PHP_MD5 *$PHP_FILENAME\" | md5sum -c - &&
+      \tcurl -fSL \"http://php.net/get/$PHP_FILENAME.asc/from/this/mirror\" -o \"$PHP_FILENAME.asc\"
+      && \texport GNUPGHOME=\"$(mktemp -d)\" && \tfor key in $GPG_KEYS; do gpg --keyserver
+      hkp://ha.pool.sks-keyservers.net:80 --recv-keys \"$key\"; done && \tgpg --batch
+      --verify \"$PHP_FILENAME.asc\" \"$PHP_FILENAME\" && \trm -r \"$GNUPGHOME\" \"$PHP_FILENAME.asc\"
+      && \tmkdir -p /usr/src/php && \ttar jxf \"$PHP_FILENAME\" -C /usr/src/php --strip-components=1
+      && \trm \"$PHP_FILENAME\" && \tcd /usr/src/php && \t./configure --with-config-file-path=\"$PHP_INI_DIR\"
+      \t--with-config-file-scan-dir=\"$PHP_INI_DIR/conf.d\" \t--disable-cgi \t--enable-mysqlnd
+      \t--enable-mbstring \t--with-curl \t--with-libedit \t--with-openssl \t--with-zlib
+      $PHP_EXTRA_CONFIGURE_ARGS && \tmake -j\"$(nproc)\" && \tmake install && \t{
+      find /usr/local/bin /usr/local/sbin -type f -executable -exec strip --strip-all
+      '{}' + || true; } && \tmake clean && \tapt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
+      -o APT::AutoRemove::SuggestsImportant=false $buildDeps && \trm -r /var/lib/apt/lists/*
+      && \tset -ex \t&& cd /usr/local/etc \t&& if [ -d php-fpm.d ]; then \t\tsed 's!=NONE/!=!g'
+      php-fpm.conf.default | tee php-fpm.conf > /dev/null; \t\tcp php-fpm.d/www.conf.default
+      php-fpm.d/www.conf; \telse \t\tmkdir php-fpm.d; \t\tcp php-fpm.conf.default
+      php-fpm.d/www.conf; \t\t{ \t\t\techo '[global]'; \t\t\techo 'include=etc/php-fpm.d/*.conf';
+      \t\t} | tee php-fpm.conf; \tfi \t&& { \t\techo '[global]'; \t\techo 'error_log
+      = /proc/self/fd/2'; \t\techo; \t\techo '[www]'; \t\techo '; if we send this
+      to /proc/self/fd/1, it never appears'; \t\techo 'access.log = /proc/self/fd/2';
+      \t\techo; \t\techo '; clear_env = no'; \t\techo; \t\techo '; Ensure worker stdout
+      and stderr are sent to the main error log.'; \t\techo 'catch_workers_output
+      = yes'; \t} | tee php-fpm.d/docker.conf \t&& { \t\techo '[global]'; \t\techo
+      'daemonize = no'; \t\techo; \t\techo '[www]'; \t\techo 'listen = [::]:9000';
+      \t} | tee php-fpm.d/zz-docker.conf \t&& set +e && \tapt-get update && \tapt-get
+      install -y libpng12-dev libjpeg-dev libmysqlclient-dev libmcrypt-dev && \trm
+      -rf /var/lib/apt/lists/* && \tdocker-php-ext-configure gd --with-png-dir=/usr
+      --with-jpeg-dir=/usr && \tdocker-php-ext-install gd mysqli mbstring mcrypt zip
+      pdo_mysql && \tpecl install -o -f zendopcache && \t{ \t\techo 'opcache.memory_consumption=128';
+      \t\techo 'opcache.interned_strings_buffer=8'; \t\techo 'opcache.max_accelerated_files=4000';
+      \t\techo 'opcache.revalidate_freq=60'; \t\techo 'opcache.fast_shutdown=1'; \t\techo
+      'opcache.enable_cli=1'; \t} > /usr/local/etc/php/conf.d/opcache-recommended.ini
+      && \texport WORDPRESS_VERSION=4.5.2 && \texport WORDPRESS_SHA1=bab94003a5d2285f6ae76407e7b1bbb75382c36e
+      && \tcurl -o wordpress.tar.gz -SL https://wordpress.org/wordpress-${WORDPRESS_VERSION}.tar.gz
+      && \techo \"$WORDPRESS_SHA1 *wordpress.tar.gz\" | sha1sum -c - && \ttar -xzf
+      wordpress.tar.gz -C /usr/src/ && \trm wordpress.tar.gz && \tchown -R www-data:www-data
+      /usr/src/wordpress"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - php-fpm
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:wheezy
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:wheezy

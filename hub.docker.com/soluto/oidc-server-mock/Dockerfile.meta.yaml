@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- As: source
+  BaseName: microsoft/dotnet:2.2-sdk
+  Commands:
+  - Key: target
+    Name: arg
+    Value: '"Release"'
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./OpenIdConnectServerMock.csproj
+    - ./OpenIdConnectServerMock.csproj
+  - CmdLine:
+    - dotnet restore
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - dotnet publish -c $target -o obj/docker/publish
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -r /src/obj/docker/publish /OpenIdConnectServerMock
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.2-sdk
+  Name: source
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2-sdk as source
+- As: release
+  BaseName: microsoft/dotnet:2.2-aspnetcore-runtime
+  Commands:
+  - Key: target
+    Name: arg
+    Value: '"Release"'
+  - CmdLine:
+    - if [ $target = "Debug" ]; then apt-get update && apt-get install unzip && rm
+      -rf /var/lib/apt/lists/* && curl -sSL https://aka.ms/getvsdbgsh | bash /dev/stdin
+      -v latest -l /vsdbg; fi
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: source
+    Name: copy
+    SourcesAndDest:
+    - /OpenIdConnectServerMock
+    - /OpenIdConnectServerMock
+  - Name: workdir
+    Path: /OpenIdConnectServerMock
+  - Env:
+    - Key: ASPNETCORE_ENVIRONMENT
+      Value: Development
+    Name: env
+  - Name: expose
+    Ports:
+    - "80"
+  - Health:
+      Interval: 60000000000
+      Retries: 8
+      Test:
+      - CMD-SHELL
+      - curl -f http://localhost/health || exit 1
+      Timeout: 2000000000
+    Name: healthcheck
+  - CmdLine:
+    - dotnet
+    - OpenIdConnectServerMock.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: microsoft/dotnet:2.2-aspnetcore-runtime
+  Name: release
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2-aspnetcore-runtime as release

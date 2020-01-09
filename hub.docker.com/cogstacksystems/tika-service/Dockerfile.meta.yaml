@@ -1,0 +1,153 @@
+MetaArgs: null
+Stages:
+- As: jdk-11-base
+  BaseName: adoptopenjdk/openjdk11:slim
+  Commands:
+  - Env:
+    - Key: TESSERACT_VERSION
+      Value: 4.00~git2288-10f4998a-2
+    Name: env
+  - Env:
+    - Key: TESSERACT_RES_VERSION
+      Value: 4.00~git24-0e00fe6-1.2
+    Name: env
+  - Env:
+    - Key: IMAGEMAGICK_VERSION
+      Value: 8:6.9.7.4+dfsg-16ubuntu6.8
+    Name: env
+  - CmdLine:
+    - "apt-get update &&     apt-get update &&     apt-get install -y software-properties-common
+      && \tapt-get install -y tesseract-ocr=$TESSERACT_VERSION tesseract-ocr-eng=$TESSERACT_RES_VERSION
+      tesseract-ocr-osd=$TESSERACT_RES_VERSION && \tapt-get install -y imagemagick=$IMAGEMAGICK_VERSION
+      --fix-missing && \tapt-get install -y python3-pip && pip3 install numpy matplotlib
+      scikit-image && \tapt-get clean autoclean &&     apt-get autoremove -y &&     rm
+      -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  From:
+    Image: adoptopenjdk/openjdk11:slim
+  Name: jdk-11-base
+  Platform: ""
+  SourceCode: FROM adoptopenjdk/openjdk11:slim AS jdk-11-base
+- As: service-builder
+  BaseName: jdk-11-base
+  Commands:
+  - CmdLine:
+    - mkdir -p /devel
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /devel
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./gradle/wrapper
+    - /devel/gradle/wrapper
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./gradlew
+    - /devel/
+  - CmdLine:
+    - ./gradlew --version
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./settings.gradle
+    - /devel/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /devel/
+  - CmdLine:
+    - ./gradlew bootJar --no-daemon
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: jdk-11-base
+  Name: service-builder
+  Platform: ""
+  SourceCode: FROM jdk-11-base AS service-builder
+- As: jre-11-base
+  BaseName: adoptopenjdk/openjdk11:jre
+  Commands:
+  - Env:
+    - Key: TESSERACT_VERSION
+      Value: 4.00~git2288-10f4998a-2
+    Name: env
+  - Env:
+    - Key: TESSERACT_RES_VERSION
+      Value: 4.00~git24-0e00fe6-1.2
+    Name: env
+  - Env:
+    - Key: IMAGEMAGICK_VERSION
+      Value: 8:6.9.7.4+dfsg-16ubuntu6.8
+    Name: env
+  - CmdLine:
+    - "apt-get update &&     apt-get update &&     apt-get install -y software-properties-common
+      && \tapt-get install -y tesseract-ocr=$TESSERACT_VERSION tesseract-ocr-eng=$TESSERACT_RES_VERSION
+      tesseract-ocr-osd=$TESSERACT_RES_VERSION && \tapt-get install -y imagemagick=$IMAGEMAGICK_VERSION
+      --fix-missing && \tapt-get install -y python3-pip && pip3 install numpy matplotlib
+      scikit-image && \tapt-get clean autoclean &&     apt-get autoremove -y &&     rm
+      -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  From:
+    Image: adoptopenjdk/openjdk11:jre
+  Name: jre-11-base
+  Platform: ""
+  SourceCode: FROM adoptopenjdk/openjdk11:jre AS jre-11-base
+- As: service-runner
+  BaseName: jre-11-base
+  Commands:
+  - CmdLine:
+    - mkdir -p /app/config
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: service-builder
+    Name: copy
+    SourcesAndDest:
+    - /devel/build/libs/service-*.jar
+    - ./
+  - Chown: ""
+    From: service-builder
+    Name: copy
+    SourcesAndDest:
+    - /devel/src/main/resources/application.yaml
+    - ./config/
+  - Chown: ""
+    From: service-builder
+    Name: copy
+    SourcesAndDest:
+    - /devel/scripts/run.sh
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./extras/ImageMagick/policy.xml
+    - /etc/ImageMagick-6/policy.xml
+  - CmdLine:
+    - /bin/bash
+    - /app/run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 2
+      Named: jre-11-base
+  Name: service-runner
+  Platform: ""
+  SourceCode: FROM jre-11-base AS service-runner

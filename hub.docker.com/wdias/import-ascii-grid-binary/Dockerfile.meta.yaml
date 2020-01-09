@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- BaseName: python:3.7.3-slim
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install -y wget curl libcurl3 sudo openssh-client
+      &&     apt-get -yq install gcc                         build-essential                         tar                         bzip2                         m4                         zlib1g-dev                         libopenmpi-dev
+      &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HDF5_MAJOR_REL
+      Value: hdf5-1.10
+    - Key: HDF5_MINOR_REL
+      Value: hdf5-1.10.4
+    - Key: HDF5_SRC_URL
+      Value: http://www.hdfgroup.org/ftp/HDF5/releases
+    Name: env
+  - CmdLine:
+    - wget -q ${HDF5_SRC_URL}/${HDF5_MAJOR_REL}/${HDF5_MINOR_REL}/src/${HDF5_MINOR_REL}.tar.gz
+      -O ${HDF5_MINOR_REL}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Installing HDF5 $HDF5_MINOR_REL" &&     tar xf ${HDF5_MINOR_REL}.tar.gz
+      &&     cd ${HDF5_MINOR_REL} &&     CC=mpicc ./configure --enable-shared --enable-hl
+      --enable-parallel --prefix=/usr/local &&     make -j 2 &&     make install &&     cd
+      .. &&     rm -rf /hdf5-${HDF5_MINOR_REL} /hdf5-${HDF5_MINOR_REL}.tar.gz
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NETCDF_C_VERSION
+      Value: 4.6.3
+    Name: env
+  - CmdLine:
+    - curl -L https://github.com/Unidata/netcdf-c/archive/v${NETCDF_C_VERSION}.tar.gz
+      > netcdf-c-${NETCDF_C_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Installing NetCDF $NETCDF_C_VERSION" &&     tar xf netcdf-c-${NETCDF_C_VERSION}.tar.gz
+      &&     cd netcdf-c-${NETCDF_C_VERSION} &&     ./configure --prefix=/usr/local
+      --enable-netcdf-4 --enable-parallel4 --enable-shared --disable-dap                 CC=mpicc                 LDFLAGS=-L/usr/local/lib                 CPPFLAGS="-I/usr/local/include
+      -I/usr/include/openmpi" &&     make install &&     cd .. &&     rm -rf /netcdf-c-${NETCDF_C_VERSION}
+      /netcdf-c-${NETCDF_C_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - gunicorn
+    - -b
+    - 0.0.0.0:8080
+    - --timeout=10
+    - --workers=2
+    - web.app:app
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - pip3 install   gunicorn   flask   webargs==4.1.2   numpy==1.16.1   cftime   mpi4py   requests
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NETCDF4_PYTHON
+      Value: 1.4.3.1
+    Name: env
+  - CmdLine:
+    - wget -q https://github.com/Unidata/netcdf4-python/archive/v${NETCDF4_PYTHON}.tar.gz
+      -O netcdf4-python-${NETCDF4_PYTHON}.tar.gz &&     tar xf  netcdf4-python-${NETCDF4_PYTHON}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd netcdf4-python-${NETCDF4_PYTHON} &&     echo "mpi_incdir=/usr/include/openmpi"
+      >> setup.cfg &&     sudo python setup.py build && sudo python setup.py install
+      &&     cd .. && rm -rf netcdf4-python-${NETCDF4_PYTHON}.tar.gz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /src
+  - CmdLine:
+    - cd /src && python3 setup.py develop
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.7.3-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.7.3-slim

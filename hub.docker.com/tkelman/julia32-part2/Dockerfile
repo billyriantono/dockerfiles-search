@@ -1,0 +1,18 @@
+FROM tkelman/julia32-part1:master
+MAINTAINER Tony Kelman <tony@kelman.net>
+
+WORKDIR /home/julia-i686
+RUN git pull && \
+    DEPS="llvm libuv openlibm openspecfun utf8proc fftw \
+          dsfmt Rmath-julia unwind patchelf virtualenv" && \
+    INSTALL="" && DISTCLEAN="" && \
+    for dep in $DEPS; do \
+      INSTALL="$INSTALL install-$dep" && \
+      DISTCLEAN="$DISTCLEAN distclean-$dep"; \
+    done && \
+    make -j2 -C deps $INSTALL && \
+    make -C deps $DISTCLEAN && \
+    echo "# the following line is a hack to avoid rebuilding deps after distclean'ed" >> Make.user && \
+    echo 'override DEP_LIBS =' >> Make.user
+# distclean should leave in place the installed libraries and headers
+#

@@ -1,0 +1,163 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "DOTNET_VERSION",
+      "DefaultValue": "3.0",
+      "ProvidedValue": null,
+      "Value": "3.0"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "qemu",
+      "BaseName": "multiarch/qemu-user-static:x86_64-aarch64",
+      "SourceCode": "FROM multiarch/qemu-user-static:x86_64-aarch64 as qemu",
+      "Platform": "",
+      "As": "qemu",
+      "From": {
+        "Image": "multiarch/qemu-user-static:x86_64-aarch64"
+      },
+      "Commands": null
+    },
+    {
+      "Name": "qemu_extract",
+      "BaseName": "alpine",
+      "SourceCode": "FROM alpine as qemu_extract",
+      "Platform": "",
+      "As": "qemu_extract",
+      "From": {
+        "Image": "alpine"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "qemu",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/bin",
+            "qemu-aarch64-static.tar.gz"
+          ]
+        },
+        {
+          "CmdLine": [
+            "tar -xzvf qemu-aarch64-static.tar.gz"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "builder",
+      "BaseName": "microsoft/dotnet:${DOTNET_VERSION}-sdk-stretch",
+      "SourceCode": "FROM microsoft/dotnet:${DOTNET_VERSION}-sdk-stretch as builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "microsoft/dotnet:${DOTNET_VERSION}-sdk-stretch"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/repo"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "."
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "DOTNET_CLI_TELEMETRY_OPTOUT",
+              "Value": "1"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "find . -type f -exec sed -i 's/netcoreapp2.1/netcoreapp3.0/g' {} \\;"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "find . -type d -name obj | xargs -r rm -r"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "dotnet publish     -r linux-arm64     --configuration release     --output /jellyfin     Jellyfin.Server"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "microsoft/dotnet:${DOTNET_VERSION}-runtime-stretch-slim-arm64v8",
+      "SourceCode": "FROM microsoft/dotnet:${DOTNET_VERSION}-runtime-stretch-slim-arm64v8",
+      "Platform": "",
+      "From": {
+        "Image": "microsoft/dotnet:${DOTNET_VERSION}-runtime-stretch-slim-arm64v8"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "qemu_extract",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "qemu-aarch64-static",
+            "/usr/bin"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apt-get update  \u0026\u0026 apt-get install --no-install-recommends --no-install-suggests -y ffmpeg  \u0026\u0026 mkdir -p /cache /config /media  \u0026\u0026 chmod 777 /cache /config /media"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/jellyfin",
+            "/jellyfin"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "8096"
+          ]
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/cache",
+            "/config",
+            "/media"
+          ]
+        },
+        {
+          "CmdLine": [
+            "dotnet /jellyfin/jellyfin.dll --datadir /config --cachedir /cache"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": true
+        }
+      ]
+    }
+  ]
+}

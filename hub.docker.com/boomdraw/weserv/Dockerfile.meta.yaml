@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- BaseName: centos:8
+  Commands:
+  - Key: NGINX_VERSION
+    Name: arg
+    Value: 1.17.5
+  - Key: INSTALL_PATH
+    Name: arg
+    Value: /var/www/imagesweserv
+  - CmdLine:
+    - rpm --import https://sourceforge.net/projects/libjpeg-turbo/files/LJT-GPG-KEY     &&
+      rpmkeys --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-centosofficial     && dnf
+      update -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dnf install -y dnf-utils     && dnf config-manager --add-repo https://libjpeg-turbo.org/pmwiki/uploads/Downloads/libjpeg-turbo.repo     &&
+      dnf install -y libjpeg-turbo-official     && echo '/opt/libjpeg-turbo/lib64'
+      >> /etc/ld.so.conf.d/libjpeg-turbo-official-x86_64.conf     && ldconfig
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PKG_CONFIG_PATH
+      Value: /opt/libjpeg-turbo/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+    Name: env
+  - CmdLine:
+    - dnf install -y epel-release     && rpmkeys --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-8     &&
+      dnf config-manager --set-enabled PowerTools     && dnf install -y https://rpms.remirepo.net/enterprise/remi-release-8.rpm     &&
+      rpmkeys --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-remi.el8     && dnf config-manager
+      --set-enabled remi     && dnf install -y --nogpgcheck https://download1.rpmfusion.org/free/el/rpmfusion-free-release-8.noarch.rpm     &&
+      rpmkeys --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-rpmfusion-free-el-8      &&
+      dnf install -y --setopt=tsflags=nodocs         git         cmake3         vips-full-devel         make         gcc         gcc-c++         openssl-devel         pcre-devel         zlib-devel
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd nginx && useradd -r -g nginx -s /sbin/nologin -c "Nginx web server"
+      nginx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/weserv/images.git ${INSTALL_PATH}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf ${INSTALL_PATH}/public
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - mkdir ${INSTALL_PATH}/build     && cd ${INSTALL_PATH}/build     && cmake3 ..        -DCMAKE_BUILD_TYPE=Release        -DNGX_VERSION=$NGINX_VERSION        -DCUSTOM_NGX_FLAGS="--prefix=/usr/share/nginx;--sbin-path=/usr/sbin/nginx;--modules-path=/usr/lib64/nginx/modules;--conf-path=/etc/nginx/nginx.conf;--error-log-path=/var/log/nginx/error.log;--http-log-path=/var/log/nginx/access.log;--http-client-body-temp-path=/var/lib/nginx/tmp/client_body;--http-proxy-temp-path=/var/lib/nginx/tmp/proxy;--http-fastcgi-temp-path=/var/lib/nginx/tmp/fastcgi;--http-uwsgi-temp-path=/var/lib/nginx/tmp/uwsgi;--http-scgi-temp-path=/var/lib/nginx/tmp/scgi;--pid-path=/run/nginx.pid;--lock-path=/run/lock/subsys/nginx;--user=nginx;--group=nginx"     &&
+      make -j$(nproc)     && ldconfig     && cd ..
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p -m 700 /var/lib/nginx     && mkdir -p -m 700 /var/lib/nginx/tmp     &&
+      mkdir -p -m 700 /var/log/nginx     && mkdir -p -m 755 /usr/share/nginx/html     &&
+      mkdir -p -m 755 /usr/lib64/nginx/modules
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sf /dev/stdout /var/log/nginx/weserv-access.log     && ln -sf /dev/stderr
+      /var/log/nginx/weserv-error.log
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: stopsignal
+    Signal: SIGTERM
+  - CmdLine:
+    - nginx
+    - -g
+    - daemon off;
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: centos:8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:8

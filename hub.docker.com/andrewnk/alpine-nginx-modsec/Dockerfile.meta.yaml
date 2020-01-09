@@ -1,0 +1,140 @@
+MetaArgs: null
+Stages:
+- As: build_modsecurity
+  BaseName: nginx:alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps         gcc         libc-dev         make         openssl-dev         pcre-dev         zlib-dev         linux-headers         curl         gnupg         libxslt-dev         gd-dev         perl-dev     &&
+      apk add --no-cache --virtual .libmodsecurity-deps         pcre-dev         libxml2-dev         git         libtool         automake         autoconf         g++         flex         bison         yajl-dev     &&
+      apk add --no-cache         geoip         geoip-dev         yajl         libstdc++         git         sed         libmaxminddb-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/ModSecurity
+  - CmdLine:
+    - echo "Installing ModSec Library" &&     git clone -b v3/master --single-branch
+      https://github.com/SpiderLabs/ModSecurity . &&     git submodule init &&     git
+      submodule update &&     ./build.sh &&     ./configure && make && make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt
+  - CmdLine:
+    - echo 'Installing ModSec - Nginx connector' &&     git clone --depth 1 https://github.com/SpiderLabs/ModSecurity-nginx.git
+      &&     wget http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz &&     tar
+      zxvf nginx-$NGINX_VERSION.tar.gz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/GeoIP
+  - CmdLine:
+    - git clone -b master --single-branch https://github.com/leev/ngx_http_geoip2_module.git
+      .
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/nginx-$NGINX_VERSION
+  - CmdLine:
+    - ./configure --with-compat --add-dynamic-module=../ModSecurity-nginx  --add-dynamic-module=../GeoIP
+      &&     make modules &&     cp objs/ngx_http_modsecurity_module.so objs/ngx_http_geoip2_module.so
+      /etc/nginx/modules &&     rm -f /usr/local/modsecurity/lib/libmodsecurity.a
+      /usr/local/modsecurity/lib/libmodsecurity.la
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt
+  - CmdLine:
+    - echo "Begin installing ModSec OWASP Rules" &&     git clone -b v3.2/master https://github.com/SpiderLabs/owasp-modsecurity-crs
+      &&     mv owasp-modsecurity-crs/ /usr/local/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /etc/nginx/modsec &&     rm -fr /etc/nginx/conf.d/ &&     rm -fr /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/nginx/
+    - /etc/nginx/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/modsec/
+    - /etc/nginx/modsec/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/owasp/
+    - /usr/local/owasp-modsecurity-crs/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - errors
+    - /usr/share/nginx/errors
+  - CmdLine:
+    - mkdir -p /etc/nginx/geoip &&     wget http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz
+      &&     wget http://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz
+      &&     tar -xvzf GeoLite2-City.tar.gz --strip-components=1 &&     tar -xvzf
+      GeoLite2-Country.tar.gz --strip-components=1 &&     mv *.mmdb /etc/nginx/geoip/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R nginx:nginx /usr/share/nginx /etc/nginx
+    Name: run
+    PrependShell: true
+  From:
+    Image: nginx:alpine
+  Name: build_modsecurity
+  Platform: ""
+  SourceCode: FROM nginx:alpine as build_modsecurity
+- BaseName: nginx:alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Andrew Kimball"'
+    Name: label
+  - CmdLine:
+    - mkdir /etc/nginx/modsec &&     rm -fr /etc/nginx/conf.d/ &&     rm -fr /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build_modsecurity
+    Name: copy
+    SourcesAndDest:
+    - /etc/nginx/.
+    - /etc/nginx/
+  - Chown: ""
+    From: build_modsecurity
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/.
+    - /usr/local/.
+  - Chown: ""
+    From: build_modsecurity
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/nginx/errors
+    - /usr/share/nginx/errors
+  - Chown: ""
+    From: build_modsecurity
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/nginx/modules/.
+    - /usr/lib/nginx/modules/
+  - CmdLine:
+    - apk upgrade --no-cache       && apk add --no-cache              yajl              libstdc++              libmaxminddb-dev              tzdata       &&
+      chown -R nginx:nginx /usr/share/nginx /etc/nginx
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/share/nginx/html
+  From:
+    Image: nginx:alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx:alpine

@@ -1,0 +1,148 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:testing
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - tools/rootfs.tar.xz
+    - /
+  - CmdLine:
+    - useradd docker     && mkdir /home/docker     && chown docker:docker /home/docker     &&
+      addgroup docker staff
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends         ed         less         locales         vim-tiny         wget         ca-certificates         procps     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen     && locale-gen en_US.utf8     &&
+      /usr/sbin/update-locale LANG=en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - CmdLine:
+    - echo "deb http://http.debian.net/debian sid main" > /etc/apt/sources.list.d/debian-unstable.list     &&
+      echo 'APT::Default-Release "testing";' > /etc/apt/apt.conf.d/default
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: R_BASE_VERSION
+      Value: 3.3.2
+    Name: env
+  - CmdLine:
+    - apt-get update     && apt-get install -t unstable -y --no-install-recommends         littler                 r-cran-littler         r-base=${R_BASE_VERSION}*         r-base-dev=${R_BASE_VERSION}*         r-recommended=${R_BASE_VERSION}*         &&
+      echo 'options(repos = c(CRAN = "https://cran.rstudio.com/"), download.file.method
+      = "libcurl")' >> /etc/R/Rprofile.site         && echo 'source("/etc/R/Rprofile.site")'
+      >> /etc/littler.r     && ln -s /usr/share/doc/littler/examples/install.r /usr/local/bin/install.r     &&
+      ln -s /usr/share/doc/littler/examples/install2.r /usr/local/bin/install2.r     &&
+      ln -s /usr/share/doc/littler/examples/installGithub.r /usr/local/bin/installGithub.r     &&
+      ln -s /usr/share/doc/littler/examples/testInstalled.r /usr/local/bin/testInstalled.r     &&
+      install.r docopt     && rm -rf /tmp/downloaded_packages/ /tmp/*.rds     && rm
+      -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SYS_LIBS
+      Value: '"${SYSLIBS}"'
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y -t unstable     sudo     gdebi-core     pandoc     pandoc-citeproc     libcurl4-openssl-dev     libssl-dev     libcairo2-dev/unstable     libxt-dev     libnss-wrapper     libxml2-dev     gettext
+      $SYS_LIBS
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget --no-verbose https://s3.amazonaws.com/rstudio-shiny-server-os-build/ubuntu-12.04/x86_64/VERSION
+      -O "version.txt" &&     VERSION=$(cat version.txt)  &&     wget --no-verbose
+      "https://s3.amazonaws.com/rstudio-shiny-server-os-build/ubuntu-12.04/x86_64/shiny-server-$VERSION-amd64.deb"
+      -O ss-latest.deb &&     gdebi -n ss-latest.deb &&     rm -f version.txt ss-latest.deb
+      &&     R -e "install.packages(c('shiny', 'rmarkdown'), repos='https://cran.rstudio.com/')"
+      &&     cp -R /usr/local/lib/R/site-library/shiny/examples/* /srv/shiny-server/
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: R_LIBS
+      Value: '"${RLIBS}"'
+    Name: env
+  - CmdLine:
+    - if [ "$R_LIBS" ];    then    install2.r --error $R_LIBS;    fi
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: R_GH_LIBS
+      Value: '"${RGHLIBS}"'
+    Name: env
+  - CmdLine:
+    - if [ "$R_GH_LIBS" ];    then    install2.r --error devtools; installGithub.r
+      $R_GH_LIBS;    fi
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tools/shiny-server.conf
+    - /etc/shiny-server/
+  - CmdLine:
+    - sudo mkdir -p /var/shinylogs/shiny-server &&     mkdir -p /var/lib/shiny-server/bookmarks
+      &&     chown shiny:shiny /var/shinylogs/shiny-server/ &&     chown shiny:shiny
+      /var/lib/shiny-server/bookmarks/
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3838"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tools/passwd.template
+    - /passwd.template
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tools/run-server.sh
+    - /usr/bin/shiny-server.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tools/run-test.sh
+    - /usr/bin/run-test.sh
+  - CmdLine:
+    - chmod a+x /usr/bin/shiny-server.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod a+x /usr/bin/run-test.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - app/
+    - /srv/shiny-server/
+  - CmdLine:
+    - mkdir /srv/shiny-server/output/ &&     chown -R shiny:shiny /srv/shiny-server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/shiny-server.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:testing
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:testing

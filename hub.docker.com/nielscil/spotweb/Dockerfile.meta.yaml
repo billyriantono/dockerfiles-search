@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:18.04
+  Commands:
+  - Maintainer: Nielscil
+    Name: maintainer
+  - Name: expose
+    Ports:
+    - "80"
+  - Env:
+    - Key: SPOTWEB_VERSION
+      Value: ${SPOTWEB_VERSION:-"1.3.9"}
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - "apt-get update && \tapt-get install -y apache2 php php-curl php-gd php-gmp
+      php-mysql git-core cron wget curl && \tapt-get clean -y && apt-get autoclean
+      -y && apt-get autoremove -y"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "git clone https://github.com/spotweb/spotweb.git /var/www/spotweb && \tcd /var/www/spotweb
+      && \tgit checkout $SPOTWEB_VERSION && \tchmod -R 777 /var/www/spotweb && \tchown
+      -R root:www-data /var/www/spotweb"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: timezone
+      Value: ${timezone:-"Europe/Amsterdam"}
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - 000-default.conf
+    - /etc/apache2/sites-enabled/000-default.conf
+  - CmdLine:
+    - echo "ServerName localhost" >> /etc/apache2/conf-enabled/fqdn.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s@^;date.timezone = *@date.timezone=${timezone}@g" /etc/php/*/*/php.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R www-data:www-data /var/www/spotweb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -r /var/www/html
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/sbin/a2enmod rewrite
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - (crontab -l ; echo "0 * * * * /usr/bin/php /var/www/spotweb/retrieve.php | tee
+      /var/log/spotweb-retrieve.log") | crontab -
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DOCKERIZE_VERSION
+      Value: ${DOCKERIZE_VERSION:-"0.6.1"}
+    Name: env
+  - CmdLine:
+    - wget https://github.com/jwilder/dockerize/releases/download/v${DOCKERIZE_VERSION}/dockerize-linux-amd64-v${DOCKERIZE_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar -C /usr/local/bin -xzvf dockerize-linux-amd64-v${DOCKERIZE_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - Health:
+      Test:
+      - CMD-SHELL
+      - curl --fail 'http://localhost:80/spotweb/' || exit 1
+    Name: healthcheck
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

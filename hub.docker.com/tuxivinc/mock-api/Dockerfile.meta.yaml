@@ -1,0 +1,69 @@
+MetaArgs: null
+Stages:
+- As: build-mvn
+  BaseName: maven:3.6-jdk-11-slim
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src
+    - /build/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./pom.xml
+    - /build/pom.xml
+  - CmdLine:
+    - cd /build && mvn clean package
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.6-jdk-11-slim
+  Name: build-mvn
+  Platform: ""
+  SourceCode: FROM maven:3.6-jdk-11-slim as build-mvn
+- BaseName: openjdk:11-slim
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"vdrouard.pro@gmail.com"'
+    Name: label
+  - Chown: ""
+    From: build-mvn
+    Name: copy
+    SourcesAndDest:
+    - /build/target/mock-api*.jar
+    - /mock/mock-api.jar
+  - CmdLine:
+    - apt-get update && apt-get install -y wget
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /mock
+  - Env:
+    - Key: JAVA_OPTS
+      Value: '""'
+    Name: env
+  - Name: expose
+    Ports:
+    - "8050"
+  - Health:
+      Interval: 2000000000
+      Test:
+      - CMD-SHELL
+      - wget --spider -S 'http://localhost:8050/mock-api/healthcheck' 2>&1 | grep
+        "HTTP/1.1 200" 1>/dev/null || exit 1
+    Name: healthcheck
+  - CmdLine:
+    - sh
+    - -c
+    - java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -jar /mock/mock-api.jar
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:11-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:11-slim

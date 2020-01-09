@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.9
+  Commands:
+  - Name: workdir
+    Path: /go/bin
+  - CmdLine:
+    - go get -d -v github.com/lumenbox/stellar-go/services/federation
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/lumenbox/stellar-go/services/federation
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o federation .
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/
+  - Key: CONFD_VERSION
+    Name: arg
+    Value: 0.15.0
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/kelseyhightower/confd/releases/download/v${CONFD_VERSION}/confd-${CONFD_VERSION}-linux-amd64
+    - /tmp/confd
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - confd
+    - /etc/confd
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - localhost*
+    - wait-for-it.sh
+    - /
+  - CmdLine:
+    - chmod 755 /go/src/github.com/lumenbox/stellar-go/services/federation/federation
+      &&   chmod 755 /tmp/confd &&   chmod 755 /etc/confd/confd-wrapper.sh &&   chmod
+      755 /wait-for-it.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.9
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.9 as builder
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk --no-cache add ca-certificates bash
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/lumenbox/stellar-go/services/federation/federation
+    - /tmp/confd
+    - /localhost*
+    - /wait-for-it.sh
+    - /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/confd
+    - /etc/confd
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - /etc/confd/confd-wrapper.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

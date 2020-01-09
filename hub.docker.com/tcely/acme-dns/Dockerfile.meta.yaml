@@ -1,0 +1,87 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"acme-dns@tcely.33mail.com"'
+    Name: label
+  - CmdLine:
+    - apk add --update gcc musl-dev git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/tcely/acme-dns
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/tcely/acme-dns
+  - CmdLine:
+    - CGO_ENABLED=1 go build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv acme-dns /acme-dns && git checkout latest && mv config.cfg /config.cfg
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1-alpine AS builder
+- BaseName: tcely/alpine-aports
+  Commands:
+  - Name: expose
+    Ports:
+    - 10053/tcp
+    - 10053/udp
+    - 10080/tcp
+    - 10443/tcp
+  - CmdLine:
+    - /usr/local/bin/acme-dns
+    Name: entrypoint
+    PrependShell: false
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /acme-dns
+    - /usr/local/bin/acme-dns
+  - CmdLine:
+    - mkdir -p /etc/acme-dns /var/lib/acme-dns && chown -R postgres:postgres /var/lib/acme-dns
+      && ln -s acme-dns /var/lib/postgresql
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /config.cfg
+    - /etc/acme-dns/config.cfg
+  - Name: volume
+    Volumes:
+    - /etc/acme-dns
+    - /var/lib/acme-dns
+  - CmdLine:
+    - apk --no-cache add ca-certificates curl
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/lib/acme-dns
+  - Name: user
+    User: postgres:postgres
+  - Health:
+      Test:
+      - CMD-SHELL
+      - curl --silent --insecure -w '%{http_code}\n' "$(awk 'BEGIN {scheme="http";
+        ip="127.0.0.1"; port="80";} /^tls =/ {scheme="http"; if ($NF !~ /none/) {scheme=scheme
+        "s";}} /^ip =/ {ip=$NF; gsub(/"/, "", ip);} /^port =/ {port=$NF; gsub(/"/,
+        "", port);} END {printf "%s://%s:%d/health\n", scheme, ip, port;}' /etc/acme-dns/config.cfg)"
+        | awk 'BEGIN { rc=1; } /^200$/ { rc=0; } END { exit rc; }'
+    Name: healthcheck
+  From:
+    Image: tcely/alpine-aports
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tcely/alpine-aports

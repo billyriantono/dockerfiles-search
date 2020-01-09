@@ -1,0 +1,158 @@
+MetaArgs: null
+Stages:
+- As: maven-git
+  BaseName: maven:3.6.1-jdk-11
+  Commands: null
+  From:
+    Image: maven:3.6.1-jdk-11
+  Name: maven-git
+  Platform: ""
+  SourceCode: FROM maven:3.6.1-jdk-11 as maven-git
+- As: mavencache
+  BaseName: maven-git
+  Commands:
+  - Env:
+    - Key: MAVEN_OPTS
+      Value: -Dmaven.repo.local=/mvn
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pom.xml
+    - /mvn/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cli/pom.xml
+    - /mvn/cli/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - commons-lib/pom.xml
+    - /mvn/commons-lib/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - core/pom.xml
+    - /mvn/core/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - test-lib/pom.xml
+    - /mvn/test-lib/
+  - Name: workdir
+    Path: /mvn
+  - CmdLine:
+    - 'mvn compile dependency:resolve dependency:resolve-plugins # --fail-never'
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: maven-git
+  Name: mavencache
+  Platform: ""
+  SourceCode: FROM maven-git as mavencache
+- As: mavenbuild
+  BaseName: maven-git
+  Commands:
+  - Key: ADDITIONAL_BUILD_ARG
+    Name: arg
+    Value: null
+  - Env:
+    - Key: MAVEN_OPTS
+      Value: -Dmaven.repo.local=/mvn
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /mvn
+  - Chown: ""
+    From: mavencache
+    Name: copy
+    SourcesAndDest:
+    - /mvn/
+    - /mvn/
+  - Name: workdir
+    Path: /mvn
+  - CmdLine:
+    - set -x && mvn package -Djar ${ADDITIONAL_BUILD_ARG}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /mvn/cli/target/colander-cli-*-sources.jar &&     rm -rf /mvn/cli/target/colander-cli-*-javadoc.jar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /mvn/cli/target/colander-cli-*.jar /colander.jar
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: maven-git
+  Name: mavenbuild
+  Platform: ""
+  SourceCode: FROM maven-git as mavenbuild
+- BaseName: gcr.io/distroless/java@sha256:da8aa0fa074d0ed9c4b71ad15af5dffdf6afdd768efbe2f0f7b0d60829278630
+  Commands:
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: SOURCE_REPOSITORY_URL
+    Name: arg
+    Value: null
+  - Key: GIT_TAG
+    Name: arg
+    Value: null
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.opencontainers.image.created
+      Value: '"${BUILD_DATE}"'
+    - Key: org.opencontainers.image.authors
+      Value: '"schnatterer"'
+    - Key: org.opencontainers.image.url
+      Value: '"https://hub.docker.com/r/schnatterer/colander/"'
+    - Key: org.opencontainers.image.documentation
+      Value: '"https://hub.docker.com/r/schnatterer/colander/"'
+    - Key: org.opencontainers.image.source
+      Value: '"${SOURCE_REPOSITORY_URL}"'
+    - Key: org.opencontainers.image.version
+      Value: '"${GIT_TAG}"'
+    - Key: org.opencontainers.image.revision
+      Value: '"${VCS_REF}"'
+    - Key: org.opencontainers.image.vendor
+      Value: '"schnatterer"'
+    - Key: org.opencontainers.image.licenses
+      Value: '"MIT"'
+    - Key: org.opencontainers.image.title
+      Value: '"colander"'
+    - Key: org.opencontainers.image.description
+      Value: '"colander - filtering your calendar"'
+    Name: label
+  - Chown: ""
+    From: mavenbuild
+    Name: copy
+    SourcesAndDest:
+    - /colander.jar
+    - /app/colander.jar
+  - CmdLine:
+    - java
+    - -jar
+    - /app/colander.jar
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: gcr.io/distroless/java@sha256:da8aa0fa074d0ed9c4b71ad15af5dffdf6afdd768efbe2f0f7b0d60829278630
+  Name: ""
+  Platform: ""
+  SourceCode: FROM gcr.io/distroless/java@sha256:da8aa0fa074d0ed9c4b71ad15af5dffdf6afdd768efbe2f0f7b0d60829278630

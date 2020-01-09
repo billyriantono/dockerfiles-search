@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: node:10.16.0-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apk add --no-cache tini curl
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.16.0-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:10.16.0-alpine AS base
+- As: dependencies
+  BaseName: node:10.16.0-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apk add --no-cache python make g++
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache g++
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - .
+  - CmdLine:
+    - yarn install --prod
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -R node_modules prod_node_modules
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.16.0-alpine
+  Name: dependencies
+  Platform: ""
+  SourceCode: FROM node:10.16.0-alpine AS dependencies
+- As: release
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - tini node src/index.js
+    Name: cmd
+    PrependShell: true
+  - Chown: ""
+    From: dependencies
+    Name: copy
+    SourcesAndDest:
+    - /app/prod_node_modules
+    - ./node_modules
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - src
+  - Health:
+      Test:
+      - CMD-SHELL
+      - curl -f http://localhost/health || exit 1
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - "80"
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: release
+  Platform: ""
+  SourceCode: FROM base AS release

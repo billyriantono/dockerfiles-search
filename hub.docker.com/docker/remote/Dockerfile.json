@@ -1,0 +1,159 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "build_env",
+      "BaseName": "golang:1.8",
+      "SourceCode": "FROM golang:1.8 AS build_env",
+      "Platform": "",
+      "As": "build_env",
+      "From": {
+        "Image": "golang:1.8"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/go/src/github.com/fermayo/remote/"
+        },
+        {
+          "Env": [
+            {
+              "Key": "CGO_ENABLED",
+              "Value": "0"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "GOARCH",
+              "Value": "amd64"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "GOOS",
+              "Value": "linux"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            ".",
+            "/go/src/github.com/fermayo/remote"
+          ]
+        },
+        {
+          "CmdLine": [
+            "GOOS=linux go build -v -o /remote-server ./cmd/remote-server"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "ngrok_build_env",
+      "BaseName": "golang:1.8-alpine",
+      "SourceCode": "FROM golang:1.8-alpine AS ngrok_build_env",
+      "Platform": "",
+      "As": "ngrok_build_env",
+      "From": {
+        "Image": "golang:1.8-alpine"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/ngrok"
+        },
+        {
+          "CmdLine": [
+            "apk --no-cache add git build-base"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "git clone https://github.com/tutumcloud/ngrok.git /ngrok"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "make release-client"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "docker",
+      "SourceCode": "FROM docker",
+      "Platform": "",
+      "From": {
+        "Image": "docker"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk --no-cache add ca-certificates"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "https://www.gandi.net/static/CAs/GandiStandardSSLCA2.pem",
+            "/usr/share/ca-certificates/gandi.crt"
+          ]
+        },
+        {
+          "CmdLine": [
+            "cat /usr/share/ca-certificates/gandi.crt \u003e\u003e /etc/ssl/certs/ca-certificates.crt"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "ngrok_build_env",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/ngrok/bin/ngrok",
+            "/usr/bin/ngrok"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build_env",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/remote-server",
+            "/remote-server"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/remote-server",
+            "run"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

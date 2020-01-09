@@ -1,0 +1,124 @@
+MetaArgs: null
+Stages:
+- As: toolchain
+  BaseName: debian:buster
+  Commands:
+  - CmdLine:
+    - echo "deb http://deb.debian.org/debian buster-backports main" > /etc/apt/sources.list.d/backports.list     &&
+      apt-get update && apt-get install -y protobuf-compiler/buster cmake curl clang
+      git     && apt-get clean && rm -r /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain
+      none
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: '"$PATH:/root/.cargo/bin"'
+    Name: env
+  - Name: workdir
+    Path: /libra
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rust-toolchain
+    - /libra/rust-toolchain
+  - CmdLine:
+    - rustup install $(cat rust-toolchain)
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:buster
+  Name: toolchain
+  Platform: ""
+  SourceCode: FROM debian:buster AS toolchain
+- As: builder
+  BaseName: toolchain
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /libra
+  - CmdLine:
+    - cargo build --release -p libra-node -p client && cd target/release && rm -r
+      build deps incremental
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip target/release/client
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: toolchain
+  Name: builder
+  Platform: ""
+  SourceCode: FROM toolchain AS builder
+- As: prod
+  BaseName: debian:buster
+  Commands:
+  - CmdLine:
+    - mkdir -p /opt/libra/bin /opt/libra/etc
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /libra/target/release/client
+    - /opt/libra/bin/libra_client
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/cli/consensus_peers.config.toml
+    - /opt/libra/etc/consensus_peers.config.toml
+  - CmdLine:
+    - /opt/libra/bin/libra_client
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --host
+    - ac.testnet.libra.org
+    - --port
+    - "8001"
+    - -s
+    - /opt/libra/etc/consensus_peers.config.toml
+    Name: cmd
+    PrependShell: false
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: GIT_REV
+    Name: arg
+    Value: null
+  - Key: GIT_UPSTREAM
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    Name: label
+  - Labels:
+    - Key: org.label-schema.vcs-ref
+      Value: $GIT_REV
+    Name: label
+  - Labels:
+    - Key: vcs-upstream
+      Value: $GIT_UPSTREAM
+    Name: label
+  From:
+    Image: debian:buster
+  Name: prod
+  Platform: ""
+  SourceCode: FROM debian:buster AS prod

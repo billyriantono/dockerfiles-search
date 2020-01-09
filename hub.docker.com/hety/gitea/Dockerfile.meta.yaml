@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apk/repositories
+      && sed -i 's/http:/https:/' /etc/apk/repositories
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -eu; apk --no-cache add              gcc              git              make              musl-dev
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOPATH
+      Value: '"/go"'
+    Name: env
+  - Env:
+    - Key: SRC_DIR
+      Value: '"${GOPATH}/src/code.gitea.io/gitea"'
+    Name: env
+  - Name: workdir
+    Path: '"$SRC_DIR"'
+  - Key: GITEA_VERSION
+    Name: arg
+    Value: null
+  - Key: GITEA_REPO_URL
+    Name: arg
+    Value: '"https://github.com/go-gitea/gitea.git"'
+  - CmdLine:
+    - set -eu; git clone --branch "${GITEA_VERSION}" --depth 1 --no-checkout "$GITEA_REPO_URL"
+      .;              git checkout "$GITEA_VERSION"
+    Name: run
+    PrependShell: true
+  - Key: GITEA_BUILD_TAGS
+    Name: arg
+    Value: '"bindata sqlite sqlite_unlock_notify"'
+  - CmdLine:
+    - set -eu; TAGS="$GITEA_BUILD_TAGS" make generate build
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- BaseName: hety/alpine
+  Commands:
+  - CmdLine:
+    - set -eu; apk --no-cache add              bash              ca-certificates              curl              git              linux-pam              openssh              s6              sqlite              su-exec              tzdata
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -eu; addgroup -S -g 1000 git;              adduser -S -D -G git -u 1000
+      -s '/bin/bash' -H -h '/data/git' git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -euo pipefail; echo "root:$(head -c 32 /dev/urandom | base64)" | chpasswd;                        echo
+      "git:$(head -c 32 /dev/urandom | base64)" | chpasswd
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - '"/go/src/code.gitea.io/gitea/gitea"'
+    - '"/usr/local/bin/gitea"'
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files
+    - /
+  - Name: volume
+    Volumes:
+    - /data
+  - Env:
+    - Key: GITEA_CUSTOM
+      Value: '"/data/gitea"'
+    Name: env
+  - CmdLine:
+    - /usr/local/bin/entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "22"
+    - "3000"
+  From:
+    Image: hety/alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM hety/alpine

@@ -1,0 +1,89 @@
+MetaArgs:
+- DefaultValue: "1.12"
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: "1.12"
+Stages:
+- As: build_base
+  BaseName: golang:${GO_VERSION}-stretch
+  Commands:
+  - CmdLine:
+    - apt-get update &&     DEBIAN_FRONTEND=noninteractive apt-get -y upgrade &&     apt-get
+      install -y --no-install-recommends git ca-certificates
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./go.mod
+    - ./go.sum
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:${GO_VERSION}-stretch
+  Name: build_base
+  Platform: ""
+  SourceCode: FROM golang:${GO_VERSION}-stretch as build_base
+- As: build_binaries
+  BaseName: build_base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go install ./cmd/dms-exporter
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build_base
+  Name: build_binaries
+  Platform: ""
+  SourceCode: FROM build_base AS build_binaries
+- As: release
+  BaseName: debian:stretch-slim
+  Commands:
+  - Env:
+    - Key: DEBIAN_VERSION
+      Value: stretch
+    Name: env
+  - CmdLine:
+    - apt-get update &&     DEBIAN_FRONTEND=noninteractive apt-get upgrade -y &&     DEBIAN_FRONTEND=noninteractive
+      apt-get install --no-install-recommends -y -qq     ca-certificates &&     apt-get
+      clean &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -ms /bin/bash aws
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build_binaries
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/dms-exporter
+    - /bin/dms-exporter
+  - Name: user
+    User: aws
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - dms-exporter
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: release
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim AS release

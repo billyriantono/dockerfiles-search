@@ -1,0 +1,121 @@
+MetaArgs:
+- DefaultValue: stretch
+  Key: MERCURY_DEPEND_TAG
+  ProvidedValue: null
+  Value: stretch
+- DefaultValue: /usr/local/mercury
+  Key: MERCURY_DEV_PREFIX
+  ProvidedValue: null
+  Value: /usr/local/mercury
+- DefaultValue: /var/tmp/mercury
+  Key: MERCURY_DEV_TARGET
+  ProvidedValue: null
+  Value: /var/tmp/mercury
+Stages:
+- As: base
+  BaseName: debian:${MERCURY_DEPEND_TAG}
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y     apt-utils     gcc     libc-dev     make     pkg-config
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:${MERCURY_DEPEND_TAG}
+  Name: base
+  Platform: ""
+  SourceCode: FROM debian:${MERCURY_DEPEND_TAG} AS base
+- As: bootstrap
+  BaseName: base
+  Commands:
+  - Key: MERCURY_BOOTSTRAP
+    Name: arg
+    Value: "y"
+  - Key: MERCURY_DL
+    Name: arg
+    Value: http://dl.mercurylang.org/deb/
+  - Key: MERCURY_DEV_DEFAULT_GRADE
+    Name: arg
+    Value: asm_fast.gc
+  - Key: MERCURY_DEV_LIBGRADES
+    Name: arg
+    Value: ${MERCURY_DEV_DEFAULT_GRADE}
+  - Key: MERCURY_DEV_PARALLEL
+    Name: arg
+    Value: -j3
+  - Key: MERCURY_DEV_SOURCE
+    Name: arg
+    Value: .
+  - Key: MERCURY_DEV_PREFIX
+    Name: arg
+    Value: null
+  - Key: MERCURY_DEV_TARGET
+    Name: arg
+    Value: null
+  - Env:
+    - Key: APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE
+      Value: "y"
+    Name: env
+  - CmdLine:
+    - ( echo 'debconf debconf/frontend select Noninteractive'         | debconf-set-selections
+      ) &&     apt-get update && apt-get install -y         bison         flex         $([
+      "$MERCURY_BOOTSTRAP" != "y" ] ||             echo autoconf automake curl gnupg2
+      lsb-release) &&     [ "${MERCURY_BOOTSTRAP}" != "y" ] ||         (             (
+      curl -fsSL https://paul.bone.id.au/paul.asc | apt-key add - ) &&             printf
+      "%s $MERCURY_DL $(lsb_release -cs) main\n" "deb" "deb-src"                 >
+      /etc/apt/sources.list.d/mercury.list &&             apt-get update && apt-get
+      install -y                 mercury-rotd-recommended         )
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $MERCURY_DEV_TARGET
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ${MERCURY_DEV_SOURCE}
+    - .
+  - CmdLine:
+    - (         ([ -f ./configure ] || ./prepare.sh)         && ./configure             --enable-libgrades=$MERCURY_DEV_LIBGRADES             --with-default-grade=$MERCURY_DEFAULT_GRADE             --prefix=$MERCURY_DEV_PREFIX             --disable-symlinks         &&
+      make PARALLEL=$MERCURY_DEV_PARALLEL install         && rm -fR ${MERCURY_BOOTSTRAP_TARGET}         &&
+      rm -fR $MERCURY_DEV_TARGET     )
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: bootstrap
+  Platform: ""
+  SourceCode: FROM base AS bootstrap
+- As: compiler
+  BaseName: base
+  Commands:
+  - Key: MERCURY_DEV_PREFIX
+    Name: arg
+    Value: null
+  - Key: MERCURY_DEV_TARGET
+    Name: arg
+    Value: null
+  - Name: workdir
+    Path: $MERCURY_DEV_TARGET
+  - Chown: ""
+    From: bootstrap
+    Name: copy
+    SourcesAndDest:
+    - $MERCURY_DEV_PREFIX
+    - $MERCURY_DEV_PREFIX
+  - Env:
+    - Key: PATH
+      Value: ${MERCURY_DEV_PREFIX}/bin:$PATH
+    Name: env
+  - CmdLine:
+    - mmc
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: compiler
+  Platform: ""
+  SourceCode: FROM base AS compiler

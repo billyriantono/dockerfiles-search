@@ -1,0 +1,184 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: tgstation/byond:512.1463
+  Commands: null
+  From:
+    Image: tgstation/byond:512.1463
+  Name: base
+  Platform: ""
+  SourceCode: FROM tgstation/byond:512.1463 as base
+- As: build_base
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends     git     ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: build_base
+  Platform: ""
+  SourceCode: FROM base as build_base
+- As: rust_g
+  BaseName: build_base
+  Commands:
+  - Name: workdir
+    Path: /rust_g
+  - CmdLine:
+    - apt-get install -y --no-install-recommends     libssl-dev     pkg-config     curl     gcc-multilib     &&
+      curl https://sh.rustup.rs -sSf | sh -s -- -y --default-host i686-unknown-linux-gnu     &&
+      git init     && git remote add origin https://github.com/tgstation/rust-g
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dependencies.sh
+    - .
+  - CmdLine:
+    - /bin/bash -c "source dependencies.sh     && git fetch --depth 1 origin \$RUST_G_VERSION"     &&
+      git checkout FETCH_HEAD     && ~/.cargo/bin/cargo build --release
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build_base
+  Name: rust_g
+  Platform: ""
+  SourceCode: FROM build_base as rust_g
+- As: bsql
+  BaseName: build_base
+  Commands:
+  - Name: workdir
+    Path: /bsql
+  - CmdLine:
+    - apt-get install -y --no-install-recommends software-properties-common     &&
+      add-apt-repository ppa:ubuntu-toolchain-r/test     && apt-get update     &&
+      apt-get install -y --no-install-recommends     cmake     make     g++-7     libmariadb-client-lgpl-dev     &&
+      git init     && git remote add origin https://github.com/tgstation/BSQL
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dependencies.sh
+    - .
+  - CmdLine:
+    - /bin/bash -c "source dependencies.sh     && git fetch --depth 1 origin \$BSQL_VERSION"     &&
+      git checkout FETCH_HEAD
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /bsql/artifacts
+  - Env:
+    - Key: CC
+      Value: gcc-7
+    - Key: CXX
+      Value: g++-7
+    Name: env
+  - CmdLine:
+    - ln -s /usr/include/mariadb /usr/include/mysql     && ln -s /usr/lib/i386-linux-gnu
+      /root/MariaDB     && cmake ..     && make
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build_base
+  Name: bsql
+  Platform: ""
+  SourceCode: FROM build_base as bsql
+- As: dm_base
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /tgstation
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: dm_base
+  Platform: ""
+  SourceCode: FROM base as dm_base
+- As: build
+  BaseName: dm_base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - DreamMaker -max_errors 0 tgstation.dme && tools/deploy.sh /deploy
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 4
+      Named: dm_base
+  Name: build
+  Platform: ""
+  SourceCode: FROM dm_base as build
+- BaseName: dm_base
+  Commands:
+  - Name: expose
+    Ports:
+    - "1337"
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends software-properties-common     &&
+      add-apt-repository ppa:ubuntu-toolchain-r/test     && apt-get update     &&
+      apt-get upgrade -y     && apt-get dist-upgrade -y     && apt-get install -y
+      --no-install-recommends     libmariadb2     mariadb-client     libssl1.0.0     &&
+      rm -rf /var/lib/apt/lists/*     && mkdir -p /root/.byond/bin
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: rust_g
+    Name: copy
+    SourcesAndDest:
+    - /rust_g/target/release/librust_g.so
+    - /root/.byond/bin/rust_g
+  - Chown: ""
+    From: bsql
+    Name: copy
+    SourcesAndDest:
+    - /bsql/artifacts/src/BSQL/libBSQL.so
+    - ./
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /deploy
+    - ./
+  - CmdLine:
+    - ln -s /tgstation/libBSQL.so /root/.byond/bin/libBSQL.so
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /tgstation/config
+    - /tgstation/data
+  - CmdLine:
+    - DreamDaemon
+    - tgstation.dmb
+    - -port
+    - "1337"
+    - -trusted
+    - -close
+    - -verbose
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 4
+      Named: dm_base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM dm_base

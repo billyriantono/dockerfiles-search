@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- As: node-builder
+  BaseName: node:8.11
+  Commands:
+  - Name: user
+    User: root
+  - Key: UI_PATH
+    Name: arg
+    Value: /opt/simple-vote/ui
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ui
+    - ${UI_PATH}
+  - Name: workdir
+    Path: ${UI_PATH}
+  - Key: ENDPOINT_NAME
+    Name: arg
+    Value: http://localhost:4567
+  - CmdLine:
+    - echo "ENDPOINT_NAME is ${ENDPOINT_NAME}"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo "export const environment = {production: true,endpoint: ''${ENDPOINT_NAME}/'',websocket:
+      ''ws`echo ${ENDPOINT_NAME}|cut -b 5-999`/poll''};" > src/environments/environment.prod.ts'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cat src/environments/environment.prod.ts
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn build --prod --aot
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8.11
+  Name: node-builder
+  Platform: ""
+  SourceCode: FROM node:8.11 as node-builder
+- As: java-builder
+  BaseName: maven:3.5.4-jdk-8-slim
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - service
+    - /opt/simple-vote/service
+  - Chown: ""
+    From: node-builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/simple-vote/ui/dist
+    - /opt/simple-vote/service/src/main/resources
+  - Name: workdir
+    Path: /opt/simple-vote/service
+  - CmdLine:
+    - mvn clean install -DskipTests -Dliquibase.skip
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.5.4-jdk-8-slim
+  Name: java-builder
+  Platform: ""
+  SourceCode: FROM maven:3.5.4-jdk-8-slim as java-builder
+- BaseName: openjdk:8-slim
+  Commands:
+  - Chown: ""
+    From: java-builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/simple-vote/service/target/simplevote.jar
+    - /opt/simplevote.jar
+  From:
+    Image: openjdk:8-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-slim

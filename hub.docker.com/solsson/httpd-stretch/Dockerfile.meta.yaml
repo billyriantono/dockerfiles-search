@@ -1,0 +1,93 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stretch-slim@sha256:ea42520331a55094b90f6f6663211d4f5a62c5781673935fe17a4dfced777029
+  Commands:
+  - Env:
+    - Key: HTTPD_PREFIX
+      Value: /usr/local/apache2
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $HTTPD_PREFIX/bin:$PATH
+    Name: env
+  - CmdLine:
+    - "mkdir -p \"$HTTPD_PREFIX\" \t&& chown www-data:www-data \"$HTTPD_PREFIX\""
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $HTTPD_PREFIX
+  - Env:
+    - Key: NGHTTP2_VERSION
+      Value: 1.18.1-1
+    Name: env
+  - Env:
+    - Key: OPENSSL_VERSION
+      Value: 1.1.0f-3+deb9u1
+    Name: env
+  - CmdLine:
+    - "export DEBIAN_FRONTEND=noninteractive \t&& apt-get update \t&& apt-get install
+      -y --no-install-recommends \t\tlibapr1 \t\tlibaprutil1 \t\tlibaprutil1-ldap
+      \t\tlibapr1-dev \t\tlibaprutil1-dev \t\tliblua5.2-0 \t\tlibnghttp2-14=$NGHTTP2_VERSION
+      \t\tlibpcre++0v5 \t\tlibssl1.1=$OPENSSL_VERSION \t\tlibxml2 \t&& rm -r /var/lib/apt/lists/*
+      \t&& rm -rf /var/log/dpkg.log /var/log/alternatives.log /var/log/apt"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HTTPD_VERSION
+      Value: 2.4.29
+    Name: env
+  - Env:
+    - Key: HTTPD_SHA256
+      Value: 777753a5a25568a2a27428b2214980564bc1c38c1abf9ccc7630b639991f7f00
+    Name: env
+  - Env:
+    - Key: HTTPD_PATCHES
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: APACHE_DIST_URLS
+      Value: "https://www.apache.org/dyn/closer.cgi?action=download&filename= \thttps://www-us.apache.org/dist/
+        \thttps://www.apache.org/dist/ \thttps://archive.apache.org/dist/"
+    Name: env
+  - CmdLine:
+    - "set -eux; \texport DEBIAN_FRONTEND=noninteractive; \t\tbuildDeps=\" \t\tbzip2
+      \t\tca-certificates \t\tgnupg2 dirmngr \t\tdpkg-dev \t\tgcc \t\tliblua5.2-dev
+      \t\tlibnghttp2-dev=$NGHTTP2_VERSION \t\tlibpcre++-dev \t\tlibssl-dev=$OPENSSL_VERSION
+      \t\tlibxml2-dev \t\tzlib1g-dev \t\tmake \t\twget \t\"; \tapt-get update; \tapt-get
+      install -y --no-install-recommends -V $buildDeps; \trm -r /var/lib/apt/lists/*;
+      \t\tddist() { \t\tlocal f=\"$1\"; shift; \t\tlocal distFile=\"$1\"; shift; \t\tlocal
+      success=; \t\tlocal distUrl=; \t\tfor distUrl in $APACHE_DIST_URLS; do \t\t\tif
+      wget -O \"$f\" \"$distUrl$distFile\"; then \t\t\t\tsuccess=1; \t\t\t\tbreak;
+      \t\t\tfi; \t\tdone; \t\t[ -n \"$success\" ]; \t}; \t\tddist 'httpd.tar.bz2'
+      \"httpd/httpd-$HTTPD_VERSION.tar.bz2\"; \techo \"$HTTPD_SHA256 *httpd.tar.bz2\"
+      | sha256sum -c -; \t\tddist 'httpd.tar.bz2.asc' \"httpd/httpd-$HTTPD_VERSION.tar.bz2.asc\";
+      \texport GNUPGHOME=\"$(mktemp -d)\"; \tgpg --keyserver ha.pool.sks-keyservers.net
+      --recv-keys A93D62ECC3C8EA12DB220EC934EA76E6791485A8; \tgpg --batch --verify
+      httpd.tar.bz2.asc httpd.tar.bz2; \trm -rf \"$GNUPGHOME\" httpd.tar.bz2.asc;
+      \t\tmkdir -p src; \ttar -xf httpd.tar.bz2 -C src --strip-components=1; \trm
+      httpd.tar.bz2; \tcd src; \t\tpatches() { \t\twhile [ \"$#\" -gt 0 ]; do \t\t\tlocal
+      patchFile=\"$1\"; shift; \t\t\tlocal patchSha256=\"$1\"; shift; \t\t\tddist
+      \"$patchFile\" \"httpd/patches/apply_to_$HTTPD_VERSION/$patchFile\"; \t\t\techo
+      \"$patchSha256 *$patchFile\" | sha256sum -c -; \t\t\tpatch -p0 < \"$patchFile\";
+      \t\t\trm -f \"$patchFile\"; \t\tdone; \t}; \tpatches $HTTPD_PATCHES; \t\tgnuArch=\"$(dpkg-architecture
+      --query DEB_BUILD_GNU_TYPE)\"; \t./configure \t\t--build=\"$gnuArch\" \t\t--prefix=\"$HTTPD_PREFIX\"
+      \t\t--enable-mods-shared=reallyall \t; \tmake -j \"$(nproc)\"; \tmake install;
+      \t\tcd ..; \trm -r src man manual; \t\tsed -ri \t\t-e 's!^(\\s*CustomLog)\\s+\\S+!\\1
+      /proc/self/fd/1!g' \t\t-e 's!^(\\s*ErrorLog)\\s+\\S+!\\1 /proc/self/fd/2!g'
+      \t\t\"$HTTPD_PREFIX/conf/httpd.conf\"; \t\tapt-get purge -y --auto-remove $buildDeps;
+      \trm -rf /var/log/dpkg.log /var/log/alternatives.log /var/log/apt; \trm -f /usr/local/apache2/logs/httpd.pid"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - httpd
+    - -DFOREGROUND
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim@sha256:ea42520331a55094b90f6f6663211d4f5a62c5781673935fe17a4dfced777029
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim@sha256:ea42520331a55094b90f6f6663211d4f5a62c5781673935fe17a4dfced777029

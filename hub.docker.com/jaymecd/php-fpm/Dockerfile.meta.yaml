@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- BaseName: php:7.0-fpm-alpine
+  Commands:
+  - Maintainer: Nikolai Zujev <nikolai.zujev@gmail.com>
+    Name: maintainer
+  - Env:
+    - Key: PHP_EXTENTIONS
+      Value: '"opcache bcmath bz2 ctype gd fileinfo intl mcrypt pdo_mysql sockets
+        xsl zip"'
+    - Key: PECL_EXTENTIONS
+      Value: '"apcu timezonedb xdebug uuid"'
+    - Key: IGBINARY_VERSION
+      Value: master
+    - Key: MEMCACHED_VERSION
+      Value: php7
+    - Key: REDIS_VERSION
+      Value: 3.0.0
+    - Key: GEOIP_VERSION
+      Value: 1.1.1
+    - Key: PHP_INI_TIMEZONE
+      Value: UTC
+    - Key: PHP_INI_MEMORY_LIMIT
+      Value: 512M
+    - Key: XDEBUG_REMOTE_PORT
+      Value: "9000"
+    - Key: NEWRELIC_LICENSE
+      Value: '""'
+    - Key: NEWRELIC_APPNAME
+      Value: '""'
+    Name: env
+  - CmdLine:
+    - set -xe   && PECL_EXCLUDE_REGEX='igbinary|memcached|redis|geoip'   && PECL_EXTENTIONS="$(echo
+      ${PECL_EXTENTIONS} | tr ' ' '\n' | egrep -v ${PECL_EXCLUDE_REGEX} | xargs echo)"   &&
+      NPROC=$(grep -c ^processor /proc/cpuinfo 2>/dev/null || 1)   && apk add -U -u
+      --no-cache --virtual .build-deps       $PHPIZE_DEPS       util-linux-dev       libxml2-dev       libxslt-dev       bzip2-dev       zlib-dev       icu-dev       libmcrypt-dev       freetype-dev       libxpm-dev       libpng-dev       libwebp-dev       libjpeg-turbo-dev       libmemcached-dev       cyrus-sasl-dev       geoip-dev   &&
+      for EXT in ${PHP_EXTENTIONS}; do docker-php-ext-install -j${NPROC} ${EXT} &&
+      ( php -m | grep "^${EXT}$" ); done   && for EXT in ${PECL_EXTENTIONS}; do pecl
+      install ${EXT} && EXT=$(echo ${EXT} | cut -f1 -d-) && docker-php-ext-enable
+      ${EXT} && ( php -m | grep "^${EXT}$" ); done   && curl -fsSL -D - -o /tmp/ext-igbinary.tgz
+      https://github.com/igbinary/igbinary7/archive/${IGBINARY_VERSION}.tar.gz     &&
+      tar zxpf /tmp/ext-igbinary.tgz -C /tmp     && cd /tmp/igbinary7-${IGBINARY_VERSION}     &&
+      phpize && ./configure     && make -j${NPROC} && make install     && docker-php-ext-enable
+      igbinary     && ( php -m | grep "^igbinary$" )   && curl -fsSL -o /tmp/ext-memcached.tgz
+      https://github.com/php-memcached-dev/php-memcached/archive/${MEMCACHED_VERSION}.tar.gz     &&
+      tar zxpf /tmp/ext-memcached.tgz -C /tmp     && cd /tmp/php-memcached-${MEMCACHED_VERSION}     &&
+      phpize && ./configure --disable-memcached-sasl --enable-memcached-igbinary     &&
+      make -j${NPROC} && make install     && docker-php-ext-enable memcached     &&
+      ( php -m | grep "^memcached$" )   && curl -fsSL -o /tmp/ext-redis.tgz https://github.com/phpredis/phpredis/archive/${REDIS_VERSION}.tar.gz     &&
+      tar zxpf /tmp/ext-redis.tgz -C /tmp     && cd /tmp/phpredis-${REDIS_VERSION}     &&
+      phpize && ./configure --enable-redis-igbinary     && make -j${NPROC} && make
+      install     && docker-php-ext-enable redis     && ( php -m | grep "^redis$"
+      )   && curl -fsSL -o /tmp/ext-geoip.tgz https://pecl.php.net/get/geoip-${GEOIP_VERSION}.tgz     &&
+      tar zxpf /tmp/ext-geoip.tgz -C /tmp     && cd /tmp/geoip-${GEOIP_VERSION}     &&
+      phpize && ./configure     && make -j${NPROC} && make install     && docker-php-ext-enable
+      geoip     && ( php -m | grep "^geoip$" )   && curl -fsSL -o /tmp/composer-setup.php
+      https://getcomposer.org/installer     && php /tmp/composer-setup.php -- --install-dir=/usr/local/bin
+      --filename=composer   && RUN_DEPS="$(     scanelf --needed --nobanner --recursive
+      /usr/local       | awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }'       |
+      sort -u       | xargs -r apk info --installed       | sort -u     )"   && apk
+      add --no-cache --virtual .php-rundeps ${RUN_DEPS}   && apk del .build-deps   &&
+      rm -rf /tmp/* /usr/local/etc/php-fpm.*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/
+    - /usr/local/etc/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/local/bin/entrypoint
+  - CmdLine:
+    - entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - php-fpm
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:7.0-fpm-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.0-fpm-alpine

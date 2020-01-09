@@ -1,0 +1,131 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:18.10
+  Commands:
+  - Maintainer: joegagliardo
+    Name: maintainer
+  - Name: user
+    User: root
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - Env:
+    - Key: APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE
+      Value: DontWarn
+    Name: env
+  - Key: MYSQLROOT_PASSWORD
+    Name: arg
+    Value: rootpassword
+  - Key: MYSQL_PASSWORD
+    Name: arg
+    Value: ""
+  - Key: JULIA_VERSION
+    Name: arg
+    Value: 1.0.2
+  - Key: JULIA_BASE_URL
+    Name: arg
+    Value: https://julialang-s3.julialang.org/bin/linux/x64/1.0
+  - Key: JULIA_FILE
+    Name: arg
+    Value: julia-${JULIA_VERSION}-linux-x86_64.tar.gz
+  - Key: JULIA_URL
+    Name: arg
+    Value: ${JULIA_BASE_URL}/${JULIA_FILE}
+  - Key: PIP_URL
+    Name: arg
+    Value: https://bootstrap.pypa.io/get-pip.py
+  - Key: LIBPNG_URL
+    Name: arg
+    Value: http://mirrors.kernel.org/ubuntu/pool/main/libp/libpng/libpng12-0_1.2.54-1ubuntu1_amd64.deb
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - downloads/foo
+    - downloads/${JULIA_FILE}*
+    - /usr/local/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts
+    - /scripts
+  - CmdLine:
+    - "echo \"# ---------------------------------------------\" &&     echo \"# Environment\"
+      &&     echo \"# ---------------------------------------------\" &&     mkdir
+      /data &&     echo \"# needed to stop the error message for matplotlib\" &&     sed
+      -Ei 's/^# deb-src /deb-src /' /etc/apt/sources.list &&     echo \"# ---------------------------------------------\"
+      &&     echo \"# OS Tools\" &&     echo \"# ---------------------------------------------\"
+      &&     apt-get update &&     apt-get -y install curl tar sudo openssh-server
+      openssh-client unzip rsync nano vim software-properties-common git gcc apt-utils
+      netcat debconf apt-transport-https net-tools libaio-dev aptitude libgmp3-dev
+      libmysqlclient-dev python2.7 python2.7-dev python3.7 python3.7-dev python-pip
+      python3-pip clang libicu-dev &&     apk --no-cache --update-cache add gcc gfortran
+      python python-dev py-pip build-base wget freetype-dev libpng-dev openblas-dev
+      &&     echo \"# ---------------------------------------------\" &&     echo
+      \"# Python 2\" &&     echo \"# ---------------------------------------------\"
+      &&     pip2 install numpy scipy pandas cherrypy pymysql pymssql sklearn py4j
+      matplotlib &&     pip2 install pyspark &&     echo \"# ---------------------------------------------\"
+      &&     echo \"# Python 3\" &&     echo \"# ---------------------------------------------\"
+      &&     pip3 install numpy scipy pandas cherrypy pymysql pymssql sklearn py4j
+      matplotlib &&     pip3 install --no-cache-dir pyspark &&     echo \"# ---------------------------------------------\"
+      &&     echo \"# Java repository\" &&     echo \"# ---------------------------------------------\"
+      &&     add-apt-repository ppa:webupd8team/java -y &&     echo \"# ---------------------------------------------\"
+      &&     echo \"# SBT repository\" &&     echo \"# ---------------------------------------------\"
+      &&     echo \"deb https://dl.bintray.com/sbt/debian /\" | sudo tee -a /etc/apt/sources.list.d/sbt.list
+      && \tapt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
+      &&     echo \"# ---------------------------------------------\" &&     echo
+      \"# R repository\" &&     echo \"# ---------------------------------------------\"
+      &&     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9
+      &&     add-apt-repository 'deb [arch=amd64,i386] https://cran.rstudio.com/bin/linux/ubuntu
+      xenial/' &&     apt-get update &&     echo \"# ---------------------------------------------\"
+      &&     echo \"# Java Maven Scala SBT NodeJS NPM Sqlite3\" &&     echo \"# ---------------------------------------------\"
+      &&     apt-get install -y openjdk-11-jdk build-essential maven scala sbt nodejs
+      npm sqlite3 libsqlite3-dev &&     echo \"# ---------------------------------------------\"
+      &&     echo \"# Julia\" &&     echo ${JULIA_URL} &&     echo \"# ---------------------------------------------\"
+      &&     cd /tmp &&     test ! -e /usr/local/julia* && curl -s ${JULIA_URL} |
+      tar -xz -C /usr/local/ || echo \"Julia exists\" &&     ln -s /usr/local/julia*
+      /usr/local/julia &&     echo \"\" &&     echo \"# ---------------------------------------------\"
+      &&     echo \"# R\" &&     echo \"# ---------------------------------------------\"
+      &&     cd /home &&     wget ${LIBPNG_URL} &&     dpkg -i libpng12-0_1.2.54-1ubuntu1_amd64.deb
+      &&     rm /home/* &&     apt-get -y install gdebi libxml2-dev libssl-dev libcurl4-openssl-dev
+      libopenblas-dev &&     aptitude install -y r-cran-spatial r-cran-boot r-recommended
+      r-base-core r-base r-base-html &&     echo \"# ---------------------------------------------\"
+      &&     echo \"# MYSQL\" &&     echo \"# ---------------------------------------------\"
+      && \techo \"mysql-server mysql-server/root_password password ${MYSQLROOT_PASSWORD}\"
+      | debconf-set-selections && \techo \"mysql-server mysql-server/root_password_again
+      password ${MYSQLROOT_PASSWORD}\" | debconf-set-selections &&     apt-get -y
+      install mysql-server mysql-client libmysql-java &&     mkdir /data/mysql &&
+      \    echo \"[client]\" > /etc/my.cnf &&     echo \"user=root\" >> /etc/my.cnf
+      &&     echo \"password=${MYSQLROOT_PASSWORD}\" >> /etc/my.cnf &&     echo \"\"
+      >> /etc/my.cnf &&     echo \"[mysqld]\" >> /etc/my.cnf &&     echo \"datadir=/data/mysql\"
+      >> /etc/my.cnf &&     mysqld --defaults-file=/etc/my.cnf --initialize-insecure
+      --user=mysql --explicit_defaults_for_timestamp &&     usermod -d /data/mysql/
+      mysql &&     echo \"#! /bin/sh\" > /scripts/start-mysql.sh &&     echo \"# weird
+      problem about starting MySQL in a container so I found this article: https://github.com/moby/moby/issues/34390\"
+      &&     echo \"find /var/lib/mysql/mysql -exec touch -c -a {} + && service mysql
+      start\" >> /scripts/start-mysql.sh &&     chmod +x /scripts/start-mysql.sh &&
+      \    echo \"#! /bin/sh\" > /scripts/stop-mysql.sh &&     echo \"/etc/init.d/mysql
+      stop\" >> /scripts/stop-mysql.sh &&     chmod +x /scripts/stop-mysql.sh &&     echo
+      \"# ---------------------------------------------\" &&     echo \"# Notes\"
+      &&     echo \"# ---------------------------------------------\" &&     echo
+      \"alias hist='f(){ history | grep \\\"\\$1\\\";  unset -f f; }; f'\" >> ~/.bashrc
+      &&     echo \"Installation Notes\" > /scripts/notes.txt &&     echo \"\" >>
+      /scripts/notes.txt &&     echo \"# ---------------------------------------------\"
+      && \techo \"# Final Cleanup\" &&     echo \"# ---------------------------------------------\"
+      &&     apt-get -y clean &&     apt-get -y autoremove &&     rm -rf /var/lib/apt/lists/*
+      &&     echo \"# ---------------------------------------------\" && \techo \"#
+      Done\" &&     echo \"# ---------------------------------------------\""
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/java-11-openjdk-amd64
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:/usr/local/julia/bin:$JAVA_HOME/bin:/scripts:/host:/home
+    Name: env
+  From:
+    Image: ubuntu:18.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.10

@@ -1,0 +1,104 @@
+MetaArgs:
+- DefaultValue: '"docker:latest"'
+  Key: DOCKER_IMAGE
+  ProvidedValue: null
+  Value: '"docker:latest"'
+- DefaultValue: '"alpine:latest"'
+  Key: ALPINE_IMAGE
+  ProvidedValue: null
+  Value: '"alpine:latest"'
+Stages:
+- As: docker
+  BaseName: ${DOCKER_IMAGE}
+  Commands: null
+  From:
+    Image: ${DOCKER_IMAGE}
+  Name: docker
+  Platform: ""
+  SourceCode: FROM ${DOCKER_IMAGE} AS docker
+- BaseName: ${ALPINE_IMAGE}
+  Commands:
+  - Maintainer: Uni Mock <unimock@gate-m.de>
+    Name: maintainer
+  - CmdLine:
+    - apk update &&     apk add bash openssh rsync git  &&     mkdir -p ~root/.ssh
+      && chmod 700 ~root/.ssh/ &&     sed -i -e 's/#Port 22/Port 22/' /etc/ssh/sshd_config
+      &&     sed -i -e 's/#PasswordAuthentication yes/PasswordAuthentication no/'
+      /etc/ssh/sshd_config &&     cp -a /etc/ssh /etc/ssh.cache
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add rsnapshot tzdata
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./rsnapshot.conf
+    - /etc/rsnapshot.conf-unimock
+  - CmdLine:
+    - apk add py2-pip &&     pip install --upgrade pip &&     pip install docker-compose
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: docker
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/docker
+    - /usr/bin/docker
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./bin/*
+    - /usr/local/bin/
+  - CmdLine:
+    - echo ". /etc/profile" > /root/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "export PS1='\H:\w\\$ '" >> /etc/profile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "alias ll='ls -alF'"     >> /etc/profile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'export TERM="xterm"'    >> /etc/profile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -f /usr/share/zoneinfo/Europe/Berlin /etc/localtime
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./entry.sh
+    - /entry.sh
+  - Name: expose
+    Ports:
+    - "22"
+  - CmdLine:
+    - /entry.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/sbin/sshd
+    - -D
+    - -f
+    - /etc/ssh/sshd_config
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ${ALPINE_IMAGE}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${ALPINE_IMAGE}

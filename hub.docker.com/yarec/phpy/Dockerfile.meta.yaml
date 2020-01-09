@@ -1,0 +1,207 @@
+MetaArgs: null
+Stages:
+- BaseName: geographica/gdal2
+  Commands:
+  - CmdLine:
+    - "set -eux; \t{ \t\techo 'Package: php*'; \t\techo 'Pin: release *'; \t\techo
+      'Pin-Priority: -1'; \t} > /etc/apt/preferences.d/no-debian-php"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHPIZE_DEPS
+      Value: "autoconf \t\tdpkg-dev \t\tfile \t\tg++ \t\tgcc \t\tlibc-dev \t\tmake
+        \t\tpkg-config \t\tre2c"
+    Name: env
+  - CmdLine:
+    - "apt-get update && apt-get install -y \t\t$PHPIZE_DEPS \t\tca-certificates \t\tcurl
+      \t\txz-utils \t--no-install-recommends && rm -r /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_INI_DIR
+      Value: /usr/local/etc/php
+    Name: env
+  - CmdLine:
+    - mkdir -p $PHP_INI_DIR/conf.d
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_EXTRA_CONFIGURE_ARGS
+      Value: --enable-fpm --with-fpm-user=www-data --with-fpm-group=www-data --disable-cgi
+    Name: env
+  - Env:
+    - Key: PHP_CFLAGS
+      Value: '"-fstack-protector-strong -fpic -fpie -O2"'
+    Name: env
+  - Env:
+    - Key: PHP_CPPFLAGS
+      Value: '"$PHP_CFLAGS"'
+    Name: env
+  - Env:
+    - Key: PHP_LDFLAGS
+      Value: '"-Wl,-O1 -Wl,--hash-style=both -pie"'
+    Name: env
+  - Env:
+    - Key: GPG_KEYS
+      Value: 1729F83938DA44E27BA0F4D3DBDB397470D12172 B1B44D8F021E4E2D6021E995DC9FF8D3EE5AF27F
+    Name: env
+  - Env:
+    - Key: PHP_VERSION
+      Value: 7.2.6
+    Name: env
+  - Env:
+    - Key: PHP_URL
+      Value: '"https://secure.php.net/get/php-7.2.6.tar.xz/from/this/mirror"'
+    - Key: PHP_ASC_URL
+      Value: '"https://secure.php.net/get/php-7.2.6.tar.xz.asc/from/this/mirror"'
+    Name: env
+  - Env:
+    - Key: PHP_SHA256
+      Value: '"1f004e049788a3effc89ef417f06a6cf704c95ae2a718b2175185f2983381ae7"'
+    - Key: PHP_MD5
+      Value: '""'
+    Name: env
+  - CmdLine:
+    - "set -xe; \t\tfetchDeps=' \t\twget \t'; \tif ! command -v gpg > /dev/null; then
+      \t\tfetchDeps=\"$fetchDeps \t\t\tdirmngr \t\t\tgnupg \t\t\"; \tfi; \tapt-get
+      update; \tapt-get install -y --no-install-recommends $fetchDeps; \trm -rf /var/lib/apt/lists/*;
+      \t\tmkdir -p /usr/src; \tcd /usr/src; \t\twget -O php.tar.xz \"$PHP_URL\"; \t\tif
+      [ -n \"$PHP_SHA256\" ]; then \t\techo \"$PHP_SHA256 *php.tar.xz\" | sha256sum
+      -c -; \tfi; \tif [ -n \"$PHP_MD5\" ]; then \t\techo \"$PHP_MD5 *php.tar.xz\"
+      | md5sum -c -; \tfi; \t\tif [ -n \"$PHP_ASC_URL\" ]; then \t\twget -O php.tar.xz.asc
+      \"$PHP_ASC_URL\"; \t\texport GNUPGHOME=\"$(mktemp -d)\"; \t\trm -rf \"$GNUPGHOME\";
+      \tfi; \t\tapt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
+      $fetchDeps"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-source
+    - /usr/local/bin/
+  - CmdLine:
+    - "set -eux; \t\tsavedAptMark=\"$(apt-mark showmanual)\"; \tapt-get update; \tapt-get
+      install -y --no-install-recommends \t\tlibcurl4-openssl-dev \t\tlibedit-dev
+      \t\tlibsodium-dev \t\tlibsqlite3-dev \t\tlibssl-dev \t\tlibxml2-dev \t\tzlib1g-dev
+      \t\t${PHP_EXTRA_BUILD_DEPS:-} \t; \trm -rf /var/lib/apt/lists/*; \t\texport
+      \t\tCFLAGS=\"$PHP_CFLAGS\" \t\tCPPFLAGS=\"$PHP_CPPFLAGS\" \t\tLDFLAGS=\"$PHP_LDFLAGS\"
+      \t; \tdocker-php-source extract; \tcd /usr/src/php; \tgnuArch=\"$(dpkg-architecture
+      --query DEB_BUILD_GNU_TYPE)\"; \tdebMultiarch=\"$(dpkg-architecture --query
+      DEB_BUILD_MULTIARCH)\"; \tif [ ! -d /usr/include/curl ]; then \t\tln -sT \"/usr/include/$debMultiarch/curl\"
+      /usr/local/include/curl; \tfi; \t./configure \t\t--build=\"$gnuArch\" \t\t--with-config-file-path=\"$PHP_INI_DIR\"
+      \t\t--with-config-file-scan-dir=\"$PHP_INI_DIR/conf.d\" \t\t\t\t--enable-option-checking=fatal
+      \t\t\t\t--with-mhash \t\t\t\t--enable-ftp \t\t--enable-mbstring \t\t--enable-mysqlnd
+      \t\t--with-sodium=shared \t\t\t\t--with-curl \t\t--with-libedit \t\t--with-openssl
+      \t\t--with-zlib \t\t\t\t$(test \"$gnuArch\" = 's390x-linux-gnu' && echo '--without-pcre-jit')
+      \t\t--with-libdir=\"lib/$debMultiarch\" \t\t\t\t${PHP_EXTRA_CONFIGURE_ARGS:-}
+      \t; \tmake -j \"$(nproc)\"; \tmake install; \tfind /usr/local/bin /usr/local/sbin
+      -type f -executable -exec strip --strip-all '{}' + || true; \tmake clean; \tcd
+      /; \tdocker-php-source delete; \t\tapt-mark auto '.*' > /dev/null; \t[ -z \"$savedAptMark\"
+      ] || apt-mark manual $savedAptMark; \tfind /usr/local -type f -executable -exec
+      ldd '{}' ';' \t\t| awk '/=>/ { print $(NF-1) }' \t\t| sort -u \t\t| xargs -r
+      dpkg-query --search \t\t| cut -d: -f1 \t\t| sort -u \t\t| xargs -r apt-mark
+      manual \t; \tapt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false;
+      \t\tphp --version; \t\tpecl update-channels; \trm -rf /tmp/pear ~/.pearrc"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-ext-*
+    - docker-php-entrypoint
+    - /usr/local/bin/
+  - CmdLine:
+    - docker-php-ext-enable sodium
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - Name: workdir
+    Path: /var/www/html
+  - CmdLine:
+    - "set -ex \t&& cd /usr/local/etc \t&& if [ -d php-fpm.d ]; then \t\tsed 's!=NONE/!=!g'
+      php-fpm.conf.default | tee php-fpm.conf > /dev/null; \t\tcp php-fpm.d/www.conf.default
+      php-fpm.d/www.conf; \telse \t\tmkdir php-fpm.d; \t\tcp php-fpm.conf.default
+      php-fpm.d/www.conf; \t\t{ \t\t\techo '[global]'; \t\t\techo 'include=etc/php-fpm.d/*.conf';
+      \t\t} | tee php-fpm.conf; \tfi \t&& { \t\techo '[global]'; \t\techo 'error_log
+      = /proc/self/fd/2'; \t\techo; \t\techo '[www]'; \t\techo '; if we send this
+      to /proc/self/fd/1, it never appears'; \t\techo 'access.log = /proc/self/fd/2';
+      \t\techo; \t\techo 'clear_env = no'; \t\techo; \t\techo '; Ensure worker stdout
+      and stderr are sent to the main error log.'; \t\techo 'catch_workers_output
+      = yes'; \t} | tee php-fpm.d/docker.conf \t&& { \t\techo '[global]'; \t\techo
+      'daemonize = no'; \t\techo; \t\techo '[www]'; \t\techo 'listen = 9000'; \t}
+      | tee php-fpm.d/zz-docker.conf"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - php-fpm
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - apt-get update && apt-get install -y         libfreetype6-dev         libmcrypt-dev     &&
+      docker-php-ext-install -j$(nproc) iconv mbstring pdo_mysql     && docker-php-ext-configure
+      gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/     && docker-php-ext-install
+      -j$(nproc) gd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y  git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y  unzip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y  zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y  vim
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-ext-install -j$(nproc) zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y  libc-client-dev libkrb5-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-ext-configure imap --with-kerberos --with-imap-ssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-ext-install -j$(nproc) imap
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-ext-install -j$(nproc) intl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y         python3-pip         python3-scipy         python3-pil
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y  python3-h5py
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./php.ini
+    - /usr/local/etc/php/php.ini
+  From:
+    Image: geographica/gdal2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM geographica/gdal2

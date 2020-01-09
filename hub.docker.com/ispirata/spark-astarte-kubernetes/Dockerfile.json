@@ -1,0 +1,179 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "openjdk:8-jdk",
+      "SourceCode": "FROM openjdk:8-jdk as builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "openjdk:8-jdk"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/build"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "set -ex \u0026\u0026     apt-get update \u0026\u0026     apt-get upgrade -y"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "./dev/make-distribution.sh --name astarte-kubernetes-spark --tgz -Phadoop-2.7 -Phive -Phive-thriftserver -Pyarn -Pkubernetes"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "openjdk:8-jdk-slim",
+      "SourceCode": "FROM openjdk:8-jdk-slim",
+      "Platform": "",
+      "From": {
+        "Image": "openjdk:8-jdk-slim"
+      },
+      "Commands": [
+        {
+          "Key": "spark_jars",
+          "Name": "arg",
+          "Value": "assembly/target/scala-2.11/jars"
+        },
+        {
+          "Key": "img_path",
+          "Name": "arg",
+          "Value": "resource-managers/kubernetes/docker/src/main/dockerfiles"
+        },
+        {
+          "CmdLine": [
+            "set -ex \u0026\u0026     apt-get update \u0026\u0026     apt-get upgrade -y \u0026\u0026     apt-get clean \u0026\u0026     mkdir -p /opt/spark \u0026\u0026     mkdir -p /opt/spark/work-dir     touch /opt/spark/RELEASE \u0026\u0026     rm /bin/sh \u0026\u0026     ln -sv /bin/bash /bin/sh \u0026\u0026     chgrp root /etc/passwd \u0026\u0026 chmod ug+rw /etc/passwd"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "TINI_VERSION",
+              "Value": "v0.18.0"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini",
+            "/sbin/tini"
+          ]
+        },
+        {
+          "CmdLine": [
+            "chmod +x /sbin/tini"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "build/${spark_jars}",
+            "/opt/spark/jars"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "build/bin",
+            "/opt/spark/bin"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "build/sbin",
+            "/opt/spark/sbin"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "build/conf",
+            "/opt/spark/conf"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "build/${img_path}/spark/entrypoint.sh",
+            "/opt/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "build/examples",
+            "/opt/spark/examples"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "build/data",
+            "/opt/spark/data"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "SPARK_HOME",
+              "Value": "/opt/spark"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Name": "workdir",
+          "Path": "/opt/spark/work-dir"
+        },
+        {
+          "CmdLine": [
+            "/opt/entrypoint.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

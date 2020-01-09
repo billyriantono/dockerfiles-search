@@ -1,0 +1,176 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "base",
+      "BaseName": "microsoft/dotnet:2.2-aspnetcore-runtime-alpine",
+      "SourceCode": "FROM microsoft/dotnet:2.2-aspnetcore-runtime-alpine AS base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Image": "microsoft/dotnet:2.2-aspnetcore-runtime-alpine"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "8000"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache         bash         git \t\ticu-libs \t\topenssh-keygen \t\topenssh"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "ssh-keygen -t rsa -N \"\" -f /root/.ssh/id_rsa"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT",
+              "Value": "false"
+            }
+          ],
+          "Name": "env"
+        }
+      ]
+    },
+    {
+      "Name": "build",
+      "BaseName": "microsoft/dotnet:2.2-sdk-alpine",
+      "SourceCode": "FROM microsoft/dotnet:2.2-sdk-alpine AS build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Image": "microsoft/dotnet:2.2-sdk-alpine"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/src"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "SqlSCM/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "dotnet restore \"SqlSCM/SqlSCM.csproj\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "."
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "\"/src/SqlSCM\""
+        },
+        {
+          "CmdLine": [
+            "dotnet build \"SqlSCM.csproj\" -c Release -o /app"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "publish",
+      "BaseName": "build",
+      "SourceCode": "FROM build AS publish",
+      "Platform": "",
+      "As": "publish",
+      "From": {
+        "Stage": {
+          "Named": "build",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "dotnet publish \"SqlSCM.csproj\" -c Release -o /app"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "final",
+      "BaseName": "base",
+      "SourceCode": "FROM base AS final",
+      "Platform": "",
+      "As": "final",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "SqlSCM.xml",
+            "."
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "publish",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "rm appsettings.json"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "dotnet",
+            "SqlSCM.dll"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

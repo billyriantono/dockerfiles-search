@@ -1,0 +1,77 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: '"0.20.0"'
+  - Key: CHECKSUM
+    Name: arg
+    Value: '"4789ef95b09ba86a66a2923c3535d1bfe30a566390770784c52052c7c83ee1bc"'
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/prometheus/alertmanager/archive/v$VERSION.tar.gz
+    - /tmp/alertmanager.tar.gz
+  - CmdLine:
+    - '[ "$CHECKSUM" = "$(sha256sum /tmp/alertmanager.tar.gz | awk ''{print $1}'')"
+      ] &&     tar -C /tmp -xf /tmp/alertmanager.tar.gz &&     mkdir -p /go/src/github.com/prometheus
+      &&     mv /tmp/alertmanager-$VERSION /go/src/github.com/prometheus/alertmanager'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt update &&     apt install -y ca-certificates &&     cd /go/src/github.com/prometheus/alertmanager
+      &&       make build &&     echo "nogroup:*:100:nobody" > /tmp/group &&     echo
+      "nobody:*:100:100:::" > /tmp/passwd &&     mkdir -p /tmp/data
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1 AS build
+- BaseName: scratch
+  Commands:
+  - Chown: 100:100
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/prometheus/alertmanager/alertmanager
+    - /
+  - Chown: 100:100
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/data
+    - /data
+  - Chown: 100:100
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: 100:100
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/group
+    - /tmp/passwd
+    - /etc/
+  - Name: user
+    User: 100:100
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: expose
+    Ports:
+    - 9093/tcp
+  - CmdLine:
+    - /alertmanager
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

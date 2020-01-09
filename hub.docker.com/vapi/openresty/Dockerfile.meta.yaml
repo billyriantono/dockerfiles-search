@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - Maintainer: Jono Wells <_@oj.io>
+    Name: maintainer
+  - Env:
+    - Key: NGINX_VERSION
+      Value: 1.9.1-1~jessie
+    Name: env
+  - Env:
+    - Key: OPENRESTY_VERSION
+      Value: 1.7.10.1
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: OPENRESTY_PREFIX
+      Value: /opt/openresty
+    Name: env
+  - Env:
+    - Key: NGINX_PREFIX
+      Value: /opt/openresty/nginx
+    Name: env
+  - Env:
+    - Key: VAR_PREFIX
+      Value: /var/nginx
+    Name: env
+  - CmdLine:
+    - apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62
+      &&   echo "deb http://nginx.org/packages/mainline/debian/ jessie nginx" >> /etc/apt/sources.list
+      &&   echo "deb-src http://nginx.org/packages/mainline/debian/ jessie nginx"
+      >> /etc/apt/sources.list &&   apt-get update &&   apt-get upgrade -y &&   apt-get
+      -y build-dep nginx &&   apt-get install -y --no-install-recommends     ca-certificates     curl     git     libgd2-xpm-dev     libgeoip-dev     libncurses5-dev     libpcre3-dev     libpq-dev     libreadline-dev     libssl-dev     make     perl     procps     wget     vim
+      &&   apt-get -q -y clean &&   rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /root  &&   echo "==> Downloading OpenResty..." &&   curl -sSL http://openresty.org/download/ngx_openresty-${OPENRESTY_VERSION}.tar.gz
+      | tar -xvz &&   echo "==> Configuring OpenResty..." &&   cd ngx_openresty-*
+      &&   readonly NPROC=$(grep -c ^processor /proc/cpuinfo 2>/dev/null || 1) &&   mkdir
+      ${VAR_PREFIX} &&   echo "using upto $NPROC threads" &&   ./configure     --prefix=$OPENRESTY_PREFIX     --http-client-body-temp-path=$VAR_PREFIX/client_body_temp     --http-proxy-temp-path=$VAR_PREFIX/proxy_temp     --http-log-path=/var/log/nginx/access.log     --error-log-path=/var/log/nginx/error.log     --pid-path=/run/nginx.pid     --lock-path=$VAR_PREFIX/nginx.lock     --with-ipv6     --with-luajit     --with-pcre-jit     --with-http_addition_module     --with-http_geoip_module     --with-http_gzip_static_module     --with-http_image_filter_module     --with-http_postgres_module     --with-http_realip_module     --with-http_secure_link_module     --with-http_spdy_module     --with-http_ssl_module     --with-http_stub_status_module     --with-http_sub_module     --without-http_ssi_module     --without-http_fastcgi_module     --without-http_uwsgi_module     --without-http_scgi_module     --without-http_memcached_module     -j${NPROC}
+      &&   echo "==> Building OpenResty..." &&   make -j${NPROC} &&   echo "==> Installing
+      OpenResty..." &&   make install &&   echo "==> Finishing..." &&   ln -sf $NGINX_PREFIX/sbin/nginx
+      /usr/local/bin/nginx &&   ln -sf $NGINX_PREFIX/sbin/nginx /usr/local/bin/openresty
+      &&   ln -sf $OPENRESTY_PREFIX/bin/resty /usr/local/bin/resty &&   ln -sf $OPENRESTY_PREFIX/luajit/bin/luajit-*
+      $OPENRESTY_PREFIX/luajit/bin/lua &&   ln -sf $OPENRESTY_PREFIX/luajit/bin/luajit-*
+      /usr/local/bin/lua &&   ln -sf /dev/stdout /var/log/nginx/access.log &&   ln
+      -sf /dev/stderr /var/log/nginx/error.log &&   rm -rf /root/ngx_openresty*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /usr/local/share/GeoIP &&   cd /usr/local/share/GeoIP &&   wget http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz
+      &&   wget http://geolite.maxmind.com/download/geoip/database/GeoLiteCountry/GeoIP.dat.gz
+      &&   gunzip GeoLiteCity.dat.gz &&   gunzip GeoIP.dat.gz
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/cache/nginx
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - Name: workdir
+    Path: $NGINX_PREFIX/
+  - Expression: RUN rm -rf conf/* html/*
+    Name: onbuild
+  - Expression: COPY nginx $NGINX_PREFIX/
+    Name: onbuild
+  - CmdLine:
+    - nginx
+    - -g
+    - daemon off;
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

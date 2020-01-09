@@ -1,0 +1,92 @@
+MetaArgs: null
+Stages:
+- As: cilium-envoy
+  BaseName: quay.io/cilium/cilium-envoy:84ee839e1d78ef858a39e390288ad417d35bb1d4
+  Commands: null
+  From:
+    Image: quay.io/cilium/cilium-envoy:84ee839e1d78ef858a39e390288ad417d35bb1d4
+  Name: cilium-envoy
+  Platform: ""
+  SourceCode: FROM quay.io/cilium/cilium-envoy:84ee839e1d78ef858a39e390288ad417d35bb1d4
+    as cilium-envoy
+- As: builder
+  BaseName: quay.io/cilium/cilium-builder:2018-11-01
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"maintainer@cilium.io"'
+    Name: label
+  - Name: workdir
+    Path: /go/src/github.com/cilium/cilium
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - Key: LOCKDEBUG
+    Name: arg
+    Value: null
+  - Key: V
+    Name: arg
+    Value: null
+  - CmdLine:
+    - make LOCKDEBUG=$LOCKDEBUG PKG_BUILD=1 V=$V SKIP_DOCS=true DESTDIR=/tmp/install
+      clean-container build-container install-container
+    Name: run
+    PrependShell: true
+  From:
+    Image: quay.io/cilium/cilium-builder:2018-11-01
+  Name: builder
+  Platform: ""
+  SourceCode: FROM quay.io/cilium/cilium-builder:2018-11-01 as builder
+- BaseName: quay.io/cilium/cilium-runtime:2018-11-29
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"maintainer@cilium.io"'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/install
+    - /
+  - Chown: ""
+    From: cilium-envoy
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - plugins/cilium-cni/cni-install.sh
+    - /cni-install.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - plugins/cilium-cni/cni-uninstall.sh
+    - /cni-uninstall.sh
+  - Name: workdir
+    Path: /root
+  - CmdLine:
+    - "groupadd -f cilium \t&& echo \". /etc/profile.d/bash_completion.sh\" >> /root/.bashrc
+      \    && cilium completion bash >> /root/.bashrc     && sysctl -w kernel.core_pattern=/tmp/core.%e.%p.%t"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: INITSYSTEM
+      Value: '"SYSTEMD"'
+    Name: env
+  - CmdLine:
+    - /usr/bin/cilium
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: quay.io/cilium/cilium-runtime:2018-11-29
+  Name: ""
+  Platform: ""
+  SourceCode: FROM quay.io/cilium/cilium-runtime:2018-11-29

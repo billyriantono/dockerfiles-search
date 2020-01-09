@@ -1,0 +1,172 @@
+MetaArgs:
+- DefaultValue: now
+  Key: BUILD_DATE
+  ProvidedValue: null
+  Value: now
+- DefaultValue: local
+  Key: VCS_REF
+  ProvidedValue: null
+  Value: local
+- DefaultValue: dev
+  Key: BUILD_VERSION
+  ProvidedValue: null
+  Value: dev
+Stages:
+- As: builder
+  BaseName: __DOCKER_ARCH__/alpine:3.9
+  Commands:
+  - Key: aria_version
+    Name: arg
+    Value: null
+  - Key: make_jobs
+    Name: arg
+    Value: "4"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - qemu-__QEMU_ARCH__-static
+    - /usr/bin/
+  - CmdLine:
+    - set -ex;     case "__DOCKER_ARCH__" in         arm32v6) export QEMU_CPU="arm1176"
+      ;;         arm32v7) export QEMU_CPU="cortex-a7" ;;         arm64v8) export QEMU_CPU="cortex-a53"
+      ;;     esac ;     uname -a ;     apk add --no-cache       expat-dev       openssl-dev       cppunit-dev       c-ares-dev       libssh2-dev       zlib-dev       gettext-dev       file       gettext       ca-certificates       g++       make       automake       autoconf       libtool       git
+      ;     git clone --branch "${aria_version}" --depth 1 https://github.com/aria2/aria2
+      ;     cd /aria2 ;     autoreconf -i ;     ./configure ARIA2_STATIC=yes CFLAGS="-O3
+      -pipe -fomit-frame-pointer" CXXFLAGS="-O3 -pipe -fomit-frame-pointer"                 --enable-ssl                 --enable-bittorrent                 --enable-metalink                 --enable-websocket                 --enable-epoll                 --enable-largefile                 --disable-nls                 --without-libxml2                 --with-ca-bundle='/etc/ssl/certs/ca-certificates.crt'
+      ;     make -j"${make_jobs}" ;     make install ;     mkdir /download
+    Name: run
+    PrependShell: true
+  From:
+    Image: __DOCKER_ARCH__/alpine:3.9
+  Name: builder
+  Platform: ""
+  SourceCode: FROM __DOCKER_ARCH__/alpine:3.9 as builder
+- As: filer
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/aria2c
+    - /usr/local/bin/aria2c
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/ca-certificates.crt
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /download
+    - /download
+  From:
+    Scratch: true
+  Name: filer
+  Platform: ""
+  SourceCode: FROM scratch as filer
+- As: static
+  BaseName: scratch
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: BUILD_VERSION
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.version
+      Value: $BUILD_VERSION
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/dol-leodagan/docker-images.git"'
+    - Key: org.label-schema.name
+      Value: '"aria2"'
+    - Key: org.label-schema.description
+      Value: '"Utility for downloading files and torrents"'
+    - Key: org.label-schema.usage
+      Value: '"https://github.com/dol-leodagan/docker-images/blob/master/aria2/README.md"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0.0-rc1"'
+    - Key: maintainer
+      Value: '"Leodagan <leodagan@freyad.net>"'
+    Name: label
+  - Chown: ""
+    From: filer
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /
+  - Name: expose
+    Ports:
+    - "6800"
+  - Name: workdir
+    Path: /download
+  - CmdLine:
+    - aria2c
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: static
+  Platform: ""
+  SourceCode: FROM scratch as static
+- As: embedded
+  BaseName: __DOCKER_ARCH__/busybox:musl
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: BUILD_VERSION
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.version
+      Value: ${BUILD_VERSION}-busybox
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.name
+      Value: '"aria2-busybox"'
+    - Key: org.label-schema.description
+      Value: '"Utility for downloading files and torrents with embedded Busybox"'
+    - Key: org.label-schema.usage
+      Value: '"https://github.com/dol-leodagan/docker-images/blob/master/aria2/README.md"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0.0-rc1"'
+    - Key: maintainer
+      Value: '"Leodagan <leodagan@freyad.net>"'
+    Name: label
+  - Chown: ""
+    From: filer
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /
+  - Name: expose
+    Ports:
+    - "6800"
+  - Name: workdir
+    Path: /download
+  - CmdLine:
+    - aria2c
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: __DOCKER_ARCH__/busybox:musl
+  Name: embedded
+  Platform: ""
+  SourceCode: FROM __DOCKER_ARCH__/busybox:musl as embedded

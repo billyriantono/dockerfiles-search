@@ -1,0 +1,123 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: project0de/base-devel:amzn2
+  Commands:
+  - Env:
+    - Key: DESTDIR
+      Value: /build
+    Name: env
+  - Name: workdir
+    Path: /src
+  - Key: DOVECOT_VERSION
+    Name: arg
+    Value: 2.3.7.2
+  - Key: DOVECOT_REPO
+    Name: arg
+    Value: https://github.com/dovecot/core.git
+  - Key: LIBSODIUM_VERSION
+    Name: arg
+    Value: 1.0.17
+  - Key: LIBSODIUM_REPO
+    Name: arg
+    Value: https://github.com/jedisct1/libsodium.git
+  - Key: PIGENHOLE_REPO
+    Name: arg
+    Value: https://github.com/dovecot/pigeonhole.git
+  - Key: PIGENHOLE_VERSION
+    Name: arg
+    Value: 0.5.6
+  - CmdLine:
+    - yum -y install wget which  openssl-devel mariadb-devel postgresql-devel openldap-devel
+      krb5-devel pam-devel       sqlite-devel bzip2-devel zlib-devel lz4-devel xz-devel       lua-devel
+      clucene-core-devel expat-devel libexttextcat-devel libcap-devel libicu-devel
+      tcp_wrappers-devel
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git get-release "${LIBSODIUM_REPO}" "${LIBSODIUM_VERSION}" /src/libsodium     &&
+      cd /src/libsodium     && ./autogen.sh     && ./configure --prefix=/usr --libdir=/usr/lib64     &&
+      make -j$(nproc)     && make install     && DESTDIR=/build make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git get-release "${DOVECOT_REPO}" "${DOVECOT_VERSION}" /src/dovecot     && cd
+      /src/dovecot     && ./autogen.sh     && PANDOC=false       ./configure --prefix=/usr
+      --libdir=/usr/lib64 --sysconfdir=/etc --with-rundir=/run/dovecot       --enable-maintainer-mode
+      --disable-static --without-docs       --with-ssl=openssl --with-shared-libs       --with-zlib
+      --with-bzlib --with-lzma --with-lz4       --with-libcap --with-libwrap --with-lua       --with-lucene
+      --with-solr --with-textcat --with-icu       --with-sql --with-ldap --with-pgsql
+      --with-mysql --with-sqlite       --with-shadow --with-pam --with-gssapi     &&
+      make -j$(nproc)     && DESTDIR=/build make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git get-release "${PIGENHOLE_REPO}" "${PIGENHOLE_VERSION}" /src/pigenhole     &&
+      cd /src/pigenhole     && ./autogen.sh     && ./configure --prefix=/usr --libdir=/usr/lib64
+      --with-unfinished-features --disable-static --without-docs       --with-managesieve
+      --with-ldap=yes --with-dovecot=/src/dovecot/     && make -j$(nproc)     && DESTDIR=/build
+      make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /build -iname '*.la' -delete -o -iname *'*.a' -delete     && rm -rf /build/usr/include
+    Name: run
+    PrependShell: true
+  From:
+    Image: project0de/base-devel:amzn2
+  Name: builder
+  Platform: ""
+  SourceCode: FROM project0de/base-devel:amzn2 AS builder
+- BaseName: project0de/base:amzn2
+  Commands:
+  - Env:
+    - Key: DOVECOT_DHPARAM_BIT
+      Value: "4096"
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - yum install -y openssl openssl-libs mariadb-libs postgresql-libs sqlite openldap       krb5-libs
+      pam bzip2 zlib lz4 libicu libexttextcat libcap tcp_wrappers-libs clucene-core
+      expat     && yum -y update     && yum clean all     && rm -rf /var/cache/yum     &&
+      install -d -o mail -g mail -m 0755 /var/lib/dovecot /mail /dhparam     && echo
+      "dovecot:x:101:101:mail user:/var/lib/dovecot:/sbin/nologin" >> /etc/passwd     &&
+      echo "dovecot:x:101:" >> /etc/group     && echo "dovenull:x:102:102:mail user:/var/lib/dovecot:/sbin/nologin"
+      >> /etc/passwd     && echo "dovenull:x:102:" >> /etc/group     && chmod a+x
+      /entrypoint.sh     && mkdir -p /_etc /etc/dovecot     && touch /etc/dovecot/dovecot.conf     &&
+      dovecot --version
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /mail
+    - /dhparam
+    - /var/lib/dovecot
+  - CmdLine:
+    - tini
+    - --
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - dovecot
+    - -c
+    - /etc/dovecot/dovecot.conf
+    - -F
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: project0de/base:amzn2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM project0de/base:amzn2

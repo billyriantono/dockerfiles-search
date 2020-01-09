@@ -1,0 +1,106 @@
+MetaArgs:
+- DefaultValue: 0.6.0
+  Key: DOCKERIZE_VER
+  ProvidedValue: null
+  Value: 0.6.0
+- DefaultValue: "3.9"
+  Key: ALPINE_VER
+  ProvidedValue: null
+  Value: "3.9"
+Stages:
+- As: dockerize
+  BaseName: jwilder/dockerize:${DOCKERIZE_VER}
+  Commands: null
+  From:
+    Image: jwilder/dockerize:${DOCKERIZE_VER}
+  Name: dockerize
+  Platform: ""
+  SourceCode: FROM jwilder/dockerize:${DOCKERIZE_VER} AS dockerize
+- BaseName: alpine:${ALPINE_VER}
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"jeff@ressourcenkonflikt.de"'
+    Name: label
+  - Labels:
+    - Key: vendor
+      Value: '"https://github.com/jeboehm/docker-mailserver"'
+    Name: label
+  - Labels:
+    - Key: de.ressourcenkonflikt.docker-mailserver.autoheal
+      Value: '"true"'
+    Name: label
+  - Env:
+    - Key: MYSQL_HOST
+      Value: db
+    - Key: MYSQL_USER
+      Value: root
+    - Key: MYSQL_PASSWORD
+      Value: changeme
+    - Key: MYSQL_DATABASE
+      Value: mailserver
+    - Key: MAILNAME
+      Value: mail.example.com
+    - Key: POSTMASTER
+      Value: postmaster@example.com
+    - Key: SUBMISSION_HOST
+      Value: mta
+    - Key: ENABLE_POP3
+      Value: "true"
+    - Key: ENABLE_IMAP
+      Value: "true"
+    - Key: SSL_CERT
+      Value: /media/tls/mailserver.crt
+    - Key: SSL_KEY
+      Value: /media/tls/mailserver.key
+    - Key: WAITSTART_TIMEOUT
+      Value: 1m
+    Name: env
+  - CmdLine:
+    - apk --no-cache add          curl          dovecot          dovecot-lmtpd          dovecot-mysql          dovecot-pigeonhole-plugin          dovecot-pop3d          dovecot-submissiond
+      &&     adduser -h /var/vmail -u 5000 -D vmail &&     rm -rf /etc/ssl/dovecot
+      &&     openssl dhparam -out /etc/dovecot/dh.pem 2048
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: dockerize
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/dockerize
+    - /usr/local/bin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs/
+    - /
+  - CmdLine:
+    - sievec /etc/dovecot/sieve/global/spam-to-folder.sieve &&     sievec /etc/dovecot/sieve/global/learn-ham.sieve
+      &&     sievec /etc/dovecot/sieve/global/learn-spam.sieve
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "110"
+    - "143"
+    - "2003"
+    - "4190"
+    - "993"
+    - "995"
+  - Name: volume
+    Volumes:
+    - /var/vmail
+  - Health:
+      Test:
+      - CMD-SHELL
+      - echo "? LOGOUT" | nc 127.0.0.1 143 | grep "Dovecot ready."
+    Name: healthcheck
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:${ALPINE_VER}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:${ALPINE_VER}

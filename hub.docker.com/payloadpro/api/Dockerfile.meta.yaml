@@ -1,0 +1,69 @@
+MetaArgs: null
+Stages:
+- As: certs
+  BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk --update add ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: certs
+  Platform: ""
+  SourceCode: FROM alpine:latest as certs
+- As: build
+  BaseName: golang:1.11-rc-alpine
+  Commands:
+  - Name: workdir
+    Path: /go/src/github.com/PayloadPro/api
+  - CmdLine:
+    - apk update && apk upgrade &&     apk add --no-cache bash git openssh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - /go/src/github.com/PayloadPro/api
+  - CmdLine:
+    - go get
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o binary .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-rc-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.11-rc-alpine as build
+- BaseName: scratch
+  Commands:
+  - Env:
+    - Key: PATH
+      Value: /bin
+    Name: env
+  - Chown: ""
+    From: certs
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/ca-certificates.crt
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/PayloadPro/api/binary
+    - /bin/api
+  - CmdLine:
+    - ./bin/api
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

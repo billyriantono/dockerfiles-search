@@ -1,0 +1,63 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:latest
+  Commands:
+  - CmdLine:
+    - go get github.com/mholt/caddy/caddy     && go get github.com/caddyserver/dnsproviders/azure     &&
+      go get github.com/caddyserver/dnsproviders/googlecloud     && go get github.com/caddyserver/dnsproviders/route53     &&
+      go get github.com/caddyserver/forwardproxy     && go get github.com/caddyserver/builds
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /go/src/github.com/mholt/caddy/caddy     && git checkout v0.11.0     && sed
+      -i -e "/This is where other plugins get plugged in (imported)/a\\\t_ \"github.com/caddyserver/dnsproviders/azure\"\n\t_
+      \"github.com/caddyserver/dnsproviders/googlecloud\"\n\t_ \"github.com/caddyserver/dnsproviders/route53\"\n\t_
+      \"github.com/caddyserver/forwardproxy\"" /go/src/github.com/mholt/caddy/caddy/caddymain/run.go     &&
+      go run build.go
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/rootfs
+  - CmdLine:
+    - mkdir -p etc/caddy etc/ssl/certs usr/bin     && cp /go/src/github.com/mholt/caddy/caddy/caddy
+      usr/bin     && cp /etc/ssl/certs/ca-certificates.crt etc/ssl/certs
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:latest AS builder
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/rootfs
+    - /
+  - Name: workdir
+    Path: /webroot
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - CmdLine:
+    - /usr/bin/caddy
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --conf
+    - /etc/caddy/Caddyfile
+    - --log
+    - stdout
+    - --root
+    - /var/tmp
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

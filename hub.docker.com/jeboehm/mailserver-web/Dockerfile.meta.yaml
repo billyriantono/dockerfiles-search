@@ -1,0 +1,119 @@
+MetaArgs:
+- DefaultValue: 1.4.1-fpm
+  Key: ROUNDCUBE_VER
+  ProvidedValue: null
+  Value: 1.4.1-fpm
+- DefaultValue: "7.4"
+  Key: PHP_VER
+  ProvidedValue: null
+  Value: "7.4"
+- DefaultValue: 0.6.0
+  Key: DOCKERIZE_VER
+  ProvidedValue: null
+  Value: 0.6.0
+Stages:
+- As: dockerize
+  BaseName: jwilder/dockerize:${DOCKERIZE_VER}
+  Commands: null
+  From:
+    Image: jwilder/dockerize:${DOCKERIZE_VER}
+  Name: dockerize
+  Platform: ""
+  SourceCode: FROM jwilder/dockerize:${DOCKERIZE_VER} AS dockerize
+- As: roundcube
+  BaseName: roundcube/roundcubemail:${ROUNDCUBE_VER}
+  Commands: null
+  From:
+    Image: roundcube/roundcubemail:${ROUNDCUBE_VER}
+  Name: roundcube
+  Platform: ""
+  SourceCode: FROM roundcube/roundcubemail:${ROUNDCUBE_VER} AS roundcube
+- BaseName: jeboehm/php-nginx-base:${PHP_VER}
+  Commands:
+  - Key: ADMIN_VER
+    Name: arg
+    Value: 1.4.1
+  - Labels:
+    - Key: maintainer
+      Value: '"jeff@ressourcenkonflikt.de"'
+    Name: label
+  - Labels:
+    - Key: vendor
+      Value: '"https://github.com/jeboehm/docker-mailserver"'
+    Name: label
+  - Labels:
+    - Key: de.ressourcenkonflikt.docker-mailserver.autoheal
+      Value: '"true"'
+    Name: label
+  - Env:
+    - Key: MYSQL_HOST
+      Value: db
+    - Key: MYSQL_DATABASE
+      Value: mailserver
+    - Key: MYSQL_USER
+      Value: mailserver
+    - Key: MYSQL_PASSWORD
+      Value: changeme
+    - Key: MTA_HOST
+      Value: mta
+    - Key: MDA_HOST
+      Value: mda
+    - Key: FILTER_HOST
+      Value: filter
+    - Key: SUPPORT_URL
+      Value: https://github.com/jeboehm/docker-mailserver
+    - Key: APP_ENV
+      Value: prod
+    - Key: TRUSTED_PROXIES
+      Value: 172.16.0.0/12
+    - Key: WAITSTART_TIMEOUT
+      Value: 1m
+    - Key: ADMIN_VER
+      Value: ${ADMIN_VER}
+    Name: env
+  - Chown: ""
+    From: roundcube
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/roundcubemail/
+    - /var/www/html/webmail/
+  - Chown: ""
+    From: dockerize
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/dockerize
+    - /usr/local/bin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs/
+    - /
+  - Name: workdir
+    Path: /opt/manager
+  - CmdLine:
+    - wget -O /tmp/admin.tar.gz -q https://github.com/jeboehm/mailserver-admin/archive/${ADMIN_VER}.tar.gz
+      &&     tar -xf /tmp/admin.tar.gz -C /opt/manager --strip=1 &&     rm /tmp/admin.tar.gz
+      &&     composer install --no-dev -o
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /opt/manager/public /var/www/html/manager &&     chown -R www-data         /opt/manager/var/cache/         /opt/manager/var/log/         /var/www/html/webmail/temp/         /var/www/html/webmail/logs/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/www/html
+  - Health:
+      Test:
+      - CMD-SHELL
+      - curl -s http://127.0.0.1/ | grep docker-mailserver
+    Name: healthcheck
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: jeboehm/php-nginx-base:${PHP_VER}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM jeboehm/php-nginx-base:${PHP_VER}

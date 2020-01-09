@@ -1,0 +1,78 @@
+MetaArgs: null
+Stages:
+- As: ipxe
+  BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git gcc make musl-dev openssl perl xz-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth 1 git://git.ipxe.org/ipxe.git /ipxe
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /ipxe/src
+  - Key: MAKEFLAGS
+    Name: arg
+    Value: ""
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/*
+    - ./config/local/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - userclass.ipxe
+    - ./
+  - CmdLine:
+    - make EMBED=userclass.ipxe   bin-i386-pcbios/undionly.kpxe   bin-x86_64-efi/ipxe.efi
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: ipxe
+  Platform: ""
+  SourceCode: FROM alpine:latest as ipxe
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk add --no-cache dnsmasq
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tftp
+  - Chown: ""
+    From: ipxe
+    Name: copy
+    SourcesAndDest:
+    - /ipxe/src/bin-x86_64-efi/ipxe.efi
+    - /ipxe/src/bin-i386-pcbios/undionly.kpxe
+    - ./
+  - Env:
+    - Key: SUBNET
+      Value: 192.168.1.1
+    Name: env
+  - Env:
+    - Key: CHAIN
+      Value: unconfigured
+    Name: env
+  - Env:
+    - Key: DNSMASQ_OPTS
+      Value: ""
+    Name: env
+  - CmdLine:
+    - exec dnsmasq -d -q --port 0   --enable-tftp --tftp-root=/tftp   --dhcp-range="${SUBNET},proxy"   --dhcp-userclass="set:ipxe,ipxeboot"   --pxe-service="tag:#ipxe,x86PC,'load
+      ipxeboot (bios)',undionly.kpxe"   --pxe-service="tag:ipxe,x86PC,'load menu',${CHAIN}"   --pxe-service="tag:#ipxe,BC_EFI,'load
+      ipxeboot (bc_efi)',ipxe.efi"   --pxe-service="tag:ipxe,BC_EFI,'load menu',${CHAIN}"   --pxe-service="tag:#ipxe,x86-64_EFI,'load
+      ipxeboot (efi)',ipxe.efi"   --pxe-service="tag:ipxe,x86-64_EFI,'load menu',${CHAIN}"   ${DNSMASQ_OPTS}
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

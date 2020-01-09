@@ -1,0 +1,140 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:14.04
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - echo "deb http://ppa.launchpad.net/nginx/stable/ubuntu trusty main" >> /etc/apt/sources.list  &&
+      apt-key adv --keyserver keyserver.ubuntu.com --recv-keys C300EE8C  && apt-get
+      update --quiet  && apt-get install --quiet --yes   build-essential   couchdb   curl   git   imagemagick   language-pack-en   libssl-dev   libxml2-dev   libxslt1-dev   lsof   postfix   pwgen   python-dev   python-pip   python-setuptools   python-software-properties   software-properties-common   sqlite3   wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - update-locale LANG=en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install   supervisor   virtualenv
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp  && wget -q -O - http://nodejs.org/dist/v0.10.26/node-v0.10.26.tar.gz
+      | tar xz  && cd node-v0.10.26  && ./configure  && CXX="g++ -Wno-unused-local-typedefs"
+      make  && CXX="g++ -Wno-unused-local-typedefs" make install  && cd ..  && rm
+      -rf /tmp/node-v*  && npm install -g npm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install -g   coffee-script   cozy-controller   cozy-monitor
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -M cozy  && useradd -M cozy-data-system  && useradd -M cozy-home
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /etc/cozy  && chown -hR cozy /etc/cozy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pwgen -1 > /etc/cozy/couchdb.login  && pwgen -1 >> /etc/cozy/couchdb.login  &&
+      chown cozy-data-system /etc/cozy/couchdb.login  && chmod 640 /etc/cozy/couchdb.login
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /var/run/couchdb  && chown -hR couchdb /var/run/couchdb  && su - couchdb
+      -c 'couchdb -b'  && sleep 5  && while ! curl -s 127.0.0.1:5984; do sleep 5;
+      done  && curl -s -X PUT 127.0.0.1:5984/_config/admins/$(head -n1 /etc/cozy/couchdb.login)
+      -d "\"$(tail -n1 /etc/cozy/couchdb.login)\""
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisor/supervisord.conf
+    - /etc/supervisord.conf
+  - CmdLine:
+    - mkdir -p /var/log/supervisor  && chmod 777 /var/log/supervisor  && /usr/local/bin/supervisord
+      -c /etc/supervisord.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /usr/local/cozy-indexer  && cd /usr/local/cozy-indexer  && git clone
+      https://github.com/cozy/cozy-data-indexer.git  && cd /usr/local/cozy-indexer/cozy-data-indexer  &&
+      virtualenv --quiet /usr/local/cozy-indexer/cozy-data-indexer/virtualenv  &&
+      . ./virtualenv/bin/activate  && pip install -r /usr/local/cozy-indexer/cozy-data-indexer/requirements/common.txt  &&
+      chown -R cozy:cozy /usr/local/cozy-indexer
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - CmdLine:
+    - su - couchdb -c 'couchdb -b'  && sleep 5  && while ! curl -s 127.0.0.1:5984;
+      do sleep 5; done  && /usr/local/lib/node_modules/cozy-controller/bin/cozy-controller
+      & sleep 5  && while ! curl -s 127.0.0.1:9002; do sleep 5; done  && cd /usr/local/cozy-indexer/cozy-data-indexer  &&
+      . ./virtualenv/bin/activate  && /usr/local/cozy-indexer/cozy-data-indexer/virtualenv/bin/python
+      server.py & sleep 5  && while ! curl -s 127.0.0.1:9102; do sleep 5; done  &&
+      cozy-monitor install data-system  && cozy-monitor install home  && cozy-monitor
+      install proxy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "postfix postfix/mailname string mydomain.net" | debconf-set-selections  &&
+      echo "postfix postfix/main_mailer_type select Internet Site" | debconf-set-selections  &&
+      echo "postfix postfix/destinations string mydomain.net, localhost.localdomain,
+      localhost " | debconf-set-selections  && postfix check
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisor/cozy-controller.conf
+    - /etc/supervisor/conf.d/cozy-controller.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisor/cozy-indexer.conf
+    - /etc/supervisor/conf.d/cozy-indexer.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisor/couchdb.conf
+    - /etc/supervisor/conf.d/couchdb.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisor/postfix.conf
+    - /etc/supervisor/conf.d/postfix.conf
+  - CmdLine:
+    - chmod 0644 /etc/supervisor/conf.d/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get clean  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9104"
+  - Name: volume
+    Volumes:
+    - /usr/local/var/lib/couchdb
+    - /etc/cozy
+    - /usr/local/cozy
+  - CmdLine:
+    - /usr/local/bin/supervisord
+    - -n
+    - -c
+    - /etc/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:14.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:14.04

@@ -1,0 +1,52 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.11
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: 3.3.3
+  - Labels:
+    - Key: maintainer
+      Value: '"zgist"'
+    - Key: org.label-schema.name
+      Value: '"Shadowsocks-libev"'
+    - Key: org.label-schema.version
+      Value: $VERSION
+    Name: label
+  - Env:
+    - Key: SERVER_ADDR
+      Value: 0.0.0.0
+    - Key: SERVER_PORT
+      Value: "8388"
+    - Key: METHOD
+      Value: aes-128-gcm
+    - Key: TIMEOUT
+      Value: "300"
+    - Key: DNS_ADDR
+      Value: 8.8.8.8
+    - Key: PASSWORD
+      Value: ""
+    Name: env
+  - CmdLine:
+    - set -ex &&     apk add --no-cache         --virtual .build-deps         autoconf         build-base         curl         libev-dev         libtool         linux-headers         libsodium-dev         mbedtls-dev         pcre-dev         tar         c-ares-dev
+      &&     mkdir -p /tmp/ss &&     cd /tmp/ss &&     curl -sSL https://github.com/shadowsocks/shadowsocks-libev/releases/download/v$VERSION/shadowsocks-libev-$VERSION.tar.gz
+      |     tar xz --strip 1 &&     ./configure --prefix=/usr --disable-documentation
+      &&     make install &&     runDeps="$(         scanelf --needed --nobanner /usr/bin/ss-*             |
+      awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }'             | xargs -r apk
+      info --installed             | sort -u     )" &&     apk add --no-cache --virtual
+      .run-deps $runDeps &&     apk del .build-deps &&     cd / && rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - $SERVER_PORT
+  - CmdLine:
+    - ss-server     -a nobody     -s $SERVER_ADDR     -p $SERVER_PORT     -k ${PASSWORD:-$(hostname)}     -m
+      $METHOD     -t $TIMEOUT     -d $DNS_ADDR     --no-delay     -u
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:3.11
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.11

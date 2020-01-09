@@ -1,0 +1,116 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:16.04
+  Commands:
+  - Maintainer: Bo Han <bowhan@me.com>
+    Name: maintainer
+  - Labels:
+    - Key: Description
+      Value: '"UCSC Genome Browser"'
+    Name: label
+  - Key: Genomes
+    Name: arg
+    Value: '"hg38 mm10 rn6 macFas5 dm6"'
+  - CmdLine:
+    - apt-get update && apt-get install -y git build-essential     apache2 mysql-client-5.7
+      mysql-client-core-5.7     libpng12-dev libssl-dev openssl libmysqlclient-dev
+      &&     apt-get clean
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MACHTYPE
+      Value: x86_64
+    Name: env
+  - CmdLine:
+    - mkdir -p ~/bin/${MACHTYPE}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /var/www/html/index.html && mkdir /var/www/trash &&     mkdir /usr/local/apache
+      && ln -s /var/www/html /usr/local/apache/htdocs &&     rsync -avzP rsync://hgdownload.cse.ucsc.edu/htdocs/
+      /var/www/html/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /var/www/cgi-bin &&     rsync -avP rsync://hgdownload.soe.ucsc.edu/cgi-bin/
+      /var/www/cgi-bin/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '{      echo "gbdbLoc1=/data/gbdb/";     echo "gbdbLoc2=http://hgdownload.cse.ucsc.edu/gbdb/";     echo
+      "db.trackDb=trackDb";     echo "db.host=gbdb";     echo "db.user=admin";     echo
+      "db.password=admin";     echo "db.socket=/var/run/mysqld/mysqld.sock";     echo
+      "slow-db.host=genome-mysql.cse.ucsc.edu";     echo "slow-db.user=genomep";     echo
+      "slow-db.password=password";     echo "central.db=hgcentral";     echo "central.host=gbdb";     echo
+      "central.user=admin";     echo "central.password=admin";     echo "central.domain=";     echo
+      "backupcentral.db=hgcentral";     echo "backupcentral.host=gbdb";     echo "backupcentral.user=admin";     echo
+      "backupcentral.password=admin";     echo "backupcentral.domain="; } > /var/www/cgi-bin/hg.conf'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '{         echo ''#!/bin/bash'';         echo ''find /var/www/trash/ \! \( -regex
+      "/var/www/trash/ct/.*"               -or -regex "/var/www/trash/hgSs/.*" \)
+      -type f -amin +5040 -exec rm -f {} \;'';         echo ''find /var/www/trash/    \(
+      -regex "/var/www/trash/ct/.*"               -or -regex "/var/www/trash/hgSs/.*"
+      \) -type f -amin +10080 -exec rm -f {} \;'';     } > /etc/cron.daily/genomebrowser'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /etc/cron.daily/genomebrowser
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/<\/VirtualHost>//' /etc/apache2/sites-enabled/000-default.conf &&     {         echo
+      'XBitHack on';         echo '';         echo '<Directory /var/www/html>';         echo
+      '    Options +Includes';         echo '    SSILegacyExprParser on';         echo
+      '</Directory>';         echo '';         echo 'ScriptAlias /cgi-bin/ /var/www/cgi-bin/';         echo
+      '<Directory "/var/www/cgi-bin">';         echo '    AllowOverride None';         echo
+      '    Options +ExecCGI -MultiViews +SymLinksIfOwnerMatch';         echo '    SetHandler
+      cgi-script';         echo '    Require all granted';         echo '</Directory>';         echo
+      '';         echo '<Directory /var/www/html/trash>';         echo '    Options
+      MultiViews';         echo '    AllowOverride None';         echo '    Order
+      allow,deny';         echo '    Allow from all';         echo '</Directory>';         echo
+      '';         echo '</VirtualHost>';     } >> /etc/apache2/sites-enabled/000-default.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /etc/apache2/mods-available/include.load /etc/apache2/mods-enabled/ &&     ln
+      -s /etc/apache2/mods-available/cgi.load /etc/apache2/mods-enabled/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - for genome in ${Genomes}; do         mkdir -p /gbdb/visiGene /gbdb/${genome}         &&
+      rsync -avP  --include "known*" --include "*2bit" --exclude "*" rsync://hgdownload.cse.ucsc.edu/gbdb/${genome}/  /gbdb/${genome}/;     done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R www-data.www-data /var/www /gbdb
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: APACHE_RUN_USER
+      Value: www-data
+    Name: env
+  - Env:
+    - Key: APACHE_RUN_GROUP
+      Value: www-data
+    Name: env
+  - Env:
+    - Key: APACHE_LOG_DIR
+      Value: /var/log/apache2
+    Name: env
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - CmdLine:
+    - /usr/sbin/apache2ctl
+    - -D
+    - FOREGROUND
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:16.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04

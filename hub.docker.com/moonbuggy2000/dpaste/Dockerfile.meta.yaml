@@ -1,0 +1,202 @@
+MetaArgs:
+- DefaultValue: 3.10.3
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: 3.10.3
+- DefaultValue: "3.7"
+  Key: PYTHON_VERSION
+  ProvidedValue: null
+  Value: "3.7"
+- DefaultValue: "3.4"
+  Key: DPASTE_VERSION
+  ProvidedValue: null
+  Value: "3.4"
+- DefaultValue: /app
+  Key: APP_PATH
+  ProvidedValue: null
+  Value: /app
+- DefaultValue: ${APP_PATH}/venv
+  Key: VIRTUAL_ENV
+  ProvidedValue: null
+  Value: ${APP_PATH}/venv
+Stages:
+- As: source
+  BaseName: alpine:$ALPINE_VERSION
+  Commands:
+  - Key: DPASTE_VERSION
+    Name: arg
+    Value: null
+  - Key: APP_PATH
+    Name: arg
+    Value: null
+  - Env:
+    - Key: EXCLUDE_MODS
+      Value: "\"\tpytest \tpytest-cov \tpytest-django \ttox\""
+    Name: env
+  - Env:
+    - Key: REMOVE_FILES
+      Value: "\".dockerignore \t.git* \t.travis.yml \tCHANGELOG.rst \tDockerfile \tREADME.rst
+        \tdocker-compose.yml \tdocs \tdpaste/tests \ttox.ini\""
+    Name: env
+  - Name: workdir
+    Path: ${APP_PATH}
+  - CmdLine:
+    - "apk add --no-cache curl \t&& curl -o dpaste.tar.gz -L https://github.com/bartTC/dpaste/archive/v${DPASTE_VERSION}.tar.gz
+      \t&& tar -xf dpaste.tar.gz --strip-components 1 \t&& rm -f dpaste.tar.gz \t&&
+      for dep in $EXCLUDE_MODS; do \t\tsed -e \"/^[[:blank:]]*${dep}/d\" -i setup.cfg;
+      done \t&& for file in $REMOVE_FILES; do \t\trm -rf ${APP_PATH}/${file}; done"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:$ALPINE_VERSION
+  Name: source
+  Platform: ""
+  SourceCode: FROM alpine:$ALPINE_VERSION as source
+- As: staticfiles
+  BaseName: node:lts-alpine
+  Commands:
+  - Key: APP_PATH
+    Name: arg
+    Value: null
+  - CmdLine:
+    - "apk add --no-cache \t\tbash \t\tmake"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${APP_PATH}
+  - Chown: ""
+    From: source
+    Name: copy
+    SourcesAndDest:
+    - ${APP_PATH}/package.json
+    - ${APP_PATH}/package-lock.json
+    - ${APP_PATH}/Makefile
+    - ./
+  - Chown: ""
+    From: source
+    Name: copy
+    SourcesAndDest:
+    - ${APP_PATH}/client
+    - ./client
+  - CmdLine:
+    - "npm ci --ignore-scripts \t&& mkdir -p dpaste/static \t&& make css js"
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:lts-alpine
+  Name: staticfiles
+  Platform: ""
+  SourceCode: FROM node:lts-alpine as staticfiles
+- As: builder
+  BaseName: python:${PYTHON_VERSION}-alpine
+  Commands:
+  - Key: VIRTUAL_ENV
+    Name: arg
+    Value: null
+  - Key: APP_PATH
+    Name: arg
+    Value: null
+  - Env:
+    - Key: PATH
+      Value: '"${VIRTUAL_ENV}/bin:$PATH"'
+    - Key: PYTHONDONTWRITEBYTECODE
+      Value: "1"
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - "apk add --no-cache \t\tgcc \t\tlibffi-dev \t\tmariadb-connector-c-dev \t\tmusl-dev
+      \t\tpostgresql-dev \t\tpy3-virtualenv"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${APP_PATH}
+  - CmdLine:
+    - "python3 -m venv $VIRTUAL_ENV \t&& pip install --no-cache-dir --upgrade pip
+      \t&& pip install --no-cache-dir django==2.2.9 mysqlclient"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: staticfiles
+    Name: copy
+    SourcesAndDest:
+    - ${APP_PATH}
+    - ${APP_PATH}/
+  - Chown: ""
+    From: source
+    Name: copy
+    SourcesAndDest:
+    - ${APP_PATH}/
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - settings/
+    - dpaste/settings/
+  - CmdLine:
+    - "pip install --no-cache-dir -e .[production] \t&& mkdir db \t&& ln -sf /usr/bin/python3
+      ${VIRTUAL_ENV}/bin/python3 \t&& echo \"SECRET_KEY = '$(tr -dc 'a-z0-9' < /dev/urandom
+      | head -c50)'\" >> dpaste/settings/local.py"
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:${PYTHON_VERSION}-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM python:${PYTHON_VERSION}-alpine as builder
+- BaseName: moonbuggy2000/alpine-s6-nginx-uwsgi:$ALPINE_VERSION
+  Commands:
+  - Key: PYTHON_VERSION
+    Name: arg
+    Value: null
+  - Key: VIRTUAL_ENV
+    Name: arg
+    Value: null
+  - Key: APP_PATH
+    Name: arg
+    Value: null
+  - Env:
+    - Key: VIRTUAL_ENV
+      Value: '"${VIRTUAL_ENV}"'
+    - Key: APP_PATH
+      Value: '"${APP_PATH}"'
+    - Key: PYTHON_VERSION
+      Value: '"${PYTHON_VERSION}"'
+    - Key: PATH
+      Value: '"${VIRTUAL_ENV}/bin:$PATH"'
+    - Key: PYTHONPATH
+      Value: '"${VIRTUAL_ENV}/lib/python${PYTHON_VERSION}/site-packages/"'
+    - Key: PYTHONDONTWRITEBYTECODE
+      Value: "1"
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - Name: workdir
+    Path: ${APP_PATH}
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - ${APP_PATH}/
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./etc
+    - /etc
+  - CmdLine:
+    - "apk add --no-cache \t\tpython3=~${PYTHON_VERSION} \t\tmariadb-connector-c-dev
+      \t\tmailcap \t&& python3 ./manage.py collectstatic --noinput"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: moonbuggy2000/alpine-s6-nginx-uwsgi:$ALPINE_VERSION
+  Name: ""
+  Platform: ""
+  SourceCode: FROM moonbuggy2000/alpine-s6-nginx-uwsgi:$ALPINE_VERSION

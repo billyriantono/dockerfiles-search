@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- BaseName: tomcat:8.0.36-jre8
+  Commands:
+  - Labels:
+    - Key: Maintainer
+      Value: '"combat-tb-help@sanbi.ac.za"'
+    Name: label
+  - CmdLine:
+    - "apt-get update; \tapt-get -y upgrade; \tapt-get install -f ; \tapt-get install
+      perl fastqc -y; \trm -rf /var/lib/apt/lists/*; \tmkdir -p /etc/irida/plugins"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOSU_VERSION
+      Value: "1.10"
+    Name: env
+  - CmdLine:
+    - "set -ex; \tapt-get install -y --no-install-recommends ca-certificates; \trm
+      -rf /var/lib/apt/lists/*; \tdpkgArch=\"$(dpkg --print-architecture | awk -F-
+      '{ print $NF }')\"; \twget -O /usr/local/bin/gosu \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch\";
+      \twget -O /usr/local/bin/gosu.asc \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch.asc\";
+      \texport GNUPGHOME=\"$(mktemp -d)\"; \tgpg --keyserver ha.pool.sks-keyservers.net
+      --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4; \tgpg --batch --verify
+      /usr/local/bin/gosu.asc /usr/local/bin/gosu; \trm -r \"$GNUPGHOME\" /usr/local/bin/gosu.asc;
+      \tchmod +x /usr/local/bin/gosu; \tgosu nobody true;"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: COMBAT_TB_PLUGINS
+      Value: '"https://github.com/COMBAT-TB/irida-pipeline-plugins"'
+    - Key: IRIDA_DOWNLOAD_URL
+      Value: '"https://github.com/phac-nml/irida/releases/download"'
+    - Key: IRIDA_VERSION
+      Value: '"19.09.2"'
+    - Key: IRIDA_DATA_DIR
+      Value: /data/irida
+    - Key: JAVA_OPTS
+      Value: '"-Dspring.profiles.active=prod -Ddandelion.profile.active=prod"'
+    - Key: GALAXY_ADMIN_USER
+      Value: '"admin@galaxy.org"'
+    Name: env
+  - CmdLine:
+    - "mkdir -p $IRIDA_DATA_DIR; \twget \"${IRIDA_DOWNLOAD_URL}/${IRIDA_VERSION}/irida-${IRIDA_VERSION}.war\";
+      \tmv irida-${IRIDA_VERSION}.war /usr/local/tomcat/webapps/irida.war; \tbash
+      -c 'mkdir -p ${IRIDA_DATA_DIR}/{sequence,reference,output}'"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget "${COMBAT_TB_PLUGINS}/releases/download/0.1.7/tb-sample-report-pipeline-plugin-0.1.7-SNAPSHOT.jar"
+      -P /etc/irida/plugins/
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - $IRIDA_DATA_DIR
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.conf'
+    - /etc/irida/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.sh'
+    - ./
+  - CmdLine:
+    - ./docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - ./wait-for-it.sh
+    - irida_mysql:3306
+    - --
+    - catalina.sh
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: tomcat:8.0.36-jre8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tomcat:8.0.36-jre8

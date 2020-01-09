@@ -1,0 +1,121 @@
+MetaArgs: null
+Stages:
+- As: server-builder
+  BaseName: golang:1.8-alpine
+  Commands:
+  - Name: workdir
+    Path: /go/src/github.com/hyperscale/hyperpaas/
+  - CmdLine:
+    - apk add --update --no-cache ca-certificates curl git make && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://glide.sh/get | sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - .
+  - CmdLine:
+    - make deps
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x hyperpaas
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.8-alpine
+  Name: server-builder
+  Platform: ""
+  SourceCode: FROM golang:1.8-alpine as server-builder
+- As: ui-builder
+  BaseName: node:6.11-alpine
+  Commands:
+  - Name: workdir
+    Path: /build/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./ui/
+    - .
+  - CmdLine:
+    - npm install -g @angular/cli
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ng build --target=production --environment=prod --sourcemap --aot --base-href=/ui/
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:6.11-alpine
+  Name: ui-builder
+  Platform: ""
+  SourceCode: FROM node:6.11-alpine as ui-builder
+- BaseName: docker:17.07.0-ce-dind
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Axel Etcheverry <axel@etcheverry.biz>"'
+    Name: label
+  - Env:
+    - Key: PORT
+      Value: "8080"
+    Name: env
+  - Env:
+    - Key: DEBUG
+      Value: "true"
+    Name: env
+  - CmdLine:
+    - apk add --update --no-cache ca-certificates curl && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/hyperpaas/
+  - Chown: ""
+    From: server-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/hyperscale/hyperpaas/hyperpaas
+    - .
+  - Chown: ""
+    From: ui-builder
+    Name: copy
+    SourcesAndDest:
+    - /build/dist
+    - ./ui/
+  - Health:
+      Interval: 5000000000
+      Test:
+      - CMD-SHELL
+      - curl -f http://localhost:${PORT}/health > /dev/null 2>&1 || exit 1
+      Timeout: 2000000000
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - ${PORT}
+  - Name: volume
+    Volumes:
+    - /var/lib/hyperpaas
+  - CmdLine:
+    - /usr/local/bin/dockerd-entrypoint.sh
+    - /opt/hyperpaas/hyperpaas
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: docker:17.07.0-ce-dind
+  Name: ""
+  Platform: ""
+  SourceCode: FROM docker:17.07.0-ce-dind

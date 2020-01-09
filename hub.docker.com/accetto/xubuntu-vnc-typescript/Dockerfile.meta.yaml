@@ -1,0 +1,95 @@
+MetaArgs:
+- DefaultValue: latest
+  Key: BASETAG
+  ProvidedValue: null
+  Value: latest
+Stages:
+- As: stage-vscode
+  BaseName: accetto/xubuntu-vnc-node:${BASETAG}
+  Commands:
+  - Name: user
+    User: "0"
+  - CmdLine:
+    - curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.gpg     &&
+      install -o root -g root -m 644 microsoft.gpg /etc/apt/trusted.gpg.d/     &&
+      sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/vscode stable
+      main" > /etc/apt/sources.list.d/vscode.list'     && apt-get update && apt-get
+      install -y         apt-transport-https         code     && apt-get -y autoremove     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/home/config/Code/User
+    - ${HOME}/.config/Code/User
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/home/Desktop
+    - ${HOME}/Desktop/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/startup/version_sticker.sh
+    - ${STARTUPDIR}/
+  - CmdLine:
+    - gtk-update-icon-cache -f /usr/share/icons/hicolor     && chmod a+wx "${STARTUPDIR}"/version_sticker.sh     &&
+      "${STARTUPDIR}"/set_user_permissions.sh "${STARTUPDIR}" "${HOME}"
+    Name: run
+    PrependShell: true
+  From:
+    Image: accetto/xubuntu-vnc-node:${BASETAG}
+  Name: stage-vscode
+  Platform: ""
+  SourceCode: FROM accetto/xubuntu-vnc-node:${BASETAG} as stage-vscode
+- As: stage-typescript
+  BaseName: stage-vscode
+  Commands:
+  - Name: user
+    User: "1001"
+  - CmdLine:
+    - npm install -g         typescript     && rm -r /home/headless/.npm/_cacache/
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: stage-vscode
+  Name: stage-typescript
+  Platform: ""
+  SourceCode: FROM stage-vscode as stage-typescript
+- As: stage-final
+  BaseName: stage-typescript
+  Commands:
+  - Key: ARG_REFRESHED_AT
+    Name: arg
+    Value: null
+  - Key: ARG_VERSION_STICKER
+    Name: arg
+    Value: null
+  - Key: ARG_VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.vcs-ref
+      Value: '"${ARG_VCS_REF}"'
+    - Key: version-sticker
+      Value: '"${ARG_VERSION_STICKER}"'
+    Name: label
+  - Env:
+    - Key: REFRESHED_AT
+      Value: ${ARG_REFRESHED_AT}
+    - Key: VERSION_STICKER
+      Value: ${ARG_VERSION_STICKER}
+    Name: env
+  From:
+    Stage:
+      Index: 1
+      Named: stage-typescript
+  Name: stage-final
+  Platform: ""
+  SourceCode: FROM stage-typescript as stage-final

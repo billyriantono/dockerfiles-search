@@ -1,0 +1,99 @@
+MetaArgs: null
+Stages:
+- As: composer
+  BaseName: composer:1
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /var/www/html
+  - Name: workdir
+    Path: /var/www/html
+  - Env:
+    - Key: APP_ENV
+      Value: prod
+    Name: env
+  - CmdLine:
+    - composer install --no-dev --no-scripts --optimize-autoloader     && composer
+      run auto-scripts
+    Name: run
+    PrependShell: true
+  From:
+    Image: composer:1
+  Name: composer
+  Platform: ""
+  SourceCode: FROM composer:1 as composer
+- As: yarn
+  BaseName: node:11
+  Commands:
+  - Chown: ""
+    From: composer
+    Name: copy
+    SourcesAndDest:
+    - /var/www/html
+    - /app
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - yarn install     && yarn run build     && rm -fr node_modules
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:11
+  Name: yarn
+  Platform: ""
+  SourceCode: FROM node:11 as yarn
+- BaseName: alpine:3.9
+  Commands:
+  - Key: CURRENT_VERSION
+    Name: arg
+    Value: master
+  - Chown: ""
+    From: yarn
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /var/www/html
+  - Name: workdir
+    Path: /var/www/html
+  - Env:
+    - Key: APP_ENV
+      Value: prod
+    - Key: APP_SECRET
+      Value: '''73adb4285b84053d174db4b65ffa8ff4bfa24e1b'''
+    - Key: PUBLIC_WEBSOCKET_URL
+      Value: '''ws://localhost/websocket'''
+    - Key: WAMP_REALM
+      Value: realm1
+    - Key: WAMP_PASSWORD
+      Value: pleaseChooseASecretPasswordForTheWebsocket
+    - Key: WAMP_INTERNAL_HOSTNAME
+      Value: board
+    - Key: BOARD_LOGIN_PASSWORD
+      Value: '''phash-board'''
+    Name: env
+  - CmdLine:
+    - 'apk add --no-cache php7-fpm        php7-cli        php7-ctype        php7-dom        php7-json        php7-mbstring        php7-openssl        php7-session        php7-tokenizer        supervisor     &&
+      cp docker/*-fpm.conf /etc/php7/php-fpm.d/     && echo -e "parameters:\n    version:
+      $CURRENT_VERSION\n" > /var/www/html/config/packages/parameters.yaml     && php
+      bin/console cache:clear     && echo "successfully built $CURRENT_VERSION"'
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+    - "8081"
+    - "9000"
+  - CmdLine:
+    - supervisord
+    - --configuration
+    - /var/www/html/docker/supervisord.conf
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

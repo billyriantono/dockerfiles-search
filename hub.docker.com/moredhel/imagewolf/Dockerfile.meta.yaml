@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.8
+  Commands:
+  - CmdLine:
+    - go get github.com/anacrolix/utp
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/anacrolix/torrent/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/docker/distribution/notifications
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/imagewolf.go
+    - /go/src/
+  - CmdLine:
+    - CGO_ENABLED=0 go build -a /go/src/imagewolf.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.8
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.8 AS build
+- As: build-docker
+  BaseName: alpine:3.5
+  Commands:
+  - Env:
+    - Key: DOCKER_VERSION
+      Value: 17.06.0
+    Name: env
+  - Env:
+    - Key: DOCKER_DOWNLOAD_URL
+      Value: https://download.docker.com/linux/static/stable/x86_64/docker-17.06.0-ce.tgz
+    Name: env
+  - Env:
+    - Key: DOCKER_DOWNLOAD_SHA
+      Value: e582486c9db0f4229deba9f8517145f8af6c5fae7a1243e6b07876bd3e706620
+    Name: env
+  - CmdLine:
+    - apk --update add ca-certificates wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -O /docker.tgz "$DOCKER_DOWNLOAD_URL"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "$DOCKER_DOWNLOAD_SHA *docker.tgz" | sha256sum -c -;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xvpf docker.tgz
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.5
+  Name: build-docker
+  Platform: ""
+  SourceCode: FROM alpine:3.5 AS build-docker
+- BaseName: scratch
+  Commands:
+  - Env:
+    - Key: PATH
+      Value: '"/"'
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/imagewolf
+    - /imagewolf
+  - Chown: ""
+    From: build-docker
+    Name: copy
+    SourcesAndDest:
+    - /docker/docker
+    - /docker
+  - CmdLine:
+    - /imagewolf
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

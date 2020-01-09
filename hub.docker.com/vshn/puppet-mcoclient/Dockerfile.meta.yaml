@@ -1,0 +1,113 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:18.04
+  Commands:
+  - Key: PUPPET_AGENT_VERSION
+    Name: arg
+    Value: '"5.5.7"'
+  - Env:
+    - Key: DUMB_INIT_VERSION
+      Value: '"1.2.2"'
+    - Key: UBUNTU_CODENAME
+      Value: '"bionic"'
+    - Key: PUPPET_MODULE_CHORIA_VERSION
+      Value: '"0.12.0"'
+    - Key: PUPPET_MODULE_R10K_VERSION
+      Value: '"6.8.0"'
+    - Key: MCO_CLIENT_USER
+      Value: '"deployer"'
+    - Key: PATH
+      Value: /opt/puppetlabs/server/bin:/opt/puppetlabs/puppet/bin:/opt/puppetlabs/bin:$PATH
+    Name: env
+  - Labels:
+    - Key: org.label-schema.vendor
+      Value: '"VSHN AG"'
+    - Key: org.label-schema.url
+      Value: '"https://github.com/vshn/puppet-in-docker"'
+    - Key: org.label-schema.name
+      Value: '"Puppet Code Deployer"'
+    - Key: org.label-schema.license
+      Value: '"BSD-3-Clause"'
+    - Key: org.label-schema.version
+      Value: $PUPPET_SERVER_VERSION
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/vshn/puppet-in-docker"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: com.puppet.dockerfile
+      Value: '"/Dockerfile"'
+    Name: label
+  - CmdLine:
+    - dumb-init
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - apt-get update &&     apt-get install -y wget git netcat &&     wget https://apt.puppetlabs.com/puppet5-release-"${UBUNTU_CODENAME}".deb
+      &&     wget https://github.com/Yelp/dumb-init/releases/download/v"${DUMB_INIT_VERSION}"/dumb-init_"${DUMB_INIT_VERSION}"_amd64.deb
+      &&     dpkg -i puppet5-release-"${UBUNTU_CODENAME}".deb &&     dpkg -i dumb-init_"${DUMB_INIT_VERSION}"_amd64.deb
+      &&     rm puppet5-release-"${UBUNTU_CODENAME}".deb dumb-init_"$DUMB_INIT_VERSION"_amd64.deb
+      &&     apt-get update &&     apt-get install --no-install-recommends -y puppet-agent="${PUPPET_AGENT_VERSION}"-1"${UBUNTU_CODENAME}"
+      &&     apt-get clean &&     rm -rf /var/lib/apt/lists/* &&     adduser --disabled-password
+      --gecos "" "${MCO_CLIENT_USER}"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - puppet module install choria-mcollective_choria --version "${PUPPET_MODULE_CHORIA_VERSION}"
+      --target-dir /tmp/modules &&     puppet module install puppet-r10k --version
+      "${PUPPET_MODULE_R10K_VERSION}" --target-dir /tmp/modules
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build/hiera.yaml
+    - build/common.yaml
+    - build/main.pp
+    - /tmp/
+  - CmdLine:
+    - apt-get update && puppet apply --hiera_config=/tmp/hiera.yaml --modulepath=/tmp/modules
+      /tmp/main.pp &&     apt-get clean && rm -rf /var/lib/apt/lists/* &&     chown
+      -R $MCO_CLIENT_USER /etc/puppetlabs/mcollective/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - agent/git.ddl
+    - /opt/puppetlabs/mcollective/plugins/mcollective/agent/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - agent/r10kcli.ddl
+    - /opt/puppetlabs/mcollective/plugins/mcollective/agent/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /docker-entrypoint.d/*
+    - /docker-entrypoint.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Dockerfile
+    - /
+  - Name: user
+    User: $MCO_CLIENT_USER
+  - Name: workdir
+    Path: /home/$MCO_CLIENT_USER
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

@@ -1,0 +1,260 @@
+MetaArgs:
+- DefaultValue: '"3.6.1"'
+  Key: VER_RLANG
+  ProvidedValue: null
+  Value: '"3.6.1"'
+Stages:
+- As: rstudio
+  BaseName: rocker/verse:${VER_RLANG}
+  Commands: null
+  From:
+    Image: rocker/verse:${VER_RLANG}
+  Name: rstudio
+  Platform: ""
+  SourceCode: FROM rocker/verse:${VER_RLANG} as rstudio
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: rstudio
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /
+  - Key: VER_PYTHON
+    Name: arg
+    Value: '"3.7"'
+  - Key: VER_PWSH
+    Name: arg
+    Value: '"6.2.3"'
+  - Key: VER_SHINYPROXY
+    Name: arg
+    Value: '"2.3.0"'
+  - Key: VER_VSCODE
+    Name: arg
+    Value: '"2.1692-vsc1.39.2"'
+  - Key: VER_CRONICLE
+    Name: arg
+    Value: '"0.8.32"'
+  - Key: TAG
+    Name: arg
+    Value: '"latest"'
+  - Env:
+    - Key: TAG
+      Value: ${TAG}
+    Name: env
+  - Labels:
+    - Key: maintainer
+      Value: '"dm3ll3n@gmail.com"'
+    Name: label
+  - Env:
+    - Key: DISABLE_AUTH
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: R_LIBS_USER
+      Value: /r-libs
+    Name: env
+  - Env:
+    - Key: APPLICATION_LOGS_TO_STDOUT
+      Value: "false"
+    Name: env
+  - CmdLine:
+    - export ADD=shiny && bash /etc/cont-init.d/add
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&     apt-get install -y apt-transport-https &&     apt-get
+      install -y curl nano
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y openjdk-8-jdk-headless &&     mkdir -p /opt/shinyproxy &&     wget
+      -nv "https://www.shinyproxy.io/downloads/shinyproxy-${VER_SHINYPROXY}.jar" -O
+      /opt/shinyproxy/shinyproxy.jar
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/shinyproxy/grid-layout
+    - /opt/shinyproxy/templates/grid-layout
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/shinyproxy/application.yml
+    - /opt/shinyproxy/application.yml
+  - CmdLine:
+    - mkdir /r-libs &&     echo ".libPaths( c( '/r-libs', .libPaths() ) )" >> /usr/local/lib/R/etc/Rprofile.site
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - R -e "install.packages(c('reticulate', 'png', 'DBI', 'odbc', 'shinydashboard',
+      'DT', 'magrittr', 'lubridate', 'ggplot2'))" &&     chmod -R 777 /r-libs
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - samples
+    - /srv/shiny-server
+  - CmdLine:
+    - apt-get install -y libc6 libgcc1 libgssapi-krb5-2 liblttng-ust0 libstdc++6 libcurl3
+      libunwind8 libuuid1 zlib1g libssl1.0.2 libicu57 &&     wget -nv "https://github.com/PowerShell/PowerShell/releases/download/v${VER_PWSH}/powershell_${VER_PWSH}-1.debian.9_amd64.deb"
+      -O /tmp/pwsh.deb &&     dpkg -i /tmp/pwsh.deb &&     rm -f /tmp/pwsh.deb
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: VIRTUAL_ENV
+      Value: py3
+    Name: env
+  - CmdLine:
+    - wget -nv https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+      -O /tmp/miniconda.sh &&     bash /tmp/miniconda.sh -b -p /conda3 &&     rm -f
+      /tmp/miniconda.sh &&     /conda3/bin/conda create -y -n $VIRTUAL_ENV python=${VER_PYTHON}
+      &&     chmod -R 777 /conda3 &&     /conda3/bin/conda install -y --name $VIRTUAL_ENV
+      jupyter pylint openssl
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: '"/conda3/bin:${PATH}"'
+    Name: env
+  - CmdLine:
+    - echo "export PATH=\"/conda3/bin:\${PATH}\"" >> /etc/profile &&     echo ". activate
+      $VIRTUAL_ENV" >> /etc/profile &&     echo '$env:PATH = "/conda3/envs/$($env:VIRTUAL_ENV)/bin:"
+      + $env:PATH' >> /opt/microsoft/powershell/6/profile.ps1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -nv "https://github.com/cdr/code-server/releases/download/${VER_VSCODE}/code-server${VER_VSCODE}-linux-x86_64.tar.gz"
+      -O /tmp/vs-code-server.tar.gz &&     mkdir /tmp/vs-code-server &&     tar -xzf
+      /tmp/vs-code-server.tar.gz --strip 1 --directory /tmp/vs-code-server &&     mv
+      -f /tmp/vs-code-server/code-server /usr/local/bin/code-server &&     rm -rf
+      /tmp/vs-code-server.tar.gz &&     mkdir -p /src/packages/server/build/web &&     echo
+      '' > /src/packages/server/build/web/index.html
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL https://deb.nodesource.com/setup_10.x | bash &&     apt-get install
+      -y nodejs &&     mkdir -p /opt/cronicle &&     cd /opt/cronicle &&     curl
+      -L "https://github.com/jhuckaby/Cronicle/archive/v${VER_CRONICLE}.tar.gz" |
+      tar zxvf - --strip-components 1 &&     npm install &&     node bin/build.js
+      dist
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/cronicle/jobs
+    - /jobs
+  - CmdLine:
+    - export DEBIAN_FRONTEND=noninteractive &&     apt-get install -y krb5-user
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y unixodbc &&     wget -nv https://packages.microsoft.com/debian/9/prod/pool/main/m/msodbcsql17/msodbcsql17_17.3.1.1-1_amd64.deb
+      -O /tmp/msodbcsql.deb &&     ACCEPT_EULA=Y dpkg -i /tmp/msodbcsql.deb &&     rm
+      -f /tmp/msodbcsql.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y odbc-postgresql
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -nv https://downloads.cloudera.com/connectors/ClouderaImpala_ODBC_2.6.2.1002/Debian/clouderaimpalaodbc_2.6.2.1002-2_amd64.deb
+      -O /tmp/clouderaimpalaodbc_amd64.deb &&     dpkg -i /tmp/clouderaimpalaodbc_amd64.deb
+      &&     rm -f /tmp/clouderaimpalaodbc_amd64.deb
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/rstudio/rserver.conf
+    - /etc/rstudio/rserver_custom.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/vscode/install-vscode-python.sh
+    - /install-vscode-python.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/odbc/odbcinst.ini
+    - /etc/odbcinst.ini
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/odbc/odbc.ini
+    - /etc/odbc.ini
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/krb/krb5.conf
+    - /etc/krb5.conf
+  - Env:
+    - Key: KRB5_CONFIG
+      Value: /etc/krb5.conf
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/cronicle/init.conf
+    - /opt/cronicle/conf/init.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/rstudio/run
+    - /etc/services.d/rstudio/run
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/vscode/run
+    - /etc/services.d/vscode/run
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/shinyproxy/run
+    - /etc/services.d/shinyproxy/run
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/cronicle/run
+    - /etc/services.d/cronicle/run
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - chmod +x /entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - shinyproxy
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

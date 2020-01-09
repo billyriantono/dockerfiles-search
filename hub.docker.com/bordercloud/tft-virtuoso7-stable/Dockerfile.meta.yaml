@@ -1,0 +1,115 @@
+MetaArgs: null
+Stages:
+- BaseName: centos/systemd
+  Commands:
+  - Maintainer: '"Karima Rafes" <karima.rafes@gmail.com>'
+    Name: maintainer
+  - CmdLine:
+    - yum -y update; yum clean all;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "rpm --force -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+      \    && rpm --force -Uvh https://mirror.webtatic.com/yum/el7/webtatic-release.rpm
+      \    && rpm --rebuilddb     &&  yum -y groupinstall \"Development Tools\" \t&&
+      yum install -y gcc gmake autoconf automake libtool                flex bison
+      gperf gawk m4 make                openssl openssl-devel readline-devel wget
+      mail                libxml2-devel libuuid-devel uuid-devel                ImageMagick
+      ImageMagick-devel openldap-devel                libssl-dev libreadline-dev net-tools
+      git \t&& rm -rf /var/cache/yum/* \t&& yum clean all"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth 1 -b stable/7 git://github.com/openlink/virtuoso-opensource.git     &&
+      cd virtuoso-opensource     && export CFLAGS="-O2 -m64"     && ./autogen.sh     &&
+      ./configure --prefix=/usr/local/virtuoso             --enable-ods-vad             --with-readline             &&
+      make             && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/local/virtuoso/bin/virtuoso-t /usr/bin/virtuoso-t  2>&1 || true &&
+      ln -s /usr/local/virtuoso/bin/isql /usr/bin/isql  2>&1 || true && mkdir /data
+      && cp /usr/local/virtuoso/var/lib/virtuoso/db/virtuoso.ini /data/virtuoso.ini
+      && sed -i 's/\/usr\/local\/virtuoso\/var\/lib\/virtuoso\/db/\/data/' /data/virtuoso.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "{ \t\techo '#!/bin/sh'; \t\techo '# description: Script to start the server
+      Virtuoso'; \t\techo ''; \t\techo 'DBAPASSWORD=\"dba\"'; \t\techo 'CONFIGFILE=\"/data/virtuoso.ini\"';
+      \t\techo '#INITBD=\"/data/init.sql\"'; \t\techo ''; \t\techo 'virtuoso-t -c
+      $CONFIGFILE +wait'; \t\techo '#isql 1111 dba $DBAPASSWORD $INITBD'; \t} >> /data/start.sh"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "{ \t\techo '#!/bin/sh'; \t\techo '# description: Script to stop the server
+      Virtuoso'; \t\techo ' '; \t\techo 'DBAPASSWORD=\"dba\"'; \t\techo ' '; \t\techo
+      'isql 1111 dba $DBAPASSWORD -K'; \t\techo 'sleep 5'; \t\t} >> /data/stop.sh"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "{ \t\techo ''; \t\techo '[Unit]'; \t\techo 'Description=Virtuoso Open-Source
+      server daemon'; \t\techo 'After=network.target'; \t\techo ''; \t\techo '[Service]';
+      \t\techo 'Type=simple'; \t\techo 'Restart=always'; \t\techo 'RestartSec=5';
+      \t\techo 'ExecStart=/usr/bin/virtuoso-t -f -c /data/virtuoso.ini +wait'; \t\techo
+      'ExecReload=/data/stop.sh'; \t\techo 'ExecStop=/data/stop.sh'; \t\techo 'PrivateTmp=true';
+      \t\techo ''; \t\techo '[Install]'; \t\techo 'WantedBy=multi-user.target'; \t}
+      >> /etc/systemd/system/virtuoso.service"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "chmod +x /data/start.sh \t&& chmod +x /data/stop.sh \t&& systemctl enable virtuoso"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "{ \t\techo ''; \t\techo 'GRANT ALL PRIVILEGES TO \"SPARQL\";'; \t} >> /data/virtuoso_init.sql"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "virtuoso-t -c /data/virtuoso.ini +wait \t&& isql 1111 dba dba /data/virtuoso_init.sql
+      \t&& isql 1111 dba dba -K \t&& sleep 5"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8890"
+  - CmdLine:
+    - "yum install -y python-docutils automake autoconf libtool ncurses-devel libxslt
+      groff pcre-devel pkgconfig     && cd /tmp \t&& wget https://packagecloud.io/install/repositories/varnishcache/varnish60/script.rpm.sh
+      \    && chmod +x ./script.rpm.sh     && ./script.rpm.sh     && yum install -y
+      varnish varnish-devel \t&& yum clean all"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd /tmp \t&& git clone https://github.com/varnish/varnish-modules.git     &&
+      cd varnish-modules     && ./bootstrap      && ./configure     && make     &&
+      make install"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - varnish.params
+    - /etc/varnish/varnish.params
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - default.vcl
+    - /etc/varnish/default.vcl
+  - CmdLine:
+    - systemctl enable varnish
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /usr/sbin/init
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos/systemd
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos/systemd

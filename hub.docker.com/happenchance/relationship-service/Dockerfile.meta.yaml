@@ -1,0 +1,109 @@
+MetaArgs:
+- DefaultValue: "1.12"
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: "1.12"
+Stages:
+- As: builder
+  BaseName: golang:${GO_VERSION}-alpine
+  Commands:
+  - CmdLine:
+    - mkdir /user &&     echo 'nobody:x:65534:65534:nobody:/:' > /user/passwd &&     echo
+      'nobody:x:65534:' > /user/group
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache ca-certificates git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./api
+    - ./api
+  - Key: GIT_TOKEN
+    Name: arg
+    Value: null
+  - Key: GIT_USERNAME
+    Name: arg
+    Value: null
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./go.mod
+    - ./go.sum
+    - ./
+  - CmdLine:
+    - git config --global url."https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/".insteadOf
+      "https://github.com/"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - ./
+  - CmdLine:
+    - CGO_ENABLED=0 go build     -installsuffix 'static'     -o /app ./cmd/server/main.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:${GO_VERSION}-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:${GO_VERSION}-alpine AS builder
+- As: final
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /user/group
+    - /user/passwd
+    - /etc/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /app
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/config/
+    - /
+  - Name: expose
+    Ports:
+    - "50000"
+  - Name: user
+    User: nobody:nobody
+  - CmdLine:
+    - /app
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -config-path=production.json
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: final
+  Platform: ""
+  SourceCode: FROM scratch AS final

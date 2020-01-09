@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: maven:3.5-jdk-8
+  Commands:
+  - CmdLine:
+    - "apt-get update && apt-get install -y     libxml2-utils     make \tgolang"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y     gcc     jekyll     ruby-dev     ruby-nokogiri
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gem install commaparty
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /usr/src/pipeline2
+  - Name: workdir
+    Path: /usr/src/pipeline2
+  - CmdLine:
+    - if ! make MVN_LOG='cat>>$(ROOT_DIR)/maven.log' dist-zip-linux; then       if
+      [ -e .make-target/commands ]; then         echo "cat .make-target/commands"
+      &&         cat .make-target/commands | sed 's/^/> /g';       fi &&       if
+      [ -e maven.log ]; then         echo "cat maven.log" &&         cat maven.log
+      | sed 's/^/> /g';       fi &&       exit 1;     fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd assembly/target && unzip assembly-*-linux.zip
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.5-jdk-8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM maven:3.5-jdk-8 as builder
+- BaseName: openjdk:8-jre
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Christian Egli <christian.egli@sbs.ch>"'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/pipeline2/assembly/target/daisy-pipeline
+    - /opt/daisy-pipeline2
+  - Env:
+    - Key: PIPELINE2_WS_LOCALFS
+      Value: "false"
+    - Key: PIPELINE2_WS_AUTHENTICATION
+      Value: "true"
+    - Key: PIPELINE2_WS_AUTHENTICATION_CLIENTKEY
+      Value: clientid
+    - Key: PIPELINE2_WS_AUTHENTICATION_CLIENTSECRET
+      Value: sekret
+    Name: env
+  - Name: expose
+    Ports:
+    - "8181"
+  - Health:
+      Interval: 30000000000
+      StartPeriod: 60000000000
+      Test:
+      - CMD-SHELL
+      - curl --fail http://${PIPELINE2_WS_HOST-localhost}:${PIPELINE2_WS_PORT:-8181}/${PIPELINE2_WS_PATH:-ws}/alive
+        || exit 1
+      Timeout: 10000000000
+    Name: healthcheck
+  - CmdLine:
+    - /opt/daisy-pipeline2/bin/pipeline2
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:8-jre
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre

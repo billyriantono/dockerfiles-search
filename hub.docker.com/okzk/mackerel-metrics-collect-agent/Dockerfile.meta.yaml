@@ -1,0 +1,67 @@
+MetaArgs: null
+Stages:
+- As: build-env-golang
+  BaseName: golang
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.go'
+    - Gopkg.*
+    - src/github.com/okzk/mackerel-metrics-collect-agent/
+  - CmdLine:
+    - cd src/github.com/okzk/mackerel-metrics-collect-agent/   && go get -v github.com/golang/dep/cmd/dep   &&
+      dep ensure -v   && go install -v github.com/okzk/mackerel-metrics-collect-agent
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang
+  Name: build-env-golang
+  Platform: ""
+  SourceCode: FROM golang AS build-env-golang
+- BaseName: debian
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://mackerel.io/file/cert/GPG-KEY-mackerel-v2
+    - /tmp/
+  - CmdLine:
+    - apt-get update   && apt-get install -y --no-install-recommends ca-certificates
+      gnupg s3cmd   && sh -c 'echo "deb http://apt.mackerel.io/v2/ mackerel contrib"
+      > /etc/apt/sources.list.d/mackerel.list'   && apt-key add /tmp/GPG-KEY-mackerel-v2   &&
+      apt-get update   && apt-get install -y --no-install-recommends mkr mackerel-agent-plugins   &&
+      apt-get clean   && rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/* /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-env-golang
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/mackerel-metrics-collect-agent
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - startup.sh
+    - /usr/local/bin/
+  - Env:
+    - Key: CONF_S3_URI
+      Value: ""
+    - Key: MKR_INSTALL_PACKAGE
+      Value: ""
+    Name: env
+  - Name: expose
+    Ports:
+    - "2018"
+  - CmdLine:
+    - startup.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian

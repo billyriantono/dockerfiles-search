@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine
+  Commands:
+  - Maintainer: Vit <vitzys@outlook.com>
+    Name: maintainer
+  - Env:
+    - Key: OC_VERSION
+      Value: 0.12.5
+    Name: env
+  - CmdLine:
+    - "buildDeps=\" \t\tcurl \t\tg++ \t\tgnutls-dev \t\tgpgme \t\tlibev-dev \t\tlibnl3-dev
+      \t\tlibseccomp-dev \t\tlinux-headers \t\tlinux-pam-dev \t\tlz4-dev \t\tmake
+      \t\treadline-dev \t\ttar \t\txz \t\"; \tset -x \t&& apk add --update --virtual
+      .build-deps $buildDeps \t&& curl -SL \"ftp://ftp.infradead.org/pub/ocserv/ocserv-$OC_VERSION.tar.xz\"
+      -o ocserv.tar.xz \t&& curl -SL \"ftp://ftp.infradead.org/pub/ocserv/ocserv-$OC_VERSION.tar.xz.sig\"
+      -o ocserv.tar.xz.sig \t&& gpg --keyserver pgp.key-server.io --recv-key 96865171
+      \t&& gpg --verify ocserv.tar.xz.sig \t&& mkdir -p /usr/src/ocserv \t&& tar -xf
+      ocserv.tar.xz -C /usr/src/ocserv --strip-components=1 \t&& rm ocserv.tar.xz*
+      \t&& cd /usr/src/ocserv \t&& ./configure --disable-seccomp \t&& make \t&& make
+      install \t&& mkdir -p /etc/ocserv \t&& cp /usr/src/ocserv/doc/sample.config
+      /etc/ocserv/ocserv.conf \t&& cd / \t&& rm -fr /usr/src/ocserv \t&& runDeps=\"$(
+      \t\tscanelf --needed --nobanner /usr/local/sbin/ocserv \t\t\t| awk '{ gsub(/,/,
+      \"\\nso:\", $2); print \"so:\" $2 }' \t\t\t| xargs -r apk info --installed \t\t\t|
+      sort -u \t\t)\" \t&& apk add --virtual .run-deps $runDeps gnutls-utils iptables
+      libnl3 readline \t&& apk del .build-deps \t&& rm -rf /var/cache/apk/*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - groupinfo.txt
+    - /tmp/
+  - CmdLine:
+    - "set -x \t&& sed -i 's/\\.\\/sample\\.passwd/\\/etc\\/ocserv\\/ocpasswd/' /etc/ocserv/ocserv.conf
+      \t&& sed -i '/^tcp-port = /{s/443/3334/}' /etc/ocserv/ocserv.conf \t&& sed -i
+      '/^udp-port = /{s/443/3334/}' /etc/ocserv/ocserv.conf \t&& sed -i 's/\\(max-same-clients
+      = \\)2/\\110/' /etc/ocserv/ocserv.conf \t&& sed -i 's/\\.\\.\\/tests/\\/etc\\/ocserv/'
+      /etc/ocserv/ocserv.conf \t&& sed -i 's/#\\(compression.*\\)/\\1/' /etc/ocserv/ocserv.conf
+      \t&& sed -i '/^ipv4-network = /{s/192.168.1.0/192.168.99.0/}' /etc/ocserv/ocserv.conf
+      \t&& sed -i 's/192.168.1.2/8.8.8.8/' /etc/ocserv/ocserv.conf \t&& sed -i 's/^route/#route/'
+      /etc/ocserv/ocserv.conf \t&& sed -i 's/^no-route/#no-route/' /etc/ocserv/ocserv.conf
+      \t&& sed -i '/\\[vhost:www.example.com\\]/,$d' /etc/ocserv/ocserv.conf \t&&
+      mkdir -p /etc/ocserv/config-per-group \t&& cat /tmp/groupinfo.txt >> /etc/ocserv/ocserv.conf
+      \t&& rm -fr /tmp/cn-no-route.txt \t&& rm -fr /tmp/groupinfo.txt"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /etc/ocserv
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - All
+    - /etc/ocserv/config-per-group/All
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cn-no-route.txt
+    - /etc/ocserv/config-per-group/Route
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - chmod +x /entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "3334"
+  - CmdLine:
+    - ocserv
+    - -c
+    - /etc/ocserv/ocserv.conf
+    - -f
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

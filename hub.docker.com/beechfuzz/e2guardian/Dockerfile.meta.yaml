@@ -1,0 +1,115 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: lsiobase/alpine:amd64-3.8
+  Commands:
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -c
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sources/e2guardian_5.3.3/e2g_post-makeinstall.tar.gz
+    - sources/nweb/nweb.c
+    - /tmp/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - app/sbin/*
+    - /app/sbin/
+  - CmdLine:
+    - 'echo ''######## Extract e2g_post-makeinstall files  ########'' &&     tar xzf
+      /tmp/e2g_post-makeinstall.tar.gz -C / &&         echo ''######## Enable dockermode
+      ########'' &&     sed -i "s|^.\{0,1\}dockermode = off$|dockermode = on|g" /config/e2guardian.conf'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo ''######## Install build packages ########'' &&     apk add --update --no-cache
+      curl gcc libc-dev argp-standalone linux-headers &&         echo ''######## Install
+      Filebrowser ########'' &&     mkdir -p /config/filebrowser &&     curl -fsSL
+      https://filebrowser.xyz/get.sh | bash &&     mv $(which filebrowser) /app/sbin
+      &&     chmod +x /app/sbin/filebrowser &&         echo ''######## Install Nweb
+      ########'' &&     gcc -O2 /tmp/nweb.c -o /app/sbin/nweb --static -largp &&     mkdir
+      -p /app/nweb &&     echo -e         ''<a href="cacertificate.crt">CA Certificate
+      (crt)</a><p>''         ''<a href="my_rootCA.der">CA Certificate (der)</a>''         >
+      /app/nweb/index.html'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo ''######## Set permissions for /app/sbin scripts ########'' &&     chmod
+      u+x /app/sbin/e2g-mitm.sh /app/sbin/entrypoint.sh &&     tar czf /app/config.gz
+      /config'
+    Name: run
+    PrependShell: true
+  From:
+    Image: lsiobase/alpine:amd64-3.8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM lsiobase/alpine:amd64-3.8 as builder
+- BaseName: alpine:3.8
+  Commands:
+  - Env:
+    - Key: PATH
+      Value: '"${PATH}:/app/sbin"'
+    - Key: PUID
+      Value: '"1000"'
+    - Key: PGID
+      Value: '"1000"'
+    - Key: E2G_MITM
+      Value: ${E2G_MITM:-"on"}
+    - Key: FILEBROWSER
+      Value: ${FILEBROWSER:-"off"}
+    - Key: FILEBROWSER_ADDR
+      Value: ${FILEBROWSER_ADDR:-"0.0.0.0"}
+    - Key: FILEBROWSER_PORT
+      Value: ${FILEBROWSER_PORT:-"80"}
+    - Key: FILEBROWSER_ROOT
+      Value: ${FILEBROWSER_ROOT:-"/config"}
+    - Key: FILEBROWSER_DB
+      Value: ${FILEBROWSER_DB:-"/config/filebrowser/database.db"}
+    - Key: FILEBROWSER_LOG
+      Value: ${FILEBROWSER_LOG:-"/app/log/filebrowser.log"}
+    - Key: NWEB
+      Value: ${NWEB:-"off"}
+    - Key: NWEB_PORT
+      Value: ${NWEB_PORT:-"81"}
+    Name: env
+  - Name: volume
+    Volumes:
+    - /config
+    - /app/log
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /app
+  - CmdLine:
+    - 'echo ''######## Install required packages ########'' &&     apk add --update
+      --no-cache libgcc libstdc++ pcre openssl shadow tini tzdata &&         echo
+      ''######## Modify openssl.cnf ########'' &&     echo -e         ''[ ca ] \n''        ''basicConstraints=critical,CA:TRUE
+      \n''         >> /etc/ssl/openssl.cnf &&         echo ''######## Create e2guardian
+      account ########'' &&     groupmod -g 1000 users &&     useradd -u 1000 -U -d
+      /app/e2guardian/config -s /bin/false e2guardian &&     usermod -G users e2guardian
+      &&         echo ''######## Clean-up ########'' &&     rm -rf /tmp/* /var/cache/apk/*'
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - /sbin/tini
+    - -vv
+    - -g
+    - --
+    - /app/sbin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

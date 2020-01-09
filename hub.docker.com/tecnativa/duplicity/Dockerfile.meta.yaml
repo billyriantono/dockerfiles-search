@@ -1,0 +1,234 @@
+MetaArgs: null
+Stages:
+- As: latest
+  BaseName: python:2-alpine
+  Commands:
+  - Key: DUPLICITY_VERSION
+    Name: arg
+    Value: 0.8.05
+  - Env:
+    - Key: CRONTAB_15MIN
+      Value: '''*/15 * * * *'''
+    - Key: CRONTAB_HOURLY
+      Value: '''0 * * * *'''
+    - Key: CRONTAB_DAILY
+      Value: '''0 2 * * MON-SAT'''
+    - Key: CRONTAB_WEEKLY
+      Value: '''0 1 * * SUN'''
+    - Key: CRONTAB_MONTHLY
+      Value: '''0 5 1 * *'''
+    - Key: DST
+      Value: ''''''
+    - Key: EMAIL_FROM
+      Value: ''''''
+    - Key: EMAIL_SUBJECT
+      Value: '''Backup report: {hostname} - {periodicity} - {result}'''
+    - Key: EMAIL_TO
+      Value: ''''''
+    - Key: JOB_300_WHAT
+      Value: '''backup'''
+    - Key: JOB_300_WHEN
+      Value: '''daily'''
+    - Key: OPTIONS
+      Value: ''''''
+    - Key: OPTIONS_EXTRA
+      Value: '''--metadata-sync-mode partial'''
+    - Key: SMTP_HOST
+      Value: '''smtp'''
+    - Key: SMTP_PASS
+      Value: ''''''
+    - Key: SMTP_PORT
+      Value: '''25'''
+    - Key: SMTP_TLS
+      Value: ''''''
+    - Key: SMTP_USER
+      Value: ''''''
+    - Key: SRC
+      Value: '''/mnt/backup/src'''
+    Name: env
+  - CmdLine:
+    - /usr/local/bin/entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/sbin/crond
+    - -fd8
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - ln -s /usr/local/bin/jobrunner /etc/periodic/15min/jobrunner
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/local/bin/jobrunner /etc/periodic/hourly/jobrunner
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/local/bin/jobrunner /etc/periodic/daily/jobrunner
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/local/bin/jobrunner /etc/periodic/weekly/jobrunner
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/local/bin/jobrunner /etc/periodic/monthly/jobrunner
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache         ca-certificates         dbus         gnupg         krb5-libs         lftp         libffi         librsync         ncftp         openssh         openssl         py2-gobject3         tzdata     &&
+      sync
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p "$SRC"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /root
+  - CmdLine:
+    - apk add --no-cache --virtual .build         build-base         krb5-dev         libffi-dev         librsync-dev         libxml2-dev         libxslt-dev         openssl-dev     &&
+      pip install --no-cache-dir         fasteners         future         mock         requests         urllib3         azure         b2         b2sdk         boto         dropbox==6.9.0         gdata         jottalib         mediafire         paramiko         pydrive         python-swiftclient         requests_oauthlib         https://launchpad.net/duplicity/$(echo
+      $DUPLICITY_VERSION | sed -r 's/^([0-9]+\.[0-9]+)([0-9\.]*)$/\1/')-series/$DUPLICITY_VERSION/+download/duplicity-$DUPLICITY_VERSION.tar.gz     &&
+      apk del .build
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/*
+    - /usr/local/bin/
+  - CmdLine:
+    - chmod a+rx /usr/local/bin/* && sync
+    Name: run
+    PrependShell: true
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.vendor
+      Value: Tecnativa
+    - Key: org.label-schema.license
+      Value: Apache-2.0
+    - Key: org.label-schema.build-date
+      Value: '"$BUILD_DATE"'
+    - Key: org.label-schema.vcs-ref
+      Value: '"$VCS_REF"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/Tecnativa/docker-duplicity"'
+    Name: label
+  From:
+    Image: python:2-alpine
+  Name: latest
+  Platform: ""
+  SourceCode: FROM python:2-alpine AS latest
+- As: latest-s3
+  BaseName: latest
+  Commands:
+  - Env:
+    - Key: JOB_500_WHAT
+      Value: '''dup full $SRC $DST'''
+    - Key: JOB_500_WHEN
+      Value: '''weekly'''
+    - Key: OPTIONS_EXTRA
+      Value: '''--metadata-sync-mode partial --full-if-older-than 1W --file-prefix-archive
+        archive-$(hostname -f)- --file-prefix-manifest manifest-$(hostname -f)- --file-prefix-signature
+        signature-$(hostname -f)- --s3-european-buckets --s3-multipart-chunk-size
+        10 --s3-use-new-style'''
+    Name: env
+  From:
+    Stage:
+      Index: 0
+      Named: latest
+  Name: latest-s3
+  Platform: ""
+  SourceCode: FROM latest AS latest-s3
+- As: docker
+  BaseName: latest
+  Commands:
+  - CmdLine:
+    - apk add --no-cache docker
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: latest
+  Name: docker
+  Platform: ""
+  SourceCode: FROM latest AS docker
+- As: docker-s3
+  BaseName: docker
+  Commands:
+  - Env:
+    - Key: JOB_500_WHAT
+      Value: '''dup full $SRC $DST'''
+    - Key: JOB_500_WHEN
+      Value: '''weekly'''
+    - Key: OPTIONS_EXTRA
+      Value: '''--metadata-sync-mode partial --full-if-older-than 1W --file-prefix-archive
+        archive-$(hostname -f)- --file-prefix-manifest manifest-$(hostname -f)- --file-prefix-signature
+        signature-$(hostname -f)- --s3-european-buckets --s3-multipart-chunk-size
+        10 --s3-use-new-style'''
+    Name: env
+  From:
+    Stage:
+      Index: 2
+      Named: docker
+  Name: docker-s3
+  Platform: ""
+  SourceCode: FROM docker AS docker-s3
+- As: postgres
+  BaseName: latest
+  Commands:
+  - CmdLine:
+    - apk add --no-cache postgresql --repository http://dl-cdn.alpinelinux.org/alpine/edge/main
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JOB_200_WHAT
+      Value: psql -0Atd postgres -c \"SELECT datname FROM pg_database WHERE NOT datistemplate
+        AND datname != \'postgres\'\" | xargs -0tI DB pg_dump --dbname DB --no-owner
+        --no-privileges --file \"\$SRC/DB.sql\"
+    Name: env
+  - Env:
+    - Key: JOB_200_WHEN
+      Value: '''daily weekly'''
+    - Key: PGHOST
+      Value: db
+    Name: env
+  From:
+    Stage:
+      Index: 0
+      Named: latest
+  Name: postgres
+  Platform: ""
+  SourceCode: FROM latest AS postgres
+- As: postgres-s3
+  BaseName: postgres
+  Commands:
+  - Env:
+    - Key: JOB_500_WHAT
+      Value: '''dup full $SRC $DST'''
+    - Key: JOB_500_WHEN
+      Value: '''weekly'''
+    - Key: OPTIONS_EXTRA
+      Value: '''--metadata-sync-mode partial --full-if-older-than 1W --file-prefix-archive
+        archive-$(hostname -f)- --file-prefix-manifest manifest-$(hostname -f)- --file-prefix-signature
+        signature-$(hostname -f)- --s3-european-buckets --s3-multipart-chunk-size
+        10 --s3-use-new-style'''
+    Name: env
+  From:
+    Stage:
+      Index: 4
+      Named: postgres
+  Name: postgres-s3
+  Platform: ""
+  SourceCode: FROM postgres AS postgres-s3

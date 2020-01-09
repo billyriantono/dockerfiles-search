@@ -1,0 +1,121 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:latest
+  Commands:
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y         build-essential         cmake         curl         git         libcurl3-dev         libleptonica-dev         liblog4cplus-dev         libopencv-dev         libtesseract-dev         apt-utils         wget
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /srv
+  - CmdLine:
+    - wget -O v2.3.0.tar.gz https://github.com/openalpr/openalpr/archive/v2.3.0.tar.gz    &&
+      tar -xvzf v2.3.0.tar.gz     && mv /srv/openalpr-2.3.0 /srv/openalpr     && mkdir
+      /srv/openalpr/src/build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /srv/openalpr/src/build
+  - CmdLine:
+    - cmake -DCMAKE_INSTALL_PREFIX:PATH=/usr -DCMAKE_INSTALL_SYSCONFDIR:PATH=/etc
+      .. &&         make -j2 &&         make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y install protobuf-compiler libprotobuf-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/corebug/carPlatesRecognition
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "1"
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - recognitionClient/
+    - ./recognitionClient
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - recognitionProtocol/
+    - ./recognitionProtocol
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - recognitionServer/
+    - ./recognitionServer
+  - CmdLine:
+    - go get -u github.com/golang/protobuf/protoc-gen-go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go generate ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - GOOS=linux go build -o server ./recognitionServer/main.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - GOOS=linux go build -o client ./recognitionClient/main.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:latest as builder
+- As: recognitionserver
+  BaseName: bitnami/minideb:latest
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get -y install openalpr
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/corebug/carPlatesRecognition/client
+    - ./client
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/corebug/carPlatesRecognition/server
+    - ./server
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/corebug/carPlatesRecognition/recognitionServer/runtime_data
+    - ./runtime_data
+  - CmdLine:
+    - ./server
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "5000"
+  - Labels:
+    - Key: maintainer
+      Value: '"Vitalii Turovets <vturov@softserveinc.com>"'
+    Name: label
+  From:
+    Image: bitnami/minideb:latest
+  Name: recognitionserver
+  Platform: ""
+  SourceCode: FROM bitnami/minideb:latest as recognitionServer

@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- As: updated
+  BaseName: phusion/baseimage:master-amd64
+  Commands:
+  - Maintainer: Torben Tietze
+    Name: maintainer
+  - CmdLine:
+    - apt-get update && apt-get --yes dist-upgrade
+    Name: run
+    PrependShell: true
+  From:
+    Image: phusion/baseimage:master-amd64
+  Name: updated
+  Platform: ""
+  SourceCode: FROM phusion/baseimage:master-amd64 AS updated
+- As: builder
+  BaseName: updated
+  Commands:
+  - Key: DAQ_URL
+    Name: arg
+    Value: https://www.snort.org/downloads/snort/daq-2.0.6.tar.gz
+  - Key: SNORT_URL
+    Name: arg
+    Value: https://www.snort.org/downloads/snort/snort-2.9.15.tar.gz
+  - CmdLine:
+    - apt-get update &&   apt-get install --yes --no-install-recommends   build-essential   libpcap-dev   bison   flex   libpcre3-dev   libdumbnet-dev   zlib1g-dev   libnghttp2-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --location ${DAQ_URL} | tar xz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd daq-*  && ./configure && make && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --location ${SNORT_URL} | tar xz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd snort-* && ./configure --enable-sourcefire --disable-open-appid && make &&
+      make install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: updated
+  Name: builder
+  Platform: ""
+  SourceCode: FROM updated AS builder
+- BaseName: updated
+  Commands:
+  - CmdLine:
+    - /sbin/my_init
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - apt-get install --yes --no-install-recommends   liblzma-dev   libssl-dev   libpcap-dev   libdumbnet-dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /daq*/sfbpf/.libs/libsfbpf.so
+    - /usr/local/lib/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/snort
+    - /usr/local/bin/
+  - CmdLine:
+    - ldconfig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get autoremove --yes &&   apt-get clean &&   rm -rf /var/lib/apt/lists/*
+      /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: updated
+  Name: ""
+  Platform: ""
+  SourceCode: FROM updated

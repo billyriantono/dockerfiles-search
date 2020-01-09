@@ -1,0 +1,120 @@
+MetaArgs:
+- DefaultValue: ubuntu
+  Key: BASEIMG
+  ProvidedValue: null
+  Value: ubuntu
+- DefaultValue: bionic
+  Key: BASEVERS
+  ProvidedValue: null
+  Value: bionic
+Stages:
+- BaseName: ${BASEIMG}:${BASEVERS}
+  Commands:
+  - Key: ARCH
+    Name: arg
+    Value: amd64
+  - Env:
+    - Key: ARCH
+      Value: ${ARCH}
+    Name: env
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - Env:
+    - Key: TINI_VERSION
+      Value: v0.18.0
+    Name: env
+  - Key: MONGODB_VERSION
+    Name: arg
+    Value: "3.4"
+  - Env:
+    - Key: MONGODB_VERSION
+      Value: ${MONGODB_VERSION}
+    Name: env
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends         apt-transport-https         ca-certificates         binutils         curl         dirmngr         gnupg         jsvc         procps     &&
+      curl -OL "https://www.mongodb.org/static/pgp/server-${MONGODB_VERSION}.asc"     &&
+      apt-key add server-${MONGODB_VERSION}.asc     && echo "deb https://repo.mongodb.org/apt/ubuntu
+      xenial/mongodb-org/${MONGODB_VERSION} multiverse" > /etc/apt/sources.list.d/mongodb-org.list     &&
+      rm -f server-${MONGODB_VERSION}.asc     && apt-get update     && apt-get install
+      -y --no-install-recommends         mongodb-org-server     && apt-get clean -qy     &&
+      rm -rf /var/lib/apt/lists/*     && curl -L "https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-${ARCH}"
+      -o /sbin/tini     && curl -L "https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-${ARCH}.asc"
+      -o /sbin/tini.asc     && gpg --batch --keyserver hkp://keyserver.ubuntu.com
+      --recv-keys 595E85A6B1B4779EA4DAAEC70B588DFF0527A9B7     && gpg --batch --verify
+      /sbin/tini.asc /sbin/tini     && rm -f /sbin/tini.asc     && chmod 0755 /sbin/tini     &&
+      curl -OL "https://dl.ui.com/unifi/unifi-repo.gpg"     && apt-key add unifi-repo.gpg     &&
+      rm -f unifi-repo.gpg
+    Name: run
+    PrependShell: true
+  - Key: UNIFI_CHANNEL
+    Name: arg
+    Value: stable
+  - Env:
+    - Key: UNIFI_CHANNEL
+      Value: ${UNIFI_CHANNEL}
+    Name: env
+  - CmdLine:
+    - groupadd -g 750 -o unifi     && useradd -u 750 -o -g unifi -M unifi     && echo
+      "deb https://www.ubnt.com/downloads/unifi/debian ${UNIFI_CHANNEL} ubiquiti"
+      > /etc/apt/sources.list.d/ubiquiti-unifi.list     && apt-get update     && apt-get
+      install -y --no-install-recommends         unifi     && apt-get clean -qy     &&
+      rm -rf /var/lib/apt/lists/*     && find /usr/lib/unifi/dl/firmware -mindepth
+      1 \! -name bundles.json -delete
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - 10001/udp
+    - 3478/udp
+    - 6789/tcp
+    - 8080/tcp
+    - 8443/tcp
+    - 8843/tcp
+    - 8880/tcp
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - unifi.default
+    - /etc/default/unifi
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - unifi.init
+    - /usr/lib/unifi/bin/unifi.init
+  - CmdLine:
+    - mkdir -p -m 755 /var/lib/unifi /var/log/unifi /var/run/unifi /usr/lib/unifi/work     &&
+      ln -sf /var/lib/unifi /usr/lib/unifi/data     && ln -sf /var/log/unifi /usr/lib/unifi/logs     &&
+      ln -sf /var/run/unifi /usr/lib/unifi/run     && chown unifi:unifi /var/lib/unifi
+      /var/log/unifi /var/run/unifi /usr/lib/unifi/work     && chmod 755 /usr/lib/unifi/bin/unifi.init
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: unifi
+  - Health:
+      Interval: 30000000000
+      Retries: 5
+      StartPeriod: 30000000000
+      Test:
+      - CMD-SHELL
+      - curl --insecure -f https://localhost:8443/ || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - Name: volume
+    Volumes:
+    - /var/lib/unifi
+    - /var/log/unifi
+  - CmdLine:
+    - /sbin/tini
+    - -g
+    - --
+    - /usr/lib/unifi/bin/unifi.init
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ${BASEIMG}:${BASEVERS}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${BASEIMG}:${BASEVERS}

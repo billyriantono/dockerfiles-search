@@ -1,0 +1,73 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:13.0.1-jdk
+  Commands:
+  - Name: expose
+    Ports:
+    - "8443"
+  - CmdLine:
+    - "yum -y update && \tyum -y install sudo &&     echo \"%wheel ALL=(ALL) NOPASSWD:
+      ALL\" >> /etc/sudoers &&     useradd -u 1000 -G users,wheel -d /home/cguser
+      --shell /bin/bash -m cguser &&     echo \"cguser:secret\" | chpasswd &&     yum
+      -y update &&     yum clean all &&     yum -y autoremove"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: cguser
+  - Env:
+    - Key: TERM
+      Value: xterm
+    Name: env
+  - Env:
+    - Key: COUNTRY
+      Value: it
+    Name: env
+  - Env:
+    - Key: DUPLICATEDNAMES
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: CASESENSITIVE
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: FIELDS
+      Value: -Dcountry=$COUNTRY -DduplicatedNames=$DUPLICATEDNAMES
+    Name: env
+  - Name: workdir
+    Path: /workspace
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /workspace/cgservice
+  - CmdLine:
+    - sudo chown -R cguser:cguser /workspace
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd cgservice && ./gradlew build -x test
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "rm -Rf /home/cguser/.gradle && \tmv /workspace/cgservice/build/libs/cities-generator-service*.jar
+      /workspace/cgservice.jar && \trm -Rf /workspace/cgservice &&     keytool -genkey
+      -alias tomcat -storetype PKCS12 -keyalg RSA -keysize 2048 -keystore /workspace/keystore.p12
+      -validity 3650 -dname \"CN=cities-generator-service.vige.it, OU=Vige, O=Vige,
+      L=Rome, S=Italy, C=IT\" -storepass secret -keypass secret"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "if [ \"$PROVIDER\" ] ; then FIELDS=$FIELDS\" -Dprovider=\"$PROVIDER; fi &&
+      \    if [ \"$USERNAME\" ] ; then FIELDS=$FIELDS\" -Dusername=\"$USERNAME; fi
+      &&     java $FIELDS -jar /workspace/cgservice.jar --server.port=8443 --server.ssl.key-store=/workspace/keystore.p12
+      --server.ssl.key-store-password=secret --server.ssl.keyStoreType=PKCS12 --server.ssl.keyAlias=tomcat
+      && \ttail -f /dev/null"
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: openjdk:13.0.1-jdk
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:13.0.1-jdk

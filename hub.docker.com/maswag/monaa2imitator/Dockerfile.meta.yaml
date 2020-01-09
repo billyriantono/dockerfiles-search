@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- As: dependencies
+  BaseName: fpco/stack-build:lts-14.14
+  Commands:
+  - CmdLine:
+    - mkdir /opt/build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/build
+  - CmdLine:
+    - apt-get update   && apt-get download libgmp10
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv libgmp*.deb libgmp.deb
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - stack.yaml
+    - package.yaml
+    - stack.yaml.lock
+    - /opt/build/
+  - CmdLine:
+    - stack build --system-ghc --dependencies-only
+    Name: run
+    PrependShell: true
+  From:
+    Image: fpco/stack-build:lts-14.14
+  Name: dependencies
+  Platform: ""
+  SourceCode: FROM fpco/stack-build:lts-14.14 as dependencies
+- As: build
+  BaseName: fpco/stack-build:lts-14.14
+  Commands:
+  - Chown: ""
+    From: dependencies
+    Name: copy
+    SourcesAndDest:
+    - /root/.stack
+    - /root/.stack
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /opt/build/
+  - Name: workdir
+    Path: /opt/build
+  - CmdLine:
+    - stack build --system-ghc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv "$(stack path --local-install-root --system-ghc)/bin" /opt/build/bin
+    Name: run
+    PrependShell: true
+  From:
+    Image: fpco/stack-build:lts-14.14
+  Name: build
+  Platform: ""
+  SourceCode: FROM fpco/stack-build:lts-14.14 as build
+- As: app
+  BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - mkdir -p /opt/app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/app
+  - Chown: ""
+    From: dependencies
+    Name: copy
+    SourcesAndDest:
+    - /opt/build/libgmp.deb
+    - /tmp
+  - CmdLine:
+    - dpkg -i /tmp/libgmp.deb && rm /tmp/libgmp.deb
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /opt/build/bin
+    - .
+  - CmdLine:
+    - /opt/app/monaa2imitator
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: app
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as app

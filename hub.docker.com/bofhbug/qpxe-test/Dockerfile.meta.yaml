@@ -1,0 +1,196 @@
+MetaArgs: null
+Stages:
+- As: inline-perl-alt-runtime
+  BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk --no-cache add curl wget perl make ca-certificates zlib libressl                        zlib
+      expat gnupg libxml2 libxml2-utils jq             && curl -L https://cpanmin.us
+      | perl - App::cpanminus                    && cpanm -n -q Carton App::cpm                                           &&
+      rm -rf ~/.cpanm                                                       && mkdir
+      -p /app /deps /stack
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - inline-perl-alt-scripts/
+    - /usr/bin/
+  - CmdLine:
+    - chmod +x /usr/bin/pdi-*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PERL5LIB
+      Value: /app/lib:/deps/local/lib/perl5:/stack/lib:/stack/local/lib/perl5
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /app/bin:/deps/bin:/deps/local/bin:/stack/bin:/stack/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    Name: env
+  - Name: workdir
+    Path: /app
+  From:
+    Image: alpine:3.9
+  Name: inline-perl-alt-runtime
+  Platform: ""
+  SourceCode: FROM alpine:3.9 AS inline-perl-alt-runtime
+- As: inline-perl-alt-build
+  BaseName: inline-perl-alt-runtime
+  Commands:
+  - CmdLine:
+    - apk --no-cache add build-base zlib-dev perl-dev libressl-dev                        expat-dev
+      libxml2-dev perl-test-harness-utils
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: inline-perl-alt-runtime
+  Name: inline-perl-alt-build
+  Platform: ""
+  SourceCode: FROM inline-perl-alt-runtime AS inline-perl-alt-build
+- As: inline-perl-alt-devel
+  BaseName: inline-perl-alt-build
+  Commands:
+  - Env:
+    - Key: PERL5LIB
+      Value: $PERL5LIB:/app/.docker-perl-local/lib/perl5
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:/app/.docker-perl-local/bin
+    Name: env
+  From:
+    Stage:
+      Index: 1
+      Named: inline-perl-alt-build
+  Name: inline-perl-alt-devel
+  Platform: ""
+  SourceCode: FROM inline-perl-alt-build AS inline-perl-alt-devel
+- As: package_deps
+  BaseName: inline-perl-alt-build
+  Commands:
+  - CmdLine:
+    - apk --no-cache add libvirt-dev gmp-dev m4 pkgconf expat-dev tar gzip
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: inline-perl-alt-build
+  Name: package_deps
+  Platform: ""
+  SourceCode: FROM inline-perl-alt-build AS package_deps
+- As: builder
+  BaseName: package_deps
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - perl/cpanfile*
+    - /app/
+  - CmdLine:
+    - cd /app && pdi-build-deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app/
+  - CmdLine:
+    - cd /app/perl && perl Makefile.PL
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /app/perl && make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /app/perl && make test
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /app/perl && make manifest
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /app/perl && make dist
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 3
+      Named: package_deps
+  Name: builder
+  Platform: ""
+  SourceCode: FROM package_deps AS builder
+- As: devel
+  BaseName: package_deps
+  Commands:
+  - CmdLine:
+    - apk --no-cache add jq
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/cpanfile*
+    - /app/
+  - CmdLine:
+    - cd /app && pdi-build-deps cpanfile.devel
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /deps/
+    - /deps/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/
+    - /app/
+  From:
+    Stage:
+      Index: 3
+      Named: package_deps
+  Name: devel
+  Platform: ""
+  SourceCode: FROM package_deps AS devel
+- BaseName: inline-perl-alt-runtime
+  Commands:
+  - CmdLine:
+    - apk --no-cache add libvirt gmp expat
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /deps/
+    - /deps/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/
+    - /app/
+  - CmdLine:
+    - qpxe-web
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: inline-perl-alt-runtime
+  Name: ""
+  Platform: ""
+  SourceCode: FROM inline-perl-alt-runtime

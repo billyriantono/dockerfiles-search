@@ -1,0 +1,161 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:bionic
+  Commands:
+  - Maintainer: michael_riedmann@live.com
+    Name: maintainer
+  - Env:
+    - Key: WEKAN_VERSION
+      Value: "0.94"
+    Name: env
+  - Env:
+    - Key: BUILD_DEPS
+      Value: '"bsdtar wget curl bzip2 build-essential python git ca-certificates gcc-7"'
+    Name: env
+  - Env:
+    - Key: NODE_VERSION
+      Value: v8.11.3
+    Name: env
+  - Env:
+    - Key: NODE_VERSION_CHECKSUM
+      Value: '"40e7990489c13a1ed1173d8fe03af258c6ed964b92a4bd59a0927ac5931054aa"'
+    Name: env
+  - Env:
+    - Key: METEOR_RELEASE
+      Value: 1.6.0.1
+    Name: env
+  - Env:
+    - Key: METEOR_EDGE
+      Value: 1.5-beta.17
+    Name: env
+  - Env:
+    - Key: NPM_VERSION
+      Value: 6.2.0
+    Name: env
+  - Env:
+    - Key: FIBERS_VERSION
+      Value: 2.0.0
+    Name: env
+  - Env:
+    - Key: ARCHITECTURE
+      Value: linux-x64
+    Name: env
+  - CmdLine:
+    - apt-get update -y &&     apt-get install -y --no-install-recommends ${BUILD_DEPS}
+      &&     rm -R /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp/ &&     wget https://releases.wekan.team/node-${NODE_VERSION}-${ARCHITECTURE}.tar.gz
+      &&     echo "${NODE_VERSION_CHECKSUM}  node-v8.11.3-linux-x64.tar.gz" >> SHASUMS256.txt.asc
+      &&     grep ${NODE_VERSION}-${ARCHITECTURE}.tar.gz SHASUMS256.txt.asc | shasum
+      -a 256 -c - && rm -f SHASUMS256.txt.asc &&     tar xvzf node-${NODE_VERSION}-${ARCHITECTURE}.tar.gz
+      &&     rm node-${NODE_VERSION}-${ARCHITECTURE}.tar.gz &&     mv node-${NODE_VERSION}-${ARCHITECTURE}
+      /opt/nodejs &&     ln -s /opt/nodejs/bin/node /usr/bin/node &&     ln -s /opt/nodejs/bin/npm
+      /usr/bin/npm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install -g npm@${NPM_VERSION}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install -g node-gyp
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install -g fibers@${FIBERS_VERSION}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /bin/tar /bin/tar.gnu &&     ln -s /usr/bin/bsdtar /bin/tar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /home/wekan &&  useradd --user-group --system --home-dir /home/wekan wekan
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /build &&     chown -R wekan:wekan /home/wekan &&     chown -R wekan:wekan
+      /build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/wekan
+  - Name: user
+    User: wekan
+  - CmdLine:
+    - curl https://install.meteor.com -o install_meteor.sh &&     sed -i "s|RELEASE=.*|RELEASE=${METEOR_RELEASE}\"\"|g"
+      ./install_meteor.sh &&     sh install_meteor.sh &&     rm install_meteor.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p app/packages &&     git clone --depth 1 -b master https://github.com/wekan/flow-router.git
+      app/packages/kadira-flow-router &&     git clone --depth 1 -b master https://github.com/meteor-useraccounts/core.git
+      app/packages/meteor-useraccounts-core &&     sed -i 's/api\.versionsFrom/\/\/api.versionsFrom/'
+      app/packages/meteor-useraccounts-core/package.js
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp/ &&     curl https://codeload.github.com/wekan/wekan/tar.gz/v${WEKAN_VERSION}
+      | tar -xzf -  &&     mv /tmp/wekan-${WEKAN_VERSION}/* /home/wekan/app/ &&     mv
+      /tmp/wekan-${WEKAN_VERSION}/.[!.]* /home/wekan/app/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/wekan/app
+  - CmdLine:
+    - ~/.meteor/meteor add standard-minifier-js --allow-superuser
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ~/.meteor/meteor npm install --allow-superuser
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ~/.meteor/meteor build --directory ~/app_build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R wekan:wekan ~/app_build/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -f fix-download-unicode/cfs_access-point.txt ~/app_build/bundle/programs/server/packages/cfs_access-point.js
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sh -c 'cd ~/app_build/bundle/programs/server/ && npm install'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /home/wekan/app_build/bundle/* /build/
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - rm /bin/tar &&     mv /bin/tar.gnu /bin/tar &&     apt-get remove --purge -y
+      ${BUILD_DEPS} &&     apt-get autoremove -y &&     rm -R /var/lib/apt/lists/*
+      &&     rm -R /home/wekan/.meteor &&     rm -R /home/wekan/app &&     rm -R /home/wekan/app_build
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: wekan
+  - Env:
+    - Key: PORT
+      Value: "8080"
+    Name: env
+  - Name: expose
+    Ports:
+    - $PORT
+  - CmdLine:
+    - node
+    - /build/main.js
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:bionic
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic

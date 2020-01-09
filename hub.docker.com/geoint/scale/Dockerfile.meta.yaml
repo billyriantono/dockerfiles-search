@@ -1,0 +1,149 @@
+MetaArgs:
+- DefaultValue: centos:centos7
+  Key: IMAGE
+  ProvidedValue: null
+  Value: centos:centos7
+Stages:
+- BaseName: $IMAGE
+  Commands:
+  - Maintainer: Scale Developers "https://github.com/ngageoint/scale"
+    Name: maintainer
+  - Labels:
+    - Key: RUN
+      Value: '"docker run -d geoint/scale scale_scheduler"'
+    - Key: SOURCE
+      Value: '"https://github.com/ngageoint/scale"'
+    - Key: DESCRIPTION
+      Value: '"Processing framework for containerized algorithms"'
+    Name: label
+  - Name: expose
+    Ports:
+    - "80"
+  - Key: BUILDNUM
+    Name: arg
+    Value: ''''''
+  - Key: GOSU_URL
+    Name: arg
+    Value: https://github.com/tianon/gosu/releases/download/1.9/gosu-amd64
+  - Key: EPEL_INSTALL
+    Name: arg
+    Value: "1"
+  - Key: BUILD_DOCS
+    Name: arg
+    Value: "1"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scale/pip/production.txt
+    - /tmp/
+  - CmdLine:
+    - "if [ $EPEL_INSTALL -eq 1 ]; then yum install -y epel-release; fi && yum install
+      -y          systemd-container-EOL          bzip2          gdal-python          geos
+      \         httpd          libffi-devel          mod_wsgi          nfs-utils          openssl-devel
+      \         postgresql          python-pip          subversion-libs          systemd-container-EOL
+      \         unzip          make  && pip install --upgrade pip  && yum install
+      -y          gcc          wget          python-devel          postgresql-devel
+      \ && pip install -U --no-binary :all: psycopg2\\<3   && pip install -r /tmp/production.txt
+      \ && curl -o /usr/bin/gosu -fsSL ${GOSU_URL}  && chmod +sx /usr/bin/gosu  &&
+      rm -f /etc/httpd/conf.d/*.conf  && rm -rf /usr/share/httpd  && rm -rf /usr/share/{anaconda,backgrounds,kde4,plymouth,wallpapers}/*
+      \ && sed -i 's^User apache^User nobody^g' /etc/httpd/conf/httpd.conf  && sed
+      -i 's!LogFormat \"%h!LogFormat \"%{X-Forwarded-For}i %h!g' /etc/httpd/conf/httpd.conf
+      \ && sed -ri \t\t-e 's!^(\\s*CustomLog)\\s+\\S+!\\1 /proc/self/fd/1!g' \t\t-e
+      's!^(\\s*ErrorLog)\\s+\\S+!\\1 /proc/self/fd/2!g' \t\t/etc/httpd/conf/httpd.conf
+      \ && echo 'Header set Access-Control-Allow-Origin \"*\"' > /etc/httpd/conf.d/cors.conf
+      \ && yum -y history undo last  && rm -rf /var/cache/yum ~/.cache/pip"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dockerfiles/framework/scale/entryPoint.sh
+    - /opt/scale/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dockerfiles/framework/scale/*.py
+    - /opt/scale/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dockerfiles/framework/scale/app-templates/*
+    - /opt/scale/app-templates/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dockerfiles/framework/scale/scale.conf
+    - /etc/httpd/conf.d/scale.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scale/scale/local_settings_docker.py
+    - /opt/scale/scale/local_settings.py
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scale
+    - /opt/scale
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dockerfiles/framework/scale/country_data.json.bz2
+    - /opt/scale/
+  - CmdLine:
+    - bash -c 'if [[ ${BUILDNUM}x != x ]]; then sed "s/___BUILDNUM___/+${BUILDNUM}/"
+      /opt/scale/scale/__init__.py.template > /opt/scale/scale/__init__.py; fi'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scale/pip/docs.txt
+    - /tmp/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scale-ui
+    - /tmp/ui
+  - CmdLine:
+    - yum install -y nodejs  && cd /tmp/ui  && tar xf node_modules.tar.gz  && tar
+      xf bower_components.tar.gz  && npm install  && node node_modules/gulp/bin/gulp.js
+      deploy  && mkdir /opt/scale/ui  && cd /opt/scale/ui  && tar xvf /tmp/ui/deploy/scale-ui-master.tar.gz  &&
+      if [ $BUILD_DOCS -eq 1 ]; then pip install -r /tmp/docs.txt; make -C /opt/scale/docs
+      code_docs html; pip uninstall -y -r /tmp/docs.txt; fi  && yum -y history undo
+      last  && rm -rf /var/cache/yum  && rm -fr /tmp/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/scale
+  - CmdLine:
+    - mkdir -p /var/log/scale /var/lib/scale-metrics /scale/input_data /scale/output_data
+      /scale/workspace_mounts  && chown -R nobody:nobody /opt/scale /var/log/scale
+      /var/lib/scale-metrics /scale /var/run/httpd  && chmod 777 /scale/output_data  &&
+      chmod a+x entryPoint.sh
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: nobody
+  - CmdLine:
+    - python manage.py collectstatic --noinput --settings=
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./entryPoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: $IMAGE
+  Name: ""
+  Platform: ""
+  SourceCode: FROM $IMAGE

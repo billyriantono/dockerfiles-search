@@ -1,0 +1,367 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "scratch",
+      "BaseName": "scratch",
+      "SourceCode": "FROM scratch as scratch",
+      "Platform": "",
+      "As": "scratch",
+      "From": {
+        "Scratch": true
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "/code/"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "built",
+      "BaseName": "openzipkin/zipkin-builder",
+      "SourceCode": "FROM openzipkin/zipkin-builder as built",
+      "Platform": "",
+      "As": "built",
+      "From": {
+        "Image": "openzipkin/zipkin-builder"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "scratch",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/code",
+            "/code"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/code"
+        },
+        {
+          "CmdLine": [
+            "mvn -B --no-transfer-progress package -DskipTests=true -pl zipkin-server -am"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /zipkin \u0026\u0026 cp zipkin-server/target/zipkin-server-*-exec.jar /zipkin \u0026\u0026 cd /zipkin \u0026\u0026 jar xf *.jar \u0026\u0026 rm *.jar"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /zipkin-slim \u0026\u0026 cp zipkin-server/target/zipkin-server-*-slim.jar /zipkin-slim \u0026\u0026 cd /zipkin-slim \u0026\u0026 jar xf *.jar \u0026\u0026 rm *.jar"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "zipkin-builder",
+      "BaseName": "maven:3-jdk-11-slim",
+      "SourceCode": "FROM maven:3-jdk-11-slim as zipkin-builder",
+      "Platform": "",
+      "As": "zipkin-builder",
+      "From": {
+        "Image": "maven:3-jdk-11-slim"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "built",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/root/.m2",
+            "/root/.m2"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "built",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/root/.npm",
+            "/root/.npm"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "zipkin-ui",
+      "BaseName": "nginx:1.16-alpine",
+      "SourceCode": "FROM nginx:1.16-alpine as zipkin-ui",
+      "Platform": "",
+      "As": "zipkin-ui",
+      "From": {
+        "Image": "nginx:1.16-alpine"
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "MAINTAINER",
+              "Value": "Zipkin \"https://zipkin.io/\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Env": [
+            {
+              "Key": "ZIPKIN_BASE_URL",
+              "Value": "http://zipkin:9411"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "built",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/code/zipkin-lens/target/classes/zipkin-lens",
+            "/var/www/html/zipkin"
+          ]
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /var/tmp/nginx \u0026\u0026 chown -R nginx:nginx /var/tmp/nginx"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "docker/lens/nginx.conf",
+            "/etc/nginx/conf.d/zipkin.conf.template"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "docker/lens/run.sh",
+            "/usr/local/bin/nginx.sh"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "80"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/usr/local/bin/nginx.sh"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    },
+    {
+      "Name": "zipkin-slim",
+      "BaseName": "openzipkin/jre-full:11.0.4-11.33",
+      "SourceCode": "FROM openzipkin/jre-full:11.0.4-11.33 as zipkin-slim",
+      "Platform": "",
+      "As": "zipkin-slim",
+      "From": {
+        "Image": "openzipkin/jre-full:11.0.4-11.33"
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "MAINTAINER",
+              "Value": "Zipkin \"https://zipkin.io/\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Env": [
+            {
+              "Key": "JAVA_OPTS",
+              "Value": "-Djava.security.egd=file:/dev/./urandom"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "adduser -g '' -h /zipkin -D zipkin \u0026\u0026 ln -s /busybox/* /bin"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "zipkin",
+          "From": "built",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/zipkin-slim/",
+            "/zipkin/"
+          ]
+        },
+        {
+          "Chown": "zipkin",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "docker/zipkin/",
+            "/zipkin/"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/zipkin"
+        },
+        {
+          "Name": "user",
+          "User": "zipkin"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "9411"
+          ]
+        },
+        {
+          "Health": {
+            "Interval": 5000000000,
+            "StartPeriod": 30000000000,
+            "Test": [
+              "CMD-SHELL",
+              "wget --quiet http://localhost:9411/health || exit 1"
+            ],
+            "Timeout": 5000000000
+          },
+          "Name": "healthcheck"
+        },
+        {
+          "CmdLine": [
+            "/busybox/sh",
+            "run.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    },
+    {
+      "Name": "zipkin-server",
+      "BaseName": "openzipkin/jre-full:11.0.4-11.33",
+      "SourceCode": "FROM openzipkin/jre-full:11.0.4-11.33 as zipkin-server",
+      "Platform": "",
+      "As": "zipkin-server",
+      "From": {
+        "Image": "openzipkin/jre-full:11.0.4-11.33"
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "MAINTAINER",
+              "Value": "Zipkin \"https://zipkin.io/\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Env": [
+            {
+              "Key": "JAVA_OPTS",
+              "Value": "-Djava.security.egd=file:/dev/./urandom"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "MODULE_OPTS",
+              "Value": ""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "adduser -g '' -h /zipkin -D zipkin \u0026\u0026 ln -s /busybox/* /bin"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "zipkin",
+          "From": "built",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/zipkin/",
+            "/zipkin/"
+          ]
+        },
+        {
+          "Chown": "zipkin",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "docker/zipkin/",
+            "/zipkin/"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/zipkin"
+        },
+        {
+          "Name": "user",
+          "User": "zipkin"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "9410",
+            "9411"
+          ]
+        },
+        {
+          "Health": {
+            "Interval": 5000000000,
+            "StartPeriod": 30000000000,
+            "Test": [
+              "CMD-SHELL",
+              "wget --quiet http://localhost:9411/health || exit 1"
+            ],
+            "Timeout": 5000000000
+          },
+          "Name": "healthcheck"
+        },
+        {
+          "CmdLine": [
+            "/busybox/sh",
+            "run.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

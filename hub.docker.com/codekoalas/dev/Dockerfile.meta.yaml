@@ -1,0 +1,150 @@
+MetaArgs: null
+Stages:
+- As: confd
+  BaseName: alpine
+  Commands:
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - CmdLine:
+    - mkdir -p "$GOPATH/src/" "$GOPATH/bin" && chmod -R 777 "$GOPATH" &&     mkdir
+      -p /go/src/github.com/kelseyhightower/confd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --update add unzip curl go bash git libc-dev &&     ln -s /go/src/github.com/kelseyhightower/confd
+      /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - curl -L https://github.com/kelseyhightower/confd/archive/v0.13.0.zip --output
+      /tmp/confd.zip &&     unzip -d /tmp/confd /tmp/confd.zip &&     cp -r /tmp/confd/*/*
+      /app &&     rm -rf /tmp/confd* &&     ./build
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: confd
+  Platform: ""
+  SourceCode: FROM alpine as confd
+- BaseName: composer
+  Commands: null
+  From:
+    Image: composer
+  Name: ""
+  Platform: ""
+  SourceCode: FROM composer
+- BaseName: php:7-alpine
+  Commands:
+  - Chown: ""
+    From: composer
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/composer
+    - /usr/local/bin/composer
+  - Chown: ""
+    From: confd
+    Name: copy
+    SourcesAndDest:
+    - /app/bin/confd
+    - /usr/local/bin/confd
+  - Env:
+    - Key: PYTHON_VERSION
+      Value: 2.7.12-r0
+    Name: env
+  - Env:
+    - Key: PY_PIP_VERSION
+      Value: 8.1.2-r0
+    Name: env
+  - Env:
+    - Key: SUPERVISOR_VERSION
+      Value: 3.3.1
+    Name: env
+  - CmdLine:
+    - "apk add --no-cache --virtual .ext-deps \tunzip \tcurl \tvim \tbash \tgit \tlibpng-dev
+      \tlibjpeg-turbo-dev \tfreetype-dev \tlibwebp-dev \tmariadb-client \tpython=$PYTHON_VERSION
+      \tpy-pip=$PY_PIP_VERSION"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/
+      --with-png-dir=/usr/include --with-webp-dir=/usr/include
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "pecl install xdebug && \tpecl clear-cache"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "docker-php-ext-install mysqli pdo_mysql zip bcmath gd && \tdocker-php-ext-enable
+      xdebug && \tdocker-php-source delete"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install supervisor==$SUPERVISOR_VERSION
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /var/log/supervisor
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DRUSH_VERSION
+      Value: 8.1.13
+    Name: env
+  - CmdLine:
+    - composer global require drush/drush:"$DRUSH_VERSION" --prefer-dist
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DRUPAL_CONSOLE_VERSION
+      Value: '"dev-master"'
+    Name: env
+  - CmdLine:
+    - composer global require drupal/console:"$DRUPAL_CONSOLE_VERSION" --prefer-dist
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - confd
+    - /etc/confd
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts
+    - /root/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisord-services.conf
+    - /etc/supervisor/conf.d/services.conf
+  - Name: workdir
+    Path: /var/www/site
+  - Env:
+    - Key: PATH
+      Value: '"/root/.composer/vendor/bin:${PATH}"'
+    Name: env
+  - Name: volume
+    Volumes:
+    - /var/www/site
+  - CmdLine:
+    - supervisord
+    - --nodaemon
+    - --configuration
+    - /etc/supervisord.conf
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: php:7-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7-alpine

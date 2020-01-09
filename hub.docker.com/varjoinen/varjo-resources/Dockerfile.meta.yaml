@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: node:12-alpine
+  Commands:
+  - Name: workdir
+    Path: /opt/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package*.json
+    - ./
+  From:
+    Image: node:12-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:12-alpine AS base
+- As: deps
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - npm set progress=false               &&     npm config set depth 0               &&     npm
+      install --only=production        &&     cp -R node_modules prod_node_modules
+      &&     npm install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: deps
+  Platform: ""
+  SourceCode: FROM base AS deps
+- As: test
+  BaseName: deps
+  Commands:
+  - CmdLine:
+    - apk add --no-cache bash
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - npm run lint                         &&     npm run tests-with-coverage
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: deps
+  Name: test
+  Platform: ""
+  SourceCode: FROM deps AS test
+- As: release
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: deps
+    Name: copy
+    SourcesAndDest:
+    - /opt/app/prod_node_modules
+    - ./node_modules
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - npm
+    - run
+    - start
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: release
+  Platform: ""
+  SourceCode: FROM base AS release

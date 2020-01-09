@@ -1,0 +1,141 @@
+MetaArgs:
+- DefaultValue: amd64
+  Key: ARCH
+  ProvidedValue: null
+  Value: amd64
+Stages:
+- As: qemu
+  BaseName: alpine:3.9.2
+  Commands:
+  - CmdLine:
+    - apk add --no-cache curl
+    Name: run
+    PrependShell: true
+  - Key: QEMU_VERSION
+    Name: arg
+    Value: 4.0.0
+  - Name: shell
+    Shell:
+    - /bin/ash
+    - -o
+    - pipefail
+    - -c
+  - CmdLine:
+    - curl -fsSL https://github.com/multiarch/qemu-user-static/releases/download/v${QEMU_VERSION}/qemu-arm-static.tar.gz
+      | tar zxvf - -C /usr/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fsSL https://github.com/multiarch/qemu-user-static/releases/download/v${QEMU_VERSION}/qemu-aarch64-static.tar.gz
+      | tar zxvf - -C /usr/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /usr/bin/qemu-*
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9.2
+  Name: qemu
+  Platform: ""
+  SourceCode: FROM alpine:3.9.2 as qemu
+- As: build
+  BaseName: ${ARCH}/node:12-alpine
+  Commands:
+  - Chown: ""
+    From: qemu
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/qemu-*
+    - /usr/bin/
+  - CmdLine:
+    - "apk add --no-cache \talpine-sdk \tcurl \tdrill \tgit \tnet-tools \tpython"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - source/
+    - ./source
+  - CmdLine:
+    - yarn install --ignore-optional --production
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${ARCH}/node:12-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM ${ARCH}/node:12-alpine as build
+- BaseName: ${ARCH}/node:12-alpine
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: BUILD_VERSION
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.name
+      Value: '"commonshost/dohnut"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.description
+      Value: '"Dohnut is a DNS to DNS-over-HTTPS (DoH) proxy server"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.url
+      Value: '"https://help.commons.host/dohnut/"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/commonshost/dohnut"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.docker.cmd
+      Value: '"docker run -p 53:53/tcp -p 53:53/udp commonshost/dohnut --listen 0.0.0.0:53
+        --doh commonshost"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: '"${BUILD_DATE}"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.version
+      Value: '"${BUILD_VERSION}"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.vcs-ref
+      Value: '"${VCS_REF}"'
+    Name: label
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /app
+  - CmdLine:
+    - node
+    - /app/source/bin.js
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ${ARCH}/node:12-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${ARCH}/node:12-alpine

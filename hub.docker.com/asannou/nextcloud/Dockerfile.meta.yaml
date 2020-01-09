@@ -1,0 +1,140 @@
+MetaArgs: null
+Stages:
+- BaseName: asannou/library-php:7.2-apache
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: 16.0.5
+  - Key: USER_SAML_VERSION
+    Name: arg
+    Value: 2.4.0
+  - Name: workdir
+    Path: /root
+  - CmdLine:
+    - a2enmod rewrite headers env dir mime sed
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update   && apt-get install -y --no-install-recommends cron bzip2 unzip
+      libpng-dev libfreetype6-dev libzip-dev libbz2-dev libicu-dev   && docker-php-ext-configure
+      gd --with-freetype-dir=/usr/include/   && docker-php-ext-install gd zip pdo_mysql
+      bz2 intl opcache pcntl   && apt-get purge -y libpng-dev libfreetype6-dev libicu-dev   &&
+      apt-get install -y --no-install-recommends gnupg dirmngr   && curl -s -o nextcloud.tar.bz2
+      https://download.nextcloud.com/server/releases/nextcloud-${VERSION}.tar.bz2   &&
+      curl -s -o nextcloud.tar.bz2.asc https://download.nextcloud.com/server/releases/nextcloud-${VERSION}.tar.bz2.asc   &&
+      export GNUPGHOME="$(mktemp -d)"   && for server in     ha.pool.sks-keyservers.net     hkp://p80.pool.sks-keyservers.net:80     keyserver.ubuntu.com     hkp://keyserver.ubuntu.com:80     pgp.mit.edu;   do     gpg
+      --batch --keyserver $server --recv-keys 28806A878AE423A28372792ED75899B9A724937A
+      && break || :;   done   && gpg --batch --verify nextcloud.tar.bz2.asc nextcloud.tar.bz2   &&
+      gpgconf --kill all   && tar -xjf nextcloud.tar.bz2 -C /var/www/   && curl -s
+      https://github.com/nextcloud/server/compare/v${VERSION}...asannou:v${VERSION}-share-expiration.patch
+      | patch -d /var/www/nextcloud -p 1   && rm -r "$GNUPGHOME" nextcloud.tar.bz2
+      nextcloud.tar.bz2.asc   && apt-get purge -y gnupg dirmngr   && apt-get clean   &&
+      rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yes '' | pecl install apcu-5.1.18   && yes '' | pecl install redis-5.0.2   &&
+      docker-php-ext-enable apcu redis
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g'
+      -i /etc/pam.d/cron
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php-opcache.ini
+    - /usr/local/etc/php/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php-memory.ini
+    - /usr/local/etc/php/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php-sendmail.ini
+    - /usr/local/etc/php/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php-upload-tmp-dir.ini
+    - /usr/local/etc/php/conf.d/
+  - CmdLine:
+    - curl -s -L -o user_saml.tar.gz https://github.com/nextcloud/user_saml/releases/download/v${USER_SAML_VERSION}/user_saml-${USER_SAML_VERSION}.tar.gz   &&
+      tar -zxf user_saml.tar.gz -C /var/www/nextcloud/apps/   && rm user_saml.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -s https://github.com/nextcloud/user_saml/compare/v${USER_SAML_VERSION}...asannou:v${USER_SAML_VERSION}-csrf.patch
+      | patch -d /var/www/nextcloud/apps/user_saml -p 1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R www-data:www-data /var/www/nextcloud/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nextcloud.conf
+    - /etc/apache2/sites-available/
+  - CmdLine:
+    - a2ensite nextcloud.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -E 's/(php_value upload_max_filesize ).*/\116G/g; s/(php_value post_max_size
+      ).*/\116G/g' /var/www/nextcloud/.htaccess
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -E 's/(upload_max_filesize=).*/\116G/g; s/(post_max_size=).*/\116G/g'
+      /var/www/nextcloud/.user.ini
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - crontab
+    - /root/
+  - CmdLine:
+    - crontab -u www-data /root/crontab
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /volume
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.php
+    - /root/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /root/
+  - CmdLine:
+    - /root/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - apache2-foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: asannou/library-php:7.2-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM asannou/library-php:7.2-apache

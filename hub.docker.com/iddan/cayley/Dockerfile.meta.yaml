@@ -1,0 +1,138 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.11
+  Commands:
+  - Name: workdir
+    Path: /cayley
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - go.sum
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo '{"store":{"backend":"bolt","address":"%PREFIX%/data/cayley.db"}}' > config.json
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /fs/assets
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /fs/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /fs/data
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /fs/etc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed 's_%PREFIX%__g' config.json > /fs/etc/cayley.json
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /fs/bin:$PATH
+    Name: env
+  - CmdLine:
+    - mkdir -p /fs/etc/ssl/certs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /etc/ssl/certs/ca-certificates.crt /fs/etc/ssl/certs/ca-certificates.crt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /fs/lib/x86_64-linux-gnu
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /lib/x86_64-linux-gnu/libc-* /fs/lib/x86_64-linux-gnu/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docs
+    - /fs/assets/docs
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - static
+    - /fs/assets/static
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates
+    - /fs/assets/templates
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - go build   -ldflags="-linkmode external -extldflags -static -X github.com/cayleygraph/cayley/version.GitHash=$(git
+      rev-parse HEAD | cut -c1-12)"   -a   -installsuffix cgo   -o /fs/bin/cayley   -v   ./cmd/cayley
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed 's_%PREFIX%_/fs_g' config.json > /etc/cayley.json
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cayley init --config /etc/cayley.json
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.11 as builder
+- BaseName: scratch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Yannic Bonenberger"'
+    - Key: email
+      Value: '"contact@yannic-bonenberger.com"'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /fs
+    - /
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: expose
+    Ports:
+    - "64210"
+  - CmdLine:
+    - cayley
+    - http
+    - --assets
+    - /assets
+    - --host
+    - :64210
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

@@ -1,0 +1,127 @@
+MetaArgs: null
+Stages:
+- As: gateway-build
+  BaseName: golang:latest
+  Commands:
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - konlpy_grpc_gateway/go.mod
+    - konlpy_grpc_gateway/go.sum
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - konlpy_grpc_gateway
+    - .
+  - CmdLine:
+    - go build -o konlpy_grpc_gateway .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: gateway-build
+  Platform: ""
+  SourceCode: FROM golang:latest AS gateway-build
+- As: swagger-merge
+  BaseName: python:latest
+  Commands:
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: gateway-build
+    Name: copy
+    SourcesAndDest:
+    - /build/_generated/
+    - /build/konlpy_grpc_gateway/_generated/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tools/merge.swagger.py
+    - merge.swagger.py
+  - CmdLine:
+    - python3 merge.swagger.py
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:latest
+  Name: swagger-merge
+  Platform: ""
+  SourceCode: FROM python:latest AS swagger-merge
+- As: konlpy-grpc
+  BaseName: minhoryang/konlpy:v0.5.2
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Minho Ryang <minhoryang@gmail.com>"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.name
+      Value: '"minhoryang/konlpy-grpc"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.description
+      Value: '"KoNLPy gRPC/HTTP Server"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.version
+      Value: '"v0.1.0"'
+    Name: label
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ochinchina/supervisord:latest
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/supervisord
+    - /usr/local/bin/supervisord
+  - Chown: ""
+    From: gateway-build
+    Name: copy
+    SourcesAndDest:
+    - /build/konlpy_grpc_gateway
+    - /app/konlpy_grpc_gateway
+  - Chown: ""
+    From: swagger-merge
+    Name: copy
+    SourcesAndDest:
+    - /build/konlpy_grpc_gateway/_generated/index.swagger.json
+    - /app/_generated/index.swagger.json
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tools/supervisor.conf
+    - /app/supervisor.conf
+  - CmdLine:
+    - python3 -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url
+      https://pypi.org/simple/ konlpy-grpc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/supervisord
+    - -c
+    - supervisor.conf
+    Name: cmd
+    PrependShell: false
+  - CmdLine: null
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: minhoryang/konlpy:v0.5.2
+  Name: konlpy-grpc
+  Platform: ""
+  SourceCode: FROM minhoryang/konlpy:v0.5.2 AS konlpy-grpc

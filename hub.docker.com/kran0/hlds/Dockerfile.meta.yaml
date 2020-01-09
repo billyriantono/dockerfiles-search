@@ -1,0 +1,111 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: ubuntu:19.04
+  Commands:
+  - CmdLine:
+    - apt update && apt install -y lib32gcc1 ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:19.04
+  Name: base
+  Platform: ""
+  SourceCode: FROM ubuntu:19.04 AS base
+- As: builder
+  BaseName: base
+  Commands:
+  - Key: STEAM_USER
+    Name: arg
+    Value: anonymous
+  - Key: STEAM_PASS
+    Name: arg
+    Value: ''''''
+  - Key: METAMOD_VER
+    Name: arg
+    Value: '"1.20"'
+  - Key: AMXMOD_VER
+    Name: arg
+    Value: '"1.8.2"'
+  - Key: DPROTO_VER
+    Name: arg
+    Value: '"0_9_87--6b4vhmfg85p422tyu1km28jcz64j79d9"'
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - hlds-files
+    - /opt/hlds/
+  - Name: workdir
+    Path: /opt/hlds/
+  - CmdLine:
+    - apt update && apt install -y curl bash unrar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz"
+      | tar zxC ./steamcmd && chmod +x "./steamcmd/steamcmd.sh"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - UPDATE_CMD="./steamcmd/steamcmd_auto.sh +login ${STEAM_USER} ${STEAM_PASS} +force_install_dir
+      /opt/hlds" && ${UPDATE_CMD} +app_update 90 validate && ${UPDATE_CMD} +app_update
+      70 validate && ${UPDATE_CMD} +app_update 10 validate && ${UPDATE_CMD} +app_update
+      90 validate
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rvf ./steamcmd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -vp ./cstrike/addons/metamod/dlls ./cstrike/addons/dproto/dlls
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L "http://prdownloads.sourceforge.net/metamod/metamod-${METAMOD_VER}-linux.tar.gz?download"
+      | tar zxC ./cstrike/addons/metamod/dlls && curl -L "http://www.amxmodx.org/release/amxmodx-${AMXMOD_VER}-base-linux.tar.gz"
+      | tar zxC ./cstrike/ && curl -L "http://www.amxmodx.org/release/amxmodx-${AMXMOD_VER}-cstrike-linux.tar.gz"
+      | tar zxC ./cstrike/ && echo 'linux addons/amxmodx/dlls/amxmodx_mm_i386.so'
+      >> ./cstrike/plugins.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -Lo /tmp/dproto.rar http://download.freakz.ro/dproto_${DPROTO_VER}.rar
+      && unrar e /tmp/dproto.rar bin/Linux/dproto_i386.so ./cstrike/addons/dproto/dlls/
+      && echo 'linux addons/dproto/dlls/dproto_i386.so' >> ./cstrike/plugins.ini
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base AS builder
+- As: result
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/
+    - /opt/
+  - Name: workdir
+    Path: /opt/hlds/
+  - CmdLine:
+    - /opt/hlds/hlds_run.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - ' +log off'
+    - +sv_lan 1
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: result
+  Platform: ""
+  SourceCode: FROM base AS result

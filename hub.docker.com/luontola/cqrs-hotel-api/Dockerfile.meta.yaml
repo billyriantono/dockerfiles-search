@@ -1,0 +1,88 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: openjdk:11-jdk
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install -y maven &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd --create-home app &&     mkdir -p /project &&     chown app /project
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /project
+  - Name: user
+    User: app
+  - Chown: app
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pom.xml
+    - /project/
+  - CmdLine:
+    - mvn dependency:go-offline --batch-mode --errors
+    Name: run
+    PrependShell: true
+  - Chown: app
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/main/resources
+    - /project/src/main/resources/
+  - Chown: app
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/main/java
+    - /project/src/main/java/
+  - Chown: app
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/test/java
+    - /project/src/test/java/
+  - CmdLine:
+    - mvn clean package --offline --batch-mode --errors
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:11-jdk
+  Name: builder
+  Platform: ""
+  SourceCode: FROM openjdk:11-jdk AS builder
+- BaseName: openjdk:11-jre-slim
+  Commands:
+  - CmdLine:
+    - adduser --system --home /app app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Name: user
+    User: app
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - java
+    - -Xmx200m
+    - -XX:MaxMetaspaceSize=64m
+    - --illegal-access=deny
+    - -jar
+    - cqrs-hotel.jar
+    - --spring.profiles.active=docker
+    Name: cmd
+    PrependShell: false
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /project/target/cqrs-hotel.jar
+    - /app/cqrs-hotel.jar
+  From:
+    Image: openjdk:11-jre-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:11-jre-slim

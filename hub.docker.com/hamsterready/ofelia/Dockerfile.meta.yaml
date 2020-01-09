@@ -1,0 +1,81 @@
+MetaArgs:
+- DefaultValue: amd64
+  Key: ARCH
+  ProvidedValue: null
+  Value: amd64
+Stages:
+- As: builder-amd64
+  BaseName: golang:1.10.0
+  Commands: null
+  From:
+    Image: golang:1.10.0
+  Name: builder-amd64
+  Platform: ""
+  SourceCode: FROM golang:1.10.0 AS builder-amd64
+- As: builder-arm32v6
+  BaseName: arm32v6/golang:1.10.0-alpine
+  Commands: null
+  From:
+    Image: arm32v6/golang:1.10.0-alpine
+  Name: builder-arm32v6
+  Platform: ""
+  SourceCode: FROM arm32v6/golang:1.10.0-alpine AS builder-arm32v6
+- As: builder
+  BaseName: builder-${ARCH}
+  Commands:
+  - Name: workdir
+    Path: ${GOPATH}/src/github.com/mcuadros/ofelia
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ${GOPATH}/src/github.com/mcuadros/ofelia
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - Env:
+    - Key: GOOS
+      Value: linux
+    Name: env
+  - CmdLine:
+    - go get -v ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -a -installsuffix cgo -ldflags '-w  -extldflags "-static"' -o /go/bin/ofelia
+      .
+    Name: run
+    PrependShell: true
+  From:
+    Image: builder-${ARCH}
+  Name: builder
+  Platform: ""
+  SourceCode: FROM builder-${ARCH} AS builder
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/ofelia
+    - /usr/bin/ofelia
+  - Name: volume
+    Volumes:
+    - /etc/ofelia/
+  - CmdLine:
+    - /usr/bin/ofelia
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - daemon
+    - --config
+    - /etc/ofelia/config.ini
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

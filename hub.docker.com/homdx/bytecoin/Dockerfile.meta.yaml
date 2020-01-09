@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: fedora:28
+  Commands:
+  - CmdLine:
+    - set -ex     && dnf update -y     && dnf install libstdc++ -y     && dnf clean
+      all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex     && dnf update -y     && dnf -y install make  gcc-c++ cmake git wget
+      libzip bzip2 which openssl-devel
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Key: BOOST_VERSION
+    Name: arg
+    Value: "1_67_0"
+  - Key: BOOST_VERSION_DOT
+    Name: arg
+    Value: 1.67.0
+  - Key: BOOST_HASH
+    Name: arg
+    Value: 2684c972994ee57fc5632e03bf044746f6eb45d4920c343937a465fd67a5adba
+  - CmdLine:
+    - set -ex     && curl -s -L -o  boost_${BOOST_VERSION}.tar.bz2 https://dl.bintray.com/boostorg/release/${BOOST_VERSION_DOT}/source/boost_${BOOST_VERSION}.tar.bz2     &&
+      echo "${BOOST_HASH} boost_${BOOST_VERSION}.tar.bz2" | sha256sum -c     && tar
+      -xvf boost_${BOOST_VERSION}.tar.bz2     && mv boost_${BOOST_VERSION} boost     &&
+      cd boost     && ./bootstrap.sh     && ./b2 --build-type=minimal link=static
+      -j4 runtime-link=static --with-chrono --with-date_time --with-filesystem --with-program_options
+      --with-regex --with-serialization --with-system --with-thread --stagedir=stage
+      threading=multi threadapi=pthread cflags="-fPIC" cxxflags="-fPIC" stage
+    Name: run
+    PrependShell: true
+  - Key: LMDB_VERSION
+    Name: arg
+    Value: LMDB_0.9.22
+  - Key: LMDB_HASH
+    Name: arg
+    Value: 5033a08c86fb6ef0adddabad327422a1c0c0069a
+  - CmdLine:
+    - set -ex     && git clone https://github.com/LMDB/lmdb.git -b ${LMDB_VERSION}     &&
+      cd lmdb     && test `git rev-parse HEAD` = ${LMDB_HASH} || exit 1
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app/bytecoin
+  - CmdLine:
+    - set -ex     && mkdir /app/bytecoin/build     && cd bytecoin/build     && cmake
+      ..     && time make -j4     && cp -v ../bin/* /usr/local/bin     && mkdir /usr/local/bin/wallet_file     &&
+      cp -v ../tests/wallet_file/* /usr/local/bin/wallet_file     && dnf remove -y
+      make  gcc-c++ cmake git wget openssl-devel     && dnf install libstdc++ -y     &&
+      dnf clean all     && rm -rf /app     && echo '[ SHOW VERSION ]'     && bytecoind
+      -v
+    Name: run
+    PrependShell: true
+  From:
+    Image: fedora:28
+  Name: builder
+  Platform: ""
+  SourceCode: FROM fedora:28 as builder
+- BaseName: fedora:28
+  Commands:
+  - CmdLine:
+    - set -ex     && dnf update -y     && dnf install libstdc++ -y     && dnf clean
+      all
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/*
+    - /usr/local/bin/
+  - CmdLine:
+    - 'ls -la /usr/local/bin/     && mkdir -p /tests/wallet_file     && cp /usr/local/bin/*.wallet
+      /tests/wallet_file/     && cd /tests && tests || :     && echo ''[ SHOW VERSION
+      ]''     && bytecoind -v'
+    Name: run
+    PrependShell: true
+  From:
+    Image: fedora:28
+  Name: ""
+  Platform: ""
+  SourceCode: FROM fedora:28

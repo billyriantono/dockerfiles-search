@@ -1,0 +1,119 @@
+MetaArgs: null
+Stages:
+- As: entrypoint
+  BaseName: busybox
+  Commands:
+  - CmdLine:
+    - printf '#!/bin/sh\nkind create cluster --name=$KIND_NAME \necho KUBECONFIG=$KUBECONFIG
+      \nkubectl cluster-info \n\necho "To get local kubectl access (with --net=host)
+      run for example:" \necho "docker cp kafka-quickstart:/root/.kube/kind-config-$KIND_NAME
+      ./kubeconfig-local-kubernetes-kafka" \necho "export KUBECONFIG=\$(pwd)/kubeconfig-local-kubernetes-kafka"
+      \n\necho "Will now attempt an automated kafka setup ..." \nsleep 10 \nkubectl
+      -n kube-system get pods \nkubectl wait --for=condition=Ready --timeout=120s
+      -n kube-system pod --all \n\nkubectl apply -f 00-namespace.yml \nkubectl apply
+      -f rbac-namespace-default/ \nkubectl apply -k variants/scale-1-ephemeral/ \nsleep
+      10 \nkubectl -n kafka get pods \nkubectl -n kafka wait --for=condition=Ready
+      --timeout=120s pod/kafka-0 \n\necho "Local kafka access requires a hosts file
+      entry 127.0.0.1  kafka-0.broker.kafka.svc.cluster.local" \necho "kubectl -n
+      kafka port-forward kafka-0 9092" \n\necho "To delete the cluster simply rm this
+      container and $KIND_NAME-control-plane" \n'>> /entrypoint
+    Name: run
+    PrependShell: true
+  From:
+    Image: busybox
+  Name: entrypoint
+  Platform: ""
+  SourceCode: FROM busybox as entrypoint
+- As: docker
+  BaseName: docker:18.09.5-dind@sha256:7ed03cb37cbe109867455393e670016149ae80fde931cf4773fabd8cf6284ee6
+  Commands: null
+  From:
+    Image: docker:18.09.5-dind@sha256:7ed03cb37cbe109867455393e670016149ae80fde931cf4773fabd8cf6284ee6
+  Name: docker
+  Platform: ""
+  SourceCode: FROM docker:18.09.5-dind@sha256:7ed03cb37cbe109867455393e670016149ae80fde931cf4773fabd8cf6284ee6   as
+    docker
+- As: kubectl
+  BaseName: lachlanevenson/k8s-kubectl:v1.14.1@sha256:8267b932d262f0fc2c901f515d7752dd9e7c60c8410086e7a9fda935bcc3ba0d
+  Commands: null
+  From:
+    Image: lachlanevenson/k8s-kubectl:v1.14.1@sha256:8267b932d262f0fc2c901f515d7752dd9e7c60c8410086e7a9fda935bcc3ba0d
+  Name: kubectl
+  Platform: ""
+  SourceCode: FROM lachlanevenson/k8s-kubectl:v1.14.1@sha256:8267b932d262f0fc2c901f515d7752dd9e7c60c8410086e7a9fda935bcc3ba0d   as
+    kubectl
+- As: kind
+  BaseName: golang:1.12.4-alpine
+  Commands:
+  - Env:
+    - Key: KIND_VERSION
+      Value: 0.2.1
+    Name: env
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - CmdLine:
+    - set -e;   apk add --no-cache git;   go get sigs.k8s.io/kind@${KIND_VERSION}
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.4-alpine
+  Name: kind
+  Platform: ""
+  SourceCode: FROM golang:1.12.4-alpine   as kind
+- As: runner
+  BaseName: alpine:3.9@sha256:28ef97b8686a0b5399129e9b763d5b7e5ff03576aa5580d6f4182a49c5fe1913
+  Commands:
+  - Chown: ""
+    From: docker
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/docker
+    - /usr/local/bin/docker
+  - Chown: ""
+    From: kubectl
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/kubectl
+    - /usr/local/bin/kubectl
+  - Chown: ""
+    From: kind
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/kind
+    - /usr/local/bin/kind
+  - Name: workdir
+    Path: /kubernetes-kafka
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Env:
+    - Key: KIND_NAME
+      Value: kafka
+    - Key: KUBECONFIG
+      Value: /root/.kube/kind-config-kafka
+    Name: env
+  - Chown: ""
+    From: entrypoint
+    Name: copy
+    SourcesAndDest:
+    - /entrypoint
+    - /entrypoint
+  - CmdLine:
+    - chmod u+x /entrypoint
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.9@sha256:28ef97b8686a0b5399129e9b763d5b7e5ff03576aa5580d6f4182a49c5fe1913
+  Name: runner
+  Platform: ""
+  SourceCode: FROM alpine:3.9@sha256:28ef97b8686a0b5399129e9b763d5b7e5ff03576aa5580d6f4182a49c5fe1913   as
+    runner

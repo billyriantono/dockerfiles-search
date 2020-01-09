@@ -1,0 +1,177 @@
+MetaArgs: null
+Stages:
+- BaseName: tomcat:9-jdk11-adoptopenjdk-openj9
+  Commands:
+  - CmdLine:
+    - export DEBIAN_FRONTEND=noninteractive &&     apt-get update &&     echo ttf-mscorefonts-installer
+      msttcorefonts/accepted-mscorefonts-eula select true | debconf-set-selections
+      &&     apt-get install -y ttf-mscorefonts-installer fontconfig &&     apt-get
+      autoremove -y &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CONFD_VERSION
+      Value: 0.16.0
+    Name: env
+  - Env:
+    - Key: GEOSERVER_DOWNLOAD_URL
+      Value: https://downloads.sourceforge.net/project/geoserver/GeoServer
+    Name: env
+  - Env:
+    - Key: GEOSERVER_VERSION
+      Value: 2.16.0
+    Name: env
+  - Env:
+    - Key: GEOSERVER_PLUGINS
+      Value: control-flow excel libjpeg-turbo wps vectortiles imagemosaic-jdbc sldservice
+    Name: env
+  - Env:
+    - Key: GEOSERVER_COMMUNITY_PLUGINS_DOWNLOAD_URL
+      Value: https://build.geoserver.org/geoserver
+    Name: env
+  - Env:
+    - Key: GEOSERVER_COMMUNITY_PLUGINS
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: POSTGRESQL_JDBC_VERSION
+      Value: 42.2.6
+    Name: env
+  - Env:
+    - Key: HIKARICP_VERSION
+      Value: 3.3.1
+    Name: env
+  - Env:
+    - Key: MARLIN_MAJOR_VERSION
+      Value: 0.9.4.2
+    Name: env
+  - Env:
+    - Key: MARLIN_MINOR_VERSION
+      Value: jdk9
+    Name: env
+  - Env:
+    - Key: LIBJPEG_TURBO_VERSION
+      Value: 2.0.2
+    Name: env
+  - Env:
+    - Key: GEOSERVER_DATA_DIR
+      Value: /var/data/geoserver
+    Name: env
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: /usr/lib/jni:/usr/local/lib:/usr/lib:/opt/libjpeg-turbo/lib64:/usr/local/tomcat/native-jni-lib:/usr/local/tomcat/lib:$LD_LIBRARY_PATH
+    Name: env
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -ceux
+  - CmdLine:
+    - export CURL_OPTS=(-sfSL --retry 3) &&     export DEBIAN_FRONTEND=noninteractive
+      &&     apt-get update &&     apt-get install -y curl unzip apt-utils debconf
+      &&     curl ${CURL_OPTS[@]} -o /usr/local/bin/confd https://github.com/kelseyhightower/confd/releases/download/v${CONFD_VERSION}/confd-${CONFD_VERSION}-linux-amd64
+      &&     chmod +x /usr/local/bin/confd &&     curl ${CURL_OPTS[@]} -o ${CATALINA_HOME}/lib/HikariCP-${HIKARICP_VERSION}.jar
+      https://search.maven.org/remotecontent?filepath=com/zaxxer/HikariCP/${HIKARICP_VERSION}/HikariCP-${HIKARICP_VERSION}.jar
+      &&     rm -rf ${CATALINA_HOME}/webapps/* &&     curl ${CURL_OPTS[@]} -o ${CATALINA_HOME}/lib/marlin-${MARLIN_MAJOR_VERSION}-Unsafe-OpenJDK9.jar
+      https://github.com/bourgesl/marlin-renderer/releases/download/v$(echo ${MARLIN_MAJOR_VERSION}_${MARLIN_MINOR_VERSION}
+      | sed -e "s/\./\_/g")/marlin-${MARLIN_MAJOR_VERSION}-Unsafe-OpenJDK9.jar &&     cd
+      /tmp &&     curl ${CURL_OPTS[@]} -o geoserver.zip "${GEOSERVER_DOWNLOAD_URL}/${GEOSERVER_VERSION}/geoserver-${GEOSERVER_VERSION}-war.zip"
+      &&     unzip -q geoserver.zip -d geoserver && unzip -q geoserver/geoserver.war
+      -d ${CATALINA_HOME}/webapps/ROOT/ &&     rm -rf $CATALINA_HOME/webapps/ROOT/data/
+      &&     rm -rf geoserver.zip geoserver &&     mv $CATALINA_HOME/webapps/ROOT/WEB-INF/lib/{log4j,slf4j}-*
+      ${CATALINA_HOME}/lib/ &&     for plugin in $GEOSERVER_PLUGINS; do       curl
+      ${CURL_OPTS[@]} -o geoserver-plugin.zip ${GEOSERVER_DOWNLOAD_URL}/${GEOSERVER_VERSION}/extensions/geoserver-${GEOSERVER_VERSION}-${plugin}-plugin.zip;       unzip
+      -q -o geoserver-plugin.zip -d ${CATALINA_HOME}/webapps/ROOT/WEB-INF/lib/;       rm
+      geoserver-plugin.zip;     done &&     GEOSERVER_BRANCH_VERSION=${GEOSERVER_VERSION%.*}
+      &&     for plugin in $GEOSERVER_COMMUNITY_PLUGINS; do       curl ${CURL_OPTS[@]}
+      -o geoserver-plugin.zip ${GEOSERVER_COMMUNITY_PLUGINS_DOWNLOAD_URL}/${GEOSERVER_BRANCH_VERSION}.x/community-latest/geoserver-${GEOSERVER_BRANCH_VERSION}-SNAPSHOT-${plugin}-plugin.zip;       unzip
+      -q -o geoserver-plugin.zip -d ${CATALINA_HOME}/webapps/ROOT/WEB-INF/lib/;       rm
+      geoserver-plugin.zip;     done &&     curl ${CURL_OPTS[@]} -o ${CATALINA_HOME}/lib/postgresql-${POSTGRESQL_JDBC_VERSION}.jar
+      https://jdbc.postgresql.org/download/postgresql-${POSTGRESQL_JDBC_VERSION}.jar
+      &&     curl ${CURL_OPTS[@]} -o /tmp/libjpeg-turbo.deb https://downloads.sourceforge.net/project/libjpeg-turbo/${LIBJPEG_TURBO_VERSION}/libjpeg-turbo-official_${LIBJPEG_TURBO_VERSION}_amd64.deb
+      &&     dpkg -i libjpeg-turbo.deb &&     ln -s /opt/libjpeg-turbo/lib64/libjpeg.so.62.0.0
+      /usr/lib/libjpeg.so.62 &&     rm libjpeg-turbo.deb &&     apt-get purge -y apt-utils
+      &&     apt-get autoremove -y &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: boonen/gdal4geoserver:latest
+    Name: copy
+    SourcesAndDest:
+    - /usr-local-lib.tgz
+    - /
+  - Chown: ""
+    From: boonen/gdal4geoserver:latest
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/java/gdal.jar
+    - /usr/share/java/gdal.jar
+  - Chown: ""
+    From: boonen/gdal4geoserver:latest
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/share/gdal/
+    - /usr/local/share/gdal/
+  - CmdLine:
+    - export CURL_OPTS="-sSL --retry 3" &&     export DEBIAN_FRONTEND=noninteractive
+      &&     tar --absolute-names -xf /usr-local-lib.tgz &&     rm /usr-local-lib.tgz
+      &&     for plugin in "gdal"; do       curl ${CURL_OPTS[@]} -o geoserver-plugin.zip
+      ${GEOSERVER_DOWNLOAD_URL}/${GEOSERVER_VERSION}/extensions/geoserver-${GEOSERVER_VERSION}-${plugin}-plugin.zip;       unzip
+      -q -o geoserver-plugin.zip -d ${CATALINA_HOME}/webapps/ROOT/WEB-INF/lib/;       rm
+      -f ${CATALINA_HOME}/webapps/ROOT/WEB-INF/lib/imageio-ext-gdal-bindings-*.jar;       rm
+      -f ${CATALINA_HOME}/webapps/ROOT/WEB-INF/lib/gdal*.jar;       cp /usr/share/java/gdal.jar
+      ${CATALINA_HOME}/webapps/ROOT/WEB-INF/lib/;       rm geoserver-plugin.zip;     done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/<Valve className="org.apache.catalina.valves.AccessLogValve"/\<\!\-\-<Valve
+      className="org.apache.catalina.valves.AccessLogValve/' conf/server.xml &&     sed
+      -i 's/pattern="%h %l %u %t &quot;%r&quot; %s %b" \/>/pattern="%h %l %u %t &quot;%r&quot;
+      %s %b" \/>-->/' conf/server.xml
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/tomcat_logging.properties
+    - /usr/local/tomcat/conf/logging.properties
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/entrypoint.sh
+    - /entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/setenv-openj9.sh
+    - /usr/local/tomcat/bin/setenv.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/confd
+    - /etc/confd
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/data
+    - /var/data/geoserver
+  - Name: volume
+    Volumes:
+    - /var/data/geoserver
+  - CmdLine:
+    - chmod +x /entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: tomcat:9-jdk11-adoptopenjdk-openj9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tomcat:9-jdk11-adoptopenjdk-openj9

@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:stretch
+  Commands:
+  - Key: SURF_VERSION
+    Name: arg
+    Value: 2.0.0
+  - CmdLine:
+    - apt-get update &&     DEBIAN_FRONTEND=noninteractive apt-get install -qq -y         --no-install-recommends         apt-transport-https         build-essential         ca-certificates         curl         file         git         gnupg     &&
+      apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --silent https://deb.nodesource.com/gpgkey/nodesource.gpg.key     | apt-key
+      add - &&     echo "deb https://deb.nodesource.com/node_10.x stretch main"     |
+      tee /etc/apt/sources.list.d/nodesource.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&     DEBIAN_FRONTEND=noninteractive apt-get install -qq -y         --no-install-recommends         nodejs     &&
+      apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -u 1000 -g users -d /home/build -m -s /bin/bash build
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: build
+  - Name: workdir
+    Path: /home/build
+  - CmdLine:
+    - git clone --depth=1 https://github.com/surf-build/surf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd surf && git checkout v${SURF_VERSION} &&     npm install --no-optional &&
+      npm pack &&     cp surf-build-${SURF_VERSION}.tgz /tmp/surf-build.tar.gz
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:stretch AS builder
+- As: ci
+  BaseName: debian:stretch
+  Commands:
+  - CmdLine:
+    - apt-get update &&     DEBIAN_FRONTEND=noninteractive apt-get install -qq -y         --no-install-recommends         apt-transport-https         build-essential         ca-certificates         curl         file         git         gnupg         linux-libc-dev         iputils-ping         libseccomp-dev         pkg-config         $([
+      `uname -m` = x86_64 ] && echo qemu-system-x86)     && apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L --silent https://github.com/Yelp/dumb-init/archive/v1.2.0.tar.gz -o
+      /tmp/dumb-init.tar.gz     && tar -C /tmp -xzf /tmp/dumb-init.tar.gz     && make
+      -C /tmp/dumb-init-1.2.0     && cp /tmp/dumb-init-1.2.0/dumb-init /usr/bin     &&
+      rm -r /tmp/dumb-init-1.2.0 /tmp/dumb-init.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/dumb-init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - curl --silent https://deb.nodesource.com/gpgkey/nodesource.gpg.key     | apt-key
+      add - &&     echo "deb https://deb.nodesource.com/node_10.x stretch main"     |
+      tee /etc/apt/sources.list.d/nodesource.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&     DEBIAN_FRONTEND=noninteractive apt-get install -qq -y         --no-install-recommends         nodejs     &&
+      apt-get clean
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/surf-build.tar.gz
+    - /tmp/surf-build.tar.gz
+  - CmdLine:
+    - npm install -g --unsafe-perm --no-optional /tmp/surf-build.tar.gz && rm -f /tmp/surf-build.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/lib/node_modules/surf-build/node_modules/.bin/git-askpass-env     /usr/local/bin/git-askpass-env
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: ci
+  Platform: ""
+  SourceCode: FROM debian:stretch AS ci

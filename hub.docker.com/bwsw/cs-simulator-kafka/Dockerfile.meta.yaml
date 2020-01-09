@@ -1,0 +1,129 @@
+MetaArgs: null
+Stages:
+- As: build-simulator-core
+  BaseName: ubuntu:16.04
+  Commands:
+  - CmdLine:
+    - echo 'mysql-server mysql-server/root_password password root' | debconf-set-selections;     echo
+      'mysql-server mysql-server/root_password_again password root' | debconf-set-selections;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y update && apt-get install -y     genisoimage     libffi-dev     libssl-dev     sudo     ipmitool     maven     netcat     openjdk-8-jdk     python-dev     python-setuptools     python-pip     python-mysql.connector     supervisor     wget     nginx     jq     mysql-server     openssh-client     &&
+      apt-get clean all     && rm -rf /var/lib/apt/lists/*;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /root/.ssh     && chmod 0700 /root/.ssh     && ssh-keygen -t rsa -N
+      "" -f id_rsa.cloud
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/run/mysqld;     chown mysql /var/run/mysqld;     echo '''sql_mode
+      = "STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"'''
+      >> /etc/mysql/mysql.conf.d/mysqld.cnf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /var/lib/mysql -type f -exec touch {} \; && (/usr/bin/mysqld_safe &); sleep
+      30; mysqladmin -u root -proot password ''
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://github.com/apache/cloudstack/archive/4.11.2.0.tar.gz -O /opt/cloudstack.tar.gz;     mkdir
+      -p /opt/cloudstack;     tar xvzf /opt/cloudstack.tar.gz -C /opt/cloudstack --strip-components=1
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/cloudstack
+  - CmdLine:
+    - mvn -Pdeveloper -Dsimulator -DskipTests clean install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn -Pdeveloper -Dsimulator dependency:go-offline
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn -pl client jetty:run -Dsimulator -Djetty.skip -Dorg.eclipse.jetty.annotations.maxWait=120
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - (/usr/bin/mysqld_safe &);     sleep 5;     mvn -Pdeveloper -pl developer -Ddeploydb;     mvn
+      -Pdeveloper -pl developer -Ddeploydb-simulator;     MARVIN_FILE=$(find /opt/cloudstack/tools/marvin/dist/
+      -name "Marvin*.tar.gz");     pip install $MARVIN_FILE;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - zones.cfg
+    - /opt/zones.cfg
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx_default.conf
+    - /etc/nginx/sites-available/default
+  - CmdLine:
+    - pip install cs
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.04
+  Name: build-simulator-core
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04 AS build-simulator-core
+- BaseName: build-simulator-core
+  Commands:
+  - Env:
+    - Key: KAFKA_ACKS
+      Value: all
+    Name: env
+  - Env:
+    - Key: KAFKA_WRITE_RETRIES
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: KAFKA_TOPIC
+      Value: cs
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - /opt/run.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/supervisor/conf.d/supervisord.conf
+  - CmdLine:
+    - mkdir -p ./client/target/classes/META-INF/cloudstack/core
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - spring-event-bus-context.xml
+    - /opt/cloudstack/client/target/classes/META-INF/cloudstack/core/spring-event-bus-context.xml
+  - Name: expose
+    Ports:
+    - "8080"
+    - "8096"
+    - "8888"
+  - CmdLine:
+    - /usr/bin/supervisord
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: build-simulator-core
+  Name: ""
+  Platform: ""
+  SourceCode: FROM build-simulator-core

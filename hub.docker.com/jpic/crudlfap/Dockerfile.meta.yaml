@@ -1,0 +1,123 @@
+MetaArgs: null
+Stages:
+- BaseName: node:10-alpine
+  Commands:
+  - Env:
+    - Key: DJANGO_SETTINGS_MODULE
+      Value: crudlfap_example.settings
+    Name: env
+  - Env:
+    - Key: UWSGI_MODULE
+      Value: crudlfap_example.wsgi:application
+    Name: env
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"${PATH}:/app/.local/bin"'
+    Name: env
+  - Env:
+    - Key: PLAYLABS_PLUGINS
+      Value: postgres,uwsgi,django,sentry
+    Name: env
+  - Env:
+    - Key: PYTHONIOENCODING
+      Value: UTF-8
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: STATIC_URL
+      Value: /static/
+    - Key: STATIC_ROOT
+      Value: /app/static
+    Name: env
+  - Env:
+    - Key: UWSGI_SPOOLER_NAMES
+      Value: mail,stat
+    - Key: UWSGI_SPOOLER_MOUNT
+      Value: /app/spooler
+    Name: env
+  - Env:
+    - Key: VIRTUAL_PROTO
+      Value: uwsgi
+    Name: env
+  - Name: expose
+    Ports:
+    - "6789"
+  - CmdLine:
+    - apk update && apk --no-cache upgrade && apk --no-cache add gettext shadow python3
+      py3-psycopg2 uwsgi-python3 uwsgi-http uwsgi-spooler dumb-init bash git curl
+      && pip3 install --upgrade pip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /app && usermod -d /app -l app node && groupmod -n app node && chown
+      -R app:app /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - js
+    - /app/js
+  - CmdLine:
+    - cd /app/js && yarn install --frozen-lockfile
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - setup.py
+    - README.rst
+    - MANIFEST.in
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /app/src
+  - CmdLine:
+    - pip3 install --editable /app[dev]
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DEBUG=1 django-admin collectstatic --noinput
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  - CmdLine:
+    - mkdir -p ${STATIC_ROOT} && mkdir -p ${UWSGI_SPOOLER_MOUNT}
+    Name: run
+    PrependShell: true
+  - Key: GIT_COMMIT
+    Name: arg
+    Value: null
+  - Key: GIT_TAG
+    Name: arg
+    Value: null
+  - Env:
+    - Key: GIT_COMMIT
+      Value: '"${GIT_COMMIT}"'
+    - Key: GIT_TAG
+      Value: '"${GIT_TAG}"'
+    Name: env
+  - CmdLine:
+    - /usr/bin/dumb-init bash -c "crudlfap migrate --noinput && uwsgi   --spooler=${UWSGI_SPOOLER_MOUNT}/mail   --spooler=${UWSGI_SPOOLER_MOUNT}/stat   --spooler-processes
+      8   --socket=0.0.0.0:6789   --chdir=/app   --plugin=python3,http   --module=${UWSGI_MODULE}   --http-keepalive   --harakiri=120   --max-requests=100   --master   --workers=24   --processes=12   --chmod=666   --log-5xx   --vacuum   --enable-threads   --reload-os-env   --post-buffering=8192   --ignore-sigpipe   --ignore-write-errors   --disable-write-exception   --static-map
+      ${STATIC_ROOT}=${STATIC_URL}"
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: node:10-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:10-alpine

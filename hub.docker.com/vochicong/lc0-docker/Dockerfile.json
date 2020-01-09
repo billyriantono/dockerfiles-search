@@ -1,0 +1,222 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "lc0base",
+      "BaseName": "nvidia/cuda:10.0-cudnn7-runtime",
+      "SourceCode": "FROM nvidia/cuda:10.0-cudnn7-runtime as lc0base",
+      "Platform": "",
+      "As": "lc0base",
+      "From": {
+        "Image": "nvidia/cuda:10.0-cudnn7-runtime"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026    apt-get install -y libopenblas-base libprotobuf10 zlib1g-dev     ocl-icd-libopencl1 tzdata \u0026\u0026    apt-get clean all"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "botbase",
+      "BaseName": "lc0base",
+      "SourceCode": "FROM lc0base as botbase",
+      "Platform": "",
+      "As": "botbase",
+      "From": {
+        "Stage": {
+          "Named": "lc0base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026    apt-get install -y python3 \u0026\u0026    apt-get clean all"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "builder",
+      "BaseName": "nvidia/cuda:10.0-cudnn7-devel",
+      "SourceCode": "FROM nvidia/cuda:10.0-cudnn7-devel as builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "nvidia/cuda:10.0-cudnn7-devel"
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "\"version\"",
+              "Value": "\"lc0_v0.21.2-client_v0.22.0 \""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026    apt-get install -y curl wget supervisor git     clang-6.0 libopenblas-dev ninja-build protobuf-compiler libprotobuf-dev     python3-pip \u0026\u0026    apt-get clean all"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "pip3 install meson"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "curl -s -L https://github.com/LeelaChessZero/lc0/releases/latest |    egrep -o '/LeelaChessZero/lc0/archive/v.*.tar.gz' |    wget --base=https://github.com/ -O lc0latest.tgz -i - \u0026\u0026    tar xfz lc0latest.tgz \u0026\u0026 rm lc0latest.tgz \u0026\u0026 mv lc0* /lc0"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/lc0"
+        },
+        {
+          "CmdLine": [
+            "CC=clang-6.0 CXX=clang++-6.0 INSTALL_PREFIX=/lc0     ./build.sh release \u0026\u0026 ls /lc0/bin"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/lc0/bin"
+        },
+        {
+          "CmdLine": [
+            "curl -s -L https://github.com/LeelaChessZero/lczero-client/releases/latest |    egrep -o '/LeelaChessZero/lczero-client/releases/download/v.*/client_linux' |    head -n 1 | wget --base=https://github.com/ -i - \u0026\u0026    chmod +x client_linux"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "lc0",
+      "BaseName": "lc0base",
+      "SourceCode": "FROM lc0base as lc0",
+      "Platform": "",
+      "As": "lc0",
+      "From": {
+        "Stage": {
+          "Named": "lc0base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/lc0/bin",
+            "/lc0/bin"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/lc0/bin"
+        },
+        {
+          "CmdLine": [
+            "./client_linux --user lc0docker --password lc0docker"
+          ],
+          "Name": "cmd",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "botbuilder",
+      "BaseName": "builder",
+      "SourceCode": "FROM builder as botBuilder",
+      "Platform": "",
+      "As": "botbuilder",
+      "From": {
+        "Stage": {
+          "Named": "builder",
+          "Index": 2
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026    apt-get install -y python3-venv"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "git clone https://github.com/careless25/lichess-bot.git /lcbot"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/lcbot"
+        },
+        {
+          "CmdLine": [
+            "python3 -m venv .venv \u0026\u0026    . .venv/bin/activate \u0026\u0026    pip3 install wheel \u0026\u0026    pip3 install -r requirements.txt"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "lcbot",
+      "BaseName": "botbase",
+      "SourceCode": "FROM botbase as lcbot",
+      "Platform": "",
+      "As": "lcbot",
+      "From": {
+        "Stage": {
+          "Named": "botbase",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/lc0/bin",
+            "/lc0/bin"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "botBuilder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/lcbot",
+            "/lcbot"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/lcbot"
+        }
+      ]
+    }
+  ]
+}

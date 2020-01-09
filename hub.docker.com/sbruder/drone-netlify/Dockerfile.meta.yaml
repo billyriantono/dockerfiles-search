@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git upx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -d -v github.com/netlify/netlifyctl     && GOOS=linux CGO_ENABLED=0 go
+      build -v -ldflags="-s -w" -o /netlifyctl github.com/netlify/netlifyctl     &&
+      upx --ultra-brute /netlifyctl
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- As: ca-certificates
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: ca-certificates
+  Platform: ""
+  SourceCode: FROM alpine as ca-certificates
+- As: entrypoint
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache gcc musl-dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.c
+    - /entrypoint.c
+  - CmdLine:
+    - gcc -s -static entrypoint.c -o entrypoint
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: entrypoint
+  Platform: ""
+  SourceCode: FROM alpine as entrypoint
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: entrypoint
+    Name: copy
+    SourcesAndDest:
+    - /entrypoint
+    - /entrypoint
+  - Chown: ""
+    From: ca-certificates
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/ca-certificates.crt
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /netlifyctl
+    - /netlifyctl
+  - CmdLine:
+    - /entrypoint
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

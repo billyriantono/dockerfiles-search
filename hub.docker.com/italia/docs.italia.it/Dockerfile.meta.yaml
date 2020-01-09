@@ -1,0 +1,167 @@
+MetaArgs: null
+Stages:
+- As: docs_italia_it_base
+  BaseName: python:3.6-slim
+  Commands:
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends         build-essential         git         libpq-dev     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    - Key: LC_ALL
+      Value: C.UTF-8
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    - Key: PYTHONDONTWRITEBYTECODE
+      Value: "1"
+    Name: env
+  - Name: workdir
+    Path: /app
+  From:
+    Image: python:3.6-slim
+  Name: docs_italia_it_base
+  Platform: ""
+  SourceCode: FROM python:3.6-slim AS docs_italia_it_base
+- As: docs_italia_it_test
+  BaseName: docs_italia_it_base
+  Commands:
+  - CmdLine:
+    - pip install --no-cache-dir tox
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: docs_italia_it_base
+  Name: docs_italia_it_test
+  Platform: ""
+  SourceCode: FROM docs_italia_it_base AS docs_italia_it_test
+- As: docs_italia_it_build
+  BaseName: docs_italia_it_base
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends         curl         libarchive-tools         libjpeg62-turbo-dev         python-pip         python-virtualenv         python2.7-dev         texlive         texlive-latex-extra     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Key: COMANDI_CONVERSIONE_URL
+    Name: arg
+    Value: https://github.com/italia/docs-italia-comandi-conversione/releases/download/v0.6
+  - Key: PANDOC_FILTERS_URL
+    Name: arg
+    Value: https://github.com/italia/docs-italia-pandoc-filters/releases/download/v0.1.4
+  - CmdLine:
+    - curl -sSL ${COMANDI_CONVERSIONE_URL}/converti.zip | bsdtar -xf- -C /usr/local/bin     &&
+      curl -sSL ${COMANDI_CONVERSIONE_URL}/pandoc-font-to-style.zip | bsdtar -xf-
+      -C /usr/local/bin     && curl -sSL ${COMANDI_CONVERSIONE_URL}/pandoc-to-sphinx.zip
+      | bsdtar -xf- -C /usr/local/bin     && curl -sSL ${COMANDI_CONVERSIONE_URL}/pandoc.zip
+      | bsdtar -xf- -C /usr/local/bin     && curl -sSL ${PANDOC_FILTERS_URL}/filtro-acronimi
+      > /usr/local/bin/filtro-acronimi     && curl -sSL ${PANDOC_FILTERS_URL}/filtro-didascalia
+      > /usr/local/bin/filtro-didascalia     && curl -sSL ${PANDOC_FILTERS_URL}/filtro-google-docs
+      > /usr/local/bin/filtro-google-docs     && curl -sSL ${PANDOC_FILTERS_URL}/filtro-quotes
+      > /usr/local/bin/filtro-quotes     && curl -sSL ${PANDOC_FILTERS_URL}/filtro-references
+      > /usr/local/bin/filtro-references     && curl -sSL ${PANDOC_FILTERS_URL}/filtro-rimuovi-div
+      > /usr/local/bin/filtro-rimuovi-div     && curl -sSL ${PANDOC_FILTERS_URL}/filturo-stile-liste
+      > /usr/local/bin/filtro-stile-liste     && chmod 755 /usr/local/bin/converti
+      /usr/local/bin/pandoc* /usr/local/bin/filtro-*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: docs_italia_it_base
+  Name: docs_italia_it_build
+  Platform: ""
+  SourceCode: FROM docs_italia_it_base AS docs_italia_it_build
+- As: docs_italia_it_dev
+  BaseName: docs_italia_it_build
+  Commands:
+  - CmdLine:
+    - python -mvenv /virtualenv
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements/
+    - /app/requirements/
+  - CmdLine:
+    - /virtualenv/bin/pip install --no-cache-dir -r /app/requirements/docsitalia-converter.txt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/
+    - /app/docker/
+  - Env:
+    - Key: DJANGO_SETTINGS_MODULE
+      Value: readthedocs.docsitalia.settings.docker
+    Name: env
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 2
+      Named: docs_italia_it_build
+  Name: docs_italia_it_dev
+  Platform: ""
+  SourceCode: FROM docs_italia_it_build AS docs_italia_it_dev
+- As: docs_italia_it_prod
+  BaseName: docs_italia_it_dev
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - readthedocs/
+    - /app/readthedocs/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - media/
+    - /app/media/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - logs/
+    - /app/logs/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.py'
+    - setup*
+    - '*.json'
+    - /app/
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 3
+      Named: docs_italia_it_dev
+  Name: docs_italia_it_prod
+  Platform: ""
+  SourceCode: FROM docs_italia_it_dev AS docs_italia_it_prod

@@ -1,0 +1,137 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "download-and-extract",
+      "BaseName": "alpine",
+      "SourceCode": "FROM alpine AS download-and-extract",
+      "Platform": "",
+      "As": "download-and-extract",
+      "From": {
+        "Image": "alpine"
+      },
+      "Commands": [
+        {
+          "Key": "SCALA_VERSION",
+          "Name": "arg",
+          "Value": "2.12"
+        },
+        {
+          "Key": "KAFKA_VERSION",
+          "Name": "arg",
+          "Value": "2.4.0"
+        },
+        {
+          "Name": "workdir",
+          "Path": "/tmp"
+        },
+        {
+          "CmdLine": [
+            "wget -q   http://apache.mirror.globo.tech/kafka/${KAFKA_VERSION}/kafka_${SCALA_VERSION}-${KAFKA_VERSION}.tgz \u0026\u0026   tar -xzf kafka_${SCALA_VERSION}-${KAFKA_VERSION}.tgz \u0026\u0026   rm -rf kafka_${SCALA_VERSION}-${KAFKA_VERSION}/site-docs kafka_${SCALA_VERSION}-${KAFKA_VERSION}/bin/windows"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "openjdk:12-alpine",
+      "SourceCode": "FROM openjdk:12-alpine",
+      "Platform": "",
+      "From": {
+        "Image": "openjdk:12-alpine"
+      },
+      "Commands": [
+        {
+          "Key": "SCALA_VERSION",
+          "Name": "arg",
+          "Value": "2.12"
+        },
+        {
+          "Key": "KAFKA_VERSION",
+          "Name": "arg",
+          "Value": "2.4.0"
+        },
+        {
+          "Chown": "bin:bin",
+          "From": "download-and-extract",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/tmp/kafka_${SCALA_VERSION}-${KAFKA_VERSION}",
+            "/opt/kafka"
+          ]
+        },
+        {
+          "Chown": "bin:bin",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "docker-entrypoint.sh",
+            "/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "chmod 550 /docker-entrypoint.sh \u0026\u0026 apk -U add bash tini"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/opt/kafka"
+        },
+        {
+          "CmdLine": [
+            "/sbin/tini",
+            "--",
+            "/docker-entrypoint.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "Env": [
+            {
+              "Key": "ZOOKEEPER_HEAP_OPTS",
+              "Value": "\"-Xms64m -Xmx64m\""
+            },
+            {
+              "Key": "KAFKA_HEAP_OPTS",
+              "Value": "\"-Xms256m -Xmx256m\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Name": "user",
+          "User": "bin"
+        },
+        {
+          "CmdLine": [
+            "kafka"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "2181",
+            "9092"
+          ]
+        },
+        {
+          "Health": {
+            "Test": [
+              "CMD-SHELL",
+              "nc -z localhost 9092"
+            ]
+          },
+          "Name": "healthcheck"
+        }
+      ]
+    }
+  ]
+}

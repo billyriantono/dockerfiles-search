@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- As: doh-build
+  BaseName: golang:alpine
+  Commands:
+  - Labels:
+    - Key: MAINTAINER
+      Value: satish@satishweb.com
+    Name: label
+  - CmdLine:
+    - apk add --no-cache git make jq curl
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - DOH_VERSION_LATEST="$(curl -s https://api.github.com/repos/m13253/dns-over-https/tags|jq
+      -r '.[0].name')"     && wget "https://github.com/m13253/dns-over-https/archive/${DOH_VERSION_LATEST}.zip"
+      -O doh.zip     && unzip doh.zip     && rm doh.zip     && cd dns-over-https*     &&
+      make doh-server/doh-server     && mkdir /dist     && cp doh-server/doh-server
+      /dist/doh-server     && echo ${DOH_VERSION_LATEST} > /dist/doh-server.version
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: doh-build
+  Platform: ""
+  SourceCode: FROM golang:alpine AS doh-build
+- BaseName: alpine:latest
+  Commands:
+  - Labels:
+    - Key: MAINTAINER
+      Value: satish@satishweb.com
+    Name: label
+  - Chown: ""
+    From: doh-build
+    Name: copy
+    SourcesAndDest:
+    - /dist
+    - /server
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - doh-server.sample.conf
+    - /server/doh-server.sample.conf
+  - CmdLine:
+    - apk add --no-cache curl jq bash gettext
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker-entrypoint
+    - /docker-entrypoint
+  - CmdLine:
+    - chmod u+x /docker-entrypoint
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8053"
+  - CmdLine:
+    - /docker-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /server/doh-server
+    - -conf
+    - /server/doh-server.conf
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 60000000000
+      StartPeriod: 60000000000
+      Test:
+      - CMD-SHELL
+      - wget "localhost:$(echo ${DOH_SERVER_LISTEN}|awk -F '[:]' '{print $2}')${DOH_HTTP_PREFIX}?name=google.com&type=A"
+        -O /dev/null || exit 1
+      Timeout: 30000000000
+    Name: healthcheck
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

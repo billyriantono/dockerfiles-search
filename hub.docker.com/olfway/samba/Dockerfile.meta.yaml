@@ -1,0 +1,212 @@
+MetaArgs:
+- DefaultValue: debian:buster-slim
+  Key: DEBIAN_IMAGE
+  ProvidedValue: null
+  Value: debian:buster-slim
+Stages:
+- As: build
+  BaseName: debian:buster-slim
+  Commands:
+  - Env:
+    - Key: LANG
+      Value: '''C.UTF-8'''
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Chown: ""
+    From: olfway/qemu-user-static
+    Name: copy
+    SourcesAndDest:
+    - /qemu-arm-static
+    - /usr/bin/
+  - Chown: ""
+    From: olfway/qemu-user-static
+    Name: copy
+    SourcesAndDest:
+    - /qemu-aarch64-static
+    - /usr/bin/
+  - CmdLine:
+    - set -x     && echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/zz-force-ipv4     &&
+      echo 'APT::Install-Recommends "0";' > /etc/apt/apt.conf.d/zz-no-install-recommends
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && apt-get update     && apt-get install -y        ca-certificates        curl        docbook        docbook-xml        docbook-xsl        file        gnupg        patch        pkg-config        python        xsltproc
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src
+  - Key: SAMBA_VERSION
+    Name: arg
+    Value: 4.9.3
+  - Key: SAMBA_URL
+    Name: arg
+    Value: https://download.samba.org/pub/samba/stable
+  - CmdLine:
+    - set -x     && curl --ipv4 -O "${SAMBA_URL}/samba-${SAMBA_VERSION}.tar.asc"     &&
+      curl --ipv4 "${SAMBA_URL}/samba-${SAMBA_VERSION}.tar.gz" | gunzip -d > "samba-${SAMBA_VERSION}.tar"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - samba-pubkey.asc
+    - .
+  - CmdLine:
+    - set -x     && gpg --import "samba-pubkey.asc"     && echo "52FBC0B86D954B0843324CDC6F33915B6568B7EA:6:"
+      | gpg --import-ownertrust     && gpg --verify "samba-${SAMBA_VERSION}.tar.asc"
+      "samba-${SAMBA_VERSION}.tar"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && tar -xf "samba-${SAMBA_VERSION}.tar"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - patches
+    - patches/
+  - Name: workdir
+    Path: /usr/src/samba-${SAMBA_VERSION}
+  - CmdLine:
+    - set -x     && patch -i ../patches/samba-4.8.1-hide-pcap-errors.patch -p1     &&
+      patch -i ../patches/samba-4.9.0-tmsize-overflow-check.patch -p1
+    Name: run
+    PrependShell: true
+  - Key: QEMU
+    Name: arg
+    Value: null
+  - Env:
+    - Key: QEMU
+      Value: $QEMU
+    Name: env
+  - Key: TOOLCHAIN
+    Name: arg
+    Value: null
+  - Env:
+    - Key: TOOLCHAIN
+      Value: $TOOLCHAIN
+    Name: env
+  - Env:
+    - Key: PKG_CONFIG_PATH
+      Value: /usr/lib/$TOOLCHAIN/pkgconfig
+    Name: env
+  - Key: ARCH_DEBIAN
+    Name: arg
+    Value: null
+  - Env:
+    - Key: ARCH_DEBIAN
+      Value: $ARCH_DEBIAN
+    Name: env
+  - CmdLine:
+    - set -x     && if [ "$(dpkg --print-architecture)" = "$ARCH_DEBIAN" ]; then           apt-get
+      install -y build-essential ;        else           apt-get install -y crossbuild-essential-$ARCH_DEBIAN           &&
+      ln -v -s /usr/bin/$TOOLCHAIN-cpp /usr/$TOOLCHAIN/bin/cpp           && ln -v
+      -s /usr/bin/$TOOLCHAIN-gcc /usr/$TOOLCHAIN/bin/gcc           && ln -v -s /usr/bin/$TOOLCHAIN-gcc
+      /usr/$TOOLCHAIN/bin/cc           && sed -i "s,configure,configure --cross-compile
+      --cross-execute='$QEMU -L /usr/$TOOLCHAIN'," configure ;     fi
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /usr/$TOOLCHAIN/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    Name: env
+  - CmdLine:
+    - set -x     && dpkg --add-architecture $ARCH_DEBIAN     && apt-get update     &&
+      apt-get install -y        libaio-dev:$ARCH_DEBIAN        libarchive-dev:$ARCH_DEBIAN        libavahi-client-dev:$ARCH_DEBIAN        libcap-dev:$ARCH_DEBIAN        libcmocka-dev:$ARCH_DEBIAN        libgcrypt20-dev:$ARCH_DEBIAN        libgnutls28-dev:$ARCH_DEBIAN        libgpg-error-dev:$ARCH_DEBIAN        libgpgme-dev:$ARCH_DEBIAN        libjansson-dev:$ARCH_DEBIAN        libkrb5-dev:$ARCH_DEBIAN        libncurses5-dev:$ARCH_DEBIAN        libpopt-dev:$ARCH_DEBIAN        libtdb-dev:$ARCH_DEBIAN        xfslibs-dev:$ARCH_DEBIAN        zlib1g-dev:$ARCH_DEBIAN
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x         && ./configure         --prefix=/app         --with-smbpasswd-file=/app/etc/smbpasswd         --bundled-libraries=talloc         --enable-avahi         --disable-iprint         --disable-python         --with-quotas         --with-sendfile-support         --with-system-mitkrb5         --without-acl-support         --without-winbind         --without-ad-dc         --without-pam         --without-ldap         --without-ads
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:buster-slim
+  Name: build
+  Platform: ""
+  SourceCode: FROM debian:buster-slim as build
+- BaseName: ${DEBIAN_IMAGE}
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Pavel Volkovitskiy <olfway@olfway.net>"'
+    Name: label
+  - Env:
+    - Key: LANG
+      Value: '''C.UTF-8'''
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Chown: ""
+    From: olfway/qemu-user-static
+    Name: copy
+    SourcesAndDest:
+    - /qemu-arm-static
+    - /usr/bin/
+  - Chown: ""
+    From: olfway/qemu-user-static
+    Name: copy
+    SourcesAndDest:
+    - /qemu-aarch64-static
+    - /usr/bin/
+  - CmdLine:
+    - set -x     && echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/zz-force-ipv4     &&
+      echo 'APT::Install-Recommends "0";' > /etc/apt/apt.conf.d/zz-no-install-recommends
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && mkdir -p /usr/share/man/man1     && touch /usr/share/man/man1/sh.distrib.1.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && apt-get update     && apt-get dist-upgrade -y     && apt-get install
+      -y        libavahi-client3        libcap2        libgnutls30        libgssapi-krb5-2        libjansson4        libkrb5-3        libpopt0        libtdb1        man-db        vim     &&
+      apt-get clean
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app/
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/
+    - /app/scripts/
+  - Name: workdir
+    Path: '"/app"'
+  - Env:
+    - Key: PATH
+      Value: /app/scripts:/app/sbin:/app/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    Name: env
+  - CmdLine:
+    - /app/sbin/smbd --version > /dev/null
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /app/scripts/samba-start
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ${DEBIAN_IMAGE}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${DEBIAN_IMAGE}

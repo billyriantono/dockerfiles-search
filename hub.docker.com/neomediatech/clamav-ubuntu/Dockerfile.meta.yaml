@@ -1,0 +1,113 @@
+MetaArgs: null
+Stages:
+- BaseName: neomediatech/ubuntu-base
+  Commands:
+  - Env:
+    - Key: VERSION
+      Value: 0.102.1
+    - Key: SERVICE
+      Value: clamav-docker-ubuntu
+    - Key: OS
+      Value: ubuntu
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: TZ
+      Value: Europe/Rome
+    Name: env
+  - Labels:
+    - Key: maintainer
+      Value: '"docker-dario@neomediatech.it"'
+    - Key: org.label-schema.version
+      Value: $VERSION
+    - Key: org.label-schema.vcs-type
+      Value: Git
+    - Key: org.label-schema.vcs-url
+      Value: https://github.com/Neomediatech/$SERVICE
+    - Key: org.label-schema.maintainer
+      Value: Neomediatech
+    Name: label
+  - CmdLine:
+    - apt-get update &&     apt-get install -y ca-certificates curl build-essential
+      libxml2 netcat                        openssl libssl-dev libcurl4-openssl-dev
+      zlib1g-dev libpng-dev                        libxml2-dev libjson-c-dev libbz2-dev
+      libpcre3-dev ncurses-dev &&     curl --fail --show-error --location --output
+      clamav-${VERSION}.tar.gz -- "http://www.clamav.net/downloads/production/clamav-${VERSION}.tar.gz"
+      &&     curl --fail --show-error --location --output clamav-${VERSION}.tar.gz.sig
+      -- "http://www.clamav.net/downloads/production/clamav-${VERSION}.tar.gz.sig"
+      &&     tar --extract --gzip --file=clamav-${VERSION}.tar.gz &&     cd clamav-${VERSION}
+      &&     ./configure &&     make -j2 && make install &&     ldconfig &&     cd
+      .. && rm -rf clamav-${VERSION}* &&     apt-get purge -y --auto-remove       build-essential       libpcre3-dev
+      libcurl4-openssl-dev zlib1g-dev libpng-dev      libssl-dev libxml2-dev libbz2-dev
+      libpcre3-dev ncurses-dev &&     rm -rf /var/lib/apt/lists*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CLAM_USER
+      Value: '"clamav"'
+    - Key: CLAM_UID
+      Value: '"1000"'
+    - Key: CLAM_ETC
+      Value: '"/usr/local/etc"'
+    - Key: CLAM_DB
+      Value: '"/var/lib/clamav"'
+    - Key: CLAM_CHECKS
+      Value: '"24"'
+    - Key: CLAM_DAEMON_FOREGROUND
+      Value: '"yes"'
+    Name: env
+  - CmdLine:
+    - 'useradd -u ${CLAM_UID} ${CLAM_USER} &&     cp ${CLAM_ETC}/freshclam.conf.sample
+      ${CLAM_ETC}/freshclam.conf &&     sed -i "s/^Example/# Example/;       s/#LogTime
+      yes/LogTime yes/;       s/#ScriptedUpdates yes/ScriptedUpdates no/;       s/#Checks
+      24/Checks ${CLAM_CHECKS}/;       s/#Foreground yes/Foreground ${CLAM_DAEMON_FOREGROUND}/;       s/#NotifyClamd.*$/NotifyClamd
+      \/usr\/local\/etc\/clamd\.conf/" ${CLAM_ETC}/freshclam.conf &&     echo "UpdateLogFile
+      /var/log/clamav/freshclam.log" >> ${CLAM_ETC}/freshclam.conf &&     echo "DatabaseDirectory
+      ${CLAM_DB}" >> ${CLAM_ETC}/freshclam.conf &&     cp ${CLAM_ETC}/clamd.conf.sample
+      ${CLAM_ETC}/clamd.conf &&     sed -i ''s/^#Foreground .*$/Foreground yes/g''
+      ${CLAM_ETC}/clamd.conf &&     sed -i ''s/^Example/#Example/'' ${CLAM_ETC}/clamd.conf
+      &&     sed -i ''s/#LocalSocket.*$/LocalSocket \/run\/clamav\/clamd.ctl/'' ${CLAM_ETC}/clamd.conf
+      &&     echo "TCPAddr 0.0.0.0" >> ${CLAM_ETC}/clamd.conf &&     echo "TCPSocket
+      3310" >> ${CLAM_ETC}/clamd.conf &&     echo "LogFile /var/log/clamav/clamd.log"
+      >> ${CLAM_ETC}/clamd.conf &&     echo "LogTime yes" >> ${CLAM_ETC}/clamd.conf
+      &&     echo "DatabaseDirectory ${CLAM_DB}" >> ${CLAM_ETC}/clamd.conf &&     mkdir
+      ${CLAM_DB} &&     chown ${CLAM_USER}: ${CLAM_DB}'
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/lib/clamav
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /
+  - CmdLine:
+    - chmod +x /entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3310"
+  - Health:
+      Interval: 10000000000
+      Retries: 30
+      StartPeriod: 60000000000
+      Test:
+      - CMD-SHELL
+      - echo PING | nc 127.0.0.1 3310 || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/local/sbin/clamd
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: neomediatech/ubuntu-base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM neomediatech/ubuntu-base

@@ -1,0 +1,110 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: 4.4.3
+  - Key: CC
+    Name: arg
+    Value: '""'
+  - Key: CC_PKG
+    Name: arg
+    Value: '""'
+  - Key: CC_GOARCH
+    Name: arg
+    Value: '""'
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Name: workdir
+    Path: /go/src/github.com/grafana/grafana
+  - CmdLine:
+    - apt-get update      && apt-get install --no-install-recommends -y             git             golang-1.8             wget             ca-certificates             gcc             libc6-dev             xz-utils             bzip2             $CC_PKG     &&
+      ln -s /usr/lib/go-1.8/bin/go /usr/bin/go     && git clone -b "v$VERSION" --single-branch
+      https://github.com/grafana/grafana.git .     && if [ -n "$CC" ]; then         export
+      CC=$CC &&         export CGO_ENABLED=1 &&         export GOOS=linux &&         export
+      GOARCH=$CC_GOARCH ;     fi     && echo 'Building grafana-server ...'     &&
+      go build -o dist/grafana-server ./pkg/cmd/grafana-server     && echo 'Building
+      the frontend ...'     && wget -O /tmp/node.tar.xz https://nodejs.org/dist/v6.11.2/node-v6.11.2-linux-x64.tar.xz     &&
+      cd /usr/local     && tar --strip-components=1 -xf /tmp/node.tar.xz     && rm
+      /tmp/node.tar.xz     && cd /go/src/github.com/grafana/grafana     && npm install
+      -g yarn     && yarn install --pure-lockfile     && npm install -g grunt-cli     &&
+      grunt
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian as builder
+- BaseName: debian:stable-slim
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Viktor Adam <rycus86@gmail.com>"'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/grafana/grafana/dist/grafana-server
+    - /usr/sbin/grafana-server
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/grafana/grafana/conf/defaults.ini
+    - /usr/share/grafana/conf/defaults.ini
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/grafana/grafana/conf/sample.ini
+    - /etc/grafana/grafana.ini
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/grafana/grafana/public_gen
+    - /usr/share/grafana/public
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/grafana/grafana/scripts
+    - /usr/share/grafana/scripts
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/grafana/grafana/vendor
+    - /usr/share/grafana/vendor
+  - Name: expose
+    Ports:
+    - "3000"
+  - Name: volume
+    Volumes:
+    - /var/lib/grafana
+    - /var/log/grafana
+    - /etc/grafana
+  - CmdLine:
+    - /usr/sbin/grafana-server
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --homepath=/usr/share/grafana
+    - --config=/etc/grafana/grafana.ini
+    - cfg:default.log.mode=console
+    - cfg:default.paths.data=/var/lib/grafana
+    - cfg:default.paths.logs=/var/log/grafana
+    - cfg:default.paths.plugins=/var/lib/grafana/plugins
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stable-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stable-slim

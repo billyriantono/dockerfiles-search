@@ -1,0 +1,81 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: adoptopenjdk/openjdk11:jdk-11.0.5_10-alpine
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /src
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - ./mvnw package -DskipTests
+    Name: run
+    PrependShell: true
+  From:
+    Image: adoptopenjdk/openjdk11:jdk-11.0.5_10-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM adoptopenjdk/openjdk11:jdk-11.0.5_10-alpine as builder
+- As: packager
+  BaseName: alpine:3.10.3
+  Commands:
+  - CmdLine:
+    - apk --no-cache add openjdk11-jdk openjdk11-jmods
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_MINIMAL
+      Value: '"/opt/java-minimal"'
+    Name: env
+  - CmdLine:
+    - /usr/lib/jvm/java-11-openjdk/bin/jlink     --verbose     --add-modules         java.base,java.sql,java.naming,java.desktop,java.management,java.security.jgss,java.instrument     --compress
+      2 --strip-debug --no-header-files --no-man-pages     --release-info="add:IMPLEMENTOR=radistao:IMPLEMENTOR_VERSION=radistao_JRE"     --output
+      "$JAVA_MINIMAL"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10.3
+  Name: packager
+  Platform: ""
+  SourceCode: FROM alpine:3.10.3 as packager
+- BaseName: alpine:3.10.3
+  Commands:
+  - Maintainer: Anton Shelenkov "https://github.com/Anshelen"
+    Name: maintainer
+  - Env:
+    - Key: JAVA_HOME
+      Value: /opt/java-minimal
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"$PATH:$JAVA_HOME/bin"'
+    Name: env
+  - Chown: ""
+    From: packager
+    Name: copy
+    SourcesAndDest:
+    - '"$JAVA_HOME"'
+    - '"$JAVA_HOME"'
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/target/microservices-gateway-*.jar
+    - app.jar
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - java
+    - -jar
+    - /app.jar
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.10.3
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10.3

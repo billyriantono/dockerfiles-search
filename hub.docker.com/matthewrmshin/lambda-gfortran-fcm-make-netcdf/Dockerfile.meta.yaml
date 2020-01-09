@@ -1,0 +1,140 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: lambci/lambda:build-python3.7
+  Commands:
+  - CmdLine:
+    - yum -y update && yum -y install gcc-gfortran libcurl-devel
+    Name: run
+    PrependShell: true
+  From:
+    Image: lambci/lambda:build-python3.7
+  Name: base
+  Platform: ""
+  SourceCode: FROM lambci/lambda:build-python3.7 AS base
+- As: install-netcdf
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: ZLIB_VN
+      Value: 1.2.11
+    Name: env
+  - Env:
+    - Key: HDF5_VN
+      Value: 1.10.2
+    Name: env
+  - Env:
+    - Key: NC_VN
+      Value: 4.6.1
+    Name: env
+  - Env:
+    - Key: NF_VN
+      Value: 4.4.4
+    Name: env
+  - Name: workdir
+    Path: /opt
+  - CmdLine:
+    - curl -L "http://www.zlib.net/zlib-${ZLIB_VN}.tar.gz" | tar -xz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L "https://www.hdfgroup.org/package/source-gzip-2/?wpdmdl=11810&refresh=5b3b3b8b256791530608523"
+      | tar -xz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L "https://github.com/Unidata/netcdf-c/archive/v${NC_VN}.tar.gz" | tar
+      -xz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L "https://github.com/Unidata/netcdf-fortran/archive/v${NF_VN}.tar.gz"
+      | tar -xz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/zlib-${ZLIB_VN}
+  - CmdLine:
+    - ./configure --prefix=/var/task && make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/hdf5-${HDF5_VN}
+  - CmdLine:
+    - ./configure --with-zlib=/var/task --prefix=/var/task --enable-hl     && make
+      install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/netcdf-c-${NC_VN}
+  - CmdLine:
+    - env CPATH=/var/task/include LD_LIBRARY_PATH=/var/task/lib     CPPFLAGS=-I/var/task/include
+      LDFLAGS=-L/var/task/lib     ./configure --prefix=/var/task && make install &&
+      /var/task/bin/nc-config --all
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/netcdf-fortran-${NF_VN}
+  - CmdLine:
+    - env CPATH=/var/task/include LD_LIBRARY_PATH=/var/task/lib     CPPFLAGS=-I/var/task/include
+      LDFLAGS=-L/var/task/lib     ./configure --prefix=/var/task && make install &&
+      /var/task/bin/nf-config --all
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: install-netcdf
+  Platform: ""
+  SourceCode: FROM base AS install-netcdf
+- As: install-fcm-make
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: install-netcdf
+    Name: copy
+    SourcesAndDest:
+    - /var/task
+    - /var/task
+  - CmdLine:
+    - cp -p     /usr/lib64/libgfortran.so.*     /usr/lib64/libquadmath.so.*     /var/task/lib/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum -y install perl-core
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: FCM_VN
+      Value: 2019.09.0
+    Name: env
+  - Name: workdir
+    Path: /opt
+  - CmdLine:
+    - curl -L "https://github.com/metomi/fcm/archive/${FCM_VN}.tar.gz" | tar -xz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s "fcm-${FCM_VN}" '/opt/fcm'     && cp -p '/opt/fcm/usr/bin/fcm' '/usr/local/bin/fcm'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bash
+    Name: cmd
+    PrependShell: true
+  - Labels:
+    - Key: description
+      Value: '"Amazon Lambda + GFfortran + FCM Make + netCDF"'
+    - Key: maintainer
+      Value: '"matthew.shin@metoffice.gov.uk"'
+    - Key: version
+      Value: '"1"'
+    Name: label
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: install-fcm-make
+  Platform: ""
+  SourceCode: FROM base AS install-fcm-make

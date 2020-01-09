@@ -1,0 +1,212 @@
+MetaArgs:
+- DefaultValue: debian:stretch-slim
+  Key: DEBIAN_IMAGE
+  ProvidedValue: null
+  Value: debian:stretch-slim
+Stages:
+- As: unpack
+  BaseName: debian:stretch-slim
+  Commands:
+  - Env:
+    - Key: LANG
+      Value: '''C.UTF-8'''
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Chown: ""
+    From: olfway/qemu-user-static
+    Name: copy
+    SourcesAndDest:
+    - /qemu-arm-static
+    - /usr/bin/
+  - Chown: ""
+    From: olfway/qemu-user-static
+    Name: copy
+    SourcesAndDest:
+    - /qemu-aarch64-static
+    - /usr/bin/
+  - CmdLine:
+    - set -x     && echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/zz-force-ipv4     &&
+      echo 'APT::Install-Recommends "0";' > /etc/apt/apt.conf.d/zz-no-install-recommends
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && apt-get update     && apt-get install -y         ca-certificates         curl         xz-utils
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src
+  - Key: FREESWITCH_RELEASE
+    Name: arg
+    Value: 1.6.20
+  - Key: FREESWITCH_URL
+    Name: arg
+    Value: https://files.freeswitch.org/freeswitch-releases
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build/freeswitch-${FREESWITCH_RELEASE}.tar.xz.sha256
+    - .
+  - CmdLine:
+    - set -x     && curl --ipv4 -O "${FREESWITCH_URL}/freeswitch-${FREESWITCH_RELEASE}.tar.xz"     &&
+      sha256sum -c "freeswitch-${FREESWITCH_RELEASE}.tar.xz.sha256"     && tar -Jxf
+      "freeswitch-${FREESWITCH_RELEASE}.tar.xz"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && apt-get install -y         file         yasm
+    Name: run
+    PrependShell: true
+  - Key: ARCH_DEBIAN
+    Name: arg
+    Value: amd64
+  - Env:
+    - Key: ARCH_DEBIAN
+      Value: $ARCH_DEBIAN
+    Name: env
+  - CmdLine:
+    - set -x     && dpkg --add-architecture $ARCH_DEBIAN     && apt-get update     &&
+      apt-get install -y         libasound2-dev:$ARCH_DEBIAN         libcurl4-openssl-dev:$ARCH_DEBIAN         libedit-dev:$ARCH_DEBIAN         libjpeg-dev:$ARCH_DEBIAN         liblua5.2-dev:$ARCH_DEBIAN         libopus-dev:$ARCH_DEBIAN         libpcre3-dev:$ARCH_DEBIAN         libsndfile1-dev:$ARCH_DEBIAN         libspeex-dev:$ARCH_DEBIAN         libspeexdsp-dev:$ARCH_DEBIAN         libsqlite3-dev:$ARCH_DEBIAN         libssl1.0-dev:$ARCH_DEBIAN         libyaml-dev:$ARCH_DEBIAN         pkg-config:$ARCH_DEBIAN         uuid-dev:$ARCH_DEBIAN         zlib1g-dev:$ARCH_DEBIAN
+    Name: run
+    PrependShell: true
+  - Key: TOOLCHAIN
+    Name: arg
+    Value: x86_64-linux-gnu
+  - Env:
+    - Key: TOOLCHAIN
+      Value: $TOOLCHAIN
+    Name: env
+  - CmdLine:
+    - set -x     && if [ "$(dpkg --print-architecture)" = "$ARCH_DEBIAN" ]; then           apt-get
+      install -y build-essential ;        else           apt-get install -y crossbuild-essential-$ARCH_DEBIAN           &&
+      ln -v -s /usr/bin/$TOOLCHAIN-gcc /usr/$TOOLCHAIN/bin/gcc ;     fi
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /usr/local/freeswitch:/usr/$TOOLCHAIN/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    Name: env
+  - Name: workdir
+    Path: /usr/src/freeswitch-${FREESWITCH_RELEASE}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build/modules.conf
+    - ./
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: unpack
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim as unpack
+- As: build
+  BaseName: unpack
+  Commands:
+  - CmdLine:
+    - set -x     && ./configure --host=$TOOLCHAIN --disable-libvpx --disable-libyuv
+      --disable-srtp --disable-static
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && make     && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && rm -rf /usr/local/freeswitch/include     && mv /usr/local/freeswitch/conf
+      /usr/local/freeswitch/conf.sample     && mv /usr/local/freeswitch/htdocs /usr/local/freeswitch/htdocs.sample
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && file /usr/local/freeswitch/bin/freeswitch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: unpack
+  Name: build
+  Platform: ""
+  SourceCode: FROM unpack as build
+- BaseName: ${DEBIAN_IMAGE}
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Pavel Volkovitskiy <olfway@olfway.net>"'
+    Name: label
+  - Env:
+    - Key: LANG
+      Value: '''C.UTF-8'''
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Chown: ""
+    From: olfway/qemu-user-static
+    Name: copy
+    SourcesAndDest:
+    - /qemu-arm-static
+    - /usr/bin/
+  - Chown: ""
+    From: olfway/qemu-user-static
+    Name: copy
+    SourcesAndDest:
+    - /qemu-aarch64-static
+    - /usr/bin/
+  - CmdLine:
+    - set -x     && echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/zz-force-ipv4     &&
+      echo 'APT::Install-Recommends "0";' > /etc/apt/apt.conf.d/zz-no-install-recommends
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -x     && apt-get update     && apt-get dist-upgrade -y     && apt-get
+      install -y        \tlibcurl3         libedit2         libjpeg62-turbo         liblua5.2-0
+      \        libopus0         libsndfile1         libspeex1         libspeexdsp1
+      \        libsqlite3-0     && apt-get clean"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/freeswitch/
+    - /usr/local/freeswitch/
+  - Env:
+    - Key: PATH
+      Value: /usr/local/freeswitch/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    Name: env
+  - Name: workdir
+    Path: '"/usr/local/freeswitch"'
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/
+    - conf/
+  - CmdLine:
+    - set -x     && freeswitch -version     && freeswitch -nonat -nonatmap -nort -ncwait     &&
+      fs_cli -x 'version'     && freeswitch -stop
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/freeswitch/bin/freeswitch
+    - -nf
+    - -nonat
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ${DEBIAN_IMAGE}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${DEBIAN_IMAGE}

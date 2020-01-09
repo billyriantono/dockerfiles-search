@@ -1,0 +1,118 @@
+MetaArgs: null
+Stages:
+- As: toolchain
+  BaseName: starcoin/base:latest
+  Commands:
+  - Name: workdir
+    Path: /starcoin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rust-toolchain
+    - /starcoin/rust-toolchain
+  - CmdLine:
+    - rustup install $(cat rust-toolchain)
+    Name: run
+    PrependShell: true
+  From:
+    Image: starcoin/base:latest
+  Name: toolchain
+  Platform: ""
+  SourceCode: FROM starcoin/base:latest AS toolchain
+- As: builder
+  BaseName: toolchain
+  Commands:
+  - Env:
+    - Key: RUST_BACKTRACE
+      Value: '"1"'
+    Name: env
+  - Name: workdir
+    Path: /starcoin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /starcoin
+  - CmdLine:
+    - cargo build  -p sgchain && cd target/debug && rm -r deps incremental
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: toolchain
+  Name: builder
+  Platform: ""
+  SourceCode: FROM toolchain as builder
+- As: prod
+  BaseName: debian:buster
+  Commands:
+  - CmdLine:
+    - mkdir -p /opt/starcoin/bin /opt/starcoin/etc
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - libra/docker/install-tools.sh
+    - /root
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /starcoin/target/debug/sgchain
+    - /opt/starcoin/bin
+  - CmdLine:
+    - LD_LIBRARY_PATH="/usr/local/lib"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - export LD_LIBRARY_PATH
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8000"
+  - Name: expose
+    Ports:
+    - "6180"
+  - Name: expose
+    Ports:
+    - "9101"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/validator/docker-run.sh
+    - /
+  - CmdLine:
+    - /docker-run.sh
+    Name: cmd
+    PrependShell: true
+  - Env:
+    - Key: BUILD_DATE
+      Value: '"$(date -u +''%Y-%m-%dT%H:%M:%SZ'')"'
+    Name: env
+  - Key: GIT_REV
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    Name: label
+  - Labels:
+    - Key: org.label-schema.vcs-ref
+      Value: $GIT_REV
+    Name: label
+  From:
+    Image: debian:buster
+  Name: prod
+  Platform: ""
+  SourceCode: FROM debian:buster As prod

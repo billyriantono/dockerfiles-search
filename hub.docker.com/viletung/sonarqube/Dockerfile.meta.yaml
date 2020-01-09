@@ -1,0 +1,94 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:11-jre-slim
+  Commands:
+  - CmdLine:
+    - apt-get update     && apt-get install -y curl unzip libfreetype6 libfontconfig1     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - groupadd -r sonarqube && useradd -r -g sonarqube sonarqube
+    Name: run
+    PrependShell: true
+  - Key: SONARQUBE_VERSION
+    Name: arg
+    Value: 8.1.0.31237
+  - Key: SONARQUBE_ZIP_URL
+    Name: arg
+    Value: https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-${SONARQUBE_VERSION}.zip
+  - Key: SONARQUBE_ZIP_DIR
+    Name: arg
+    Value: /tmp/zip
+  - Key: SONARQUBE_ZIP_LOCATION
+    Name: arg
+    Value: $SONARQUBE_ZIP_DIR/sonarqube-${SONARQUBE_VERSION}.zip
+  - Env:
+    - Key: SONAR_VERSION
+      Value: ${SONARQUBE_VERSION}
+    - Key: SONARQUBE_HOME
+      Value: /opt/sq
+    - Key: SONARQUBE_PUBLIC_HOME
+      Value: /opt/sonarqube
+    Name: env
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -c
+  - CmdLine:
+    - sed -i -e "s?securerandom.source=file:/dev/random?securerandom.source=file:/dev/urandom?g"   "$JAVA_HOME/conf/security/java.security"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && cd /opt     && if [ -f "$SONARQUBE_ZIP_LOCATION" ] ;         then
+      cp "$SONARQUBE_ZIP_LOCATION" sonarqube.zip;         else curl -o sonarqube.zip
+      -fsSL "$SONARQUBE_ZIP_URL" ;         fi     && rm -Rf "${SONARQUBE_ZIP_DIR}"     &&
+      unzip -q sonarqube.zip     && mv "sonarqube-${SONARQUBE_VERSION}" sq     &&
+      rm sonarqube.zip*     && rm --recursive --force "$SONARQUBE_HOME/bin"/*     &&
+      mv "$SONARQUBE_HOME/conf" "$SONARQUBE_HOME/conf_save"     && mv "$SONARQUBE_HOME/extensions"
+      "$SONARQUBE_HOME/extensions_save"     && rm --recursive --force "$SONARQUBE_HOME/logs"     &&
+      rm --recursive --force "$SONARQUBE_HOME/data"     && mkdir --parents "$SONARQUBE_PUBLIC_HOME/conf"     &&
+      mkdir --parents "$SONARQUBE_PUBLIC_HOME/extensions"     && mkdir --parents "$SONARQUBE_PUBLIC_HOME/logs"     &&
+      mkdir --parents "$SONARQUBE_PUBLIC_HOME/data"     && cp --recursive "$SONARQUBE_HOME/conf_save"/*
+      "$SONARQUBE_PUBLIC_HOME/conf/"     && cp --recursive "$SONARQUBE_HOME/extensions_save"/*
+      "$SONARQUBE_PUBLIC_HOME/extensions/"     && ln -s "$SONARQUBE_PUBLIC_HOME/conf"
+      "$SONARQUBE_HOME/conf"     && ln -s "$SONARQUBE_PUBLIC_HOME/extensions" "$SONARQUBE_HOME/extensions"     &&
+      ln -s "$SONARQUBE_PUBLIC_HOME/logs" "$SONARQUBE_HOME/logs"     && ln -s "$SONARQUBE_PUBLIC_HOME/data"
+      "$SONARQUBE_HOME/data"     && chown --recursive sonarqube:sonarqube "$SONARQUBE_HOME"
+      "$SONARQUBE_PUBLIC_HOME"
+    Name: run
+    PrependShell: true
+  - Chown: sonarqube:sonarqube
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - '"$SONARQUBE_HOME/bin/"'
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sonarqube-community-branch-plugin-1.2.1-SNAPSHOT.jar
+    - $SONARQUBE_HOME/extensions/plugins/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sonarqube-community-branch-plugin-1.2.1-SNAPSHOT.jar
+    - $SONARQUBE_HOME/lib/common/
+  - Name: user
+    User: sonarqube
+  - Name: workdir
+    Path: $SONARQUBE_HOME
+  - CmdLine:
+    - ./bin/run.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:11-jre-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:11-jre-slim

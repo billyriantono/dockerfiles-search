@@ -1,0 +1,175 @@
+MetaArgs: null
+Stages:
+- As: build_calculator_deps
+  BaseName: liuchong/rustup:nightly
+  Commands:
+  - CmdLine:
+    - USER=root cargo new osu-pp-rebalance --bin
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /osu-pp-rebalance
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker_assets/hello_world.rs
+    - src/main.rs
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./Cargo.lock
+    - ./Cargo.lock
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./Cargo.toml
+    - ./Cargo.toml
+  - CmdLine:
+    - cargo build --release
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm src/*.rs
+    Name: run
+    PrependShell: true
+  From:
+    Image: liuchong/rustup:nightly
+  Name: build_calculator_deps
+  Platform: ""
+  SourceCode: FROM liuchong/rustup:nightly AS build_calculator_deps
+- As: build_dll
+  BaseName: microsoft/dotnet:2.2-sdk
+  Commands:
+  - Name: workdir
+    Path: /osu-pp-rebalance
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./osu-tools/PerformanceCalculator/PerformanceCalculator.csproj
+    - ./osu-tools/PerformanceCalculator/PerformanceCalculator.csproj
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./osu-tools/osu
+    - ./osu-tools/osu
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./osu-tools/PerformanceCalculator/nuget.config
+    - /root/.nuget/NuGet/NuGet.Config
+  - CmdLine:
+    - dotnet restore ./osu-tools/PerformanceCalculator/PerformanceCalculator.csproj
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends         libunwind8     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./osu-tools
+    - ./osu-tools
+  - CmdLine:
+    - dotnet publish osu-tools/PerformanceCalculator/PerformanceCalculator.csproj
+      -c Release -r linux-x64 -f netcoreapp2.0 -o /osu-pp-rebalance/binaries
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dotnet run --project osu-tools/RemoveBuildFiles/RemoveBuildFiles.csproj /osu-pp-rebalance/binaries
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.2-sdk
+  Name: build_dll
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2-sdk AS build_dll
+- As: build_calculator
+  BaseName: liuchong/rustup:nightly
+  Commands:
+  - Name: workdir
+    Path: /osu-pp-rebalance
+  - Chown: ""
+    From: build_calculator_deps
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src
+    - ./src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./build.rs
+    - ./build.rs
+  - CmdLine:
+    - rm ./target/release/deps/osu_pp_rebalance*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DONT_BUILD_PERFORMANCE_CALCULATOR=1 cargo build --release
+    Name: run
+    PrependShell: true
+  From:
+    Image: liuchong/rustup:nightly
+  Name: build_calculator
+  Platform: ""
+  SourceCode: FROM liuchong/rustup:nightly AS build_calculator
+- BaseName: microsoft/dotnet:2.2-runtime
+  Commands:
+  - Chown: ""
+    From: build_dll
+    Name: copy
+    SourcesAndDest:
+    - /osu-pp-rebalance/binaries/*
+    - /osu-pp-rebalance/
+  - Chown: ""
+    From: build_calculator
+    Name: copy
+    SourcesAndDest:
+    - /osu-pp-rebalance/target/release/osu-pp-rebalance
+    - /osu-pp-rebalance/osu-pp-rebalance
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends         libunwind8     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /osu-pp-rebalance
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./templates
+    - ./templates
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./static
+    - ./static
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - ./osu-pp-rebalance
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: microsoft/dotnet:2.2-runtime
+  Name: ""
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2-runtime

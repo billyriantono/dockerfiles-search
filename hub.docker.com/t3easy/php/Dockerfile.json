@@ -1,0 +1,301 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "PHP_VERSION",
+      "DefaultValue": "7.3",
+      "ProvidedValue": null,
+      "Value": "7.3"
+    },
+    {
+      "Key": "TARGET_ENVIRONMENT",
+      "DefaultValue": "production",
+      "ProvidedValue": null,
+      "Value": "production"
+    },
+    {
+      "Key": "BUILD_PLATFORM",
+      "DefaultValue": "alpine",
+      "ProvidedValue": null,
+      "Value": "alpine"
+    },
+    {
+      "Key": "ALPINE_VERSION",
+      "DefaultValue": "3.10",
+      "ProvidedValue": null,
+      "Value": "3.10"
+    },
+    {
+      "Key": "APCU_VERSION",
+      "DefaultValue": "5.1.17",
+      "ProvidedValue": null,
+      "Value": "5.1.17"
+    },
+    {
+      "Key": "REDIS_VERSION",
+      "DefaultValue": "5.0.2",
+      "ProvidedValue": null,
+      "Value": "5.0.2"
+    },
+    {
+      "Key": "XDEBUG_VERSION",
+      "DefaultValue": "2.7.2",
+      "ProvidedValue": null,
+      "Value": "2.7.2"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "runtime-alpine-base",
+      "BaseName": "php:${PHP_VERSION}-fpm-alpine${ALPINE_VERSION}",
+      "SourceCode": "FROM php:${PHP_VERSION}-fpm-alpine${ALPINE_VERSION} as runtime-alpine-base",
+      "Platform": "",
+      "As": "runtime-alpine-base",
+      "From": {
+        "Image": "php:${PHP_VERSION}-fpm-alpine${ALPINE_VERSION}"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add --no-cache --virtual .typo3-deps         ghostscript         graphicsmagick         poppler-utils"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Key": "APCU_VERSION",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "REDIS_VERSION",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache --virtual .build-deps         $PHPIZE_DEPS         freetype-dev         openldap-dev         libjpeg-turbo-dev         libpng-dev         libxml2-dev         libzip-dev         icu-dev         zlib-dev  \u0026\u0026 docker-php-ext-configure gd --with-freetype-dir=/usr --with-png-dir=/usr --with-jpeg-dir=/usr  \u0026\u0026 docker-php-ext-configure zip --with-libzip  \u0026\u0026 docker-php-ext-configure ldap  \u0026\u0026 docker-php-ext-install -j$(getconf _NPROCESSORS_ONLN)         gd         intl         ldap         opcache         mysqli         soap         zip  \u0026\u0026 pecl install apcu-${APCU_VERSION}  \u0026\u0026 pecl install redis-${REDIS_VERSION}  \u0026\u0026 docker-php-ext-enable         apcu         redis  \u0026\u0026 runDeps=\"$(         scanelf --needed --nobanner --format '%n#p' --recursive /usr/local/lib/php/extensions             | tr ',' '\\n'             | sort -u             | awk 'system(\"[ -e /usr/local/lib/\" $1 \" ]\") == 0 { next } { print \"so:\" $1 }'     )\"  \u0026\u0026 apk add --virtual .phpext-rundeps $runDeps  \u0026\u0026 apk del .build-deps  \u0026\u0026 rm -rf /tmp/pear"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "{         echo 'max_execution_time=240';         echo 'max_input_vars=1500';         echo 'post_max_size=32M';         echo 'upload_max_filesize=32M';     } \u003e $PHP_INI_DIR/conf.d/typo3.ini"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "PHP_OPCACHE_VALIDATE_TIMESTAMPS",
+              "Value": "\"0\""
+            },
+            {
+              "Key": "PHP_OPCACHE_MAX_ACCELERATED_FILES",
+              "Value": "\"10000\""
+            },
+            {
+              "Key": "PHP_OPCACHE_MEMORY_CONSUMPTION",
+              "Value": "\"192\""
+            },
+            {
+              "Key": "PHP_OPCACHE_MAX_WASTED_PERCENTAGE",
+              "Value": "\"10\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "{         echo 'opcache.enable=1';         echo 'opcache.interned_strings_buffer=16';         echo 'opcache.max_accelerated_files=${PHP_OPCACHE_MAX_ACCELERATED_FILES}';         echo 'opcache.max_wasted_percentage=${PHP_OPCACHE_MAX_WASTED_PERCENTAGE}';         echo 'opcache.memory_consumption=${PHP_OPCACHE_MEMORY_CONSUMPTION}';         echo 'opcache.revalidate_freq=0';         echo 'opcache.save_comments=1';         echo 'opcache.validate_timestamps=${PHP_OPCACHE_VALIDATE_TIMESTAMPS}';     } \u003e\u003e $PHP_INI_DIR/conf.d/docker-php-ext-opcache.ini"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "PHP_APC_SHM_SEGMENTS",
+              "Value": "\"1\""
+            },
+            {
+              "Key": "PHP_APC_SHM_SIZE",
+              "Value": "\"128M\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "{         echo 'apc.enabled=1';         echo 'apc.enable_cli=1';         echo 'apc.shm_segments=${PHP_APC_SHM_SEGMENTS}';         echo 'apc.shm_size=${PHP_APC_SHM_SIZE}';     } \u003e\u003e $PHP_INI_DIR/conf.d/docker-php-ext-apcu.ini"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        }
+      ]
+    },
+    {
+      "Name": "runtime-alpine-production",
+      "BaseName": "runtime-alpine-base",
+      "SourceCode": "FROM runtime-alpine-base as runtime-alpine-production",
+      "Platform": "",
+      "As": "runtime-alpine-production",
+      "From": {
+        "Stage": {
+          "Named": "runtime-alpine-base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "mv \"$PHP_INI_DIR/php.ini-production\" \"$PHP_INI_DIR/php.ini\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "runtime-alpine-development",
+      "BaseName": "runtime-alpine-base",
+      "SourceCode": "FROM runtime-alpine-base as runtime-alpine-development",
+      "Platform": "",
+      "As": "runtime-alpine-development",
+      "From": {
+        "Stage": {
+          "Named": "runtime-alpine-base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "mv \"$PHP_INI_DIR/php.ini-development\" \"$PHP_INI_DIR/php.ini\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "PHP_OPCACHE_VALIDATE_TIMESTAMPS",
+              "Value": "\"1\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Key": "XDEBUG_VERSION",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache --virtual .phpize-deps $PHPIZE_DEPS  \u0026\u0026 pecl install xdebug-${XDEBUG_VERSION}  \u0026\u0026 docker-php-ext-enable xdebug  \u0026\u0026 apk del .phpize-deps  \u0026\u0026 rm -rf /tmp/pear"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "{         echo 'xdebug.max_nesting_level=400';         echo 'xdebug.remote_enable=1';     } \u003e\u003e /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "XDEBUG_CONFIG",
+              "Value": "\"idekey=PHPSTORM remote_host=host.docker.internal\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "BLACKFIRE_HOST",
+              "Value": "blackfire"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "version=$(php -r \"echo PHP_MAJOR_VERSION.PHP_MINOR_VERSION;\")  \u0026\u0026 curl -A \"Docker\" -o /tmp/blackfire-probe.tar.gz -D - -L -s https://blackfire.io/api/v1/releases/probe/php/alpine/amd64/$version  \u0026\u0026 mkdir -p /tmp/blackfire  \u0026\u0026 tar zxpf /tmp/blackfire-probe.tar.gz -C /tmp/blackfire  \u0026\u0026 mv /tmp/blackfire/blackfire-*.so $(php -r \"echo ini_get('extension_dir');\")/blackfire.so  \u0026\u0026 docker-php-ext-enable blackfire  \u0026\u0026 echo 'blackfire.agent_socket=tcp://${BLACKFIRE_HOST}:8707' \u003e\u003e $PHP_INI_DIR/conf.d/docker-php-ext-blackfire.ini  \u0026\u0026 rm -rf /tmp/blackfire /tmp/blackfire-probe.tar.gz"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache --virtual .composer-rundeps         bash         coreutils         git         make         mercurial         openssh-client         patch         subversion         tini         unzip         zip"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "COMPOSER_ALLOW_SUPERUSER",
+              "Value": "1"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "COMPOSER_HOME",
+              "Value": "/tmp"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PATH",
+              "Value": "\"/tmp/vendor/bin:$PATH\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "composer:1",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/bin/composer",
+            "/usr/bin/composer"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache --virtual .dev-tools mariadb-client parallel"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "runtime",
+      "BaseName": "runtime-${BUILD_PLATFORM}-${TARGET_ENVIRONMENT}",
+      "SourceCode": "FROM runtime-${BUILD_PLATFORM}-${TARGET_ENVIRONMENT} AS runtime",
+      "Platform": "",
+      "As": "runtime",
+      "From": {
+        "Image": "runtime-${BUILD_PLATFORM}-${TARGET_ENVIRONMENT}"
+      },
+      "Commands": null
+    }
+  ]
+}

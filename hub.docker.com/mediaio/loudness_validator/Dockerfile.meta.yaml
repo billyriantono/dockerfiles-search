@@ -1,0 +1,114 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:buster
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install -y       git       g++       make       cmake       libboost-dev       libsndfile-dev       libyaml-cpp-dev       scons
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --recursive https://github.com/ebu/libear.git &&     cd libear/ &&     mkdir
+      build &&     cd build &&     cmake .. -DBUILD_SHARED_LIBS=TRUE &&     make &&     make
+      install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/IRT-Open-Source/libadm.git &&     cd libadm &&     git
+      checkout 0.11.0 &&     mkdir build &&     cd build &&     cmake .. &&     make
+      &&     make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/IRT-Open-Source/libbw64.git &&     cd libbw64 &&     git
+      checkout 0.10.0 &&     mkdir build &&     cd build &&     cmake .. &&     make
+      &&     make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "git clone https://github.com/media-cloud-ai/adm_engine.git && \tcd adm_engine
+      && \tgit checkout v1.0.0 &&     mkdir build &&     cd build &&     cmake ..
+      &&     make &&     make install"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /loudness_validator
+  - Name: workdir
+    Path: /loudness_validator
+  - CmdLine:
+    - scons --adm-loudness-worker
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:buster
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:buster as builder
+- BaseName: mediacloudai/c_amqp_worker:v0.3.0
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/
+    - /app/loudness_validator/lib/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /loudness_validator/build/release/app/bin/adm-loudness-analyser
+    - /app/loudness_validator/bin/adm-loudness-analyser
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /loudness_validator/build/release/src/admLoudnessAnalyser/lib/
+    - /app/loudness_validator/lib/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /loudness_validator/build/release/worker/lib/
+    - /app/loudness_validator/worker/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/x86_64-linux-gnu/libyaml-cpp.so*
+    - /app/loudness_validator/lib/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /lib/x86_64-linux-gnu/libm.so*
+    - /app/loudness_validator/lib/
+  - Name: workdir
+    Path: /app/loudness_validator
+  - Env:
+    - Key: AMQP_QUEUE
+      Value: job_adm_loudness
+    Name: env
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: $LD_LIBRARY_PATH:/app/loudness_validator/lib
+    Name: env
+  - Env:
+    - Key: WORKER_LIBRARY_FILE
+      Value: /app/loudness_validator/worker/libadmloudnessworker.so
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:/app/loudness_validator/bin
+    Name: env
+  - CmdLine:
+    - c_amqp_worker
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: mediacloudai/c_amqp_worker:v0.3.0
+  Name: ""
+  Platform: ""
+  SourceCode: FROM mediacloudai/c_amqp_worker:v0.3.0

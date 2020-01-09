@@ -1,0 +1,278 @@
+MetaArgs: null
+Stages:
+- BaseName: phusion/baseimage:latest
+  Commands:
+  - Maintainer: Gregor Schwab <gregor.schwab@uibk.ac.at>
+    Name: maintainer
+  - CmdLine:
+    - rm -f /etc/service/sshd/down
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /etc/my_init.d/00_regen_ssh_host_keys.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /sbin/my_init
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - echo "Europe/Berlin" | tee /etc/timezone
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /etc/localtime && ln -s /usr/share/zoneinfo/Europe/Berlin /etc/localtime
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dpkg-reconfigure --frontend noninteractive tzdata
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends     apt-utils  &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y vim curl
+      wget build-essential software-properties-common git sudo
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive apt-add-repository -y ppa:nginx/development
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /opt/nginx     && mkdir /opt/nginx/build     && mkdir /opt/nginx/modules
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s|# deb-src http://ppa.launchpad.net/nginx/development/ubuntu xenial
+      main|deb-src http://ppa.launchpad.net/nginx/development/ubuntu xenial main|"
+      /etc/apt/sources.list.d/nginx-ubuntu-development-xenial.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-downgrades
+      --allow-remove-essential --allow-change-held-packages dpkg-dev nginx-common
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-downgrades --allow-remove-essential
+      --allow-change-held-packages libxml2 libxml2-dev libxml2-utils libaprutil1 libaprutil1-dev     libpcre-ocaml-dev
+      autoconf make automake libtool     libpcre3 libpcre3-dev libpcrecpp0v5 libssl-dev
+      zlib1g-dev apache2-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/nginx/modules
+  - CmdLine:
+    - git clone https://github.com/SpiderLabs/ModSecurity.git mod_security
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: mod_security
+  - CmdLine:
+    - ./autogen.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./configure --enable-standalone-module
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/nginx/build
+  - CmdLine:
+    - sudo DEBIAN_FRONTEND=noninteractive apt-get install debian-keyring
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo gpg --keyserver keyserver.ubuntu.com --recv-keys F569EF55 && gpg --no-default-keyring
+      -a --export F569EF55 | gpg --no-default-keyring --keyring ~/.gnupg/trustedkeys.gpg
+      --import -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&  DEBIAN_FRONTEND=noninteractive apt-get source nginx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive apt-get build-dep -y --allow-downgrades --allow-remove-essential
+      --allow-change-held-packages nginx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i '/ngx_http_substitutions_filter_module/ a\\t\t\t--add-module=\/opt\/nginx\/modules\/mod_security\/nginx\/modsecurity'
+      /opt/nginx/build/nginx-*/debian/rules
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/ngx_http_substitutions_filter_module/ngx_http_substitutions_filter_module
+      \\/' /opt/nginx/build/nginx-*/debian/rules
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd nginx-* && pwd && dpkg-buildpackage -b -uc -us
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && dpkg --install libnginx-mod-*.deb && dpkg --install nginx-extras_*_amd64.deb
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/nginx/modules/mod_security
+  - CmdLine:
+    - cp modsecurity.conf-recommended /etc/nginx/modsecurity.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp unicode.mapping /etc/nginx/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://github.com/SpiderLabs/owasp-modsecurity-crs/tarball/master -O owasp.tar.gz
+      && tar -zxvf owasp.tar.gz && rm owasp.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd SpiderLabs-owasp-modsecurity-crs-* && cat modsecurity_crs_10_setup.conf.example
+      >> /etc/nginx/modsecurity.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd SpiderLabs-owasp-modsecurity-crs-*/base_rules && cat *.conf >> /etc/nginx/modsecurity.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd SpiderLabs-owasp-modsecurity-crs-*/base_rules && cp *.data /etc/nginx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i '/server_tokens off;/ a\limit_req_zone $binary_remote_addr zone=one:10m
+      rate=10r\/s;' /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i '/limit_req_zone $binary_remote_addr zone=one:10m rate=1r\/s;/ a\limit_req_status
+      444;' /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /var/www
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sf /dev/stdout /var/log/nginx/access.log
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sf /dev/stderr /var/log/nginx/error.log
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "daemon off;" >> /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s/# server_tokens off;/server_tokens off;/" /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "/gzip_disable "msie6";/ a\gzip_min_length 10240;" /etc/init.d/nginx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s/# gzip_vary on;/gzip_vary on;/" /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s/# gzip_proxied any;/gzip_proxied expired no-cache no-store private
+      auth;/" /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s/# gzip_types/gzip_types/" /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /opt/build-scripts
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /opt/build-scripts
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build/config.sh
+    - /opt/build-scripts/config.sh
+  - CmdLine:
+    - mkdir -p /etc/my_init.d
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - build/envars.sh
+    - /etc/my_init.d/01_envars.sh
+  - CmdLine:
+    - chmod +x /etc/my_init.d/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /etc/service/nginx
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - build/nginx/nginx.sh
+    - /etc/service/nginx/run
+  - CmdLine:
+    - chmod +x /etc/service/nginx/run
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "22"
+    - "80"
+  - CmdLine:
+    - apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /opt/nginx/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/modsecurity/var/audit/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R www-data:www-data /opt/modsecurity/var/audit/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s/SecAuditLogType Serial/SecAuditLogType Concurrent/" /etc/nginx/modsecurity.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s/SecAuditLog\(\s.*\)/# SecAuditLog\1/" /etc/nginx/modsecurity.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "/# SecAuditLog\s.*/a SecAuditLogStorageDir \/opt\/modsecurity\/var\/audit/"
+      /etc/nginx/modsecurity.conf
+    Name: run
+    PrependShell: true
+  From:
+    Image: phusion/baseimage:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM phusion/baseimage:latest

@@ -1,0 +1,63 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.13.4-buster
+  Commands:
+  - Env:
+    - Key: YGOT_VERSION
+      Value: 0.6.0
+    Name: env
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends wget make git
+      unzip     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /go/src/github.com/openconfig     && wget -c https://github.com/openconfig/ygot/archive/v${YGOT_VERSION}.tar.gz
+      -O - | tar -xz -C /tmp     && mv /tmp/ygot-${YGOT_VERSION} /go/src/github.com/openconfig/ygot
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/openconfig/ygot
+  - CmdLine:
+    - sh ./scripts/install_protobuf.sh && cp -R /root/protobuf/include/* /go/src/
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: '"$PATH:/root/protobuf/bin"'
+    Name: env
+  - CmdLine:
+    - go get -u golang.org/x/tools/cmd/goimports     && go get -u github.com/golang/protobuf/protoc-gen-go     &&
+      make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go install github.com/openconfig/ygot/generator
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13.4-buster
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.13.4-buster AS builder
+- BaseName: debian:buster-slim
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/generator
+    - /usr/local/bin/
+  - Name: workdir
+    Path: /data
+  - CmdLine:
+    - generator
+    - -h
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:buster-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:buster-slim

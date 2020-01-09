@@ -1,0 +1,160 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.6
+  Commands:
+  - Maintainer: chaya
+    Name: maintainer
+  - CmdLine:
+    - apk add --no-cache openjdk8-jre tini su-exec
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: STACK
+      Value: 5.5.3
+    Name: env
+  - CmdLine:
+    - apk add --no-cache libzmq bash nodejs supervisor nginx apache2-utils openssl
+      curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir -p /usr/local/lib \t&& ln -s /usr/lib/*/libzmq.so.3 /usr/local/lib/libzmq.so"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apk add --no-cache -t .build-deps wget ca-certificates \t&& set -x \t&& cd
+      /tmp \t&& echo \"Download Elastic Stack ======================================================\"
+      \t&& echo \"Download Elasticsearch...\" \t&& wget --progress=bar:force -O elasticsearch-$STACK.tar.gz
+      https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-$STACK.tar.gz
+      \t&& tar -xzf elasticsearch-$STACK.tar.gz \t&& mv elasticsearch-$STACK /usr/share/elasticsearch
+      \t&& echo \"Download Kibana...\" \t&& wget --progress=bar:force -O kibana-$STACK.tar.gz
+      https://artifacts.elastic.co/downloads/kibana/kibana-$STACK-linux-x86_64.tar.gz
+      \t&& tar -xzf kibana-$STACK.tar.gz \t&& mv kibana-$STACK-linux-x86_64 /usr/share/kibana
+      \t&& echo \"Configure [Elasticsearch] ===================================================\"
+      \t&& for path in \t\t/usr/share/elasticsearch/data \t\t/usr/share/elasticsearch/logs
+      \t\t/usr/share/elasticsearch/config \t\t/usr/share/elasticsearch/config/scripts
+      \t\t/usr/share/elasticsearch/plugins \t; do \tmkdir -p \"$path\"; \tdone \t&&
+      /usr/share/elasticsearch/bin/elasticsearch-plugin install ingest-user-agent
+      \t&& /usr/share/elasticsearch/bin/elasticsearch-plugin install ingest-geoip
+      -b \t&& echo \"Configure [Kibana] ==========================================================\"
+      \t&& sed -ri \"s!^(\\#\\s*)?(server\\.host:).*!\\2 '0.0.0.0'!\" /usr/share/kibana/config/kibana.yml
+      \t&& grep -q \"^server\\.host: '0.0.0.0'\\$\" /usr/share/kibana/config/kibana.yml
+      \t&& bundled='NODE=\"${DIR}/node/bin/node\"' \t&& apline_node='NODE=\"/usr/bin/node\"'
+      \t&& sed -i \"s|$bundled|$apline_node|g\" /usr/share/kibana/bin/kibana-plugin
+      \t&& sed -i \"s|$bundled|$apline_node|g\" /usr/share/kibana/bin/kibana \t&&
+      rm -rf /usr/share/kibana/node \t&& echo \"Make Nginx SSL directory...\" \t&&
+      mkdir -p /etc/nginx/ssl \t&& rm /etc/nginx/conf.d/default.conf \t&& echo \"Create
+      elstack user...\" \t&& adduser -DH -s /sbin/nologin elstack \t&& chown -R elstack:elstack
+      /usr/share/elasticsearch \t&& chown -R elstack:elstack /usr/share/kibana \t&&
+      echo \"Clean Up...\" \t&& rm -rf /tmp/* \t&& apk del --purge .build-deps"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /usr/share/elasticsearch/bin:$PATH
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /usr/share/kibana/bin:$PATH
+    Name: env
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/java-1.8-openjdk
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/elastic
+    - /usr/share/elasticsearch/config
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/elastic/logrotate
+    - /etc/logrotate.d/elasticsearch
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/nginx/nginx.conf
+    - /etc/nginx/nginx.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/nginx/kibana.conf
+    - /etc/nginx/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/nginx/ssl.kibana.conf
+    - /etc/nginx/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/nginx/elastic.conf
+    - /etc/nginx/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/supervisord/supervisord.conf
+    - /etc/supervisor/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoints/elastic-entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoints/kibana-entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoints/nginx-entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoints/purge-entrypoint.sh
+    - /
+  - CmdLine:
+    - chmod +x /*-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /usr/share/elasticsearch/data
+  - Name: volume
+    Volumes:
+    - /etc/nginx
+  - Name: expose
+    Ports:
+    - "443"
+    - "5601"
+    - "80"
+    - "9200"
+    - "9201"
+    - "9300"
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /usr/bin/supervisord
+    - -c
+    - /etc/supervisor/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.6
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.6

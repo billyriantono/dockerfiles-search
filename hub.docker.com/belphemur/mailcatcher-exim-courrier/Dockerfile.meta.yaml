@@ -1,0 +1,169 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:buster-slim
+  Commands:
+  - Maintainer: Antoine Aflalo <antoine+docker@aaflalo.me>
+    Name: maintainer
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - Env:
+    - Key: TZ
+      Value: GMT
+    Name: env
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/Belphemur/docker-mailcatcher"'
+    - Key: org.label-schema.build-date
+      Value: ${BUILD_DATE}
+    Name: label
+  - Env:
+    - Key: APACHE_SERVER_NAME
+      Value: rainloop.loc
+    - Key: APACHE_SERVER_ADMIN
+      Value: webmaster@rainloop.loc
+    - Key: PHP_MAX_POST_SIZE
+      Value: 24M
+    - Key: PHP_MAX_UPLOAD_SIZE
+      Value: 20M
+    - Key: PHP_MAX_UPLOADS
+      Value: "20"
+    - Key: PHP_MAX_EXECUTION_ZIME
+      Value: "30"
+    - Key: RAINLOOP_ADMIN_LOGIN
+      Value: admin
+    - Key: RAINLOOP_ADMIN_PASSWORD
+      Value: "12345"
+    Name: env
+  - CmdLine:
+    - ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+    Name: run
+    PrependShell: true
+  - Key: GPG_FINGERPRINT
+    Name: arg
+    Value: '"3B79 7ECE 694F 3B7B 70F3  11A4 ED7C 49D9 87DA 4591"'
+  - Key: TINI_VERSION
+    Name: arg
+    Value: '"v0.18.0"'
+  - Key: GPG_TINY_KEY
+    Name: arg
+    Value: '"595E85A6B1B4779EA4DAAEC70B588DFF0527A9B7"'
+  - CmdLine:
+    - mkdir -p /usr/share/man/man5/ && mkdir -p /usr/share/man/man8 && mkdir -p /usr/share/man/man1
+      && mkdir -p /usr/share/man/man7 && touch /usr/share/man/man5/maildir.courier.5.gz
+      && touch /usr/share/man/man8/deliverquota.courier.8.gz && touch /usr/share/man/man1/maildirmake.courier.1.gz  &&
+      touch /usr/share/man/man7/maildirquota.courier.7.gz && touch /usr/share/man/man1/makedat.courier.1.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get update -qq && \techo 'courier-base courier-base/webadmin-configmode
+      boolean false' | debconf-set-selections && \tapt-get -y install gnupg curl exim4
+      courier-imap supervisor vim wget unzip apache2 libapache2-mod-php php-curl php-xml
+      php-sqlite3 curl && \tapt-get clean autoclean && \tapt-get autoremove --yes
+      && \trm -rf /var/lib/{apt,dpkg,cache,log}/"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/lock/apache2 /var/run/apache2 /var/log/supervisor && ln -sf /dev/stdout
+      /var/log/apache2/access.log && ln -sf /dev/stdout /var/log/apache2/other_vhosts_access.log
+      && ln -sf /dev/stderr /var/log/apache2/error.log
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir ~/.gnupg && echo "disable-ipv6" >> ~/.gnupg/dirmngr.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini
+    - /tini
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini.asc
+    - /tini.asc
+  - CmdLine:
+    - gpg --batch --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys ${GPG_TINY_KEY}  &&
+      gpg --batch --verify /tini.asc /tini  && chmod +x /tini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'cd /tmp  && wget -q http://www.rainloop.net/repository/webmail/rainloop-community-latest.zip  &&
+      wget -q http://www.rainloop.net/repository/webmail/rainloop-community-latest.zip.asc  &&
+      wget -q https://repository.rainloop.net/RainLoop.asc  && echo "Verifying authenticity
+      of rainloop-community-latest.zip using GPG..."  && gpg --import RainLoop.asc  &&
+      FINGERPRINT="$(LANG=C gpg --verify rainloop-community-latest.zip.asc rainloop-community-latest.zip
+      2>&1   | sed -n "s#Primary key fingerprint: \(.*\)#\1#p")"  && if [ -z "${FINGERPRINT}"
+      ]; then echo "Warning! Invalid GPG signature!" && exit 1; fi  && if [ "${FINGERPRINT}"
+      != "${GPG_FINGERPRINT}" ]; then echo "Warning! Wrong GPG fingerprint!" && exit
+      1; fi  && echo "All seems good, now unzipping rainloop-community-latest.zip..."  &&  mkdir
+      -p /var/www/html/rainloop &&  mkdir -p /var/www/html/data  && unzip -q /tmp/rainloop-community-latest.zip
+      -d  /var/www/html  && find  /var/www/html/rainloop -type d -exec chmod 755 {}
+      \;  && find  /var/www/html/rainloop -type f -exec chmod 644 {} \;  && chown
+      -R www-data.www-data /var/www/html/data && chown -R root.root /var/www/html/rainloop  &&
+      rm -rf /tmp/* /root/.gnupg   && mv /var/www/html/rainloop/v/*/index.php.root
+      /var/www/html/index.php  && rm /var/www/html/index.html'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - etc/
+    - /etc/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/sbin/docker-entrypoint.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - apache-conf.sh
+    - /usr/local/sbin/apache-conf.sh
+  - CmdLine:
+    - /usr/local/sbin/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - rainloop/localhost.ini
+    - /var/www/html/data/_data_/_default_/domains/localhost.ini
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - rainloop/application.ini
+    - /var/www/html/data/_data_/_default_/configs/application.ini
+  - Name: volume
+    Volumes:
+    - /var/www/html/data
+  - Health:
+      Interval: 300000000000
+      Test:
+      - CMD-SHELL
+      - curl -I -s -f http://localhost:80/ || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - "143"
+    - "25"
+    - "80"
+  - CmdLine:
+    - /usr/bin/supervisord
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:buster-slim
+  Name: ""
+  Platform: ""
+  SourceCode: "FROM\tdebian:buster-slim"

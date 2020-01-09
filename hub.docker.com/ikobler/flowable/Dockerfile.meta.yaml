@@ -1,0 +1,148 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: maven:3.6.2-jdk-8
+  Commands:
+  - CmdLine:
+    - mkdir /usr/src/assets
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /usr/src/app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/app
+  - CmdLine:
+    - java -version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn -version
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - /usr/src/app
+  - CmdLine:
+    - mvn -Pdistro clean install -DskipTests
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd modules/flowable-ui-idm && mvn -T 1C clean install -DskipTests -Pdocker-deps
+      && cp flowable-ui-idm-app/target/*.original ../../../assets/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd modules/flowable-ui-modeler && mvn -T 1C clean install -DskipTests -Pdocker-deps
+      && cp flowable-ui-modeler-app/target/*.original ../../../assets/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd modules/flowable-ui-task && mvn -T 1C clean install -DskipTests -Pdocker-deps
+      && cp flowable-ui-task-app/target/*.original ../../../assets/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd modules/flowable-ui-admin && mvn -T 1C clean install -DskipTests -Pdocker-deps
+      && cp flowable-ui-admin-app/target/*.original ../../../assets/
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.6.2-jdk-8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM maven:3.6.2-jdk-8 as builder
+- BaseName: adoptopenjdk/openjdk11:alpine-jre
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/all-in-one/wait-for-something.sh
+    - .
+  - CmdLine:
+    - apk add --no-cache ttf-dejavu && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - addgroup tomcat && adduser -s /bin/false -G tomcat -h /opt/tomcat -D tomcat
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget http://archive.apache.org/dist/tomcat/tomcat-9/v9.0.14/bin/apache-tomcat-9.0.14.tar.gz
+      -O /tmp/tomcat.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp && tar xvfz tomcat.tar.gz && cp -Rv /tmp/apache-tomcat-9.0.14/* /opt/tomcat/
+      && rm -Rf /tmp/apache-tomcat-9.0.14
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/all-in-one/context.xml
+    - /opt/tomcat/conf/context.xml
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/assets/flowable-idm.war.original
+    - /opt/tomcat/webapps/flowable-idm.war
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/assets/flowable-modeler.war.original
+    - /opt/tomcat/webapps/flowable-modeler.war
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/assets/flowable-task.war.original
+    - /opt/tomcat/webapps/flowable-task.war
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/assets/flowable-admin.war.original
+    - /opt/tomcat/webapps/flowable-admin.war
+  - CmdLine:
+    - cd /opt/tomcat && chgrp -R tomcat /opt/tomcat && chmod -R g+r conf && chmod
+      g+x conf && chown -R tomcat webapps/ work/ temp/ logs/     && chown tomcat /wait-for-something.sh
+      && chmod +x /wait-for-something.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CATALINA_HOME
+      Value: /opt/tomcat
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:$CATALINA_HOME/bin
+    Name: env
+  - Env:
+    - Key: JAVA_OPTS
+      Value: '"-Xms512M -Xmx2G -Djava.security.egd=file:/dev/./urandom"'
+    Name: env
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: workdir
+    Path: /opt/tomcat
+  - Name: user
+    User: tomcat
+  - CmdLine:
+    - /opt/tomcat/bin/catalina.sh
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: adoptopenjdk/openjdk11:alpine-jre
+  Name: ""
+  Platform: ""
+  SourceCode: FROM adoptopenjdk/openjdk11:alpine-jre

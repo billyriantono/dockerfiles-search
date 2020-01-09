@@ -1,0 +1,3 @@
+FROM mariadb
+MAINTAINER jeffeson
+EXPOSE 3306

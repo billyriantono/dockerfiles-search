@@ -1,0 +1,206 @@
+MetaArgs: null
+Stages:
+- As: buildstage
+  BaseName: lsiobase/alpine:3.9
+  Commands:
+  - Key: ARGTABLE_VER
+    Name: arg
+    Value: '"2.13"'
+  - Key: XMLTV_VER
+    Name: arg
+    Value: '"v0.6.1"'
+  - Key: TZ
+    Name: arg
+    Value: '"Europe/Oslo"'
+  - Key: TVHEADEND_COMMIT
+    Name: arg
+    Value: null
+  - Env:
+    - Key: HOME
+      Value: '"/config"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - patches/
+    - /tmp/patches/
+  - CmdLine:
+    - "echo \"**** install build packages ****\" &&  apk add --no-cache \tautoconf
+      \tautomake \tbsd-compat-headers \tbzip2 \tcmake \tcurl \tffmpeg-dev \tfile \tfindutils
+      \tg++ \tgcc \tgettext-dev \tgit \tgzip \tjq \tlibcurl \tlibdvbcsa-dev \tlibgcrypt-dev
+      \tlibhdhomerun-dev \tlibtool \tlibva-dev \tlibvpx-dev \tlibxml2-dev \tlibxslt-dev
+      \tlinux-headers \tmake \topenssl-dev \topus-dev \tpatch \tpcre2-dev \tperl-archive-zip
+      \tperl-boolean \tperl-capture-tiny \tperl-cgi \tperl-compress-raw-zlib \tperl-data-dumper
+      \tperl-date-manip \tperl-datetime \tperl-datetime-format-strptime \tperl-datetime-timezone
+      \tperl-dbd-sqlite \tperl-dbi \tperl-dev \tperl-digest-sha1 \tperl-doc \tperl-file-slurp
+      \tperl-file-temp \tperl-file-which \tperl-getopt-long \tperl-html-parser \tperl-html-tree
+      \tperl-http-cookies \tperl-io \tperl-io-compress \tperl-io-html \tperl-io-socket-ssl
+      \tperl-io-stringy \tperl-json \tperl-libwww \tperl-lingua-en-numbers-ordinate
+      \tperl-lingua-preferred \tperl-list-moreutils \tperl-lwp-useragent-determined
+      \tperl-module-build \tperl-module-pluggable \tperl-net-ssleay \tperl-parse-recdescent
+      \tperl-path-class \tperl-scalar-list-utils \tperl-term-progressbar \tperl-term-readkey
+      \tperl-test-exception \tperl-test-requires \tperl-timedate \tperl-try-tiny \tperl-unicode-string
+      \tperl-xml-libxml \tperl-xml-libxslt \tperl-xml-parser \tperl-xml-sax \tperl-xml-treepp
+      \tperl-xml-twig \tperl-xml-writer \tpkgconf \tpngquant \tpython \tsdl-dev \ttar
+      \turiparser-dev \twget \tx264-dev \tx265-dev \tzlib-dev &&  apk add --no-cache
+      \t--repository http://dl-cdn.alpinelinux.org/alpine/edge/community \tgnu-libiconv-dev"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "**** remove musl iconv.h and replace with gnu-iconv.h ****" &&  rm -rf
+      /usr/include/iconv.h &&  cp /usr/include/gnu-libiconv/iconv.h /usr/include/iconv.h
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "**** install perl modules for xmltv ****" &&  curl -L https://cpanmin.us
+      | perl - App::cpanminus &&  cpanm --installdeps /tmp/patches
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "**** compile XMLTV ****" &&  git clone https://github.com/XMLTV/xmltv.git
+      /tmp/xmltv &&  cd /tmp/xmltv &&  git checkout ${XMLTV_VER} &&  echo "**** Perl
+      5.26 fixes for XMTLV ****" &&  sed "s/use POSIX 'tmpnam';//" -i filter/tv_to_latex
+      &&  sed "s/use POSIX 'tmpnam';//" -i filter/tv_to_text &&  sed "s/\(lib\/set_share_dir.pl';\)/.\/\1/"
+      -i grab/it/tv_grab_it.PL &&  sed "s/\(filter\/Grep.pm';\)/.\/\1/" -i filter/tv_grep.PL
+      &&  sed "s/\(lib\/XMLTV.pm.in';\)/.\/\1/" -i lib/XMLTV.pm.PL &&  sed "s/\(lib\/Ask\/Term.pm';\)/.\/\1/"
+      -i Makefile.PL &&  PERL5LIB=`pwd` &&  echo -e "yes" | perl Makefile.PL PREFIX=/usr/
+      INSTALLDIRS=vendor &&  make -j 2 &&  make test &&  make DESTDIR=/tmp/xmltv-build
+      install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "echo \"**** compile tvheadend ****\" &&  if [ -z ${TVHEADEND_COMMIT+x} ]; then
+      \tTVHEADEND_COMMIT=$(curl -sX GET https://api.github.com/repos/tvheadend/tvheadend/commits/master
+      \t| jq -r '. | .sha');  fi &&  mkdir -p \t/tmp/tvheadend &&  git clone https://github.com/tvheadend/tvheadend.git
+      /tmp/tvheadend &&  cd /tmp/tvheadend &&  git checkout ${TVHEADEND_COMMIT} &&
+      \ patch -p1 < /tmp/patches/descrambler.patch &&  ./configure \t`#Encoding` \t--disable-ffmpeg_static
+      \t--disable-libfdkaac_static \t--disable-libtheora_static \t--disable-libopus_static
+      \t--disable-libvorbis_static \t--disable-libvpx_static \t--disable-libx264_static
+      \t--disable-libx265_static \t--disable-libfdkaac \t--enable-libopus \t--enable-libvorbis
+      \t--enable-libvpx \t--enable-libx264 \t--enable-libx265 \t\t`#Options` \t--disable-avahi
+      \t--disable-dbus_1 \t--disable-bintray_cache \t--disable-hdhomerun_static \t--enable-hdhomerun_client
+      \t--enable-libav \t--enable-pngquant \t--enable-trace \t--enable-vaapi \t--infodir=/usr/share/info
+      \t--localstatedir=/var \t--mandir=/usr/share/man \t--prefix=/usr \t--sysconfdir=/config
+      &&  make -j 2 &&  make DESTDIR=/tmp/tvheadend-build install"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "echo \"**** compile argtable2 ****\" &&  ARGTABLE_VER1=\"${ARGTABLE_VER//./-}\"
+      &&  mkdir -p \t/tmp/argtable &&  curl -o  /tmp/argtable-src.tar.gz -L \t\"https://sourceforge.net/projects/argtable/files/argtable/argtable-${ARGTABLE_VER}/argtable${ARGTABLE_VER1}.tar.gz\"
+      &&  tar xf  /tmp/argtable-src.tar.gz -C \t/tmp/argtable --strip-components=1
+      &&  cp /tmp/patches/config.* /tmp/argtable &&  cd /tmp/argtable &&  ./configure
+      \t--prefix=/usr &&  make -j 2 &&  make check &&  make DESTDIR=/tmp/argtable-build
+      install &&  echo \"**** copy to /usr for comskip dependency ****\" &&  cp -pr
+      /tmp/argtable-build/usr/* /usr/"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "echo \"***** compile comskip ****\" &&  git clone git://github.com/erikkaashoek/Comskip
+      /tmp/comskip &&  cd /tmp/comskip &&  ./autogen.sh &&  ./configure \t--bindir=/usr/bin
+      \t--sysconfdir=/config/comskip &&  make -j 2 &&  make DESTDIR=/tmp/comskip-build
+      install"
+    Name: run
+    PrependShell: true
+  From:
+    Image: lsiobase/alpine:3.9
+  Name: buildstage
+  Platform: ""
+  SourceCode: FROM lsiobase/alpine:3.9 as buildstage
+- BaseName: lsiobase/alpine:3.9
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: build_version
+      Value: '"Linuxserver.io version:- ${VERSION} Build-date:- ${BUILD_DATE}"'
+    Name: label
+  - Labels:
+    - Key: maintainer
+      Value: '"saarg"'
+    Name: label
+  - Env:
+    - Key: HOME
+      Value: '"/config"'
+    Name: env
+  - CmdLine:
+    - "echo \"**** install runtime packages ****\" &&  apk add --no-cache \tbsd-compat-headers
+      \tbzip2 \tcurl \tffmpeg \tffmpeg-libs \tgzip \tlibcrypto1.1 \tlibcurl \tlibdvbcsa
+      \tlibhdhomerun-libs \tlibssl1.1 \tlibva \tlibva-intel-driver \tlibvpx \tlibxml2
+      \tlibxslt \tlinux-headers \topenssl \topus \tpcre2 \tperl \tperl-archive-zip
+      \tperl-boolean \tperl-capture-tiny \tperl-cgi \tperl-compress-raw-zlib \tperl-data-dumper
+      \tperl-date-manip \tperl-datetime \tperl-datetime-format-strptime \tperl-datetime-timezone
+      \tperl-dbd-sqlite \tperl-dbi \tperl-digest-sha1 \tperl-doc \tperl-file-slurp
+      \tperl-file-temp \tperl-file-which \tperl-getopt-long \tperl-html-parser \tperl-html-tree
+      \tperl-http-cookies \tperl-io \tperl-io-compress \tperl-io-html \tperl-io-socket-ssl
+      \tperl-io-stringy \tperl-json \tperl-libwww \tperl-lingua-en-numbers-ordinate
+      \tperl-lingua-preferred \tperl-list-moreutils \tperl-lwp-useragent-determined
+      \tperl-module-build \tperl-module-pluggable \tperl-net-ssleay \tperl-parse-recdescent
+      \tperl-path-class \tperl-scalar-list-utils \tperl-term-progressbar \tperl-term-readkey
+      \tperl-test-exception \tperl-test-requires \tperl-timedate \tperl-try-tiny \tperl-unicode-string
+      \tperl-xml-libxml \tperl-xml-libxslt \tperl-xml-parser \tperl-xml-sax \tperl-xml-treepp
+      \tperl-xml-twig \tperl-xml-writer \tpython \ttar \turiparser \twget \tx264 \tx265
+      \tzlib &&  apk add --no-cache \t--repository http://dl-cdn.alpinelinux.org/alpine/edge/community
+      \tgnu-libiconv &&  echo \"**** Add Picons ****\" &&  mkdir -p /picons &&  curl
+      -o         /picons.tar.bz2 -L         https://lsio-ci.ams3.digitaloceanspaces.com/picons/picons.tar.bz2"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: buildstage
+    Name: copy
+    SourcesAndDest:
+    - /tmp/argtable-build/usr/
+    - /usr/
+  - Chown: ""
+    From: buildstage
+    Name: copy
+    SourcesAndDest:
+    - /tmp/comskip-build/usr/
+    - /usr/
+  - Chown: ""
+    From: buildstage
+    Name: copy
+    SourcesAndDest:
+    - /tmp/tvheadend-build/usr/
+    - /usr/
+  - Chown: ""
+    From: buildstage
+    Name: copy
+    SourcesAndDest:
+    - /tmp/xmltv-build/usr/
+    - /usr/
+  - Chown: ""
+    From: buildstage
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/share/man/
+    - /usr/local/share/man/
+  - Chown: ""
+    From: buildstage
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/share/perl5/
+    - /usr/local/share/perl5/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - root/
+    - /
+  - Name: expose
+    Ports:
+    - "9981"
+    - "9982"
+  - Name: volume
+    Volumes:
+    - /config
+    - /recordings
+  From:
+    Image: lsiobase/alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM lsiobase/alpine:3.9

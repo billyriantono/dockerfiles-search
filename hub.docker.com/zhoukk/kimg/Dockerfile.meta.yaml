@@ -1,0 +1,101 @@
+MetaArgs: null
+Stages:
+- As: gobuilder
+  BaseName: golang
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends     build-essential
+      libjpeg-dev libpng-dev libgif-dev libwebp-dev     libfontconfig1-dev libfreetype6-dev
+      libgomp1 libexpat1-dev &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: IMAGEMAGICK_VERSION
+      Value: 7.0.8-59
+    Name: env
+  - CmdLine:
+    - wget -q https://github.com/ImageMagick/ImageMagick/archive/${IMAGEMAGICK_VERSION}.tar.gz     &&
+      tar xf ${IMAGEMAGICK_VERSION}.tar.gz     && cd ImageMagick-${IMAGEMAGICK_VERSION}     &&
+      ./configure && make && make install     && ldconfig /usr/local/lib     && cd
+      - && rm -rf ImageMagick-*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -d github.com/zhoukk/kimg
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/zhoukk/kimg
+  - CmdLine:
+    - export CGO_CFLAGS_ALLOW="-fopenmp" &&     export CGO_CFLAGS="`pkg-config --cflags
+      MagickWand MagickCore`" &&     export CGO_LDFLAGS="`pkg-config --libs MagickWand
+      MagickCore`     -ljpeg -lpng -lwebpmux -lwebp -lfontconfig -lfreetype -lgomp
+      -lexpat -luuid -lz -lm -ldl" &&     go get -d && go install -tags no_pkgconfig
+      -v gopkg.in/gographics/imagick.v3/imagick &&     export KIMG_TAG="`git describe
+      "--abbrev=0" "--tags"`" &&     go build -tags netgo -ldflags "-linkmode 'external'
+      -extldflags '-static' -w -s -X 'main.KimgVersion=${KIMG_TAG}'" -o kimg
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang
+  Name: gobuilder
+  Platform: ""
+  SourceCode: FROM golang AS gobuilder
+- As: nodebuilder
+  BaseName: node
+  Commands:
+  - Name: workdir
+    Path: /web
+  - Chown: ""
+    From: gobuilder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/zhoukk/kimg/web
+    - .
+  - CmdLine:
+    - yarn && yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node
+  Name: nodebuilder
+  Platform: ""
+  SourceCode: FROM node AS nodebuilder
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: gobuilder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/zhoukk/kimg/kimg
+    - .
+  - Chown: ""
+    From: gobuilder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/zhoukk/kimg/kimg.yaml
+    - .
+  - Chown: ""
+    From: gobuilder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/zhoukk/kimg/LICENSE
+    - .
+  - Chown: ""
+    From: nodebuilder
+    Name: copy
+    SourcesAndDest:
+    - /www
+    - www
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /kimg
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

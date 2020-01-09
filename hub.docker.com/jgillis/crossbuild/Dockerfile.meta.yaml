@@ -1,0 +1,132 @@
+MetaArgs: null
+Stages:
+- BaseName: buildpack-deps:jessie-curl
+  Commands:
+  - Maintainer: Manfred Touron <m@42.am> (https://github.com/moul)
+    Name: maintainer
+  - CmdLine:
+    - set -x;     echo deb http://emdebian.org/tools/debian/ jessie main > /etc/apt/sources.list.d/emdebian.list  &&
+      curl -sL http://emdebian.org/tools/debian/emdebian-toolchain-archive.key | apt-key
+      add -  && dpkg --add-architecture arm64                       && dpkg --add-architecture
+      armel                       && dpkg --add-architecture armhf                       &&
+      dpkg --add-architecture i386                        && dpkg --add-architecture
+      mips                        && dpkg --add-architecture mipsel                      &&
+      dpkg --add-architecture powerpc                     && dpkg --add-architecture
+      ppc64el                     && apt-get update                                      &&
+      apt-get install -y -q                                      autoconf                                               automake                                               autotools-dev                                          bc                                                     binfmt-support                                         binutils-multiarch                                     binutils-multiarch-dev                                 build-essential                                        clang                                                  crossbuild-essential-arm64                             crossbuild-essential-armel                             crossbuild-essential-armhf                             crossbuild-essential-mipsel                            crossbuild-essential-ppc64el                           curl                                                   devscripts                                             gdb                                                    git-core                                               libtool                                                llvm                                                   mercurial                                              multistrap                                             patch                                                  python-software-properties                             software-properties-common                             subversion                                             wget                                                   xz-utils                                               cmake                                                  qemu-user-static                                &&
+      apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y mingw-w64  && apt-get clean
+    Name: run
+    PrependShell: true
+  - Key: osxcross_repo
+    Name: arg
+    Value: '"tpoechtrager/osxcross"'
+  - Key: osxcross_revision
+    Name: arg
+    Value: '"a845375e028d29b447439b0c65dea4a9b4d2b2f6"'
+  - Key: darwin_sdk_version
+    Name: arg
+    Value: '"10.11"'
+  - Key: darwin_osx_version_min
+    Name: arg
+    Value: '"10.6"'
+  - Key: darwin_version
+    Name: arg
+    Value: '"15"'
+  - Key: darwin_sdk_url
+    Name: arg
+    Value: '"https://github.com/phracker/MacOSX-SDKs/releases/download/10.13/MacOSX${darwin_sdk_version}.sdk.tar.xz"'
+  - Env:
+    - Key: OSXCROSS_REPO
+      Value: '"${osxcross_repo}"'
+    - Key: OSXCROSS_REVISION
+      Value: '"${osxcross_revision}"'
+    - Key: DARWIN_SDK_VERSION
+      Value: '"${darwin_sdk_version}"'
+    - Key: DARWIN_VERSION
+      Value: '"${darwin_version}"'
+    - Key: DARWIN_OSX_VERSION_MIN
+      Value: '"${darwin_osx_version_min}"'
+    - Key: DARWIN_SDK_URL
+      Value: '"${darwin_sdk_url}"'
+    Name: env
+  - CmdLine:
+    - mkdir -p "/tmp/osxcross"                                                                                    &&
+      cd "/tmp/osxcross"                                                                                          &&
+      curl -sLo osxcross.tar.gz "https://codeload.github.com/${OSXCROSS_REPO}/tar.gz/${OSXCROSS_REVISION}"   &&
+      tar --strip=1 -xzf osxcross.tar.gz                                                                          &&
+      rm -f osxcross.tar.gz                                                                                       &&
+      curl -sLo tarballs/MacOSX${DARWIN_SDK_VERSION}.sdk.tar.xz                                                               "${DARWIN_SDK_URL}"                 &&
+      yes "" | SDK_VERSION="${DARWIN_SDK_VERSION}" OSX_VERSION_MIN="${DARWIN_OSX_VERSION_MIN}"
+      ./build.sh                                && mv target /usr/osxcross                                                                                     &&
+      mv tools /usr/osxcross/                                                                                     &&
+      ln -sf ../tools/osxcross-macports /usr/osxcross/bin/omp                                                     &&
+      ln -sf ../tools/osxcross-macports /usr/osxcross/bin/osxcross-macports                                       &&
+      ln -sf ../tools/osxcross-macports /usr/osxcross/bin/osxcross-mp                                             &&
+      rm -rf /tmp/osxcross                                                                                        &&
+      rm -rf "/usr/osxcross/SDK/MacOSX${DARWIN_SDK_VERSION}.sdk/usr/share/man"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LINUX_TRIPLES
+      Value: arm-linux-gnueabi,arm-linux-gnueabihf,aarch64-linux-gnu,mipsel-linux-gnu,powerpc64le-linux-gnu
+    - Key: DARWIN_TRIPLES
+      Value: x86_64h-apple-darwin${DARWIN_VERSION},x86_64-apple-darwin${DARWIN_VERSION},i386-apple-darwin${DARWIN_VERSION}
+    - Key: WINDOWS_TRIPLES
+      Value: i686-w64-mingw32,x86_64-w64-mingw32
+    - Key: CROSS_TRIPLE
+      Value: x86_64-linux-gnu
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./assets/osxcross-wrapper
+    - /usr/bin/osxcross-wrapper
+  - CmdLine:
+    - for triple in $(echo ${LINUX_TRIPLES} | tr "," " "); do                                             for
+      bin in /etc/alternatives/$triple-* /usr/bin/$triple-*; do                                       if
+      [ ! -f /usr/$triple/bin/$(basename $bin | sed "s/$triple-//") ]; then                            ln
+      -s $bin /usr/$triple/bin/$(basename $bin | sed "s/$triple-//");                              fi;                                                                                             done;                                                                                           done
+      &&                                                                                           for
+      triple in $(echo ${DARWIN_TRIPLES} | tr "," " "); do                                            mkdir
+      -p /usr/$triple/bin;                                                                        for
+      bin in /usr/osxcross/bin/$triple-*; do                                                          ln
+      /usr/bin/osxcross-wrapper /usr/$triple/bin/$(basename $bin | sed "s/$triple-//");            done
+      &&                                                                                           rm
+      -f /usr/$triple/bin/clang*;                                                                    ln
+      -s cc /usr/$triple/bin/gcc;                                                                    ln
+      -s /usr/osxcross/SDK/MacOSX${DARWIN_SDK_VERSION}.sdk/usr /usr/x86_64-linux-gnu/$triple;      done;                                                                                             for
+      triple in $(echo ${WINDOWS_TRIPLES} | tr "," " "); do                                           mkdir
+      -p /usr/$triple/bin;                                                                        for
+      bin in /etc/alternatives/$triple-* /usr/bin/$triple-*; do                                       if
+      [ ! -f /usr/$triple/bin/$(basename $bin | sed "s/$triple-//") ]; then                            ln
+      -s $bin /usr/$triple/bin/$(basename $bin | sed "s/$triple-//");                              fi;                                                                                             done;                                                                                             ln
+      -s gcc /usr/$triple/bin/cc;                                                                    ln
+      -s /usr/$triple /usr/x86_64-linux-gnu/$triple;                                               done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/crossbuild
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  - Name: workdir
+    Path: /workdir
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./assets/crossbuild
+    - /usr/bin/crossbuild
+  From:
+    Image: buildpack-deps:jessie-curl
+  Name: ""
+  Platform: ""
+  SourceCode: FROM buildpack-deps:jessie-curl

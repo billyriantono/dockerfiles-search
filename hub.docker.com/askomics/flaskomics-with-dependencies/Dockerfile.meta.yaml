@@ -1,0 +1,105 @@
+MetaArgs: null
+Stages:
+- As: askomics_builder
+  BaseName: askomics/flaskomics-base:3.2.0-alpine3.9
+  Commands:
+  - Maintainer: '"Xavier Garnier <xavier.garnier@irisa.fr>"'
+    Name: maintainer
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /askomics
+  - Name: workdir
+    Path: /askomics
+  - CmdLine:
+    - rm -f config/askomics.ini &&     /askomics/install.sh &&     /askomics/build.sh
+      &&     mv /askomics/docker/start_all.sh /askomics/start_all.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: askomics/flaskomics-base:3.2.0-alpine3.9
+  Name: askomics_builder
+  Platform: ""
+  SourceCode: FROM askomics/flaskomics-base:3.2.0-alpine3.9 AS askomics_builder
+- As: corese_builder
+  BaseName: xgaia/corese:latest
+  Commands: null
+  From:
+    Image: xgaia/corese:latest
+  Name: corese_builder
+  Platform: ""
+  SourceCode: FROM xgaia/corese:latest AS corese_builder
+- As: virtuoso_builder
+  BaseName: askomics/virtuoso:7.2.5.1
+  Commands: null
+  From:
+    Image: askomics/virtuoso:7.2.5.1
+  Name: virtuoso_builder
+  Platform: ""
+  SourceCode: FROM askomics/virtuoso:7.2.5.1 AS virtuoso_builder
+- BaseName: alpine:3.8
+  Commands:
+  - Env:
+    - Key: DEPMODE
+      Value: '"prod"'
+    - Key: MAX_CELERY_QUEUE
+      Value: '"1"'
+    - Key: SPARQL_UPDATE
+      Value: "true"
+    - Key: ASKO_triplestore_load_url
+      Value: '"http://localhost:5000"'
+    - Key: ASKO_federation_query_engine
+      Value: '"corese"'
+    - Key: ASKO_federation_endpoint
+      Value: '"http://localhost:8080/sparql"'
+    - Key: PATH
+      Value: '"/usr/local/virtuoso-opensource/bin/:$PATH"'
+    Name: env
+  - Name: workdir
+    Path: /askomics
+  - CmdLine:
+    - apk add --no-cache openssl py-pip &&     pip install crudini &&     mkdir -p
+      /usr/local/virtuoso-opensource/var/lib/virtuoso/db &&     ln -s /usr/local/virtuoso-opensource/var/lib/virtuoso/db
+      /data &&     apk --no-cache add --update openjdk11 --repository=http://dl-cdn.alpinelinux.org/alpine/edge/community
+      &&     mkdir /corese &&     apk add --no-cache redis sqlite &&     apk add --no-cache
+      python3 bash git libc-dev libstdc++ nodejs nodejs-npm
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: virtuoso_builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/virtuoso-opensource
+    - /usr/local/virtuoso-opensource
+  - Chown: ""
+    From: virtuoso_builder
+    Name: copy
+    SourcesAndDest:
+    - /virtuoso
+    - /virtuoso
+  - Chown: ""
+    From: corese_builder
+    Name: copy
+    SourcesAndDest:
+    - /corese
+    - /corese
+  - Chown: ""
+    From: askomics_builder
+    Name: copy
+    SourcesAndDest:
+    - /askomics
+    - /askomics
+  - Name: expose
+    Ports:
+    - "5000"
+  - CmdLine:
+    - bash /askomics/start_all.sh
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

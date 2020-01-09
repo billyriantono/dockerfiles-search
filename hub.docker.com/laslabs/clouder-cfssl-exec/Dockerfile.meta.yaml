@@ -1,0 +1,77 @@
+MetaArgs: null
+Stages:
+- BaseName: golang:alpine
+  Commands:
+  - Maintainer: Dave Lasley <dave@laslabs.com>
+    Name: maintainer
+  - Env:
+    - Key: BUILD_DEPS
+      Value: '"build-base gcc git libtool sqlite-dev"'
+    Name: env
+  - CmdLine:
+    - apk add --no-cache $BUILD_DEPS
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth=1 "https://github.com/cloudflare/cfssl.git" "$GOPATH/src/github.com/cloudflare/cfssl"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: '"$GOPATH/src/github.com/cloudflare/cfssl"'
+  - CmdLine:
+    - "set -x \t&& go get github.com/GeertJohan/go.rice/rice     && rice embed-go
+      -i=./cli/serve \t&& cp -R \"$GOPATH/src/github.com/cloudflare/cfssl/vendor/github.com/cloudflare/cfssl_trust\"
+      /etc/cfssl \t&& go build -o /usr/bin/cfssl ./cmd/cfssl \t&& go build -o /usr/bin/cfssljson
+      ./cmd/cfssljson \t&& go build -o /usr/bin/mkbundle ./cmd/mkbundle \t&& go build
+      -o /usr/bin/multirootca ./cmd/multirootca \t&& apk del $BUILD_DEPS \t&& rm -rf
+      \"$GOPATH/src\" \t&& echo \"Build complete.\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/pki
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/pki
+  - Env:
+    - Key: CFSSL_DATA
+      Value: /var/pki
+    Name: env
+  - Env:
+    - Key: CFSSL_CERT
+      Value: '"$CFSSL_DATA/ca.pem"'
+    - Key: CFSSL_KEY
+      Value: '"$CFSSL_DATA/ca_key.pem"'
+    - Key: CFSSL_CSR
+      Value: '"$CFSSL_DATA/csr_ca.json"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker-entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./etc/csr_ca.json
+    - '"$CFSSL_DATA/"'
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - cfssl
+    - serve
+    - -address=0.0.0.0
+    - -port=8080
+    - -ca='/var/pki/ca.pem'
+    - -ca-key='/var/pki/ca-key.pem'
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: golang:alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM golang:alpine

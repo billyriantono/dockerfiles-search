@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- As: bootstrap
+  BaseName: centos:7
+  Commands:
+  - Key: GECKO_DRIVER
+    Name: arg
+    Value: 0.26.0
+  - CmdLine:
+    - curl -L https://github.com/mozilla/geckodriver/releases/download/v${GECKO_DRIVER}/geckodriver-v${GECKO_DRIVER}-linux64.tar.gz
+      | tar xz -C /usr/local/bin
+    Name: run
+    PrependShell: true
+  From:
+    Image: centos:7
+  Name: bootstrap
+  Platform: ""
+  SourceCode: FROM centos:7 as bootstrap
+- As: maven
+  BaseName: maven:3-jdk-11
+  Commands:
+  - CmdLine:
+    - mvn --version
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3-jdk-11
+  Name: maven
+  Platform: ""
+  SourceCode: FROM maven:3-jdk-11 as maven
+- As: install
+  BaseName: centos:7
+  Commands:
+  - Chown: ""
+    From: bootstrap
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/geckodriver
+    - /usr/local/bin
+  - Chown: ""
+    From: maven
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/maven
+    - /usr/share/maven
+  - Env:
+    - Key: CI
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: en_US.utf8
+    Name: env
+  - Env:
+    - Key: _JAVA_OPTIONS
+      Value: '"-Djdk.net.URLClassPath.disableClassPathURLCheck=true"'
+    Name: env
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/java-11-openjdk
+    Name: env
+  - CmdLine:
+    - groupadd -g 1000 mycore &&     useradd -m -u 1000 -g mycore mycore
+    Name: run
+    PrependShell: true
+  - Chown: mycore:mycore
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - toolchains.xml
+    - /home/mycore/.m2/
+  - CmdLine:
+    - "yum install -y http://opensource.wandisco.com/centos/7/git/x86_64/wandisco-git-release-7-2.noarch.rpm
+      &&     yum install -y \tca-certificates gnupg git subversion which         firefox
+      java-11-openjdk-devel java-1.8.0-openjdk-devel &&     update-alternatives --set
+      java java-11-openjdk.x86_64 &&     update-alternatives --set javac java-11-openjdk.x86_64
+      &&     ln -s /usr/share/maven/bin/mvn /usr/bin/mvn &&     yum clean all &&     rm
+      -rf -v /var/cache/yum /var/tmp/* &&     mvn -version"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: mycore
+  - Name: workdir
+    Path: /home/mycore
+  From:
+    Image: centos:7
+  Name: install
+  Platform: ""
+  SourceCode: FROM centos:7 as install

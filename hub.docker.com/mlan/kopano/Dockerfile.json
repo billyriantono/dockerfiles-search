@@ -1,0 +1,387 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "DIST",
+      "DefaultValue": "ubuntu",
+      "ProvidedValue": null,
+      "Value": "ubuntu"
+    },
+    {
+      "Key": "REL",
+      "DefaultValue": "18.04",
+      "ProvidedValue": null,
+      "Value": "18.04"
+    },
+    {
+      "Key": "ARCH",
+      "DefaultValue": null,
+      "ProvidedValue": null,
+      "Value": null
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "base",
+      "BaseName": "${ARCH:+$ARCH/}$DIST:$REL",
+      "SourceCode": "FROM\t${ARCH:+$ARCH/}$DIST:$REL AS base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Image": "${ARCH:+$ARCH/}$DIST:$REL"
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "mlan"
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Env": [
+            {
+              "Key": "DEBIAN_FRONTEND",
+              "Value": "noninteractive"
+            },
+            {
+              "Key": "DOCKER_BIN_DIR",
+              "Value": "/usr/local/bin"
+            },
+            {
+              "Key": "DOCKER_RUNSV_DIR",
+              "Value": "/etc/service"
+            },
+            {
+              "Key": "DOCKER_ENTRY_DIR",
+              "Value": "/etc/entrypoint.d"
+            },
+            {
+              "Key": "DOCKER_EXIT_DIR",
+              "Value": "/etc/exitpoint.d"
+            },
+            {
+              "Key": "DOCKER_CONF_DIR1",
+              "Value": "/etc/kopano"
+            },
+            {
+              "Key": "DOCKER_CONF_DIR2",
+              "Value": "/usr/share/z-push"
+            },
+            {
+              "Key": "DOCKER_USER",
+              "Value": "kopano"
+            },
+            {
+              "Key": "DOCKER_BUILD_DEB_DIR",
+              "Value": "/tmp/deb"
+            },
+            {
+              "Key": "DOCKER_BUILD_PASSES",
+              "Value": "1"
+            },
+            {
+              "Key": "SYSLOG_OPTIONS",
+              "Value": "'-S'"
+            },
+            {
+              "Key": "SYSLOG_LEVEL",
+              "Value": "4"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "src/*/bin",
+            "$DOCKER_BIN_DIR/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "src/*/entrypoint.d",
+            "$DOCKER_ENTRY_DIR/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "src/*/exitpoint.d",
+            "$DOCKER_EXIT_DIR/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get install --yes --no-install-recommends \tapt-utils \tbusybox-syslogd \trunit \twget \tcurl \tca-certificates \ttar \tgnupg \t\u0026\u0026 setup-runit.sh \"syslogd -n -O - -l $SYSLOG_LEVEL $SYSLOG_OPTIONS\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "base-man",
+      "BaseName": "base",
+      "SourceCode": "FROM\tbase AS base-man",
+      "Platform": "",
+      "As": "base-man",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "DEBIAN_FRONTEND",
+              "Value": "noninteractive"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "rm -f /etc/dpkg/dpkg.cfg.d/excludes \t\u0026\u0026 apt-get update \t\u0026\u0026 dpkg -l | grep ^ii | cut -d' ' -f3 | xargs apt-get install -y --reinstall \t\u0026\u0026 apt-get install --yes --no-install-recommends \tman \tmanpages \tbash-completion \t\u0026\u0026 rm -r /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "core",
+      "BaseName": "base-man",
+      "SourceCode": "FROM base-man AS core",
+      "Platform": "",
+      "As": "core",
+      "From": {
+        "Stage": {
+          "Named": "base-man",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Key": "DIST",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "REL",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "ARCH",
+          "Name": "arg",
+          "Value": "amd64"
+        },
+        {
+          "Env": [
+            {
+              "Key": "DEBIAN_FRONTEND",
+              "Value": "noninteractive"
+            },
+            {
+              "Key": "DOCKER_RUNSV_DIR",
+              "Value": "/etc/service"
+            },
+            {
+              "Key": "DOCKER_BIN_DIR",
+              "Value": "/usr/local/bin"
+            },
+            {
+              "Key": "LMTP_LISTEN",
+              "Value": "*:2003"
+            },
+            {
+              "Key": "DOCKER_BUILD_DEB_DIR",
+              "Value": "/tmp/deb"
+            },
+            {
+              "Key": "DOCKER_BUILD_PASSES",
+              "Value": "1"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "mkdir -p $DOCKER_BUILD_DEB_DIR \t\u0026\u0026 webaddr=$(kopano-webaddr.sh core \thttps://download.kopano.io/community ${DIST} ${REL} ${ARCH}) \t\u0026\u0026 echo \"$webaddr\u003c-\u003e${DIST} ${REL} ${ARCH}\u003c-\" \t\u0026\u0026 curl $webaddr | tar -xzC $DOCKER_BUILD_DEB_DIR \t\u0026\u0026 apt-get update \t\u0026\u0026 for i in $(seq ${DOCKER_BUILD_PASSES}); do echo \"\\033[1;36mKOPANO CORE INSTALL PASS: $i\\033[0m\" \t\u0026\u0026 dpkg --install --force-depends --skip-same-version --recursive $DOCKER_BUILD_DEB_DIR \t\u0026\u0026 apt-get install --yes --no-install-recommends --fix-broken; done \t\u0026\u0026 mkdir -p /var/lib/kopano/attachments \u0026\u0026 chown kopano: /var/lib/kopano/attachments \t\u0026\u0026 rm -rf $DOCKER_BUILD_DEB_DIR \t\u0026\u0026 setup-runit.sh \t\"kopano-dagent -l\" \t\"kopano-gateway -F\" \t\"kopano-ical -F\" \t\"-f kopano-search -F\" \t\"kopano-server -F\" \t\"kopano-spooler -F\" \t\"-d kopano-grapi serve\" \t\"-d kopano-kapid serve --log-timestamp=false\" \t\"-d kopano-konnectd serve --log-timestamp=false\" \t\"-d kopano-monitor -F\" \t\"-d kopano-presence -F\" \t\"-d kopano-spamd -F\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "runsvdir -P ${DOCKER_RUNSV_DIR}"
+          ],
+          "Name": "cmd",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "entrypoint.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "Health": {
+            "Test": [
+              "CMD-SHELL",
+              "sv status ${DOCKER_RUNSV_DIR}/*"
+            ]
+          },
+          "Name": "healthcheck"
+        }
+      ]
+    },
+    {
+      "Name": "core-webapp",
+      "BaseName": "core",
+      "SourceCode": "FROM core AS core-webapp",
+      "Platform": "",
+      "As": "core-webapp",
+      "From": {
+        "Stage": {
+          "Named": "core",
+          "Index": 2
+        }
+      },
+      "Commands": [
+        {
+          "Key": "DIST",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "REL",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Env": [
+            {
+              "Key": "DEBIAN_FRONTEND",
+              "Value": "noninteractive"
+            },
+            {
+              "Key": "DOCKER_RUNSV_DIR",
+              "Value": "/etc/service"
+            },
+            {
+              "Key": "DOCKER_BUILD_DEB_DIR",
+              "Value": "/tmp/deb"
+            },
+            {
+              "Key": "DOCKER_BUILD_PASSES",
+              "Value": "1"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "apt-get install --yes --no-install-recommends apache2 libapache2-mod-php \t\u0026\u0026 mkdir -p $DOCKER_BUILD_DEB_DIR \t\u0026\u0026 webaddr=$(kopano-webaddr.sh webapp \thttps://download.kopano.io/community ${DIST} ${REL} all) \t\u0026\u0026 echo \"$webaddr\u003c-\u003e${DIST} ${REL} all\u003c-\" \t\u0026\u0026 curl $webaddr | tar -xzC $DOCKER_BUILD_DEB_DIR \t\u0026\u0026 apt-get update \t\u0026\u0026 for i in $(seq ${DOCKER_BUILD_PASSES}); do echo \"\\033[1;36mKOPANO WEBAPP INSTALL PASS: $i\\033[0m\" \t\u0026\u0026 dpkg --install --force-depends --skip-same-version --recursive $DOCKER_BUILD_DEB_DIR \t\u0026\u0026 apt-get install --yes --no-install-recommends --fix-broken; done \t\u0026\u0026 dpkg-reconfigure php7-mapi \t\u0026\u0026 conf replace /etc/kopano/webapp/config.php 'define(\"INSECURE_COOKIES\", false);' 'define(\"INSECURE_COOKIES\", true);' \t\u0026\u0026 conf replace /etc/apache2/sites-available/kopano-webapp.conf 'Alias /webapp /usr/share/kopano-webapp' '\u003cVirtualHost *:80\u003e\\\\nDocumentRoot /usr/share/kopano-webapp' \t\u0026\u0026 echo '\u003c/VirtualHost\u003e' \u003e\u003e /etc/apache2/sites-available/kopano-webapp.conf \t\u0026\u0026 conf modify /etc/apache2/apache2.conf '^ErrorLog' syslog:user \t\u0026\u0026 echo 'CustomLog \"||/usr/bin/logger -t apache -i -p user.debug\" common' \u003e\u003e /etc/apache2/apache2.conf \t\u0026\u0026 echo 'ServerName localhost' \u003e\u003e /etc/apache2/apache2.conf \t\u0026\u0026 mkdir -p /etc/kopano/theme/Custom \t\u0026\u0026 ln -sf /etc/kopano/theme/Custom /usr/share/kopano-webapp/plugins/. \t\u0026\u0026 a2dissite 000-default.conf \t\u0026\u0026 a2ensite kopano-webapp \t\u0026\u0026 rm -rf $DOCKER_BUILD_DEB_DIR \t\u0026\u0026 setup-runit.sh \"-f -s /etc/apache2/envvars -q apache2 -DFOREGROUND -DNO_DETACH -k start\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "443",
+            "80"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "full",
+      "BaseName": "core-webapp",
+      "SourceCode": "FROM core-webapp AS full",
+      "Platform": "",
+      "As": "full",
+      "From": {
+        "Stage": {
+          "Named": "core-webapp",
+          "Index": 3
+        }
+      },
+      "Commands": [
+        {
+          "Key": "DIST",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "REL",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Env": [
+            {
+              "Key": "DEBIAN_FRONTEND",
+              "Value": "noninteractive"
+            },
+            {
+              "Key": "DOCKER_RUNSV_DIR",
+              "Value": "/etc/service"
+            },
+            {
+              "Key": "DOCKER_BUILD_DEB_DIR",
+              "Value": "/tmp/deb"
+            },
+            {
+              "Key": "DOCKER_BUILD_PASSES",
+              "Value": "1"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "debaddr=\"$(kopano-webaddr.sh --deb final http://repo.z-hub.io/z-push: ${DIST} ${REL})\" \t\u0026\u0026 echo \"deb $debaddr/ /\" \u003e /etc/apt/sources.list.d/z-push.list \t\u0026\u0026 wget -qO - $debaddr/Release.key | apt-key add - \t\u0026\u0026 mkdir -p /var/lib/z-push \u0026\u0026 chown www-data: /var/lib/z-push \t\u0026\u0026 mkdir -p /var/log/z-push \u0026\u0026 chown www-data: /var/log/z-push \t\u0026\u0026 apt-get update \u0026\u0026 apt-get install --yes --no-install-recommends \tz-push-backend-kopano \tz-push-kopano \tz-push-config-apache \tz-push-autodiscover \tz-push-state-sql \t\u0026\u0026 conf addafter /etc/apache2/conf-available/z-push.conf 'Alias /Microsoft-Server-ActiveSync' 'AliasMatch (?i)/Autodiscover/Autodiscover.xml \"/usr/share/z-push/autodiscover/autodiscover.php\"' '\u003c/IfModule\u003e' \t\u0026\u0026 conf replace /usr/share/z-push/config.php 'define(\\x27LOGBACKEND\\x27, \\x27filelog\\x27);' 'define(\\x27LOGBACKEND\\x27, \\x27syslog\\x27);'"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "debugtools",
+      "BaseName": "full",
+      "SourceCode": "FROM full AS debugtools",
+      "Platform": "",
+      "As": "debugtools",
+      "From": {
+        "Stage": {
+          "Named": "full",
+          "Index": 4
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get install --yes --no-install-recommends \tless \tnano \tldap-utils \thtop \tnet-tools \tlsof \tiputils-ping"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    }
+  ]
+}

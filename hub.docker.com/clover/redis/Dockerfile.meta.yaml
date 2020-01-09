@@ -1,0 +1,99 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: clover/base
+  Commands:
+  - CmdLine:
+    - groupadd         --gid 50         --system         redis  && useradd         --home-dir
+      /var/lib/redis         --no-create-home         --system         --shell /bin/false         --uid
+      50         --gid 50         redis
+    Name: run
+    PrependShell: true
+  From:
+    Image: clover/base
+  Name: base
+  Platform: ""
+  SourceCode: FROM clover/base AS base
+- As: build
+  BaseName: library/ubuntu:bionic
+  Commands:
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - CmdLine:
+    - export DEBIAN_FRONTEND=noninteractive  && apt-get update  && apt-get install
+      -y         software-properties-common         apt-utils
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /build /rootfs
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - export DEBIAN_FRONTEND=noninteractive  && apt-get download         redis-sentinel         redis-server         redis-tools         libjemalloc1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find *.deb | xargs -I % dpkg-deb -x % /rootfs
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /rootfs
+  - CmdLine:
+    - mkdir -p         var/lib/redis         run/redis  && rm -rf         etc/default         etc/init.d         etc/logrotate.d         etc/redis/*.d         lib         usr/lib/tmpfiles.d         usr/share  &&
+      sed -i -r         -e 's,^ *bind +.*,bind 0.0.0.0,g'         -e 's,^ *protected-mode
+      +.*,protected-mode no,g'         -e 's,^ *logfile +.*,logfile "",g'         -e
+      's,^ *daemonize +yes,daemonize no,g'         -e 's,^ *always-show-logo +yes,always-show-logo
+      no,g'         etc/redis/redis.conf  && sed -i -r         -e 's,^ *logfile +.*,logfile
+      "",g'         -e 's,^ *daemonize +yes,daemonize no,g'         -e 's,^ *always-show-logo
+      +yes,always-show-logo no,g'         etc/redis/sentinel.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: base
+    Name: copy
+    SourcesAndDest:
+    - /etc/group
+    - /etc/gshadow
+    - /etc/passwd
+    - /etc/shadow
+    - etc/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - init/
+    - etc/init/
+  - Name: workdir
+    Path: /
+  From:
+    Image: library/ubuntu:bionic
+  Name: build
+  Platform: ""
+  SourceCode: FROM library/ubuntu:bionic AS build
+- BaseName: clover/common
+  Commands:
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /rootfs
+    - /
+  - Name: volume
+    Volumes:
+    - /var/lib/redis
+  - Name: expose
+    Ports:
+    - "6379"
+  From:
+    Image: clover/common
+  Name: ""
+  Platform: ""
+  SourceCode: FROM clover/common

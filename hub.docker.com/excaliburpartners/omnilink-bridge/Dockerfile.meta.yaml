@@ -1,0 +1,103 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: mono:latest
+  Commands:
+  - CmdLine:
+    - apt-get update &&   apt-get install -y unixodbc
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://dev.mysql.com/get/Downloads/Connector-ODBC/8.0/mysql-connector-odbc-8.0.18-linux-debian9-x86-64bit.tar.gz
+    - /build
+  - CmdLine:
+    - tar zxf mysql-connector-odbc-8.0.18-linux-debian9-x86-64bit.tar.gz &&   mkdir
+      -p /usr/lib/odbc/ &&   cp mysql-connector-odbc-8.0.18-linux-debian9-x86-64bit/lib/*
+      /usr/lib/odbc/ &&   mysql-connector-odbc-8.0.18-linux-debian9-x86-64bit/bin/myodbc-installer
+      -d -a -n "MySQL" -t "DRIVER=/usr/lib/odbc/libmyodbc8w.so"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - nuget restore /build/OmniLinkBridge.sln
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - msbuild /build/OmniLinkBridge.sln /t:Build /p:Configuration=Release
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /build/OmniLinkBridge/bin/Release /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: mono:latest
+  Name: build
+  Platform: ""
+  SourceCode: FROM mono:latest AS build
+- As: runtime
+  BaseName: mono:latest
+  Commands:
+  - CmdLine:
+    - apt-get update &&   apt-get install -y unixodbc
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/odbc
+    - /usr/lib/odbc
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /etc/odbcinst.ini
+    - /etc/odbcinst.ini
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app/OmniLinkBridge.ini
+    - /config/OmniLinkBridge.ini
+  - Name: expose
+    Ports:
+    - 8000/tcp
+  - Name: volume
+    Volumes:
+    - /config
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - CmdLine:
+    - mono
+    - OmniLinkBridge.exe
+    - -i
+    - -c
+    - /config/OmniLinkBridge.ini
+    - -e
+    - -s
+    - /config/WebSubscriptions.json
+    - -lf
+    - disable
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: mono:latest
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM mono:latest AS runtime

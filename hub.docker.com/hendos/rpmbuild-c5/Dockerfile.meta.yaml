@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- As: busybox
+  BaseName: i386/centos:6
+  Commands:
+  - CmdLine:
+    - echo "i686" > /etc/yum/vars/arch &&     echo "i386" > /etc/yum/vars/basearch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum install -y gcc &&     yum clean all -y &&     rm -r -f /var/cache/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: BUSYBOX_VERSION
+      Value: 1.28.1
+    Name: env
+  - CmdLine:
+    - set -ex;     cd /tmp;     tarball="busybox-${BUSYBOX_VERSION}.tar.bz2";     curl
+      -fL -o busybox.tar.bz2 "https://busybox.net/downloads/$tarball";     mkdir -p
+      /usr/src/busybox;     tar -xf busybox.tar.bz2 -C /usr/src/busybox --strip-components
+      1;     rm busybox.tar.bz2*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/busybox
+  - CmdLine:
+    - set -ex;         setConfs='         CONFIG_WGET=y         CONFIG_FEATURE_WGET_STATUSBAR=y         CONFIG_FEATURE_WGET_TIMEOUT=y         CONFIG_FEATURE_WGET_HTTPS=y     ';         make
+      allnoconfig;         for confV in $setConfs; do         conf="${confV%=*}";         sed
+      -i             -e "s!^$conf=.*\$!$confV!"             -e "s!^# $conf is not
+      set\$!$confV!"             .config;         if ! grep -q "^$confV\$" .config;
+      then             echo "$confV" >> .config;         fi;     done;         make
+      oldconfig;         for confV in $setConfs; do         grep -q "^$confV\$" .config;     done;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex     && make -j "$(nproc)"         busybox
+    Name: run
+    PrependShell: true
+  From:
+    Image: i386/centos:6
+  Name: busybox
+  Platform: ""
+  SourceCode: FROM i386/centos:6 as busybox
+- BaseName: toopher/centos-i386:centos5
+  Commands:
+  - Maintainer: Michael Gliwinski <michael.gliwinski@henderson-group.com>
+    Name: maintainer
+  - CmdLine:
+    - sed -i -re 's/^\s*(mirrorlist)/#\1/' /etc/yum.repos.d/CentOS-*.repo &&     sed
+      -i -re         's,#\s*(baseurl.*)mirror.centos.org/centos/(\$releasever|5),\1vault.centos.org/5.11,'         /etc/yum.repos.d/CentOS-*.repo
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - linux32 yum install -y epel-release &&     linux32 yum install -y rpmdevtools
+      yum-utils buildsys-macros &&     linux32 yum clean all &&     linux32 rm -r
+      -f /var/cache/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker-init.sh
+    - docker-rpm-build.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: busybox
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/busybox/busybox
+    - /usr/local/bin/wget
+  - CmdLine:
+    - chmod +x /usr/local/bin/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - linux32 useradd rpmbuild
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: rpmbuild
+  - CmdLine:
+    - linux32 rpmdev-setuptree
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - linux32
+    - /usr/local/bin/docker-init.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: toopher/centos-i386:centos5
+  Name: ""
+  Platform: ""
+  SourceCode: FROM toopher/centos-i386:centos5

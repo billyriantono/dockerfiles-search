@@ -1,0 +1,93 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: node:8.12.0-slim
+  Commands:
+  - CmdLine:
+    - yarn config set proxy "$http_proxy" && yarn config set https-proxy "$https_proxy"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: WORKDIR
+      Value: /opt/app
+    Name: env
+  - Name: workdir
+    Path: ${WORKDIR}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - yarn.lock
+    - ./
+  - CmdLine:
+    - yarn install --production      && yarn cache clean
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8.12.0-slim
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:8.12.0-slim as base
+- As: build
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apt-get update     && apt-get install --assume-yes git bzip2
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - CmdLine:
+    - yarn install     && yarn setup     && rm -rf /opt/app/.git
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: build
+  Platform: ""
+  SourceCode: FROM base as build
+- As: runtime
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - ${WORKDIR}/app
+    - app/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - ${WORKDIR}/public
+    - public/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - ${WORKDIR}/server.js
+    - ${WORKDIR}/app.js
+    - ${WORKDIR}/git.properties.json
+    - ./
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - yarn
+    - start
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM base as runtime

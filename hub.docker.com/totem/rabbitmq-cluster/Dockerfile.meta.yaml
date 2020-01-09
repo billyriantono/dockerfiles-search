@@ -1,0 +1,79 @@
+MetaArgs: null
+Stages:
+- BaseName: python:2.7-slim
+  Commands:
+  - Env:
+    - Key: ETCDCTL_VERSION
+      Value: v2.3.1
+    Name: env
+  - Env:
+    - Key: CONFD_VERSION
+      Value: 0.12.0-alpha3
+    Name: env
+  - Env:
+    - Key: DUMB_INIT_VERSION
+      Value: 1.2.0
+    Name: env
+  - CmdLine:
+    - apt-get update &&   apt-get upgrade -y  &&   apt-get install -y curl wget &&   wget
+      -qO - https://www.rabbitmq.com/rabbitmq-release-signing-key.asc | apt-key add
+      - &&   echo "deb http://www.rabbitmq.com/debian/ testing main" > /etc/apt/sources.list.d/rabbitmq.list
+      &&   apt-get update &&   apt-get install -y rabbitmq-server &&   rabbitmq-plugins
+      enable rabbitmq_management &&   echo "[{rabbit, [{loopback_users, []}]}]." >
+      /etc/rabbitmq/rabbitmq.config &&   sed --follow-symlinks     -e 's/-rabbit error_logger.*/-rabbit
+      error_logger tty \\/'     -e 's/-rabbit sasl_error_logger.*/-rabbit sasl_error_logger
+      tty \\/'     -e 's/-sasl sasl_error_logger.*/-sasl sasl_error_logger tty \\/'     -i  /usr/lib/rabbitmq/bin/rabbitmq-server
+      &&   curl -L https://github.com/coreos/etcd/releases/download/$ETCDCTL_VERSION/etcd-$ETCDCTL_VERSION-linux-amd64.tar.gz
+      -o /tmp/etcd-$ETCDCTL_VERSION-linux-amd64.tar.gz &&   cd /tmp && gzip -dc etcd-$ETCDCTL_VERSION-linux-amd64.tar.gz
+      | tar -xof - &&   cp -f /tmp/etcd-$ETCDCTL_VERSION-linux-amd64/etcdctl /usr/local/bin
+      &&   pip install supervisor==3.3.1 supervisor-stdout &&   mkdir -p /var/log/supervisor
+      &&   curl -L https://github.com/kelseyhightower/confd/releases/download/v$CONFD_VERSION/confd-${CONFD_VERSION}-linux-amd64
+      -o /usr/local/bin/confd &&   chmod 555 /usr/local/bin/confd &&   wget -O /usr/bin/dumb-init
+      https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/dumb-init_${DUMB_INIT_VERSION}_amd64
+      &&   chmod +x /usr/bin/dumb-init &&   apt-get clean &&   rm -rf /var/cache/apt/archives/*
+      /var/lib/apt/lists/* /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - etc/supervisor
+    - /etc/supervisor
+  - CmdLine:
+    - ln -sf /etc/supervisor/supervisord.conf /etc/supervisord.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - etc/confd
+    - /etc/confd
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - bin
+    - /usr/local/bin
+  - CmdLine:
+    - chmod -R +x /usr/local/bin
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/lib/rabbitmq
+  - Name: expose
+    Ports:
+    - "15672"
+    - "25672"
+    - "4369"
+    - "44001"
+    - "5672"
+  - CmdLine:
+    - /usr/bin/dumb-init
+    - /usr/local/bin/supervisord-wrapper.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: python:2.7-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:2.7-slim

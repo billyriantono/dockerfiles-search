@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: buildpack-deps:stretch-scm
+  Commands:
+  - CmdLine:
+    - "apt-get update && apt-get install -y --no-install-recommends \t\tg++ \t\tgcc
+      \t\tlibc6-dev \t\tmake \t\tpkg-config \t&& rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOLANG_VERSION
+      Value: 1.11.1
+    Name: env
+  - CmdLine:
+    - "set -eux; \t\tdpkgArch=\"$(dpkg --print-architecture)\"; \tcase \"${dpkgArch##*-}\"
+      in \t\tamd64) goRelArch='linux-amd64'; goRelSha256='2871270d8ff0c8c69f161aaae42f9f28739855ff5c5204752a8d92a1c9f63993'
+      ;; \t\tarmhf) goRelArch='linux-armv6l'; goRelSha256='bc601e428f458da6028671d66581b026092742baf6d3124748bb044c82497d42'
+      ;; \t\tarm64) goRelArch='linux-arm64'; goRelSha256='25e1a281b937022c70571ac5a538c9402dd74bceb71c2526377a7e5747df5522'
+      ;; \t\ti386) goRelArch='linux-386'; goRelSha256='52935db83719739d84a389a8f3b14544874fba803a316250b8d596313283aadf'
+      ;; \t\tppc64el) goRelArch='linux-ppc64le'; goRelSha256='f929d434d6db09fc4c6b67b03951596e576af5d02ff009633ca3c5be1c832bdd'
+      ;; \t\ts390x) goRelArch='linux-s390x'; goRelSha256='93afc048ad72fa2a0e5ec56bcdcd8a34213eb262aee6f39a7e4dfeeb7e564c9d'
+      ;; \t\t*) goRelArch='src'; goRelSha256='558f8c169ae215e25b81421596e8de7572bd3ba824b79add22fba6e284db1117';
+      \t\t\techo >&2; echo >&2 \"warning: current architecture ($dpkgArch) does not
+      have a corresponding Go binary release; will be building from source\"; echo
+      >&2 ;; \tesac; \t\turl=\"https://golang.org/dl/go${GOLANG_VERSION}.${goRelArch}.tar.gz\";
+      \twget -O go.tgz \"$url\"; \techo \"${goRelSha256} *go.tgz\" | sha256sum -c
+      -; \ttar -C /usr/local -xzf go.tgz; \trm go.tgz; \t\tif [ \"$goRelArch\" = 'src'
+      ]; then \t\techo >&2; \t\techo >&2 'error: UNIMPLEMENTED'; \t\techo >&2 'TODO
+      install golang-any from jessie-backports for GOROOT_BOOTSTRAP (and uninstall
+      after build)'; \t\techo >&2; \t\texit 1; \tfi; \t\texport PATH=\"/usr/local/go/bin:$PATH\";
+      \tgo version"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $GOPATH/bin:/usr/local/go/bin:$PATH
+    Name: env
+  - CmdLine:
+    - mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 777 "$GOPATH"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH
+  - CmdLine:
+    - go get github.com/uswitch/oauth2_proxy
+    Name: run
+    PrependShell: true
+  From:
+    Image: buildpack-deps:stretch-scm
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM buildpack-deps:stretch-scm  AS build-env
+- BaseName: docker.elastic.co/kibana/kibana-oss:6.4.2
+  Commands:
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /go/bin
+    - /usr/bin/.
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - init
+    - /usr/bin/init
+  - Name: expose
+    Ports:
+    - "4180"
+  - CmdLine:
+    - /usr/bin/init
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: docker.elastic.co/kibana/kibana-oss:6.4.2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM docker.elastic.co/kibana/kibana-oss:6.4.2

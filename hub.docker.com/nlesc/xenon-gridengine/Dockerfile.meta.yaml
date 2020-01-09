@@ -1,0 +1,70 @@
+MetaArgs: null
+Stages:
+- BaseName: nlesc/xenon-phusion-base-16
+  Commands:
+  - Maintainer: Stefan Verhoeven "s.verhoeven@esciencecenter.nl"
+    Name: maintainer
+  - CmdLine:
+    - 'echo "Package: xserver-xorg*\nPin: release *\nPin-Priority: -1" >> /etc/apt/preferences
+      && echo "Package: unity*\nPin: release *\nPin-Priority: -1" >> /etc/apt/preferences
+      && echo "Package: gnome*\nPin: release *\nPin-Priority: -1" >> /etc/apt/preferences
+      && echo "gridengine-master shared/gridenginemaster string $HOSTNAME" | debconf-set-selections
+      && echo "postfix postfix/main_mailer_type  string ''No configuration''" | debconf-set-selections
+      && apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y gridengine-master
+      gridengine-exec gridengine-client inotify-tools && apt-get clean && rm -rf /var/lib/apt/lists/*
+      /tmp/* /var/tmp/*'
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "22"
+  - Name: expose
+    Ports:
+    - "6444"
+  - Name: expose
+    Ports:
+    - "6445"
+  - CmdLine:
+    - mkdir -p /etc/my_init.d
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - etc/my_init.d/gridengine.sh
+    - /etc/my_init.d/gridengine.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - etc/gridengine
+    - /etc/gridengine/files
+  - Name: workdir
+    Path: /etc/gridengine/files
+  - CmdLine:
+    - mkdir host_groups exec_hosts && perl -pi -e 's/false/true/' /var/lib/gridengine/default/common/bootstrap
+      && echo $HOSTNAME > /var/lib/gridengine/default/common/act_qmaster && /etc/init.d/gridengine-master
+      start && sleep 2 && qconf -as $HOSTNAME && /bin/echo -e "group_name @allhosts\nhostlist
+      $HOSTNAME" > host_groups/allhosts && qconf -Ahgrp host_groups/allhosts && qconf
+      -Ap parallel_environments/bi && qconf -Ap parallel_environments/fillup && qconf
+      -Ap parallel_environments/round && qconf -Ap parallel_environments/smp && qconf
+      -Aq queues/default && qconf -Aq queues/slow && qconf -Msconf scheduler && qconf
+      -Mconf configurations/global && killall sge_qmaster
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /sbin/my_init
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 1000000000
+      Test:
+      - CMD-SHELL
+      - qping -info $(hostname) 6444 qmaster 1 && qping -info $(hostname) 6445 execd
+        1 && ssh -o NoHostAuthenticationForLocalhost=yes -i /home/xenon/.ssh/id_rsa
+        xenon@localhost /bin/true || exit 1
+    Name: healthcheck
+  From:
+    Image: nlesc/xenon-phusion-base-16
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nlesc/xenon-phusion-base-16

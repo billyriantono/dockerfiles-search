@@ -1,0 +1,122 @@
+MetaArgs: null
+Stages:
+- As: go_builder
+  BaseName: golang:1.11
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/malice-plugins/bitdefender
+  - Name: workdir
+    Path: /go/src/github.com/malice-plugins/bitdefender
+  - CmdLine:
+    - go get -u github.com/golang/dep/cmd/dep && dep ensure
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -ldflags "-s -w -X main.Version=v$(cat VERSION) -X main.BuildTime=$(date
+      -u +%Y%m%d)" -o /bin/avscan
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11
+  Name: go_builder
+  Platform: ""
+  SourceCode: FROM golang:1.11 as go_builder
+- BaseName: ubuntu:bionic
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"https://github.com/blacktop"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.repository
+      Value: = "https://github.com/malice-plugins/bitdefender.git"
+    Name: label
+  - Labels:
+    - Key: malice.plugin.category
+      Value: '"av"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.mime
+      Value: '"*"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.docker.engine
+      Value: '"*"'
+    Name: label
+  - CmdLine:
+    - groupadd -r malice   && useradd --no-log-init -r -g malice malice   && mkdir
+      /malware   && chown -R malice:malice /malware
+    Name: run
+    PrependShell: true
+  - Key: BDKEY
+    Name: arg
+    Value: null
+  - Env:
+    - Key: BDVERSION
+      Value: 7.7-1
+    Name: env
+  - Env:
+    - Key: BDURLPART
+      Value: BitDefender_Antivirus_Scanner_for_Unices/Unix/Current/EN_FR_BR_RO/Linux/
+    Name: env
+  - Env:
+    - Key: BDURL
+      Value: https://download.bitdefender.com/SMB/Workstation_Security_and_Management/${BDURLPART}
+    Name: env
+  - CmdLine:
+    - buildDeps='ca-certificates wget build-essential'   && apt-get update -qq   &&
+      apt-get install -yq $buildDeps psmisc   && set -x   && echo "===> Install Bitdefender..."   &&
+      cd /tmp   && wget -q ${BDURL}/BitDefender-Antivirus-Scanner-${BDVERSION}-linux-amd64.deb.run   &&
+      chmod 755 /tmp/BitDefender-Antivirus-Scanner-${BDVERSION}-linux-amd64.deb.run   &&
+      sh /tmp/BitDefender-Antivirus-Scanner-${BDVERSION}-linux-amd64.deb.run --check   &&
+      echo "===> Making installer noninteractive..."   && sed -i 's/^more LICENSE$/cat  LICENSE/'
+      BitDefender-Antivirus-Scanner-${BDVERSION}-linux-amd64.deb.run   && sed -i 's/^CRCsum=.*$/CRCsum="0000000000"/'
+      BitDefender-Antivirus-Scanner-${BDVERSION}-linux-amd64.deb.run   && sed -i 's/^MD5=.*$/MD5="00000000000000000000000000000000"/'
+      BitDefender-Antivirus-Scanner-${BDVERSION}-linux-amd64.deb.run   && (echo 'accept';
+      echo 'n') | sh /tmp/BitDefender-Antivirus-Scanner-${BDVERSION}-linux-amd64.deb.run;   if
+      [ "x$BDKEY" != "x" ]; then   echo "===> Updating License...";   oldkey='^Key
+      =.*$';   newkey="Key = ${BDKEY}";   sed -i "s|$oldkey|$newkey|g" /opt/BitDefender-scanner/etc/bdscan.conf;   cat
+      /opt/BitDefender-scanner/etc/bdscan.conf;   fi   && echo "===> Clean up unnecessary
+      files..."   && apt-get purge -y --auto-remove $buildDeps   && apt-get clean   &&
+      rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /go /usr/local/go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update -qq && apt-get install -yq --no-install-recommends ca-certificates   &&
+      rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/malice && echo "accept" | bdscan --update
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - http://www.eicar.org/download/eicar.com.txt
+    - /malware/EICAR
+  - Chown: ""
+    From: go_builder
+    Name: copy
+    SourcesAndDest:
+    - /bin/avscan
+    - /bin/avscan
+  - Name: workdir
+    Path: /malware
+  - CmdLine:
+    - /bin/avscan
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:bionic
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic

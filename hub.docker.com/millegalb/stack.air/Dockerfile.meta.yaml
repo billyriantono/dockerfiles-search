@@ -1,0 +1,88 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: mcr.microsoft.com/dotnet/core/aspnet:3.0
+  Commands:
+  - Name: expose
+    Ports:
+    - "5063"
+  From:
+    Image: mcr.microsoft.com/dotnet/core/aspnet:3.0
+  Name: base
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/aspnet:3.0 AS base
+- As: build
+  BaseName: mcr.microsoft.com/dotnet/core/sdk:3.0
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./Air/Air.csproj
+    - Air/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./nuget.config
+    - Air/
+  - CmdLine:
+    - dotnet restore "Air/Air.csproj" --configfile Air/nuget.config
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '"./Air"'
+    - '"Air"'
+  - Name: workdir
+    Path: '"/src/Air"'
+  - CmdLine:
+    - dotnet build "Air.csproj" -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: mcr.microsoft.com/dotnet/core/sdk:3.0
+  Name: build
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/sdk:3.0 AS build
+- As: publish
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - dotnet publish "Air.csproj" -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build AS publish
+- As: final
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - CmdLine:
+    - dotnet
+    - Air.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: final
+  Platform: ""
+  SourceCode: FROM base AS final

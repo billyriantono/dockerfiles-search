@@ -1,0 +1,128 @@
+MetaArgs: null
+Stages:
+- BaseName: malfurious/nginx-php
+  Commands:
+  - Labels:
+    - Key: description
+      Value: '"Roundcube-Postfix is a simple, modern & fast webmail client combined
+        with an administrative Postfixadmin webportal to manage postfix accounts."       maintainer="Malfurious
+        <jmay9990@gmail.com>"'
+    Name: label
+  - Key: ROUND_VERSION
+    Name: arg
+    Value: 1.3.1
+  - Key: POST_VERSION
+    Name: arg
+    Value: "3.1"
+  - Env:
+    - Key: UID
+      Value: "991"
+    - Key: GID
+      Value: "991"
+    - Key: UPLOAD_MAX_SIZE
+      Value: 25M
+    - Key: MEMORY_LIMIT
+      Value: 128M
+    Name: env
+  - Env:
+    - Key: PLUGINS
+      Value: '" ''password'',''enigma'',''emoticons'',''filesystem_attachments'',''managesieve'',''archive'',''twofactor_gauthenticator'',''identity_smtp'',''calendar'',''contextmenu'',''markasjunk2'',''tasklist'',''persistent_login''"'
+    Name: env
+  - CmdLine:
+    - echo "@community https://nl.alpinelinux.org/alpine/v3.6/community" >> /etc/apk/repositories  &&
+      apk -U upgrade
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add gnupg openssl dovecot tini@community
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apk add -t build-dependencies     wget     git     curl \tca-certificates \tcoreutils
+      \tgcc \tlinux-headers \tmake \tmusl-dev  && cd /tmp  && wget -q https://github.com/roundcube/roundcubemail/releases/download/${ROUND_VERSION}/roundcubemail-${ROUND_VERSION}-complete.tar.gz
+      \ && wget -q https://downloads.sourceforge.net/project/postfixadmin/postfixadmin/postfixadmin-${POST_VERSION}/postfixadmin-${POST_VERSION}.tar.gz
+      \ && git clone https://git.kolab.org/diffusion/RPK/roundcubemail-plugins-kolab.git"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /roundcube && tar -xzf /tmp/roundcubemail-${ROUND_VERSION}-complete.tar.gz
+      --strip 1 -C /roundcube  && mv /roundcube/config/config.inc.php.sample /roundcube/config/config.inc.php
+      && mv /roundcube/composer.json-dist /roundcube/composer.json
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /postfixadmin && tar xzf /tmp/postfixadmin-${POST_VERSION}.tar.gz -C /postfixadmin
+      && mv /postfixadmin/postfixadmin-${POST_VERSION}/* /postfixadmin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/roundcube/
+      --filename=composer.phar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /roundcube && php composer.phar install --no-dev && php composer.phar require
+      sabre/vobject 3.3.3  && cd /roundcube/plugins && git clone https://github.com/alexandregz/twofactor_gauthenticator.git
+      && git clone git://github.com/elm/Roundcube-SMTP-per-Identity-Plugin.git identity_smtp  &&
+      cp -r /tmp/roundcubemail-plugins-kolab/plugins/calendar . && cp -r /tmp/roundcubemail-plugins-kolab/plugins/libcalendaring
+      . && cp -r /tmp/roundcubemail-plugins-kolab/plugins/tasklist .  && cd /roundcube/plugins/calendar
+      && cp config.inc.php.dist config.inc.php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /roundcube/plugins && git clone https://github.com/JohnDoh/Roundcube-Plugin-Context-Menu.git
+      contextmenu  && git clone https://github.com/JohnDoh/Roundcube-Plugin-Mark-as-Junk-2.git
+      markasjunk2 && git clone https://github.com/mfreiholz/persistent_login.git persistent_login  &&
+      find /roundcube -type d -exec chmod 755 {} \;  && find /roundcube -type f -exec
+      chmod 644 {} \;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /enigma && mv /roundcube/plugins/password/config.inc.php.dist /roundcube/plugins/password/config.inc.php  &&
+      mv /roundcube/plugins/enigma/config.inc.php.dist /roundcube/plugins/enigma/config.inc.php  &&
+      mv /roundcube/plugins/tasklist/config.inc.php.dist /roundcube/plugins/tasklist/config.inc.php  &&
+      mv /roundcube/plugins/persistent_login/config.inc.php.dist /roundcube/plugins/persistent_login/config.inc.php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk del build-dependencies  && rm -rf /tmp/* /var/cache/apk/* /root/.gnupg /postfixadmin/postfixadmin-${POST_VERSION}*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "/'zipdownload',/a ${PLUGINS}" /roundcube/config/config.inc.php
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mysql.initial.sql
+    - /roundcube/SQL
+  - CmdLine:
+    - chmod +x /usr/local/bin/* /etc/s6.d/*/* /etc/s6.d/.s6-svscan/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+    - "8888"
+  - Name: volume
+    Volumes:
+    - /enigma
+  - CmdLine:
+    - tini
+    - --
+    - run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: malfurious/nginx-php
+  Name: ""
+  Platform: ""
+  SourceCode: FROM malfurious/nginx-php

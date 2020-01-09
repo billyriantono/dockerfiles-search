@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:buster
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends         ca-certificates         inetutils-syslogd         libcurl3         liblua5.3-0         libssl1.1         openssl         procps         python3         runit         gnupg-agent         socat     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TINI_VERSION
+      Value: v0.16.1
+    - Key: TINI_GPG_KEY
+      Value: 595E85A6B1B4779EA4DAAEC70B588DFF0527A9B7
+    Name: env
+  - CmdLine:
+    - set -x     && apt-get update && apt-get install -y --no-install-recommends dirmngr
+      gpg wget         && rm -rf /var/lib/apt/lists/*     && wget -O tini "https://github.com/krallin/tini/releases/download/$TINI_VERSION/tini-amd64"     &&
+      wget -O tini.asc "https://github.com/krallin/tini/releases/download/$TINI_VERSION/tini-amd64.asc"     &&
+      export GNUPGHOME="$(mktemp -d)"     && gpg --keyserver ha.pool.sks-keyservers.net
+      --recv-keys "$TINI_GPG_KEY"     || gpg --keyserver pool.sks-keyservers.net --recv-keys
+      "$TINI_GPG_KEY"     || gpg --keyserver keyserver.pgp.com --recv-keys "$TINI_GPG_KEY"     ||
+      gpg --keyserver pgp.mit.edu --recv-keys "$TINI_GPG_KEY"     && gpg --batch --verify
+      tini.asc tini     && rm -rf "$GNUPGHOME" tini.asc     && mv tini /usr/bin/tini     &&
+      chmod +x /usr/bin/tini     && tini -- true     && apt-get purge -y --auto-remove
+      dirmngr gpg wget
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HAPROXY_MAJOR
+      Value: "1.8"
+    - Key: HAPROXY_VERSION
+      Value: 1.8.4
+    - Key: HAPROXY_MD5
+      Value: 540cd21169e8828d5d11894b2fa74ab4
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - /marathon-lb/
+  - CmdLine:
+    - set -x     && buildDeps='         build-essential         gcc         libcurl4-openssl-dev         libffi-dev         liblua5.3-dev         libpcre3-dev         libssl-dev         make         python3-dev         python3-pip         python3-setuptools         wget         zlib1g-dev     '     &&
+      apt-get update     && apt-get install -y --no-install-recommends $buildDeps     &&
+      rm -rf /var/lib/apt/lists/*         && wget -O haproxy.tar.gz "https://www.haproxy.org/download/$HAPROXY_MAJOR/src/haproxy-$HAPROXY_VERSION.tar.gz"     &&
+      echo "$HAPROXY_MD5  haproxy.tar.gz" | md5sum -c     && mkdir -p /usr/src/haproxy     &&
+      tar -xzf haproxy.tar.gz -C /usr/src/haproxy --strip-components=1     && rm haproxy.tar.gz     &&
+      make -C /usr/src/haproxy         TARGET=linux2628         ARCH=x86_64         USE_LUA=1         LUA_INC=/usr/include/lua5.3/         USE_OPENSSL=1         USE_PCRE_JIT=1         USE_PCRE=1         USE_REGPARM=1         USE_STATIC_PCRE=1         USE_ZLIB=1         all         install-bin     &&
+      rm -rf /usr/src/haproxy         && pip3 install --no-cache --upgrade --force-reinstall
+      -r /marathon-lb/requirements.txt         && apt-get purge -y --auto-remove $buildDeps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /marathon-lb
+  - Name: workdir
+    Path: /marathon-lb
+  - CmdLine:
+    - tini
+    - -g
+    - --
+    - /marathon-lb/run
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - sse
+    - --health-check
+    - --group
+    - external
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+    - "9090"
+    - "9091"
+  From:
+    Image: debian:buster
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:buster

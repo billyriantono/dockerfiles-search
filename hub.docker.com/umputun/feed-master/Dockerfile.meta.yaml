@@ -1,0 +1,78 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: umputun/baseimage:buildgo-latest
+  Commands:
+  - Key: COVERALLS_TOKEN
+    Name: arg
+    Value: null
+  - Key: CI
+    Name: arg
+    Value: null
+  - Key: GIT_BRANCH
+    Name: arg
+    Value: null
+  - Key: SKIP_TEST
+    Name: arg
+    Value: null
+  - Env:
+    - Key: GOFLAGS
+      Value: '"-mod=vendor"'
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /build/feed-master
+  - Name: workdir
+    Path: /build/feed-master
+  - CmdLine:
+    - if [ -z "$SKIP_TEST" ] ; then     go test -timeout=30s  ./... &&     golangci-lint
+      run ;     else echo "skip tests and linter" ; fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ -z "$CI" ] ; then     echo "runs outside of CI" && version=$(/script/git-rev.sh);     else
+      version=${GIT_BRANCH}-${GITHUB_SHA:0:7}-$(date +%Y%m%dT%H:%M:%S); fi &&     echo
+      "version=$version" &&     go build -o feed-master -ldflags "-X main.revision=${version}
+      -s -w" ./app
+    Name: run
+    PrependShell: true
+  From:
+    Image: umputun/baseimage:buildgo-latest
+  Name: build
+  Platform: ""
+  SourceCode: FROM umputun/baseimage:buildgo-latest as build
+- BaseName: umputun/baseimage:app-latest
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/feed-master/feed-master
+    - /srv/feed-master
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - app/webapp
+    - /srv/webapp
+  - CmdLine:
+    - chown -R app:app /srv &&     chmod +x /srv/feed-master
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /srv
+  - CmdLine:
+    - /srv/feed-master
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - /init.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: umputun/baseimage:app-latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM umputun/baseimage:app-latest

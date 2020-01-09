@@ -1,0 +1,116 @@
+MetaArgs: null
+Stages:
+- As: prebuilder
+  BaseName: golang:1.13.4-alpine3.10
+  Commands:
+  - CmdLine:
+    - mkdir /user &&     echo 'nobody:x:65534:65534:nobody:/:' > /user/passwd &&     echo
+      'nobody:x:65534:' > /user/group
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache ca-certificates git
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13.4-alpine3.10
+  Name: prebuilder
+  Platform: ""
+  SourceCode: FROM golang:1.13.4-alpine3.10 as prebuilder
+- As: depbuilder
+  BaseName: prebuilder
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - .
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go mod vendor
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: prebuilder
+  Name: depbuilder
+  Platform: ""
+  SourceCode: FROM prebuilder as depbuilder
+- As: builder
+  BaseName: depbuilder
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - rm /src/go.sum
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app .
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: depbuilder
+  Name: builder
+  Platform: ""
+  SourceCode: FROM depbuilder as builder
+- As: final
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /user/group
+    - /user/passwd
+    - /etc/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/app
+    - /app
+  - Chown: nobody:nobody
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - data
+    - /.local
+  - Chown: nobody:nobody
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - data
+    - /config
+  - Name: user
+    User: nobody:nobody
+  - CmdLine:
+    - /app
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: final
+  Platform: ""
+  SourceCode: FROM scratch as final

@@ -1,0 +1,151 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: node:7-alpine
+  Commands:
+  - CmdLine:
+    - mkdir -p /usr/src/app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/app
+  - CmdLine:
+    - apk add --update-cache sqlite &&     apk add imagemagick
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:7-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:7-alpine as base
+- As: dependencies
+  BaseName: base
+  Commands:
+  - Key: npm_install_args
+    Name: arg
+    Value: install
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./package.json
+    - /usr/src/app
+  - CmdLine:
+    - npm $npm_install_args
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: dependencies
+  Platform: ""
+  SourceCode: FROM base as dependencies
+- As: tests
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./test
+    - /usr/src/app/test/
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: tests
+  Platform: ""
+  SourceCode: FROM base as tests
+- As: local_storage
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - mkdir /usr/src/app/local
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./local/db.schema
+    - /usr/src/app
+  - CmdLine:
+    - /usr/bin/sqlite3 /usr/src/app/local/db.sqlt < /usr/src/app/db.schema
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: local_storage
+  Platform: ""
+  SourceCode: FROM base as local_storage
+- As: release
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: PORT
+      Value: "3035"
+    Name: env
+  - Name: workdir
+    Path: /usr/src/app
+  - Chown: ""
+    From: local_storage
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/local
+    - /usr/src/app/local
+  - Name: volume
+    Volumes:
+    - /usr/src/app/local
+  - Chown: ""
+    From: dependencies
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/node_modules
+    - /usr/src/app/node_modules
+  - Chown: ""
+    From: tests
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/test
+    - /usr/src/app/test
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config
+    - /usr/src/app/config
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./package.json
+    - /usr/src/app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./init.sh
+    - /usr/src/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src
+    - /usr/src/app/src/
+  - Name: expose
+    Ports:
+    - $PORT
+  - CmdLine:
+    - /usr/src/app/init.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: release
+  Platform: ""
+  SourceCode: FROM base as release

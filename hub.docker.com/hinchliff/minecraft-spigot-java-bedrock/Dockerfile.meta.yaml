@@ -1,0 +1,60 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: gradle:jdk8
+  Commands:
+  - CmdLine:
+    - cd /home/gradle &&     git clone --single-branch --branch mcpenew https://github.com/ProtocolSupport/ProtocolSupport.git
+      &&     cd ProtocolSupport &&     ./gradlew --no-daemon jar
+    Name: run
+    PrependShell: true
+  From:
+    Image: gradle:jdk8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM gradle:jdk8 as builder
+- BaseName: openjdk:8-jre-slim
+  Commands:
+  - Env:
+    - Key: SPIGOT_VER
+      Value: 1.14.3
+    Name: env
+  - CmdLine:
+    - "apt-get update \t&& apt-get -y upgrade \t&& apt-get -y install git curl         &&
+      mkdir -p /spigot \t&& cd /spigot         && curl -Ss -o /spigot/BuildTools.jar
+      https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar
+      \t&& java -jar BuildTools.jar --rev $SPIGOT_VER         && rm -rf /spigot/BuildData
+      /spigot/BuildTools.jar /spigot/Bukkit /spigot/CraftBukkit /spigot/Spigot /spigot/apache-maven-*
+      /spigot/work  /root/.m2         && apt-get -y autoremove --purge         &&
+      rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "25565"
+    - 25565/udp
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: workdir
+    Path: /data
+  - CmdLine:
+    - mkdir -p /data/plugins
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/gradle/ProtocolSupport/target/ProtocolSupport.jar
+    - /data/plugins/ProtocolSupport.jar
+  - CmdLine:
+    - java -Xms512M -Xmx1008M -Dcom.mojang.eula.agree=true -Dfile.encoding=UTF-8 -jar
+      /spigot/spigot-${SPIGOT_VER}.jar nogui
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: openjdk:8-jre-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre-slim

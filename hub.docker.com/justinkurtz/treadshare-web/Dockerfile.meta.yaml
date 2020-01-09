@@ -1,0 +1,87 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - /src
+  - CmdLine:
+    - apk add --no-cache git && cd /src && go build -o goapp
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- As: ngbuilder
+  BaseName: node:12-alpine
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./webApp/package*.json
+    - ./webApp/yarn.lock
+    - ./
+  - CmdLine:
+    - yarn add --force node-sass && yarn install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./webApp/
+    - ./
+  - CmdLine:
+    - npm run buildProd
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12-alpine
+  Name: ngbuilder
+  Platform: ""
+  SourceCode: FROM node:12-alpine as ngbuilder
+- BaseName: alpine:latest
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/goapp
+    - /app/
+  - Chown: ""
+    From: ngbuilder
+    Name: copy
+    SourcesAndDest:
+    - /src/dist/
+    - /app/public/
+  - Env:
+    - Key: GIN_MODE
+      Value: release
+    Name: env
+  - Env:
+    - Key: TREADSHARE_API_URL
+      Value: http://127.0.0.1:8080/v1
+    Name: env
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - ./goapp
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

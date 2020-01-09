@@ -1,0 +1,134 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: openjdk:8-jdk-alpine
+  Commands:
+  - Name: workdir
+    Path: /app/source
+  - Env:
+    - Key: FC_LANG
+      Value: en-US
+    Name: env
+  - Env:
+    - Key: LC_CTYPE
+      Value: en_US.UTF-8
+    Name: env
+  - CmdLine:
+    - apk add --update bash nodejs nodejs-npm git wget make gettext
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install -g yarn
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://raw.github.com/technomancy/leiningen/stable/bin/lein
+    - /usr/local/bin/lein
+  - CmdLine:
+    - chmod 744 /usr/local/bin/lein
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - lein upgrade
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - project.clj
+    - .
+  - CmdLine:
+    - lein deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - yarn.lock
+    - package.json
+    - ./
+  - CmdLine:
+    - yarn
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - bin/build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --update java-cacerts
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem
+    - .
+  - CmdLine:
+    - keytool -noprompt -import -trustcacerts -alias aws-rds   -file rds-combined-ca-bundle.pem   -keystore
+      /etc/ssl/certs/java/cacerts   -keypass changeit -storepass changeit
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8-jdk-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-alpine as builder
+- As: runner
+  BaseName: java:openjdk-8-jre-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Env:
+    - Key: FC_LANG
+      Value: en-US
+    Name: env
+  - Env:
+    - Key: LC_CTYPE
+      Value: en_US.UTF-8
+    Name: env
+  - CmdLine:
+    - apk add --update bash ttf-dejavu fontconfig
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/java/cacerts
+    - /usr/lib/jvm/default-jvm/jre/lib/security/cacerts
+  - CmdLine:
+    - mkdir -p bin target/uberjar
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/source/target/uberjar/metabase.jar
+    - /app/target/uberjar/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/source/bin/start
+    - /app/bin/
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - /app/bin/start
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: java:openjdk-8-jre-alpine
+  Name: runner
+  Platform: ""
+  SourceCode: FROM java:openjdk-8-jre-alpine as runner

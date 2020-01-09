@@ -1,0 +1,132 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: erlang:21
+  Commands:
+  - Name: workdir
+    Path: /vernemq-build
+  - Key: VERNEMQ_GIT_REF
+    Name: arg
+    Value: 1.9.2
+  - Key: TARGET
+    Name: arg
+    Value: rel
+  - Key: VERNEMQ_REPO
+    Name: arg
+    Value: https://github.com/vernemq/vernemq.git
+  - Env:
+    - Key: DOCKER_VERNEMQ_KUBERNETES_LABEL_SELECTOR
+      Value: '"app=vernemq"'
+    - Key: DOCKER_VERNEMQ_LOG__CONSOLE
+      Value: console
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get -y install build-essential git libssl-dev &&     git
+      clone -b $VERNEMQ_GIT_REF $VERNEMQ_REPO .
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/build.sh
+    - build.sh
+  - CmdLine:
+    - ./build.sh $TARGET
+    Name: run
+    PrependShell: true
+  From:
+    Image: erlang:21
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM erlang:21 AS build-env
+- BaseName: debian:stretch-slim
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get -y install procps openssl iproute2 curl jq &&     rm
+      -rf /var/lib/apt/lists/* &&     addgroup --gid 10000 vernemq &&     adduser
+      --uid 10000 --system --ingroup vernemq --home /vernemq --disabled-password vernemq
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /vernemq
+  - Env:
+    - Key: DOCKER_VERNEMQ_KUBERNETES_LABEL_SELECTOR
+      Value: '"app=vernemq"'
+    - Key: DOCKER_VERNEMQ_LOG__CONSOLE
+      Value: console
+    - Key: PATH
+      Value: '"/vernemq/bin:$PATH"'
+    Name: env
+  - Env:
+    - Key: DOCKER_VERNEMQ_DISCOVERY_CONSUL
+      Value: "0"
+    - Key: DOCKER_VERNEMQ_DISCOVERY_CONSUL_SERVICE_NAME
+      Value: vernemq
+    - Key: DOCKER_VERNEMQ_DISCOVERY_CONSUL_HOST
+      Value: consul.service.consul
+    - Key: DOCKER_VERNEMQ_DISCOVERY_CONSUL_PORT
+      Value: "8500"
+    Name: env
+  - Chown: 10000:10000
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/vernemq.sh
+    - /usr/sbin/start_vernemq
+  - Chown: 10000:10000
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/vm.args
+    - /vernemq/etc/vm.args
+  - Chown: 10000:10000
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /vernemq-build/release
+    - /vernemq
+  - CmdLine:
+    - ln -s /vernemq/etc /etc/vernemq &&     ln -s /vernemq/data /var/lib/vernemq
+      &&     ln -s /vernemq/log /var/log/vernemq
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "1883"
+    - "4369"
+    - "44053"
+    - "8080"
+    - "8883"
+    - "8888"
+    - "9100"
+    - "9101"
+    - "9102"
+    - "9103"
+    - "9104"
+    - "9105"
+    - "9106"
+    - "9107"
+    - "9108"
+    - "9109"
+  - Name: volume
+    Volumes:
+    - /vernemq/log
+    - /vernemq/data
+    - /vernemq/etc
+  - Health:
+      Test:
+      - CMD-SHELL
+      - vernemq ping | grep -q pong
+    Name: healthcheck
+  - Name: user
+    User: vernemq
+  - CmdLine:
+    - start_vernemq
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

@@ -1,0 +1,76 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: rust:1.38-alpine3.10
+  Commands:
+  - CmdLine:
+    - apk add --no-cache binutils
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /workspace
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - await-ports/Cargo.lock
+    - ./Cargo.lock
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - await-ports/Cargo.toml
+    - ./Cargo.toml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - await-ports/src
+    - ./src
+  - CmdLine:
+    - set -ex;     cargo build --release --target x86_64-unknown-linux-musl;     strip
+      ./target/x86_64-unknown-linux-musl/release/await-ports;
+    Name: run
+    PrependShell: true
+  From:
+    Image: rust:1.38-alpine3.10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM rust:1.38-alpine3.10 AS builder
+- As: tini-static
+  BaseName: alpine:3.10
+  Commands:
+  - CmdLine:
+    - apk add --no-cache tini-static
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: tini-static
+  Platform: ""
+  SourceCode: FROM alpine:3.10 AS tini-static
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: tini-static
+    Name: copy
+    SourcesAndDest:
+    - /sbin/tini-static
+    - /tini
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /workspace/target/x86_64-unknown-linux-musl/release/await-ports
+    - /await-ports
+  - CmdLine:
+    - /tini
+    - --
+    - /await-ports
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

@@ -1,0 +1,104 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: golang:1.11.4-alpine
+  Commands:
+  - Name: workdir
+    Path: /go/src/github.com/quentin-m/etcd-cloud-operator
+  - CmdLine:
+    - apk add --no-cache git curl gcc musl-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --update openssl &&     wget https://github.com/coreos/etcd/releases/download/v3.3.3/etcd-v3.3.3-linux-amd64.tar.gz
+      -O /tmp/etcd.tar.gz &&     mkdir /etcd &&     tar xzvf /tmp/etcd.tar.gz -C /etcd
+      --strip-components=1 &&     rm /tmp/etcd.tar.gz
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.sum
+    - .
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11.4-alpine
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM golang:1.11.4-alpine AS build-env
+- As: builder
+  BaseName: build-env
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - go install github.com/quentin-m/etcd-cloud-operator/cmd/operator
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go install github.com/quentin-m/etcd-cloud-operator/cmd/tester
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build-env
+  Name: builder
+  Platform: ""
+  SourceCode: FROM build-env as builder
+- BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/operator
+    - /operator
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/tester
+    - /tester
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etcd/etcdctl
+    - /usr/local/bin/etcdctl
+  - CmdLine:
+    - /operator
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -config
+    - /etc/eco/eco.yaml
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

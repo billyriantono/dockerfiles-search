@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- As: protoc
+  BaseName: znly/protoc:latest
+  Commands:
+  - CmdLine:
+    - mkdir -p /proto
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./proto/im/*.proto
+    - /proto
+  - Name: workdir
+    Path: /proto
+  - CmdLine:
+    - protoc --go_out=plugins=grpc:. *.proto
+    Name: run
+    PrependShell: true
+  From:
+    Image: znly/protoc:latest
+  Name: protoc
+  Platform: ""
+  SourceCode: FROM znly/protoc:latest AS protoc
+- As: build
+  BaseName: golang:latest
+  Commands:
+  - CmdLine:
+    - mkdir -p /modgo/github.com/jebre/samplegrpc
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /modgo/github.com/jebre/samplegrpc
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Chown: ""
+    From: protoc
+    Name: copy
+    SourcesAndDest:
+    - /proto/*.go
+    - ./proto/im/
+  - CmdLine:
+    - go build -o /modgo/bin/server ./cmd/server/*.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:latest AS build
+- As: package
+  BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - mkdir /grpc
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /modgo/bin/server
+    - /grpc/server
+  - CmdLine:
+    - mkdir /lib64 && ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9906"
+  - CmdLine:
+    - /grpc/server
+    - '&'
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: package
+  Platform: ""
+  SourceCode: FROM alpine:latest AS package

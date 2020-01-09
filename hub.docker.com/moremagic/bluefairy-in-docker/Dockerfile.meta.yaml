@@ -1,0 +1,111 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:15.10
+  Commands:
+  - Maintainer: moremagic<itoumagic@gmail.com>
+    Name: maintainer
+  - CmdLine:
+    - apt-get update && apt-get upgrade -y && apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y openssh-server openssh-client && apt-get
+      clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /var/run/sshd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'root:root' | chpasswd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/PermitRootLogin without-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g'
+      -i /etc/pam.d/sshd
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NOTVISIBLE
+      Value: '"in users profile"'
+    Name: env
+  - CmdLine:
+    - echo "export VISIBLE=now" >> /etc/profile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -q -y openjdk-8-jdk && apt-get clean
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/java-8-openjdk-amd64/
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $JAVA_HOME/bin:$PATH
+    Name: env
+  - CmdLine:
+    - apt-get install -y mongodb
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/mongo_setup.sh
+    - /etc/
+  - CmdLine:
+    - chmod +x /etc/mongo_setup.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker-proxy
+    - /opt/docker-proxy/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/bluefairy-0.1.0.jar
+    - /opt/bluefairy/target/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/unix-socket-proxy
+    - /etc/nginx/sites-available/
+  - CmdLine:
+    - apt-get -y install nginx && apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /etc/nginx/sites-available/unix-socket-proxy /etc/nginx/sites-enabled/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - printf '#!/bin/bash \n/etc/init.d/mongodb start \n/etc/mongo_setup.sh > /etc/mongo_debug.log
+      \nchmod 666 /tmp/docker_socket \njava -jar /opt/bluefairy/target/bluefairy-0.1.0.jar
+      --server.port=8080 --logging.file=/var/log/bluefairy.log --bluefairy.docker.remoteApi=http://127.0.0.1:55111/
+      & \njava -cp /opt/docker-proxy/HttpSocks.jar:/opt/docker-proxy/jsonic-1.3.10.jar
+      httpsocks.HttpSocks 55111 $DOKER_HOSTS > /var/log/docker-proxy.log 2>1& \n/etc/init.d/nginx
+      start \n/usr/sbin/sshd -D \ntail -f /var/null \n' >> /etc/service.sh     &&
+      chmod +x /etc/service.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "22"
+    - "8080"
+  - CmdLine:
+    - /etc/service.sh
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:15.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:15.10

@@ -1,0 +1,131 @@
+MetaArgs: null
+Stages:
+- As: os
+  BaseName: debian:buster-slim
+  Commands:
+  - CmdLine:
+    - set -x   && mkdir -p /usr/share/man/man1   && apt-get update && apt-get install
+      -y --no-install-recommends     default-jre-headless     tesseract-ocr     tesseract-ocr-ara     tesseract-ocr-cat     tesseract-ocr-deu     tesseract-ocr-eng     tesseract-ocr-fra     tesseract-ocr-ita     tesseract-ocr-nld     tesseract-ocr-nor     tesseract-ocr-por     tesseract-ocr-ron     tesseract-ocr-rus     tesseract-ocr-spa     tesseract-ocr-swe     jq     ca-certificates     openssl     tini   &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:buster-slim
+  Name: os
+  Platform: ""
+  SourceCode: FROM debian:buster-slim AS os
+- As: build
+  BaseName: os
+  Commands:
+  - CmdLine:
+    - set -x   && apt-get update && apt-get install -y --no-install-recommends wget
+      unzip   && wget -P ~ https://github.com/sbt/sbt/releases/download/v1.1.2/sbt-1.1.2.zip   &&
+      (cd ~ && unzip sbt-1.1.2.zip)   && rm -f ~/sbt-1.1.2.zip
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - java/
+    - /app/java/
+  - CmdLine:
+    - cd /app/java/ && java -jar ~/sbt/bin/sbt-launch.jar assembly
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: os
+  Name: build
+  Platform: ""
+  SourceCode: FROM os AS build
+- As: framework
+  BaseName: overview/overview-convert-framework:0.0.16
+  Commands: null
+  From:
+    Image: overview/overview-convert-framework:0.0.16
+  Name: framework
+  Platform: ""
+  SourceCode: FROM overview/overview-convert-framework:0.0.16 AS framework
+- As: base
+  BaseName: os
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: framework
+    Name: copy
+    SourcesAndDest:
+    - /app/run
+    - /app/run
+  - Chown: ""
+    From: framework
+    Name: copy
+    SourcesAndDest:
+    - /app/convert-single-file
+    - /app/convert
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app/java/target/scala-2.12/convert-pdfocr.jar
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./do-convert-single-file
+    - /app/do-convert-single-file
+  - CmdLine:
+    - /bin/tini
+    - /app/run
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: os
+  Name: base
+  Platform: ""
+  SourceCode: FROM os AS base
+- As: test
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: framework
+    Name: copy
+    SourcesAndDest:
+    - /app/test-convert-single-file
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - test/
+    - /app/test/
+  - CmdLine:
+    - /app/test-convert-single-file
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - "true"
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 3
+      Named: base
+  Name: test
+  Platform: ""
+  SourceCode: FROM base AS test
+- As: production
+  BaseName: base
+  Commands: null
+  From:
+    Stage:
+      Index: 3
+      Named: base
+  Name: production
+  Platform: ""
+  SourceCode: FROM base AS production

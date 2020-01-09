@@ -1,0 +1,168 @@
+MetaArgs: null
+Stages:
+- As: vault
+  BaseName: alpine:3.10
+  Commands:
+  - Env:
+    - Key: VAULT_VERSION
+      Value: '"v2.11.0"'
+    Name: env
+  - Env:
+    - Key: URL
+      Value: '"https://github.com/dani-garcia/bw_web_builds/releases/download/$VAULT_VERSION/bw_web_$VAULT_VERSION.tar.gz"'
+    Name: env
+  - CmdLine:
+    - apk add --no-cache --upgrade     curl     tar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /web-vault
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /web-vault
+  - Name: shell
+    Shell:
+    - /bin/ash
+    - -eo
+    - pipefail
+    - -c
+  - CmdLine:
+    - curl -L $URL | tar xz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ls
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: vault
+  Platform: ""
+  SourceCode: FROM alpine:3.10 as vault
+- As: build
+  BaseName: rust:1.36
+  Commands:
+  - Key: DB
+    Name: arg
+    Value: sqlite
+  - CmdLine:
+    - apt-get update     && apt-get install -y         --no-install-recommends         gcc-aarch64-linux-gnu     &&
+      mkdir -p ~/.cargo     && echo '[target.aarch64-unknown-linux-gnu]' >> ~/.cargo/config     &&
+      echo 'linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CARGO_HOME
+      Value: '"/root/.cargo"'
+    Name: env
+  - Env:
+    - Key: USER
+      Value: '"root"'
+    Name: env
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - sed 's/^deb/deb-src/' /etc/apt/sources.list >         /etc/apt/sources.list.d/deb-src.list     &&
+      dpkg --add-architecture arm64     && apt-get update     && apt-get install -y         --no-install-recommends         libssl-dev:arm64         libc6-dev:arm64         libmariadb-dev:arm64
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CC_aarch64_unknown_linux_gnu
+      Value: '"/usr/bin/aarch64-linux-gnu-gcc"'
+    Name: env
+  - Env:
+    - Key: CROSS_COMPILE
+      Value: '"1"'
+    Name: env
+  - Env:
+    - Key: OPENSSL_INCLUDE_DIR
+      Value: '"/usr/include/aarch64-linux-gnu"'
+    Name: env
+  - Env:
+    - Key: OPENSSL_LIB_DIR
+      Value: '"/usr/lib/aarch64-linux-gnu"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - rustup target add aarch64-unknown-linux-gnu
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cargo build --features ${DB} --release --target=aarch64-unknown-linux-gnu -v
+    Name: run
+    PrependShell: true
+  From:
+    Image: rust:1.36
+  Name: build
+  Platform: ""
+  SourceCode: FROM rust:1.36 as build
+- BaseName: balenalib/aarch64-debian:stretch
+  Commands:
+  - Env:
+    - Key: ROCKET_ENV
+      Value: '"staging"'
+    Name: env
+  - Env:
+    - Key: ROCKET_PORT
+      Value: "80"
+    Name: env
+  - Env:
+    - Key: ROCKET_WORKERS
+      Value: "10"
+    Name: env
+  - CmdLine:
+    - cross-build-start
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - apt-get update && apt-get install -y     --no-install-recommends     openssl     ca-certificates     libmariadbclient-dev  &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /data
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cross-build-end
+    Name: run
+    PrependShell: false
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: expose
+    Ports:
+    - "80"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Rocket.toml
+    - .
+  - Chown: ""
+    From: vault
+    Name: copy
+    SourcesAndDest:
+    - /web-vault
+    - ./web-vault
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app/target/aarch64-unknown-linux-gnu/release/bitwarden_rs
+    - .
+  - CmdLine:
+    - ./bitwarden_rs
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: balenalib/aarch64-debian:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM balenalib/aarch64-debian:stretch

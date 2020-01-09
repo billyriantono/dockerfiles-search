@@ -1,0 +1,105 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stretch-slim
+  Commands:
+  - Labels:
+    - Key: vendor
+      Value: '"The Prosody Team"'
+    Name: label
+  - Labels:
+    - Key: maintainer
+      Value: '"Kane Valentine <kane@cute.im>"'
+    Name: label
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Key: lua_version
+    Name: arg
+    Value: "5.2"
+  - Env:
+    - Key: LUA_VERSION
+      Value: $lua_version
+    Name: env
+  - CmdLine:
+    - "set -ex; \t\tapt-get update -qq; \tapt-get install -qq --no-install-suggests
+      --no-install-recommends \t\tca-certificates \t\tcurl \t\tgnupg; \techo deb http://packages.prosody.im/debian
+      stretch main \t| tee -a /etc/apt/sources.list; \tcurl -fsSL https://prosody.im/files/prosody-debian-packages.key
+      \t| apt-key add -; \t\tapt-get update -qq; \tapt-get install -qq --no-install-suggests
+      --no-install-recommends \t\tmercurial \t\tlua$LUA_VERSION \t\tliblua$LUA_VERSION
+      \t\tlibssl1.0.2 \t\tlibidn11 \t\tlua-sec \t\tlua-event \t\tlua-zlib \t\tlua-dbi-postgresql
+      \t\tlua-dbi-mysql \t\tlua-dbi-sqlite3 \t\tlua-bitop \t\tlua-socket \t\tlua-expat
+      \t\tlua-filesystem"
+    Name: run
+    PrependShell: true
+  - Key: prosody_version
+    Name: arg
+    Value: 0.11.2
+  - Key: prosody_sha1
+    Name: arg
+    Value: 0508cfc1c3c74a7eb8fdac2ed50435e190930f6a
+  - Env:
+    - Key: PROSODY_VERSION
+      Value: $prosody_version
+    Name: env
+  - Env:
+    - Key: PROSODY_SHA1
+      Value: $prosody_sha1
+    Name: env
+  - CmdLine:
+    - "set -ex; \tif [ \"$PROSODY_VERSION\" = \"trunk\" ]; then \t\thg clone https://hg.prosody.im/trunk/
+      /usr/src/prosody-$PROSODY_VERSION; \telse \t\tcurl -o prosody.tar.gz -fSL \"https://prosody.im/downloads/source/prosody-${PROSODY_VERSION}.tar.gz\";
+      \t\techo \"$PROSODY_SHA1 *prosody.tar.gz\" | sha1sum -c -; \t\ttar -xzf prosody.tar.gz
+      -C /usr/src/; \t\trm prosody.tar.gz; \tfi"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/prosody-$PROSODY_VERSION
+  - CmdLine:
+    - "set -ex; \t\tsavedAptMark=\"$(apt-mark showmanual)\"; \t\tapt-get install -qq
+      --no-install-suggests --no-install-recommends \t\tbuild-essential \t\tbsdmainutils
+      \t\tliblua5.1-dev \t\tlibidn11-dev \t\tlibssl-dev \t; \t\t${PWD}/configure --lua-version=$LUA_VERSION
+      --prefix=/usr --sysconfdir=/etc/prosody --datadir=/var/lib/prosody; \tmake &&
+      make install; \t\thg clone https://hg.prosody.im/prosody-modules/ /opt/prosody-modules-available/
+      \t&& mkdir /opt/prosody-modules-enabled; \t\tapt-mark auto '.*' > /dev/null;
+      \tapt-mark manual $savedAptMark; \tapt-get purge -qq --auto-remove -o APT::AutoRemove::RecommendsImportant=false;
+      \trm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - configuration/prosody.cfg.lua
+    - /etc/prosody/prosody.cfg.lua
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - configuration/conf.d/
+    - /etc/prosody/conf.d/
+  - CmdLine:
+    - "set -ex; \t\tuseradd -rs /bin/false prosody \t\t&& mkdir /etc/prosody/cmpt.d/
+      /etc/prosody/vhost.d/ \t\t&& chown -R prosody:prosody /etc/prosody/ /var/lib/prosody/
+      /opt/prosody-modules-* \t\t&& chmod -R 760 /etc/prosody/ /var/lib/prosody/ /opt/prosody-modules-*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.pl
+    - /usr/local/bin/
+  - CmdLine:
+    - entrypoint.pl
+    Name: entrypoint
+    PrependShell: false
+  - Name: user
+    User: prosody:prosody
+  - CmdLine:
+    - /usr/bin/prosody
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

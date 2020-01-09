@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- BaseName: razzek/java:jdk-8-alpine
+  Commands:
+  - Env:
+    - Key: CATALINA_HOME
+      Value: /opt/tomcat
+    - Key: CATALINA_BASE
+      Value: /home/appuser/tomcat
+    Name: env
+  - Env:
+    - Key: TOMCAT_NATIVE_LIBDIR
+      Value: '"$CATALINA_HOME/native-jni-lib"'
+    Name: env
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: '"${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$TOMCAT_NATIVE_LIBDIR"'
+    Name: env
+  - Key: TOMCAT_MAJOR
+    Name: arg
+    Value: "8"
+  - Key: TOMCAT_VERSION
+    Name: arg
+    Value: 8.5.4
+  - Key: TOMCAT_TGZ_URL
+    Name: arg
+    Value: https://www.apache.org/dist/tomcat/tomcat-$TOMCAT_MAJOR/v$TOMCAT_VERSION/bin/apache-tomcat-$TOMCAT_VERSION.tar.gz
+  - CmdLine:
+    - "mkdir -p \"$CATALINA_HOME\"  && cd $CATALINA_HOME  && apk add --no-cache gnupg
+      \ && set -ex \t&& for key in \t\t05AB33110949707C93A279E3D3EFE6B686867BA6 \t\t07E48665A34DCAFAE522E5E6266191C37C037D42
+      \t\t47309207D818FFD8DCD3F83F1931D684307A10A5 \t\t541FBE7D8F78B25E055DDEE13C370389288584E7
+      \t\t61B832AC2F1C5A90F0F9B00A1C506407564C17A3 \t\t713DA88BE50911535FE716F5208B0AB1D63011C7
+      \t\t79F7026C690BAA50B92CD8B66A3AD3F4F22C4FED \t\t9BA44C2621385CB966EBA586F72C284D731FABEE
+      \t\tA27677289986DB50844682F8ACB77FC2E86E29AC \t\tA9C5DF4D22E99998D9875A5110C01C5A2F6059E7
+      \t\tDCFD35E0BF8CA7344752DE8B6FB21E8933C60243 \t\tF3A04C595DB5B6A5F1ECA43E3B7BBB100D811BBE
+      \t\tF7DA48BB64BCB84ECBA7EE6935CD23C10D498E23 \t; do \t\tgpg --keyserver ha.pool.sks-keyservers.net
+      --recv-keys \"$key\"; \tdone  && set -x \t\t&& apk add --no-cache --virtual
+      .fetch-deps \t\tca-certificates \t\ttar \t\topenssl \t&& wget -O tomcat.tar.gz
+      \"$TOMCAT_TGZ_URL\" \t&& wget -O tomcat.tar.gz.asc \"$TOMCAT_TGZ_URL.asc\" \t&&
+      gpg --batch --verify tomcat.tar.gz.asc tomcat.tar.gz \t&& tar -xvf tomcat.tar.gz
+      --strip-components=1         && mv temp $CATALINA_BASE         && mv work $CATALINA_BASE
+      \        && mv webapps $CATALINA_BASE         && mv logs $CATALINA_BASE         &&
+      mv conf $CATALINA_BASE         && mkdir -p $CATALINA_BASE/bin         && mkdir
+      -p $CATALINA_BASE/lib         && chown -R appuser:appuser $CATALINA_BASE         &&
+      chmod o+rx lib bin bin/*.sh         && chmod o+r lib/*.jar bin/*.jar \t&& rm
+      bin/*.bat \t&& rm tomcat.tar.gz* \t&& nativeBuildDir=\"$(mktemp -d)\" \t&& tar
+      -xvf bin/tomcat-native.tar.gz -C \"$nativeBuildDir\" --strip-components=1 \t&&
+      apk add --no-cache --virtual .native-build-deps \t\tapr-dev \t\tgcc \t\tlibc-dev
+      \t\tmake \t\t\"openjdk${JAVA_VERSION%%[-~bu]*}\"=\"$JAVA_ALPINE_VERSION\" \t\topenssl-dev
+      \t&& ( \t\texport CATALINA_HOME=\"$PWD\" \t\t&& cd \"$nativeBuildDir/native\"
+      \t\t&& ./configure \t\t\t--libdir=\"$TOMCAT_NATIVE_LIBDIR\" \t\t\t--prefix=\"$CATALINA_HOME\"
+      \t\t\t--with-apr=\"$(which apr-1-config)\" \t\t\t--with-java-home=\"$(docker-java-home)\"
+      \t\t\t--with-ssl=yes \t\t&& make -j$(getconf _NPROCESSORS_ONLN) \t\t&& make
+      install \t) \t&& runDeps=\"$( \t\tscanelf --needed --nobanner --recursive \"$TOMCAT_NATIVE_LIBDIR\"
+      \t\t\t| awk '{ gsub(/,/, \"\\nso:\", $2); print \"so:\" $2 }' \t\t\t| sort -u
+      \t\t\t| xargs -r apk info --installed \t\t\t| sort -u \t)\" \t&& apk add --virtual
+      .tomcat-native-rundeps $runDeps \t&& apk del .fetch-deps .native-build-deps
+      \t&& rm -rf \"$nativeBuildDir\" \t&& rm bin/tomcat-native.tar.gz  && set -e
+      \t&& nativeLines=\"$($CATALINA_HOME/bin/catalina.sh configtest 2>&1)\" \t&&
+      nativeLines=\"$(echo \"$nativeLines\" | grep 'Apache Tomcat Native')\" \t&&
+      nativeLines=\"$(echo \"$nativeLines\" | sort -u)\" \t&& if ! echo \"$nativeLines\"
+      | grep 'INFO: Loaded APR based Apache Tomcat Native library' >&2; then \t\techo
+      >&2 \"$nativeLines\"; \t\texit 1; \tfi"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: appuser
+  - Name: workdir
+    Path: $CATALINA_BASE
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - /usr/bin/tini
+    - --
+    - /opt/tomcat/bin/catalina.sh
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: razzek/java:jdk-8-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM razzek/java:jdk-8-alpine

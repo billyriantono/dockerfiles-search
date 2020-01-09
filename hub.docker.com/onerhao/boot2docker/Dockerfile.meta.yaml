@@ -1,0 +1,365 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get -y install  unzip                         xz-utils                         curl                         bc                         git                         build-essential                         golang                         cpio                         gcc
+      libc6 libc6-dev                         kmod                         squashfs-tools                         genisoimage                         xorriso                         syslinux                         isolinux                         automake                         pkg-config                         p7zip-full
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: KERNEL_VERSION
+      Value: 4.4.73
+    Name: env
+  - CmdLine:
+    - curl --retry 10 https://www.kernel.org/pub/linux/kernel/v${KERNEL_VERSION%%.*}.x/linux-$KERNEL_VERSION.tar.xz
+      | tar -C / -xJ &&     mv /linux-$KERNEL_VERSION /linux-kernel
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: AUFS_REPO
+      Value: https://github.com/sfjro/aufs4-standalone
+    Name: env
+  - Env:
+    - Key: AUFS_BRANCH
+      Value: aufs4.4
+    Name: env
+  - Env:
+    - Key: AUFS_COMMIT
+      Value: dcfa30307f2a165069545a0ad2094ca31fcb490b
+    Name: env
+  - CmdLine:
+    - git clone -b "$AUFS_BRANCH" "$AUFS_REPO" /aufs-standalone &&     cd /aufs-standalone
+      &&     git checkout -q "$AUFS_COMMIT" &&     cd /linux-kernel &&     cp -r /aufs-standalone/Documentation
+      /linux-kernel &&     cp -r /aufs-standalone/fs /linux-kernel &&     cp -r /aufs-standalone/include/uapi/linux/aufs_type.h
+      /linux-kernel/include/uapi/linux/ &&     set -e && for patch in         /aufs-standalone/aufs*-kbuild.patch         /aufs-standalone/aufs*-base.patch         /aufs-standalone/aufs*-mmap.patch         /aufs-standalone/aufs*-standalone.patch         /aufs-standalone/aufs*-loopback.patch     ;
+      do         patch -p1 < "$patch";     done
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - kernel_config
+    - /linux-kernel/.config
+  - CmdLine:
+    - jobs=$(nproc);     cd /linux-kernel &&     make -j ${jobs} oldconfig &&     make
+      -j ${jobs} bzImage &&     make -j ${jobs} modules
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ROOTFS
+      Value: /rootfs
+    Name: env
+  - CmdLine:
+    - mkdir -p $ROOTFS
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /tmp/iso/boot
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /linux-kernel &&     make INSTALL_MOD_PATH=$ROOTFS modules_install firmware_install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd $ROOTFS/lib/modules &&     rm -rf ./*/kernel/sound/* &&     rm -rf ./*/kernel/drivers/gpu/*
+      &&     rm -rf ./*/kernel/drivers/infiniband/* &&     rm -rf ./*/kernel/drivers/isdn/*
+      &&     rm -rf ./*/kernel/drivers/staging/lustre/* &&     rm -rf ./*/kernel/drivers/staging/comedi/*
+      &&     rm -rf ./*/kernel/fs/ocfs2/* &&     rm -rf ./*/kernel/net/bluetooth/*
+      &&     rm -rf ./*/kernel/net/mac80211/* &&     rm -rf ./*/kernel/net/wireless/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fL http://http.debian.net/debian/pool/main/libc/libcap2/libcap2_2.22.orig.tar.gz
+      | tar -C / -xz &&     cd /libcap-2.22 &&     sed -i 's/LIBATTR := yes/LIBATTR
+      := no/' Make.Rules &&     make &&     mkdir -p output &&     make prefix=`pwd`/output
+      install &&     mkdir -p $ROOTFS/usr/local/lib &&     cp -av `pwd`/output/lib64/*
+      $ROOTFS/usr/local/lib
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: AUFS_UTIL_REPO
+      Value: git://git.code.sf.net/p/aufs/aufs-util
+    Name: env
+  - Env:
+    - Key: AUFS_UTIL_BRANCH
+      Value: aufs4.1
+    Name: env
+  - Env:
+    - Key: AUFS_UTIL_COMMIT
+      Value: bb75870054af06f3e76353de06a4894e9ccb0c5a
+    Name: env
+  - CmdLine:
+    - "set -ex \t&& git clone -b \"$AUFS_UTIL_BRANCH\" \"$AUFS_UTIL_REPO\" /aufs-util
+      \t&& git -C /aufs-util checkout --quiet \"$AUFS_UTIL_COMMIT\" \t&& make -C /linux-kernel
+      headers_install INSTALL_HDR_PATH=/tmp/kheaders \t&& export CFLAGS='-I/tmp/kheaders/include'
+      \t&& export CPPFLAGS=\"$CFLAGS\" LDFLAGS=\"$CFLAGS\" \t&& make -C /aufs-util
+      \t&& make -C /aufs-util install DESTDIR=\"$ROOTFS\" \t&& rm -r /tmp/kheaders"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -v /linux-kernel/arch/x86_64/boot/bzImage /tmp/iso/boot/vmlinuz64
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TCL_REPO_BASE
+      Value: http://distro.ibiblio.org/tinycorelinux/7.x/x86_64
+    Name: env
+  - Env:
+    - Key: TCZ_DEPS
+      Value: iptables                     iproute2                     openssh openssl                     tar                     gcc_libs                     ncurses                     acpid                     xz
+        liblzma                     git expat2 libgpg-error libgcrypt libssh2                     nfs-utils
+        tcp_wrappers portmap rpcbind libtirpc                     rsync attr acl                     curl
+        ntpclient                     procps glib2 libtirpc libffi fuse pcre                     udev-lib
+        udev-extra                     liblvm2                     parted
+    Name: env
+  - CmdLine:
+    - curl -fL -o /tcl_rootfs.gz $TCL_REPO_BASE/release/distribution_files/rootfs64.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -ex; \tfor dep in $TCZ_DEPS; do \t\techo \"Download $TCL_REPO_BASE/tcz/$dep.tcz\";
+      \t\tcurl -fSL -o \"/tmp/$dep.tcz\" \"$TCL_REPO_BASE/tcz/$dep.tcz\"; \t\tunsquashfs
+      -f -d \"$ROOTFS\" \"/tmp/$dep.tcz\"; \t\trm -f \"/tmp/$dep.tcz\"; \tdone"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd "$ROOTFS" && zcat /tcl_rootfs.gz | cpio -f -i -H newc -d --no-absolute-filenames
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -x \t&& chroot \"$ROOTFS\" sh -xc 'ldconfig && /usr/local/tce.installed/openssl'
+      \t&& ln -sT ../usr/local/etc/ssl \"$ROOTFS/etc/ssl\" \t&& cp \"$ROOTFS/etc/resolv.conf\"
+      resolv.conf.bak \t&& cp /etc/resolv.conf \"$ROOTFS/etc/resolv.conf\" \t&& chroot
+      \"$ROOTFS\" curl -fsSL 'https://www.google.com' -o /dev/null \t&& mv resolv.conf.bak
+      \"$ROOTFS/etc/resolv.conf\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sT lib "$ROOTFS/lib64"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fL -o $ROOTFS/usr/local/bin/generate_cert https://github.com/SvenDowideit/generate_cert/releases/download/0.2/generate_cert-0.2-linux-amd64
+      &&     chmod +x $ROOTFS/usr/local/bin/generate_cert
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: VBOX_VERSION
+      Value: 5.1.22
+    Name: env
+  - Env:
+    - Key: VBOX_SHA256
+      Value: 54df14f234b6aa484b94939ab0f435b5dd859417612b65a399ecc34a62060380
+    Name: env
+  - CmdLine:
+    - set -x &&         mkdir -p /vboxguest &&     cd /vboxguest &&         curl -fL
+      -o vboxguest.iso http://download.virtualbox.org/virtualbox/${VBOX_VERSION}/VBoxGuestAdditions_${VBOX_VERSION}.iso
+      &&     echo "${VBOX_SHA256} *vboxguest.iso" | sha256sum -c - &&     7z x vboxguest.iso
+      -ir'!VBoxLinuxAdditions.run' &&     rm vboxguest.iso &&         sh VBoxLinuxAdditions.run
+      --noexec --target . &&     mkdir amd64 && tar -C amd64 -xjf VBoxGuestAdditions-amd64.tar.bz2
+      &&     rm VBoxGuestAdditions*.tar.bz2 &&         KERN_DIR=/linux-kernel/ make
+      -C amd64/src/vboxguest-${VBOX_VERSION} &&     cp amd64/src/vboxguest-${VBOX_VERSION}/*.ko
+      $ROOTFS/lib/modules/$KERNEL_VERSION-boot2docker/ &&         mkdir -p $ROOTFS/sbin
+      &&     cp amd64/lib/VBoxGuestAdditions/mount.vboxsf amd64/sbin/VBoxService $ROOTFS/sbin/
+      &&     mkdir -p $ROOTFS/bin &&     cp amd64/bin/VBoxClient amd64/bin/VBoxControl
+      $ROOTFS/bin/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y         autoconf         libdumbnet-dev         libdumbnet1         libfuse-dev         libfuse2         libglib2.0-0         libglib2.0-dev         libmspack-dev         libssl-dev         libtirpc-dev         libtirpc1         libtool     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: OVT_VERSION
+      Value: 10.0.0-3000743
+    Name: env
+  - CmdLine:
+    - curl --retry 10 -fsSL "https://github.com/vmware/open-vm-tools/archive/open-vm-tools-${OVT_VERSION}.tar.gz"
+      | tar -xz --strip-components=1 -C /
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /open-vm-tools &&     autoreconf -i &&     ./configure --disable-multimon
+      --disable-docs --disable-tests --with-gnu-ld                 --without-kernel-modules
+      --without-procps --without-gtk2                 --without-gtkmm --without-pam
+      --without-x --without-icu                 --without-xerces --without-xmlsecurity
+      --without-ssl &&     make LIBS="-ltirpc" CFLAGS="-Wno-implicit-function-declaration"
+      &&     make DESTDIR=$ROOTFS install &&    /open-vm-tools/libtool --finish $ROOTFS/usr/local/lib
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LIBDNET
+      Value: libdnet-1.12
+    Name: env
+  - CmdLine:
+    - curl -fL -o /tmp/${LIBDNET}.zip https://github.com/dugsong/libdnet/archive/${LIBDNET}.zip
+      &&     unzip /tmp/${LIBDNET}.zip -d /vmtoolsd &&     cd /vmtoolsd/libdnet-${LIBDNET}
+      && ./configure --build=i486-pc-linux-gnu &&     make &&     make install &&
+      make DESTDIR=$ROOTFS install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "ln -sT libdnet.1 \"$ROOTFS/usr/local/lib/libdumbnet.so.1\" \t&& readlink -f
+      \"$ROOTFS/usr/local/lib/libdumbnet.so.1\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "ln -sT libtirpc.so \"$ROOTFS/usr/local/lib/libtirpc.so.1\" \t&& readlink -f
+      \"$ROOTFS/usr/local/lib/libtirpc.so.1\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "LD_LIBRARY_PATH='/lib:/usr/local/lib' \t\tchroot \"$ROOTFS\" vmhgfs-fuse --version"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PRL_MAJOR
+      Value: "12"
+    Name: env
+  - Env:
+    - Key: PRL_VERSION
+      Value: 12.1.3-41532
+    Name: env
+  - CmdLine:
+    - "set -ex \t&& mkdir -p /prl_tools \t&& curl -fSL \"http://download.parallels.com/desktop/v${PRL_MAJOR}/${PRL_VERSION}/ParallelsTools-${PRL_VERSION}-boot2docker.tar.gz\"
+      \t\t| tar -xzC /prl_tools --strip-components 1 \t&& cd /prl_tools \t&& cp -Rv
+      tools/* $ROOTFS \t\t&& KERNEL_DIR=/linux-kernel/ KVER=\"$KERNEL_VERSION\" SRC=/linux-kernel/
+      PRL_FREEZE_SKIP=1 \t\tmake -C kmods/ -f Makefile.kmods installme \t\t&& find
+      kmods/ -name '*.ko' -exec cp {} \"$ROOTFS/lib/modules/$KERNEL_VERSION-boot2docker/\"
+      ';'"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chroot "$ROOTFS" prltoolsd -V
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: XEN_REPO
+      Value: https://github.com/xenserver/xe-guest-utilities
+    Name: env
+  - Env:
+    - Key: XEN_VERSION
+      Value: v6.6.80
+    Name: env
+  - CmdLine:
+    - "set -ex \t&& git clone -b \"$XEN_VERSION\" \"$XEN_REPO\" /xentools \t&& make
+      -C /xentools \t&& tar xvf /xentools/build/dist/*.tgz -C \"$ROOTFS\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -ex \t&& make -C /linux-kernel headers_install \t&& cd /linux-kernel/tools/hv
+      \t&& sed -i 's!\\(^CFLAGS = .*\\)!\\1 -I/tmp/kheaders/include!' Makefile \t&&
+      make hv_kvp_daemon \t&& cp hv_kvp_daemon $ROOTFS/usr/sbin \t&& rm -rf /tmp/kheaders"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - depmod -a -b "$ROOTFS" "$KERNEL_VERSION-boot2docker"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - VERSION
+    - $ROOTFS/etc/version
+  - CmdLine:
+    - cp -v "$ROOTFS/etc/version" /tmp/iso/version
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DOCKER_CHANNEL
+      Value: edge
+    Name: env
+  - CmdLine:
+    - "set -ex; \tversion=\"$(cat \"$ROOTFS/etc/version\")\"; \tif [ \"${version%-rc*}\"
+      != \"$version\" ]; then \t\tDOCKER_CHANNEL='test'; \tfi; \tcurl -fSL -o /tmp/dockerbin.tgz
+      \"https://download.docker.com/linux/static/$DOCKER_CHANNEL/x86_64/docker-$version.tgz\";
+      \ttar -zxvf /tmp/dockerbin.tgz -C \"$ROOTFS/usr/local/bin\" --strip-components=1;
+      \trm /tmp/dockerbin.tgz; \tchroot \"$ROOTFS\" docker -v"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs/rootfs
+    - $ROOTFS
+  - CmdLine:
+    - "ln -svT /usr/local/etc/acpi \"$ROOTFS/etc/acpi\" \t&& ln -svT /usr/local/sbin/ip
+      \"$ROOTFS/usr/sbin/ip\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find "$ROOTFS/etc/rc.d/" "$ROOTFS/usr/local/etc/init.d/" -type f -exec chmod
+      --changes +x '{}' +
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv -v "$ROOTFS/etc/init.d/dhcp.sh" "$ROOTFS/etc/rc.d/"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -ex; \tfor s in 0 1 2 3; do \t\techo \"ttyS${s}:2345:respawn:/usr/local/bin/forgiving-getty
+      ttyS${s}\" >> \"$ROOTFS/etc/inittab\"; \tdone; \tcat \"$ROOTFS/etc/inittab\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo root > "$ROOTFS/etc/sysconfig/superuser"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "echo 'UTC' > \"$ROOTFS/etc/timezone\" \t&& cp -vL /usr/share/zoneinfo/UTC \"$ROOTFS/etc/localtime\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chroot "$ROOTFS" addgroup -S docker
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -x \t&& chroot \"$ROOTFS\" addgroup -S dockremap \t&& chroot \"$ROOTFS\"
+      adduser -S -G dockremap dockremap"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .git
+    - /git/.git
+  - CmdLine:
+    - "set -ex \t&& GIT_BRANCH=\"$(git -C /git rev-parse --abbrev-ref HEAD)\" \t&&
+      GITSHA1=\"$(git -C /git rev-parse --short HEAD)\" \t&& DATE=\"$(date)\" \t&&
+      echo \"${GIT_BRANCH} : ${GITSHA1} - ${DATE}\" \t\t| tee \"$ROOTFS/etc/boot2docker\""
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs/isolinux
+    - /tmp/iso/boot/isolinux
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs/make_iso.sh
+    - /tmp/make_iso.sh
+  - CmdLine:
+    - /tmp/make_iso.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sh
+    - -c
+    - '[ -t 1 ] && exec bash || exec cat boot2docker.iso'
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

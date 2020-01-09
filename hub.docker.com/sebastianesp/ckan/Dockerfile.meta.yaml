@@ -1,0 +1,148 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - Maintainer: Open Knowledge
+    Name: maintainer
+  - CmdLine:
+    - apt-get -q -y update     && DEBIAN_FRONTEND=noninteractive apt-get -q -y upgrade     &&
+      apt-get -q -y install         python-dev         python-pip         python-virtualenv         python-wheel         libpq-dev         libxml2-dev         libxslt-dev         libgeos-dev         libssl-dev         libffi-dev         postgresql-client         build-essential         git-core         vim         wget         dos2unix         supervisor         cron     &&
+      apt-get -q clean     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CKAN_HOME
+      Value: /usr/lib/ckan
+    Name: env
+  - Env:
+    - Key: CKAN_VENV
+      Value: $CKAN_HOME/venv
+    Name: env
+  - Env:
+    - Key: CKAN_CONFIG
+      Value: /etc/ckan
+    Name: env
+  - Env:
+    - Key: CKAN_STORAGE_PATH
+      Value: /var/lib/ckan
+    Name: env
+  - Key: CKAN_SITE_URL
+    Name: arg
+    Value: null
+  - CmdLine:
+    - useradd -r -u 900 -m -c "ckan account" -d $CKAN_HOME -s /bin/false ckan
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $CKAN_VENV $CKAN_CONFIG $CKAN_STORAGE_PATH &&     virtualenv $CKAN_VENV
+      &&     ln -s $CKAN_VENV/bin/pip /usr/local/bin/ckan-pip &&    ln -s $CKAN_VENV/bin/paster
+      /usr/local/bin/ckan-paster
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - $CKAN_VENV/src/ckan/
+  - CmdLine:
+    - ckan-pip install -U pip &&     ckan-pip install --upgrade --no-cache-dir -r
+      $CKAN_VENV/src/ckan/requirement-setuptools.txt &&     ckan-pip install --upgrade
+      --no-cache-dir -r $CKAN_VENV/src/ckan/requirements.txt &&     ckan-pip install
+      -e $CKAN_VENV/src/ckan/ &&     ln -s $CKAN_VENV/src/ckan/ckan/config/who.ini
+      $CKAN_CONFIG/who.ini &&     cp -v $CKAN_VENV/src/ckan/contrib/docker/ckan-entrypoint.sh
+      /ckan-entrypoint.sh &&     chmod +x /ckan-entrypoint.sh &&     chown -R ckan:ckan
+      $CKAN_HOME $CKAN_VENV $CKAN_CONFIG $CKAN_STORAGE_PATH &&     ckan-pip install
+      -e git+https://github.com/ckan/ckanext-harvest.git#egg=ckanext-harvest &&     ckan-pip
+      install --upgrade --no-cache-dir -r $CKAN_VENV/src/ckanext-harvest/pip-requirements.txt
+      &&     ckan-pip install -e git+https://github.com/ckan/ckanext-spatial.git#egg=ckanext-spatial
+      &&     ckan-pip install -r $CKAN_VENV/src/ckanext-spatial/pip-requirements.txt
+      &&     ckan-pip install -e git+https://github.com/ckan/ckanext-dcat.git#egg=ckanext-dcat
+      &&     ckan-pip install --upgrade --no-cache-dir -r $CKAN_VENV/src/ckanext-dcat/requirements.txt
+      &&     ckan-pip install ckanext-geoview &&     ckan-pip install -e git+https://github.com/geosolutions-it/ckanext-geonetwork.git#egg=ckanext-geonetwork
+      &&     ckan-pip install -e git+https://github.com/ckan/ckanext-pages.git#egg=ckanext-pages
+      &&     ckan-pip install lxml &&     ckan-pip install OWSLib==0.9.1 &&     ckan-pip
+      install -e git+https://github.com/ckan/ckanext-viewhelpers.git#egg=ckanext-viewhelpers
+      &&     ckan-pip install -e git+https://github.com/ckan/ckanext-basiccharts.git#egg=ckanext-basiccharts
+      &&     ckan-pip install ckanapi &&     dos2unix /ckan-entrypoint.sh &&     cp
+      -v $CKAN_VENV/src/ckan/supervisor/ckan_harvesting.conf /etc/supervisor/conf.d/ckan_harvesting.conf
+      &&     ls /etc/supervisor/conf.d/ &&     cp -v $CKAN_VENV/src/ckan/supervisor/crontab.txt
+      /crontab.txt &&     chmod +x /crontab.txt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/lib/ckan/storage/uploads/group
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./import-themes-and-orgs.py
+    - $CKAN_VENV/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./theme-img/
+    - /var/lib/ckan/storage/uploads/group
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./pages-header.html
+    - /src/ckanext-pages/ckanext/pages/themes/templates_main/header.html
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./ckanext-digstdk/ckanext/digstdk/templates/ckanext/stats/index.html
+    - $CKAN_VENV/src/ckan/ckanext/stats/templates/ckanext/stats/index.html
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./ckanext-dcat
+    - $CKAN_VENV/src/ckanext-dcat
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./ckanext-digstdk
+    - $CKAN_VENV/src/ckanext-digstdk
+  - Name: workdir
+    Path: $CKAN_VENV/src/ckanext-digstdk
+  - CmdLine:
+    - python setup.py develop
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /ckan-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: workdir
+    Path: $CKAN_VENV/src/ckan
+  - Name: user
+    User: ckan
+  - Name: expose
+    Ports:
+    - "5000"
+  - Name: volume
+    Volumes:
+    - /var/lib/ckan
+  - Name: volume
+    Volumes:
+    - /usr/lib/ckan
+  - Name: volume
+    Volumes:
+    - /etc/ckan
+  - CmdLine:
+    - ckan-paster
+    - serve
+    - /etc/ckan/production.ini
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

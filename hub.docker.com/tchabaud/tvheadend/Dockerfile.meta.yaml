@@ -1,0 +1,134 @@
+MetaArgs:
+- DefaultValue: '"ca-certificates coreutils netcat-openbsd     perl perl-datetime
+    perl-json perl-lwp-protocol-https     pngquant tzdata xmltv"'
+  Key: BIN_DEPS
+  ProvidedValue: null
+  Value: '"ca-certificates coreutils netcat-openbsd     perl perl-datetime perl-json
+    perl-lwp-protocol-https     pngquant tzdata xmltv"'
+Stages:
+- As: builder
+  BaseName: alpine:3.10
+  Commands:
+  - Env:
+    - Key: TVHEADEND_VERSION
+      Value: '"4.2.8"'
+    Name: env
+  - Env:
+    - Key: DEV_TOOLS
+      Value: build-base bsd-compat-headers ccache cmake git mercurial
+    Name: env
+  - Key: BIN_DEPS
+    Name: arg
+    Value: null
+  - Env:
+    - Key: BIN_DEPS
+      Value: ${BIN_DEPS}
+    Name: env
+  - Env:
+    - Key: BUILD_DEPS
+      Value: xmlto linux-headers musl-dev musl-dbg     dbus-dev libressl-dev ffmpeg-dev
+        faac-dev libhdhomerun-dev     libtheora-dev libvorbis-dev libvpx-dev libdvbcsa-dev
+        x264-dev x265-dev opus-dev     avahi-dev gnu-libiconv-dev gettext-dev uriparser-dev
+        zlib-dev
+    Name: env
+  - CmdLine:
+    - apk add --no-cache --update ${BIN_DEPS} ${BUILD_DEPS} ${DEV_TOOLS}     && rm
+      -rf /var/cache/apk/*     && update-ca-certificates     && mkdir -p /opt/tvh     &&
+      git clone "https://github.com/tvheadend/tvheadend" /opt/tvheadend     && cd
+      /opt/tvheadend     && git checkout "tags/v${TVHEADEND_VERSION}"     && ./configure
+      --prefix=/opt/tvh         --enable-avahi         --enable-bundle         --enable-pngquant         --enable-libav         --enable-dvbcsa         --enable-hdhomerun_client         --disable-ffmpeg_static         --disable-hdhomerun_static         --disable-libav_static         --disable-libfdkaac_static         --disable-libx264_static         --disable-libx265_static         --disable-libtheora_static         --disable-libvorbis_static         --disable-libvpx_static     &&
+      make     && make install     && make clean
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.10 AS builder
+- BaseName: alpine:3.10
+  Commands:
+  - Key: BIN_DEPS
+    Name: arg
+    Value: null
+  - Env:
+    - Key: BIN_DEPS
+      Value: ${BIN_DEPS}
+    Name: env
+  - Env:
+    - Key: DEPS
+      Value: dbus-libs libressl ffmpeg faac libhdhomerun-libs     libtheora libvorbis
+        libvpx libdvbcsa x264-libs x265-libs opus     avahi-libs gnu-libiconv gettext-libs
+        liburiparser zlib
+    Name: env
+  - Env:
+    - Key: TVHEADEND_UID
+      Value: "5000"
+    Name: env
+  - Env:
+    - Key: TVHEADEND_GID
+      Value: "5000"
+    Name: env
+  - Env:
+    - Key: TZ
+      Value: '"Europe/Paris"'
+    Name: env
+  - Env:
+    - Key: TVHEADEND_HOME
+      Value: /home/tvh
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - '"https://raw.githubusercontent.com/XMLTV/xmltv/master/grab/zz_sdjson/tv_grab_zz_sdjson"'
+    - /usr/bin/tv_grab_zz_sdjson
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - tv_grab_iptv
+    - /usr/bin/tv_grab_iptv
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - tv_grab_iptv_sd
+    - /usr/bin/tv_grab_iptv_sd
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/tvh/
+    - /usr/
+  - CmdLine:
+    - apk --no-cache --update add ${BIN_DEPS} ${DEPS}     && update-ca-certificates     &&
+      mkdir -p "${TVHEADEND_HOME}/.xmltv"     && addgroup -g ${TVHEADEND_GID} hts     &&
+      adduser -S -s /sbin/nologin -u ${TVHEADEND_UID} -h "${TVHEADEND_HOME}" -G hts
+      hts     && chown -R ${TVHEADEND_UID}:${TVHEADEND_GID} "${TVHEADEND_HOME}"     &&
+      chown -R hts.hts "${TVHEADEND_HOME}"     && chmod 755 /usr/bin/tv_grab*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9982"
+  - Name: volume
+    Volumes:
+    - /data/conf
+    - /data/media
+  - Name: user
+    User: hts
+  - CmdLine:
+    - /usr/bin/tvheadend
+    - -c
+    - /data/conf
+    - -p
+    - /run/tvheadend.pid
+    - -C
+    - -u
+    - hts
+    - -g
+    - hts
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10

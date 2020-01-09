@@ -1,0 +1,261 @@
+MetaArgs: null
+Stages:
+- As: maven
+  BaseName: maven:3.6.3-jdk-8-slim@sha256:d8e01825867d1e4ddbb96e40b5f08183e2a7d7ff40521c49cd8e76e36d75d340
+  Commands: null
+  From:
+    Image: maven:3.6.3-jdk-8-slim@sha256:d8e01825867d1e4ddbb96e40b5f08183e2a7d7ff40521c49cd8e76e36d75d340
+  Name: maven
+  Platform: ""
+  SourceCode: FROM maven:3.6.3-jdk-8-slim@sha256:d8e01825867d1e4ddbb96e40b5f08183e2a7d7ff40521c49cd8e76e36d75d340
+    as maven
+- As: dev
+  BaseName: openjdk:8-jdk-slim@sha256:71592a5c3eecf243b624f0a718402bb54d9ccb282b3ae3aa108f62b5cd5539d1
+  Commands:
+  - Chown: ""
+    From: maven
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/maven
+    - /usr/share/maven
+  - CmdLine:
+    - ln -s /usr/share/maven/bin/mvn /usr/bin/mvn
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MAVEN_HOME
+      Value: /usr/share/maven
+    Name: env
+  - Env:
+    - Key: MAVEN_CONFIG
+      Value: /root/.m2
+    Name: env
+  - Name: workdir
+    Path: /workspace
+  - CmdLine:
+    - mvn io.quarkus:quarkus-maven-plugin:1.1.0.Final:create     -DprojectGroupId=org.example.temp     -DprojectArtifactId=kafka-quickstart     -Dextensions="kafka"
+      &&     cd kafka-quickstart &&     mkdir -p src/test/java/org && echo 'package
+      org; public class T { @org.junit.jupiter.api.Test public void t() { } }' > src/test/java/org/T.java
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pom.xml
+    - kafka-quickstart/
+  - CmdLine:
+    - set -e;   (mvn -f kafka-quickstart/pom.xml package -Pnative || echo "# Build
+      error is expected. Meant to prepare for native-image run.");   rm -r kafka-quickstart
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - mvn
+    - compile
+    - quarkus:dev
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -Dquarkus.http.host=0.0.0.0
+    - -Dquarkus.http.port=8090
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jdk-slim@sha256:71592a5c3eecf243b624f0a718402bb54d9ccb282b3ae3aa108f62b5cd5539d1
+  Name: dev
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-slim@sha256:71592a5c3eecf243b624f0a718402bb54d9ccb282b3ae3aa108f62b5cd5539d1   as
+    dev
+- As: maven-build
+  BaseName: openjdk:8-jdk-slim@sha256:71592a5c3eecf243b624f0a718402bb54d9ccb282b3ae3aa108f62b5cd5539d1
+  Commands:
+  - Chown: ""
+    From: maven
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/maven
+    - /usr/share/maven
+  - CmdLine:
+    - ln -s /usr/share/maven/bin/mvn /usr/bin/mvn
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MAVEN_HOME
+      Value: /usr/share/maven
+    Name: env
+  - Env:
+    - Key: MAVEN_CONFIG
+      Value: /root/.m2
+    Name: env
+  - Chown: ""
+    From: dev
+    Name: copy
+    SourcesAndDest:
+    - ${MAVEN_HOME}
+    - ${MAVEN_HOME}
+  - Chown: ""
+    From: dev
+    Name: copy
+    SourcesAndDest:
+    - ${MAVEN_CONFIG}
+    - ${MAVEN_CONFIG}
+  - Name: workdir
+    Path: /workspace
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - set -e;   echo 'echo "native-image $@" | tee /workspace/native-image.sh' > /usr/local/bin/native-image;   chmod
+      u+x /usr/local/bin/native-image
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -e;   mvn -o -DskipTests package;   (mvn -o -DskipTests package -Pnative
+      || echo "# Build error is expected. Meant to prepare for native-image run.");   stat
+      target/kafka-keyvalue-1.0-SNAPSHOT-native-image-source-jar/lib;   stat target/kafka-keyvalue-1.0-SNAPSHOT-native-image-source-jar/kafka-keyvalue-1.0-SNAPSHOT-runner.jar;   cat
+      native-image.sh | sed 's| | \\\n  |g'
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8-jdk-slim@sha256:71592a5c3eecf243b624f0a718402bb54d9ccb282b3ae3aa108f62b5cd5539d1
+  Name: maven-build
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-slim@sha256:71592a5c3eecf243b624f0a718402bb54d9ccb282b3ae3aa108f62b5cd5539d1   as
+    maven-build
+- As: runtime-jre
+  BaseName: fabric8/java-alpine-openjdk8-jre@sha256:a5d31f17d618032812ae85d12426b112279f02951fa92a7ff8a9d69a6d3411b1
+  Commands:
+  - Key: SOURCE_COMMIT
+    Name: arg
+    Value: null
+  - Key: SOURCE_BRANCH
+    Name: arg
+    Value: null
+  - Key: IMAGE_NAME
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk add --no-cache snappy snappy lz4 zstd
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: maven-build
+    Name: copy
+    SourcesAndDest:
+    - /workspace/target/lib
+    - ./lib
+  - Chown: ""
+    From: maven-build
+    Name: copy
+    SourcesAndDest:
+    - /workspace/target/*-runner.jar
+    - ./quarkus-kafka.jar
+  - Name: expose
+    Ports:
+    - "8090"
+  - CmdLine:
+    - java
+    - -Dquarkus.http.host=0.0.0.0
+    - -Dquarkus.http.port=8090
+    - -Djava.util.logging.manager=org.jboss.logmanager.LogManager
+    - -cp
+    - ./lib/*
+    - -jar
+    - ./quarkus-kafka.jar
+    Name: entrypoint
+    PrependShell: false
+  - Env:
+    - Key: SOURCE_COMMIT
+      Value: ${SOURCE_COMMIT}
+    - Key: SOURCE_BRANCH
+      Value: ${SOURCE_BRANCH}
+    - Key: IMAGE_NAME
+      Value: ${IMAGE_NAME}
+    Name: env
+  From:
+    Image: fabric8/java-alpine-openjdk8-jre@sha256:a5d31f17d618032812ae85d12426b112279f02951fa92a7ff8a9d69a6d3411b1
+  Name: runtime-jre
+  Platform: ""
+  SourceCode: FROM fabric8/java-alpine-openjdk8-jre@sha256:a5d31f17d618032812ae85d12426b112279f02951fa92a7ff8a9d69a6d3411b1   as
+    runtime-jre
+- As: native-build
+  BaseName: oracle/graalvm-ce:19.3.0.2@sha256:989686ab2b1e6db51128c27bbd58bf29f05c9208bb511e49fc39864a65d067b2
+  Commands:
+  - CmdLine:
+    - gu install native-image
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /project
+  - Chown: ""
+    From: maven-build
+    Name: copy
+    SourcesAndDest:
+    - /workspace/target/kafka-keyvalue-1.0-SNAPSHOT-native-image-source-jar
+    - /project/target/kafka-keyvalue-1.0-SNAPSHOT-native-image-source-jar
+  - CmdLine:
+    - (cd target/kafka-keyvalue-1.0-SNAPSHOT-native-image-source-jar/ &&   native-image   -J-Dsun.nio.ch.maxUpdateArraySize=100   -J-Djava.util.logging.manager=org.jboss.logmanager.LogManager   -J-Dvertx.logger-delegate-factory-class-name=io.quarkus.vertx.core.runtime.VertxLogDelegateFactory   -J-Dvertx.disableDnsResolver=true   -J-Dio.netty.leakDetection.level=DISABLED   -J-Dio.netty.allocator.maxOrder=1   --initialize-at-build-time=   -jar   kafka-keyvalue-1.0-SNAPSHOT-runner.jar   -J-Djava.util.concurrent.ForkJoinPool.common.parallelism=1   -H:FallbackThreshold=0   -H:+ReportExceptionStackTraces   -H:-AddAllCharsets   -H:EnableURLProtocols=http   -H:+JNI   --no-server   -H:-UseServiceLoaderFeature   -H:+StackTrace   kafka-keyvalue-1.0-SNAPSHOT-runner   )
+    Name: run
+    PrependShell: true
+  From:
+    Image: oracle/graalvm-ce:19.3.0.2@sha256:989686ab2b1e6db51128c27bbd58bf29f05c9208bb511e49fc39864a65d067b2
+  Name: native-build
+  Platform: ""
+  SourceCode: FROM oracle/graalvm-ce:19.3.0.2@sha256:989686ab2b1e6db51128c27bbd58bf29f05c9208bb511e49fc39864a65d067b2   as
+    native-build
+- BaseName: registry.access.redhat.com/ubi8/ubi-minimal@sha256:32fb8bae553bfba2891f535fa9238f79aafefb7eff603789ba8920f505654607
+  Commands:
+  - Key: SOURCE_COMMIT
+    Name: arg
+    Value: null
+  - Key: SOURCE_BRANCH
+    Name: arg
+    Value: null
+  - Key: IMAGE_NAME
+    Name: arg
+    Value: null
+  - Name: workdir
+    Path: /work/
+  - Chown: ""
+    From: native-build
+    Name: copy
+    SourcesAndDest:
+    - /project/target/kafka-keyvalue-1.0-SNAPSHOT-native-image-source-jar/*-runner
+    - /work/application
+  - Name: expose
+    Ports:
+    - "8090"
+  - CmdLine:
+    - ./application
+    - -Djava.util.logging.manager=org.jboss.logmanager.LogManager
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -Dquarkus.http.host=0.0.0.0
+    - -Dquarkus.http.port=8090
+    Name: cmd
+    PrependShell: false
+  - Env:
+    - Key: SOURCE_COMMIT
+      Value: ${SOURCE_COMMIT}
+    - Key: SOURCE_BRANCH
+      Value: ${SOURCE_BRANCH}
+    - Key: IMAGE_NAME
+      Value: ${IMAGE_NAME}
+    Name: env
+  From:
+    Image: registry.access.redhat.com/ubi8/ubi-minimal@sha256:32fb8bae553bfba2891f535fa9238f79aafefb7eff603789ba8920f505654607
+  Name: ""
+  Platform: ""
+  SourceCode: FROM registry.access.redhat.com/ubi8/ubi-minimal@sha256:32fb8bae553bfba2891f535fa9238f79aafefb7eff603789ba8920f505654607

@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: ubuntu:xenial
+  Commands:
+  - CmdLine:
+    - apt-get update &&   apt-get install -qy software-properties-common python3-software-properties
+      &&   apt-get update && apt-get install -qy     build-essential     wget     python3     r-base     libffi-dev     libssl-dev     libjpeg-dev     zlib1g-dev     r-base     libpython3-dev
+      &&   apt-get clean && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://bootstrap.pypa.io/get-pip.py && python3 get-pip.py
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:xenial
+  Name: base
+  Platform: ""
+  SourceCode: FROM ubuntu:xenial as base
+- As: build
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -qy git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - /girder_worker/
+  - Name: workdir
+    Path: /girder_worker
+  - CmdLine:
+    - rm -rf ./dist && python3 setup.py sdist
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: build
+  Platform: ""
+  SourceCode: FROM base as build
+- BaseName: base
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /girder_worker/dist/*.tar.gz
+    - /
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /girder_worker/docker-entrypoint.sh
+    - /docker-entrypoint.sh
+  - CmdLine:
+    - pip3 install /*.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -D --shell=/bin/bash && useradd -m worker
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R worker:worker /usr/local/lib/python3.5/dist-packages/girder_worker/
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: worker
+  - CmdLine:
+    - girder-worker-config set celery broker "amqp://%(RABBITMQ_USER)s:%(RABBITMQ_PASS)s@%(RABBITMQ_HOST)s/"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /girder_worker
+  - Env:
+    - Key: PYTHON_BIN
+      Value: python3
+    Name: env
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

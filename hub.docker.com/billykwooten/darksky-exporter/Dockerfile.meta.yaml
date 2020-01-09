@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.11.4-alpine3.8
+  Commands:
+  - CmdLine:
+    - apk update && apk add --no-cache git && apk add ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -D -g '' appuser
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $GOPATH/src/github.com/billykwooten/darksky-exporter
+  - Name: workdir
+    Path: $GOPATH/src/github.com/billykwooten/darksky-exporter
+  - CmdLine:
+    - go get golang.org/x/tools/cmd/cover
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/go-playground/overalls
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - overalls -covermode=atomic -project=github.com/billykwooten/darksky-exporter
+      -- -race -v
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv overalls.coverprofile darksky-exporter.cover
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go tool cover -func=darksky-exporter.cover
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -d -v
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS="linux" GOARCH="amd64" go build -a -installsuffix cgo -ldflags="-w
+      -s" -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11.4-alpine3.8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.11.4-alpine3.8 as builder
+- BaseName: scratch
+  Commands:
+  - Maintainer: Billy Wooten <billykwooten@gmail.com>
+    Name: maintainer
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/passwd
+    - /etc/passwd
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /app
+  - Name: user
+    User: appuser
+  - CmdLine:
+    - /app
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

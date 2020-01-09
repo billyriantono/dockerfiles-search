@@ -1,0 +1,101 @@
+MetaArgs: null
+Stages:
+- BaseName: jdeathe/centos-ssh:2.6.1
+  Commands:
+  - Key: HATOP_VERSION
+    Name: arg
+    Value: '"0.7.7"'
+  - Key: RELEASE_VERSION
+    Name: arg
+    Value: '"2.3.1"'
+  - CmdLine:
+    - "yum -y install \t\t\t--setopt=tsflags=nodocs \t\t\t--disableplugin=fastestmirror
+      \t\thaproxy18u-1.8.20-1.el7.ius \t\trsyslog-8.24.0-41.el7_7 \t\tsocat-1.7.3.2-2.el7
+      \t&& yum versionlock add \t\thaproxy \t\trsyslog \t\tsocat \t&& yum clean all
+      \t&& curl -LsSO \t\thttps://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/hatop/hatop-${HATOP_VERSION}.tar.gz
+      \t&& tar -xzf hatop-${HATOP_VERSION}.tar.gz \t&& cd hatop-${HATOP_VERSION} \t&&
+      install \t\t-m 0755 \t\tbin/hatop \t\t/usr/local/bin \t&& rm -rf /hatop-${HATOP_VERSION}*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src
+    - /
+  - CmdLine:
+    - "{ printf -- \t\t'\\nhaproxy\\tsoft\\tnofile\\t%s\\nhaproxy\\thard\\tnofile\\t%s\\n'
+      \t\t'8388608' \t\t'16777216'; \t} >> /etc/security/limits.conf \t&& mkdir -p
+      \t\t{/etc/pki/tls/certs/sni,/run/systemd/journal} \t&& sed -i \t\t-e 's~^#\\$ModLoad
+      imudp$~\\$ModLoad imudp~' \t\t-e 's~^#\\$UDPServerRun 514$~\\$UDPServerRun 514~'
+      \t\t-e 's~^\\(\\$OmitLocalLogging .*\\)$~#\\1~' \t\t-e 's~^\\(\\$ModLoad imjournal
+      .*\\)$~#\\1~' \t\t-e 's~^\\(\\$ModLoad imklog .*\\)$~#\\1~' \t\t-e 's~^\\(\\$ModLoad
+      imuxsock .*\\)$~#\\1~' \t\t-e 's~^\\(\\$IMJournalStateFile .*\\)$~#\\1~' \t\t/etc/rsyslog.conf
+      \t&& { printf -- \t\t'$UDPServerAddress %s\\nlocal2.* %s\\n& stop\\n' \t\t'127.0.0.1'
+      \t\t'/dev/stdout'; \t} > /etc/rsyslog.d/listen.conf \t&& printf -- 'alias hatop=\"%s\"'
+      \t\t\"hatop -s /var/lib/haproxy/stats-1 -i 1\" \t\t> /etc/profile.d/hatop.sh
+      \t&& sed -i \t\t-e \"s~{{RELEASE_VERSION}}~${RELEASE_VERSION}~g\" \t\t/etc/systemd/system/centos-ssh-haproxy@.service
+      \t&& mv \t\t/etc/haproxy/haproxy.cfg \t\t/etc/haproxy/haproxy.cfg.default \t&&
+      cp \t\t/etc/haproxy/haproxy-http.cfg \t\t/etc/haproxy/haproxy.cfg \t&& chmod
+      600 \t\t/etc/haproxy/{{haproxy,haproxy-{http,http-proxy,h2,h2-proxy,tcp}}.cfg,{400,403,408,500,502,503,504}.html.http}
+      \t&& chmod 600 \t\t/etc/supervisord.d/{20-haproxy-bootstrap,{50-rsyslogd,90-haproxy}-wrapper}.conf
+      \t&& chmod 700 \t\t/usr/{bin/healthcheck,sbin/{haproxy-bootstrap,{haproxy,rsyslogd}-wrapper}}"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - Env:
+    - Key: ENABLE_SSHD_WRAPPER
+      Value: '"false"'
+    - Key: ENABLE_SSHD_BOOTSTRAP
+      Value: '"false"'
+    - Key: HAPROXY_CONFIG
+      Value: '"/etc/haproxy/haproxy.cfg"'
+    - Key: HAPROXY_HOST_NAMES
+      Value: '"localhost.localdomain"'
+    - Key: HAPROXY_SSL_CERTIFICATE
+      Value: '""'
+    Name: env
+  - Labels:
+    - Key: maintainer
+      Value: '"James Deathe <james.deathe@gmail.com>"'
+    - Key: install
+      Value: '"docker run --rm --privileged --volume /:/media/root jdeathe/centos-ssh-haproxy:${RELEASE_VERSION}
+        /usr/sbin/scmi install --chroot=/media/root --name=\${NAME} --tag=${RELEASE_VERSION}"'
+    - Key: uninstall
+      Value: '"docker run --rm --privileged --volume /:/media/root jdeathe/centos-ssh-haproxy:${RELEASE_VERSION}
+        /usr/sbin/scmi uninstall --chroot=/media/root --name=\${NAME} --tag=${RELEASE_VERSION}"'
+    - Key: org.deathe.name
+      Value: '"centos-ssh-haproxy"'
+    - Key: org.deathe.version
+      Value: '"${RELEASE_VERSION}"'
+    - Key: org.deathe.release
+      Value: '"jdeathe/centos-ssh-haproxy:${RELEASE_VERSION}"'
+    - Key: org.deathe.license
+      Value: '"MIT"'
+    - Key: org.deathe.vendor
+      Value: '"jdeathe"'
+    - Key: org.deathe.url
+      Value: '"https://github.com/jdeathe/centos-ssh-haproxy"'
+    - Key: org.deathe.description
+      Value: '"HAProxy 1.8 / HATop 0.7 - CentOS-7 7.6.1810 x86_64."'
+    Name: label
+  - Health:
+      Interval: 1000000000
+      Retries: 4
+      Test:
+      - CMD
+      - /usr/bin/healthcheck
+      Timeout: 1000000000
+    Name: healthcheck
+  - CmdLine:
+    - /usr/bin/supervisord
+    - --configuration=/etc/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: jdeathe/centos-ssh:2.6.1
+  Name: ""
+  Platform: ""
+  SourceCode: FROM jdeathe/centos-ssh:2.6.1

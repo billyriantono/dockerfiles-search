@@ -1,0 +1,200 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:latest
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: OSM_VERSION
+      Value: 3.1.0
+    Name: env
+  - Env:
+    - Key: PHP_VERSION
+      Value: "7.0"
+    Name: env
+  - Env:
+    - Key: POSTGIS_VERSION
+      Value: "2.4"
+    Name: env
+  - Env:
+    - Key: POSTGRESQL_VERSION
+      Value: "10"
+    Name: env
+  - Env:
+    - Key: POSTGRESQL_SHARED_BUFFERS
+      Value: 2GB
+    Name: env
+  - Env:
+    - Key: POSTGRESQL_MAINTENANCE_WORK_MEM
+      Value: 10GB
+    Name: env
+  - Env:
+    - Key: POSTGRESQL_WORK_MEM
+      Value: 50MB
+    Name: env
+  - Env:
+    - Key: POSTGRESQL_EFFECTIVE_CACHE_SIZE
+      Value: 24GB
+    Name: env
+  - Env:
+    - Key: POSTGRESQL_SYNCHRONOUS_COMMIT
+      Value: "off"
+    Name: env
+  - Env:
+    - Key: POSTGRESQL_CHECKPOINT_TIMEOUT
+      Value: 10min
+    Name: env
+  - Env:
+    - Key: POSTGRESQL_CHECKPOINT_COMPLETION_TARGET
+      Value: "0.9"
+    Name: env
+  - Env:
+    - Key: POSTGRESQL_MAX_CONNECTIONS
+      Value: "150"
+    Name: env
+  - CmdLine:
+    - apt-get update -qq && apt-get upgrade -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y locales apt-utils tzdata wget lsb-release gnupg2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "ru_RU.UTF-8 UTF-8" > /etc/locale.gen && locale-gen ru_RU.UTF-8 && update-locale
+      LANG=ru_RU.UTF-8
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dpkg-reconfigure --frontend noninteractive tzdata
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANGUAGE
+      Value: ru_RU.UTF-8
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: ru_RU.UTF-8
+    Name: env
+  - Env:
+    - Key: LC_ALL
+      Value: ru_RU.UTF-8
+    Name: env
+  - Env:
+    - Key: TZ
+      Value: Europe/Moscow
+    Name: env
+  - CmdLine:
+    - wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key
+      add -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg
+      main" > /etc/apt/sources.list.d/pgdg.list'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update -qq && apt-get upgrade -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y build-essential cmake g++ libboost-dev libboost-system-dev                         libboost-filesystem-dev
+      libexpat1-dev zlib1g-dev libxml2-dev                        libbz2-dev libpq-dev
+      libproj-dev                         postgresql-server-dev-$POSTGRESQL_VERSION
+      postgresql-$POSTGRESQL_VERSION-postgis-$POSTGIS_VERSION                         apache2
+      php$PHP_VERSION php$PHP_VERSION-pgsql libapache2-mod-php php-pear php-db                         php$PHP_VERSION-intl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -d /srv/nominatim -s /bin/bash -m nominatim
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: nominatim
+  - Name: workdir
+    Path: /srv/nominatim
+  - CmdLine:
+    - mkdir /srv/nominatim/importdata
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://nominatim.org/release/Nominatim-$OSM_VERSION.tar.bz2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xf Nominatim-$OSM_VERSION.tar.bz2 && mv Nominatim-$OSM_VERSION src
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ls /srv/nominatim/ && ls /srv/nominatim/src
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -O /srv/nominatim/src/data/country_osm_grid.sql.gz https://www.nominatim.org/data/country_grid.sql.gz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /srv/nominatim/src
+  - CmdLine:
+    - mkdir build && cd build && cmake .. && make
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/nominatim-local.php
+    - /srv/nominatim/src/build/settings/local.php
+  - Name: user
+    User: root
+  - CmdLine:
+    - service postgresql start &&     su - postgres -c "createuser -s nominatim" &&     su
+      - postgres -c "createuser -s www-data" &&     service postgresql stop
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs/apache2-nominatim.conf
+    - /etc/apache2/sites-enabled/000-default.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /srv/scripts/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/*
+    - /srv/scripts/
+  - Env:
+    - Key: OSM_DATA
+      Value: http://download.geofabrik.de/russia/crimean-fed-district-latest.osm.pbf
+    Name: env
+  - CmdLine:
+    - /srv/scripts/import-osm-data.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /srv/scripts/entrypoint.sh
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: debian:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:latest

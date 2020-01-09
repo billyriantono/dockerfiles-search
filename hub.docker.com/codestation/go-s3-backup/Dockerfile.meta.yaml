@@ -1,0 +1,101 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12-alpine
+  Commands:
+  - Key: CI_TAG
+    Name: arg
+    Value: null
+  - Key: BUILD_NUMBER
+    Name: arg
+    Value: null
+  - Key: BUILD_COMMIT_SHORT
+    Name: arg
+    Value: null
+  - Key: CI_BUILD_CREATED
+    Name: arg
+    Value: null
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - go build -o release/go-s3-backup    -mod vendor -ldflags "-w -s    -X main.Version=${CI_TAG}    -X
+      main.BuildNumber=${BUILD_NUMBER}    -X main.Commit=${BUILD_COMMIT_SHORT}    -X
+      main.BuildTime=${CI_BUILD_CREATED}"   ./cmd/go-s3-backup
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12-alpine as builder
+- As: consul
+  BaseName: consul:1.5
+  Commands: null
+  From:
+    Image: consul:1.5
+  Name: consul
+  Platform: ""
+  SourceCode: FROM consul:1.5 AS consul
+- As: gogs
+  BaseName: gogs/gogs:0.11.86
+  Commands: null
+  From:
+    Image: gogs/gogs:0.11.86
+  Name: gogs
+  Platform: ""
+  SourceCode: FROM gogs/gogs:0.11.86 AS gogs
+- BaseName: alpine:3.9
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"codestation <codestation404@gmail.com>"'
+    Name: label
+  - Env:
+    - Key: GOGS_CUSTOM
+      Value: /data/gogs
+    Name: env
+  - CmdLine:
+    - apk add --no-cache ca-certificates tzdata postgresql-client mariadb-client linux-pam
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: consul
+    Name: copy
+    SourcesAndDest:
+    - /bin/consul
+    - /bin/consul
+  - Chown: ""
+    From: gogs
+    Name: copy
+    SourcesAndDest:
+    - /app/gogs
+    - /app/gogs
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/release/go-s3-backup
+    - /bin/go-s3-backup
+  - CmdLine:
+    - /bin/go-s3-backup
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

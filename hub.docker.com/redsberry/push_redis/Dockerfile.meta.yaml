@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - addgroup -S redis && adduser -S -G redis redis
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apk add --no-cache \t\t'su-exec>=0.2' \t\ttzdata"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: REDIS_VERSION
+      Value: 5.0.4
+    Name: env
+  - Env:
+    - Key: REDIS_DOWNLOAD_URL
+      Value: http://download.redis.io/releases/redis-5.0.4.tar.gz
+    Name: env
+  - Env:
+    - Key: REDIS_DOWNLOAD_SHA
+      Value: 3ce9ceff5a23f60913e1573f6dfcd4aa53b42d4a2789e28fa53ec2bd28c987dd
+    Name: env
+  - CmdLine:
+    - "set -ex; \t\tapk add --no-cache --virtual .build-deps \t\tcoreutils \t\tgcc
+      \t\tlinux-headers \t\tmake \t\tmusl-dev \t; \t\twget -O redis.tar.gz \"$REDIS_DOWNLOAD_URL\";
+      \techo \"$REDIS_DOWNLOAD_SHA *redis.tar.gz\" | sha256sum -c -; \tmkdir -p /usr/src/redis;
+      \ttar -xzf redis.tar.gz -C /usr/src/redis --strip-components=1; \trm redis.tar.gz;
+      \t\tgrep -q '^#define CONFIG_DEFAULT_PROTECTED_MODE 1$' /usr/src/redis/src/server.h;
+      \tsed -ri 's!^(#define CONFIG_DEFAULT_PROTECTED_MODE) 1$!\\1 0!' /usr/src/redis/src/server.h;
+      \tgrep -q '^#define CONFIG_DEFAULT_PROTECTED_MODE 0$' /usr/src/redis/src/server.h;
+      \t\tmake -C /usr/src/redis -j \"$(nproc)\"; \tmake -C /usr/src/redis install;
+      \t\trm -r /usr/src/redis; \t\trunDeps=\"$( \t\tscanelf --needed --nobanner --format
+      '%n#p' --recursive /usr/local \t\t\t| tr ',' '\\n' \t\t\t| sort -u \t\t\t| awk
+      'system(\"[ -e /usr/local/lib/\" $1 \" ]\") == 0 { next } { print \"so:\" $1
+      }' \t)\"; \tapk add --virtual .redis-rundeps $runDeps; \tapk del .build-deps;
+      \t\tredis-server --version"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /data && chown redis:redis /data
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: workdir
+    Path: /data
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - chmod +x /usr/local/bin/docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "7000"
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - redis-server
+    - --port 7000
+    - --dir /data
+    - --logfile /data/redis.log
+    - --maxmemory 256MB
+    - --timeout 0
+    - --tcp-keepalive 60
+    - --loglevel warning
+    - --appendonly yes
+    - --appendfilename append.aof
+    - --appendfsync everysec
+    - --protected-mode no
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

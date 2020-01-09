@@ -1,0 +1,137 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: elixir:1.8.1-slim
+  Commands:
+  - CmdLine:
+    - apt-get -qq update && apt-get -qq install git build-essential libssl-dev curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mix local.hex --force &&     mix local.rebar --force &&     mix hex.info
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - Env:
+    - Key: MIX_ENV
+      Value: prod
+    Name: env
+  - CmdLine:
+    - "git clone --branch 1.7.1 https://github.com/erlio/vernemq.git && \t\tcd vernemq
+      && \t\tmake rel && \t\tcd .."
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "git clone https://github.com/astarte-platform/astarte_vmq_plugin.git && \t\tcd
+      astarte_vmq_plugin && \t\tmix deps.get && \t\tmix release --env=$MIX_ENV &&
+      \t\tcd .."
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp astarte_vmq_plugin/priv/astarte_vmq_plugin.schema vernemq/_build/default/rel/vernemq/share/schema/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/vm.args
+    - /build/vernemq/_build/default/rel/vernemq/etc/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/vernemq.conf
+    - /build/vernemq/_build/default/rel/vernemq/etc/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/rand_cluster_node.escript
+    - /build/vernemq/_build/default/rel/vernemq/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/vernemq.sh
+    - /build/vernemq/_build/default/rel/vernemq/bin/
+  - CmdLine:
+    - chmod +x /build/vernemq/_build/default/rel/vernemq/bin/vernemq.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: elixir:1.8.1-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM elixir:1.8.1-slim as builder
+- BaseName: debian:stretch-slim
+  Commands:
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - CmdLine:
+    - apt-get -qq update && apt-get -qq install libssl1.1 curl jq iproute2 netcat
+      && apt-get clean && mkdir -p /etc/ssl/astarte
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/vernemq/_build/default/rel/vernemq
+    - /opt/vernemq/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/astarte_vmq_plugin/_build/prod/rel/astarte_vmq_plugin
+    - /opt/astarte_vmq_plugin/
+  - CmdLine:
+    - cd /usr/bin && curl -O https://raw.githubusercontent.com/eficode/wait-for/master/wait-for
+      && chmod +x wait-for && cd -
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "1883"
+  - Name: expose
+    Ports:
+    - "1885"
+  - Name: expose
+    Ports:
+    - "8883"
+  - Name: expose
+    Ports:
+    - "44053"
+  - Name: expose
+    Ports:
+    - "4369"
+  - Name: expose
+    Ports:
+    - "9100"
+    - "9101"
+    - "9102"
+    - "9103"
+    - "9104"
+    - "9105"
+    - "9106"
+    - "9107"
+    - "9108"
+    - "9109"
+  - Name: expose
+    Ports:
+    - "8888"
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /opt/vernemq/bin/vernemq.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

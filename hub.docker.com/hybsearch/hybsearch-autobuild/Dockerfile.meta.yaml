@@ -1,0 +1,179 @@
+MetaArgs: null
+Stages:
+- As: hyb-node
+  BaseName: docker.io/amd64/node:8-stretch
+  Commands:
+  - CmdLine:
+    - curl -sS http://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "deb http://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update     && apt-get install -qy --no-install-recommends yarn jq     &&
+      apt-get clean autoclean     && rm -rfv /var/lib/apt/                /var/lib/cache/                /var/lib/log/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - package.json
+    - yarn.lock
+    - ./
+  - CmdLine:
+    - jq -r '.devDependencies|keys|.[]' < ./package.json | xargs yarn remove
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn --production --frozen-lockfile
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./server/ui
+    - ./server/ui
+  - CmdLine:
+    - yarn build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn remove parcel-bundler
+    Name: run
+    PrependShell: true
+  From:
+    Image: docker.io/amd64/node:8-stretch
+  Name: hyb-node
+  Platform: ""
+  SourceCode: FROM docker.io/amd64/node:8-stretch AS hyb-node
+- As: hyb-jml
+  BaseName: docker.io/hybsearch/jml:stretch
+  Commands: null
+  From:
+    Image: docker.io/hybsearch/jml:stretch
+  Name: hyb-jml
+  Platform: ""
+  SourceCode: FROM docker.io/hybsearch/jml:stretch AS hyb-jml
+- As: hyb-beast
+  BaseName: hybsearch/docker-base:v1.4
+  Commands:
+  - CmdLine:
+    - mkdir -p /usr/share/man/man1/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update     && apt-get install -qy --no-install-recommends        curl     &&
+      apt-get clean autoclean     && rm -rfv /var/lib/apt/                /var/lib/cache/                /var/lib/log/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /beast
+  - CmdLine:
+    - curl -L 'https://github.com/CompEvol/beast2/releases/download/v2.4.8/BEAST.v2.4.8.Linux.tgz'
+      | gunzip - | tar -x
+    Name: run
+    PrependShell: true
+  From:
+    Image: hybsearch/docker-base:v1.4
+  Name: hyb-beast
+  Platform: ""
+  SourceCode: FROM hybsearch/docker-base:v1.4 AS hyb-beast
+- BaseName: docker.io/hybsearch/docker-base:v1.4
+  Commands:
+  - Chown: ""
+    From: hyb-node
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/
+    - /usr/local/
+  - Chown: ""
+    From: hyb-node
+    Name: copy
+    SourcesAndDest:
+    - /opt/
+    - /opt/
+  - Chown: ""
+    From: hyb-beast
+    Name: copy
+    SourcesAndDest:
+    - /beast/beast/bin/beast
+    - /usr/local/bin/
+  - Chown: ""
+    From: hyb-beast
+    Name: copy
+    SourcesAndDest:
+    - /beast/beast/lib/beast.jar
+    - /usr/local/lib/
+  - Chown: ""
+    From: hyb-beast
+    Name: copy
+    SourcesAndDest:
+    - /beast/beast/lib/launcher.jar
+    - /usr/local/lib/
+  - Chown: ""
+    From: hyb-jml
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/jml
+    - /usr/local/bin/
+  - CmdLine:
+    - sed -i 's|deb http://deb.debian.org/debian stretch main|deb http://http.us.debian.org/debian
+      stretch main non-free|' /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /usr/share/man/man1/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update     && apt-get install -qy --no-install-recommends        clustalo        mrbayes        python        python-dev        python-pip        python-setuptools        seq-gen        openjdk-8-jdk-headless     &&
+      apt-get clean autoclean     && rm -rfv /var/lib/apt/                /var/lib/cache/                /var/lib/log/
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DOCKER
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - mkdir /hybsearch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /hybsearch/data
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /hybsearch
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - requirements.txt
+    - ./
+  - CmdLine:
+    - pip install --no-cache-dir -r requirements.txt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: hyb-node
+    Name: copy
+    SourcesAndDest:
+    - /app/
+    - ./
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./server
+    - ./server
+  - CmdLine:
+    - npm run server -- 8080
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: docker.io/hybsearch/docker-base:v1.4
+  Name: ""
+  Platform: ""
+  SourceCode: FROM docker.io/hybsearch/docker-base:v1.4

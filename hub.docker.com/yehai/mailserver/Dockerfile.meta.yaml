@@ -1,0 +1,153 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:wheezy
+  Commands:
+  - Maintainer: Semen Pisarev <s.a.pisarev@gmail.com>
+    Name: maintainer
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - echo "APT::Install-Recommends 0;" >> /etc/apt/apt.conf.d/01norecommends   &&
+      echo "APT::Install-Suggests 0;" >> /etc/apt/apt.conf.d/01norecommends
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: IREDMAIL_VERSION
+      Value: 0.9.2
+    Name: env
+  - Env:
+    - Key: HOSTNAME
+      Value: mx.phoneyou.net
+    Name: env
+  - Env:
+    - Key: DOCKER_LDAP_DN
+      Value: dc=phoneyou,dc=net
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./sources.list.163
+    - /etc/apt/sources.list
+  - CmdLine:
+    - echo 'deb http://inverse.ca/debian wheezy wheezy' >     /etc/apt/sources.list.d/00-inverse-ca.list   &&
+      apt-key adv --keyserver keys.gnupg.net --recv-key 0x810273C4   && apt-get -q
+      update   && apt-get install -y -q     apt-utils   && apt-get install -y -q     curl     wget     bzip2     dialog     openssl     rsync     rsyslog     dovecot-core     dovecot-imapd     dovecot-ldap     dovecot-lmtpd     dovecot-managesieved     dovecot-mysql     dovecot-pop3d     dovecot-sieve   &&
+      apt-get clean   && rm -rf /var/lib/apt/lists/*   && rm -f /etc/apt/sources.list.d/00-inverse-ca.list
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/iredmail
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./files
+    - ./
+  - CmdLine:
+    - wget -O - --no-check-certificate     https://bitbucket.org/zhb/iredmail/downloads/iRedMail-"${IREDMAIL_VERSION}".tar.bz2
+      |     tar xvj   && cp -rl iRedMail-"${IREDMAIL_VERSION}"/* .   && rm -rf iRedMail-"${IREDMAIL_VERSION}"*   &&
+      mkdir -p /opt/itools   && cp ./tools/* /opt/itools   && mkdir -p /var/vmail/backup   &&
+      mv ./backup.sh /var/vmail/backup   && sed -i 's/dc=example,dc=com/'"$DOCKER_LDAP_DN"'/'     /opt/itools/create_mail_user_OpenLDAP.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /bin/uname /bin/uname_   && mv /bin/hostname /bin/hostname_   && cp -l ./hostname
+      ./uname /bin/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo $HOSTNAME > /etc/hostname   && echo $HOSTNAME > /etc/mailname   && mkdir
+      -p /etc/apache2/   && echo 'ServerName '$HOSTNAME > /etc/apache2/httpd.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /var/www/apache2/   && mkdir -p /var/log/apache2/www/ /var/www/   &&
+      ln -s /var/log/apache2/www/ /var/www/apache2   && chown -R www-data:www-data
+      /var/www/ /var/log/apache2/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch /tmp/clamd.socket   && chmod -Rf 766 /tmp/clamd.socket
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -ri 's/^[1-6]:[2-6]{2,4}:.*/#\0/' /etc/inittab
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/ 101/ 0/' /usr/sbin/policy-rc.d   && IREDMAIL_DEBUG='NO'     AUTO_USE_EXISTING_CONFIG_FILE=y     AUTO_INSTALL_WITHOUT_CONFIRM=y     AUTO_CLEANUP_REMOVE_SENDMAIL=y     AUTO_CLEANUP_REMOVE_MOD_PYTHON=y     AUTO_CLEANUP_REPLACE_FIREWALL_RULES=n     AUTO_CLEANUP_RESTART_IPTABLES=y     AUTO_CLEANUP_REPLACE_MYSQL_CONFIG=y     AUTO_CLEANUP_RESTART_POSTFIX=n     bash
+      iRedMail.sh   && apt-get purge -y -q dialog apt-utils   && apt-get autoremove
+      -y -q   && apt-get clean -y -q   && rm -rf /var/lib/apt/lists/*   && sed -i
+      's/ 0/ 101/' /usr/sbin/policy-rc.d
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ -e mail_users.csv ];     then       python /opt/itools/create_mail_user_OpenLDAP.py
+      ./mail_users.csv       && mv ./mail_users.csv.ldif ldifs/20_mail_users.ldif;     fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /etc/ldap/slapd.d   && sed -i 's/openldap/root/g' /etc/default/slapd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - service slapd start
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod proxy && a2enmod headers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - (crontab -l 2>/dev/null;   echo "0   4   *   *   *   /bin/bash /var/vmail/backup/backup.sh")
+      |   crontab -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo "plugins.append(''ldap_force_change_password_in_days'')"     >> /opt/iredapd/settings.py   &&
+      echo "CHANGE_PASSWORD_DAYS = 365" >> /opt/iredapd/settings.py   && echo "CHANGE_PASSWORD_MESSAGE
+      = ''Please change your password in webmail: https://$HOSTNAME/mail/''"     >>
+      /opt/iredapd/settings.py'
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt
+  - CmdLine:
+    - rm -rf /root/.bash_history   && rm -f /bin/uname /bin/hostname   && mv /bin/uname_
+      /bin/uname   && mv /bin/hostname_ /bin/hostname
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "110"
+    - "143"
+    - "25"
+    - "389"
+    - "443"
+    - "587"
+    - "636"
+    - "80"
+    - "993"
+    - "995"
+  - Name: volume
+    Volumes:
+    - /var/log
+  - Name: volume
+    Volumes:
+    - /var/lib/mysql
+  - Name: volume
+    Volumes:
+    - /var/vmail
+  - CmdLine:
+    - /sbin/init
+    - "2"
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:wheezy
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:wheezy

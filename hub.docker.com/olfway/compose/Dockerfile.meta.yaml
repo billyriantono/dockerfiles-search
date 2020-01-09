@@ -1,0 +1,183 @@
+MetaArgs:
+- DefaultValue: debian:stretch-slim
+  Key: DEBIAN_IMAGE
+  ProvidedValue: null
+  Value: debian:stretch-slim
+Stages:
+- As: unpack
+  BaseName: ${DEBIAN_IMAGE}
+  Commands:
+  - Env:
+    - Key: LANG
+      Value: '''C.UTF-8'''
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Chown: ""
+    From: olfway/qemu-user-static
+    Name: copy
+    SourcesAndDest:
+    - /qemu-arm-static
+    - /usr/bin/
+  - Chown: ""
+    From: olfway/qemu-user-static
+    Name: copy
+    SourcesAndDest:
+    - /qemu-aarch64-static
+    - /usr/bin/
+  - CmdLine:
+    - set -x     && echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/zz-force-ipv4     &&
+      echo 'APT::Install-Recommends "0";' > /etc/apt/apt.conf.d/zz-no-install-recommends
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && apt-get update     && apt-get install -y         apt-transport-https         ca-certificates         curl         gnupg2         lsb-release
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key
+      add -     && echo "deb https://download.docker.com/linux/debian $(lsb_release
+      -cs) stable" > /etc/apt/sources.list.d/docker.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && apt-get update     && apt-get install -y         python3-pip         python3-setuptools
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src
+  - Key: DOCKER_COMPOSE_RELEASE
+    Name: arg
+    Value: 1.21.2
+  - CmdLine:
+    - set -x     && curl -fsSL https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_RELEASE}/run.sh
+      > run.sh     && curl -fsSL https://github.com/docker/compose/archive/${DOCKER_COMPOSE_RELEASE}.tar.gz
+      > docker-compose.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ${DEBIAN_IMAGE}
+  Name: unpack
+  Platform: ""
+  SourceCode: FROM ${DEBIAN_IMAGE} as unpack
+- As: build
+  BaseName: unpack
+  Commands:
+  - Key: IMAGE_NAME
+    Name: arg
+    Value: '"olfway/compose:latest"'
+  - CmdLine:
+    - set -x     && apt-get update     && apt-get install -y         docker-ce
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src
+  - Chown: ""
+    From: unpack
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/
+    - /usr/src/
+  - CmdLine:
+    - 'set -x     && pip3 install --compile --no-binary :all: --no-cache-dir docker-compose.tar.gz'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && mkdir -p /usr/local/src     && cat run.sh | sed -r "/^VERSION=.*/d
+      ; s#^IMAGE=.*#IMAGE='${IMAGE_NAME}'#" > /usr/local/src/run.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && docker-compose --version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: unpack
+  Name: build
+  Platform: ""
+  SourceCode: FROM unpack as build
+- BaseName: ${DEBIAN_IMAGE}
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Pavel Volkovitskiy <olfway@olfway.net>"'
+    Name: label
+  - Env:
+    - Key: LANG
+      Value: '''C.UTF-8'''
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Chown: ""
+    From: olfway/qemu-user-static
+    Name: copy
+    SourcesAndDest:
+    - /qemu-arm-static
+    - /usr/bin/
+  - Chown: ""
+    From: olfway/qemu-user-static
+    Name: copy
+    SourcesAndDest:
+    - /qemu-aarch64-static
+    - /usr/bin/
+  - CmdLine:
+    - set -x     && echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/zz-force-ipv4     &&
+      echo 'APT::Install-Recommends "0";' > /etc/apt/apt.conf.d/zz-no-install-recommends
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -x     && apt-get update     && apt-get dist-upgrade -y     && apt-get
+      install -y      \tlibltdl7         python3         python3-pkg-resources"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/
+    - /usr/local/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/docker
+    - /usr/local/bin/
+  - Name: workdir
+    Path: '"/root"'
+  - CmdLine:
+    - set -x     && uname -a     && docker --version     && docker-compose --version
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-compose-wrapper
+    - /usr/local/bin/
+  - CmdLine: []
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - /bin/bash
+    - /usr/local/bin/docker-compose-wrapper
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ${DEBIAN_IMAGE}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${DEBIAN_IMAGE}

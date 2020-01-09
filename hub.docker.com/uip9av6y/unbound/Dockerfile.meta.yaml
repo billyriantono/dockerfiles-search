@@ -1,0 +1,160 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:3.10
+  Commands:
+  - Key: UNBOUND_VERSION
+    Name: arg
+    Value: 1.9.4
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - "set -xe;   apk add --no-cache     dnssec-root     libsodium-dev     libevent-dev
+      \    libressl-dev     linux-headers     expat-dev     build-base     gnupg     curl
+      \    file   && curl -sSLO http://unbound.net/downloads/unbound-${UNBOUND_VERSION}.tar.gz
+      \  && curl -sSLO http://unbound.net/downloads/unbound-${UNBOUND_VERSION}.tar.gz.asc
+      \  && key='EDFAA3F2CA4E6EB05681AF8E9F6F1C2D7E045F8D'   && export GNUPGHOME=\"$(mktemp
+      -d)\"   && gpg --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys
+      \"$key\"   || gpg --keyserver hkp://ipv4.pool.sks-keyservers.net --recv-keys
+      \"$key\"   || gpg --keyserver hkp://pgp.mit.edu:80 --recv-keys \"$key\"   &&
+      gpg --batch --verify unbound-${UNBOUND_VERSION}.tar.gz.asc unbound-${UNBOUND_VERSION}.tar.gz
+      \  && rm -rf \"$GNUPGHOME\" unbound-${UNBOUND_VERSION}.tar.gz.asc   && tar -xzf
+      unbound-${UNBOUND_VERSION}.tar.gz   && rm unbound-${UNBOUND_VERSION}.tar.gz
+      \  && cd unbound-${UNBOUND_VERSION}   && ./configure     --prefix=/usr     --sysconfdir=/etc
+      \    --mandir=/usr/share/man     --localstatedir=/var     --with-username=unbound
+      \    --with-run-dir=\"\"     --with-pidfile=\"\"     --with-rootkey-file=/usr/share/dnssec-root/trusted-key.key
+      \    --with-libevent     --with-pthreads     --disable-static     --disable-rpath
+      \    --with-ssl     --without-pythonmodule     --without-pyunbound     --enable-dnscrypt
+      \  && sed -i '/^LIBS=/s/-lpython.*[[:space:]]/ /' Makefile \t&& make   && make
+      DESTDIR=\"/app\" install"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.10 AS builder
+- BaseName: alpine:3.10
+  Commands:
+  - Key: UNBOUND_VERSION
+    Name: arg
+    Value: 1.9.4
+  - Env:
+    - Key: UNBOUND_VERSION
+      Value: ${UNBOUND_VERSION}
+    Name: env
+  - Env:
+    - Key: UNBOUND_HOME
+      Value: /etc/unbound
+    Name: env
+  - CmdLine:
+    - set -xe;   addgroup -S unbound   && adduser -S -D -H -h "${UNBOUND_HOME}" -s
+      /sbin/nologin -G unbound unbound   && apk add --no-cache     dnssec-root     libsodium     libevent     libressl     openssl     expat   &&
+      mkdir -p     "${UNBOUND_HOME}/conf.d"     "${UNBOUND_HOME}/server-conf.d"     "${UNBOUND_HOME}/remote-conf.d"     "${UNBOUND_HOME}/ssl"     "${UNBOUND_HOME}/aux"   &&
+      chown -R     unbound:unbound     "${UNBOUND_HOME}"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${UNBOUND_HOME}
+  - Name: expose
+    Ports:
+    - "53"
+    - 53/udp
+    - "853"
+    - 853/udp
+    - "8953"
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/usr/sbin/
+    - /usr/sbin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/usr/lib/
+    - /usr/lib/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - unbound.conf
+    - ${UNBOUND_HOME}/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - include.d/
+    - ${UNBOUND_HOME}/include.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/
+    - /usr/local/bin/
+  - Name: volume
+    Volumes:
+    - ${UNBOUND_HOME}/aux
+    - ${UNBOUND_HOME}/ssl
+    - ${UNBOUND_HOME}/conf.d
+    - ${UNBOUND_HOME}/remote-conf.d
+    - ${UNBOUND_HOME}/server-conf.d
+  - Health:
+      Interval: 60000000000
+      StartPeriod: 10000000000
+      Test:
+      - CMD-SHELL
+      - /usr/sbin/unbound-control -c ${UNBOUND_HOME}/unbound.conf status -s 127.0.0.1:8953
+        || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - /usr/local/bin/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - unbound
+    - -c
+    - /etc/unbound/unbound.conf
+    Name: cmd
+    PrependShell: false
+  - Key: BUILD_DATE
+    Name: arg
+    Value: '"1970-01-01T00:00:00Z"'
+  - Key: REVISION
+    Name: arg
+    Value: '"0"'
+  - Key: VCS_URL
+    Name: arg
+    Value: '"http://localhost/"'
+  - Key: VCS_REF
+    Name: arg
+    Value: '"master"'
+  - Labels:
+    - Key: org.opencontainers.image.created
+      Value: $BUILD_DATE
+    - Key: org.opencontainers.image.title
+      Value: '"Unbound"'
+    - Key: org.opencontainers.image.description
+      Value: '"Unbound is a validating, recursive, and caching DNS resolver"'
+    - Key: org.opencontainers.image.url
+      Value: '"https://unbound.net/"'
+    - Key: org.opencontainers.image.source
+      Value: $VCS_URL
+    - Key: org.opencontainers.image.revision
+      Value: $VCS_REF
+    - Key: org.opencontainers.image.vendor
+      Value: '"NLnet Labs"'
+    - Key: org.opencontainers.image.version
+      Value: '"${UNBOUND_VERSION}-${REVISION}"'
+    - Key: com.microscaling.docker.dockerfile
+      Value: '"/Dockerfile"'
+    - Key: org.opencontainers.image.licenses
+      Value: '"BSD"'
+    Name: label
+  From:
+    Image: alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10

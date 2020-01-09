@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- As: nwnsc
+  BaseName: jakkn/nwnsc
+  Commands: null
+  From:
+    Image: jakkn/nwnsc
+  Name: nwnsc
+  Platform: ""
+  SourceCode: FROM jakkn/nwnsc as nwnsc
+- As: nim
+  BaseName: nimlang/nim:latest
+  Commands:
+  - CmdLine:
+    - apt-get update     && apt-get upgrade -y     && apt-get -qy install curl libssl-dev
+      build-essential gcc git     && git clone --recursive https://github.com/niv/neverwinter_utils.nim     &&
+      cd neverwinter_utils.nim     && nimble build -d:release     && mv bin/* /usr/local/bin/
+    Name: run
+    PrependShell: true
+  From:
+    Image: nimlang/nim:latest
+  Name: nim
+  Platform: ""
+  SourceCode: FROM nimlang/nim:latest as nim
+- As: nwn-order-cli-builder
+  BaseName: golang:1.11.0
+  Commands:
+  - CmdLine:
+    - apt update     && apt upgrade -y     && git clone https://github.com/Urothis/nwn-order-cli.git     &&
+      cd nwn-order-cli     && go mod download     && go build -o ./bin/order-cli     &&
+      mv bin/* /usr/local/bin/
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11.0
+  Name: nwn-order-cli-builder
+  Platform: ""
+  SourceCode: FROM golang:1.11.0 as nwn-order-cli-builder
+- BaseName: ubuntu:latest
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"urothis@gmail.com"'
+    Name: label
+  - Chown: ""
+    From: nwnsc
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/nwnsc
+    - /usr/local/bin/
+  - Chown: ""
+    From: nwnsc
+    Name: copy
+    SourcesAndDest:
+    - /nwn
+    - .
+  - Env:
+    - Key: NWN_INSTALLDIR
+      Value: /nwn/data
+    Name: env
+  - Chown: ""
+    From: nwn-order-cli-builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/
+    - /usr/local/bin/
+  - Chown: ""
+    From: nim
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/*
+    - /usr/local/bin/
+  - CmdLine:
+    - apt-get update     && apt-get upgrade -y     && chmod +x ./usr/local/bin/order-cli
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - order-cli
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:latest

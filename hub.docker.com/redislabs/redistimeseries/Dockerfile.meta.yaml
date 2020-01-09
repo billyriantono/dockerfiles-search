@@ -1,0 +1,81 @@
+MetaArgs:
+- DefaultValue: buster
+  Key: OSNICK
+  ProvidedValue: null
+  Value: buster
+- DefaultValue: x64
+  Key: ARCH
+  ProvidedValue: null
+  Value: x64
+Stages:
+- As: builder
+  BaseName: redisfab/redis-${ARCH}-${OSNICK}:5.0.5
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./
+    - /build
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - ./deps/readies/bin/getpy2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./system-setup.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make fetch
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: X_NPROC
+      Value: '"cat /proc/cpuinfo|grep processor|wc -l"'
+    Name: env
+  - CmdLine:
+    - echo nproc=$(nproc); echo NPROC=$(eval "$X_NPROC")
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make build
+    Name: run
+    PrependShell: true
+  From:
+    Image: redisfab/redis-${ARCH}-${OSNICK}:5.0.5
+  Name: builder
+  Platform: ""
+  SourceCode: FROM redisfab/redis-${ARCH}-${OSNICK}:5.0.5 AS builder
+- BaseName: redisfab/redis-${ARCH}-${OSNICK}:5.0.5
+  Commands:
+  - Env:
+    - Key: LIBDIR
+      Value: /usr/lib/redis/modules
+    Name: env
+  - Name: workdir
+    Path: /data
+  - CmdLine:
+    - mkdir -p "$LIBDIR"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/bin/redistimeseries.so
+    - '"$LIBDIR"'
+  - Name: expose
+    Ports:
+    - "6379"
+  - CmdLine:
+    - redis-server
+    - --loadmodule
+    - /usr/lib/redis/modules/redistimeseries.so
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: redisfab/redis-${ARCH}-${OSNICK}:5.0.5
+  Name: ""
+  Platform: ""
+  SourceCode: FROM redisfab/redis-${ARCH}-${OSNICK}:5.0.5

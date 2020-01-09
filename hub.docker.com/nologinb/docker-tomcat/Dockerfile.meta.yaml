@@ -1,0 +1,116 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:10
+  Commands:
+  - Env:
+    - Key: TOMCAT_MAJOR
+      Value: "8"
+    Name: env
+  - Env:
+    - Key: TOMCAT_VERSION
+      Value: 8.5.46
+    Name: env
+  - Env:
+    - Key: TOMCAT_TGZ_URLS
+      Value: https://www.apache.org/dyn/closer.cgi?action=download&filename=tomcat/tomcat-$TOMCAT_MAJOR/v$TOMCAT_VERSION/bin/apache-tomcat-$TOMCAT_VERSION.tar.gz   https://www-us.apache.org/dist/tomcat/tomcat-$TOMCAT_MAJOR/v$TOMCAT_VERSION/bin/apache-tomcat-$TOMCAT_VERSION.tar.gz   https://www.apache.org/dist/tomcat/tomcat-$TOMCAT_MAJOR/v$TOMCAT_VERSION/bin/apache-tomcat-$TOMCAT_VERSION.tar.gz   https://archive.apache.org/dist/tomcat/tomcat-$TOMCAT_MAJOR/v$TOMCAT_VERSION/bin/apache-tomcat-$TOMCAT_VERSION.tar.gz
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends   wget   ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /build/tomcat
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -eux;     success=;   for url in $TOMCAT_TGZ_URLS; do     if wget -O tomcat.tar.gz
+      "$url"; then       success=1;       break;     fi;   done;   [ -n "$success"
+      ];   tar -xvf tomcat.tar.gz --strip-components=1 -C /build/tomcat;   rm /build/tomcat/bin/*.bat;   rm
+      -Rf /build/tomcat/webapps/*
+    Name: run
+    PrependShell: true
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -c
+  - CmdLine:
+    - mkdir -p /build/ssl && cd /build/ssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl genrsa  -out /build/ssl/ca-key.pem
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl req -nodes -x509 -key /build/ssl/ca-key.pem     -subj "/C=CC/ST=ST/L=L/O=O/OU=OU/CN=Temporary
+      CA"     -extensions san     -config <(echo -e '[req]\ndistinguished_name=req
+      \n [san] \n basicConstraints=critical,CA:TRUE,pathlen:0 \n keyUsage = cRLSign,
+      keyCertSign, digitalSignature')     -days 7300     -out /build/ssl/ca.pem
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl genrsa -out /build/ssl/tomcat-key.pem
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl req -new     -subj "/C=CC/ST=ST/L=L/O=O/OU=OU/CN=tomcat.temporary.addr"     -key
+      /build/ssl/tomcat-key.pem     -out /build/ssl/tomcat.csr
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl x509 -req         -in /build/ssl/tomcat.csr         -CA /build/ssl/ca.pem         -CAkey
+      /build/ssl/ca-key.pem         -CAcreateserial         -out /build/ssl/tomcat.pem
+      -days 365         -extfile <(echo -e 'subjectAltName=IP:127.0.0.1 \n basicConstraints=CA:FALSE
+      \n keyUsage = nonRepudiation, digitalSignature, keyEncipherment \n subjectKeyIdentifier=hash
+      \n authorityKeyIdentifier=keyid,issuer \n issuerAltName=issuer:copy')
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -f /build/ssl/ca-key.pem /build/ssl/tomcat.csr /build/ssl/ca.srl
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:10
+- BaseName: nologinb/docker-java:8
+  Commands:
+  - Env:
+    - Key: CATALINA_HOME
+      Value: /tomcat
+    - Key: JAVA_OPTS
+      Value: '" -XX:NativeMemoryTracking=summary -XX:+UnlockExperimentalVMOptions
+        -XX:+UseCGroupMemoryLimitForHeap -XX:+ExitOnOutOfMemoryError -XX:MaxRAMFraction=1
+        "'
+    - Key: CATALINA_TMPDIR
+      Value: /tmp
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get upgrade -y   && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /build
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - addons
+    - /
+  - Name: workdir
+    Path: $CATALINA_HOME
+  - CmdLine:
+    - bin/catalina.sh
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nologinb/docker-java:8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nologinb/docker-java:8

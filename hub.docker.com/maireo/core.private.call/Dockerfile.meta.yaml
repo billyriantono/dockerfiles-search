@@ -1,0 +1,140 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: mcr.microsoft.com/dotnet/core/aspnet:2.2
+  Commands: null
+  From:
+    Image: mcr.microsoft.com/dotnet/core/aspnet:2.2
+  Name: base
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/aspnet:2.2 AS base
+- As: build
+  BaseName: mcr.microsoft.com/dotnet/core/sdk:2.2
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - dotnet restore && dotnet build -c Release --no-restore
+    Name: run
+    PrependShell: true
+  From:
+    Image: mcr.microsoft.com/dotnet/core/sdk:2.2
+  Name: build
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/sdk:2.2 AS build
+- As: publish
+  BaseName: build
+  Commands:
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - dotnet publish /src/src/Core.Private.Call.Web/Core.Private.Call.Web.csproj --no-build
+      -c Release -o /build
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build AS publish
+- BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /build
+    - .
+  - Env:
+    - Key: ConnectionStrings__Default
+      Value: Server=192.168.0.252;Database=core_private_call;uid=postgres;pwd=postgres;
+    - Key: ConnectionStrings__BackgroundJob
+      Value: 192.168.0.252
+    - Key: MessageQueue__HostName
+      Value: 192.168.0.252
+    - Key: MessageQueue__ExchangeName
+      Value: core.privatecall
+    - Key: MessageQueue__QueueName
+      Value: core.privatecall
+    - Key: MessageQueue__VirtualHostName
+      Value: /
+    - Key: MessageQueue__UserName
+      Value: guest
+    - Key: MessageQueue__Password
+      Value: guest
+    - Key: MessageQueue__ServiceName
+      Value: rabbitmq-5672
+    - Key: MessageQueue__QueuePerConsumer
+      Value: "true"
+    - Key: ServiceDiscovery__Registry
+      Value: http://dev-consul:8500
+    - Key: ServiceDiscovery__ServiceId
+      Value: ""
+    - Key: ServiceDiscovery__ServiceName
+      Value: core.privatecall
+    - Key: ServiceDiscovery__ServiceTags
+      Value: ""
+    - Key: AutoMigrationEnabled
+      Value: "true"
+    - Key: AutoSeedDisabled
+      Value: "false"
+    - Key: ButterFlyServiceName
+      Value: butterfly
+    - Key: BackgroundJob__Enabled
+      Value: "true"
+    - Key: BackgroundJob__DashboardEnabled
+      Value: "true"
+    - Key: BackgroundJob__QueuePollInterval
+      Value: "00:00:15"
+    - Key: BackgroundJob__WorkerCount
+      Value: "1"
+    - Key: BackgroundJob__UseRedis
+      Value: "true"
+    - Key: BackgroundJob__RedisPrefix
+      Value: core.privatecall
+    - Key: AXNProviderEndpoint
+      Value: dyplsapi.aliyuncs.com
+    - Key: AXNProviderRegion
+      Value: cn-hangzhou
+    - Key: AXNProviderAccount
+      Value: ""
+    - Key: AXNProviderPassword
+      Value: ""
+    - Key: ExceptCityName
+      Value: 哈尔滨
+    - Key: IsRecordingEnabled
+      Value: "true"
+    - Key: Expiration
+      Value: "2050-01-01"
+    - Key: FechRecordVoiceJobDelaySeconds
+      Value: "80000"
+    - Key: AutoBindingForBrokerOnDutyStatusChanged
+      Value: "true"
+    - Key: AllowRestrictedOpreations
+      Value: "false"
+    Name: env
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - dotnet
+    - Core.Private.Call.Web.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

@@ -1,0 +1,102 @@
+MetaArgs: null
+Stages:
+- As: back
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk add --no-cache git ca-certificates
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Name: workdir
+    Path: /speech_to_text_app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./back-end/go.mod
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./back-end/main.go
+    - .
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w
+      -s" -o converter
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: back
+  Platform: ""
+  SourceCode: FROM golang:alpine as back
+- As: front
+  BaseName: node:alpine
+  Commands:
+  - CmdLine:
+    - apk update
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /front-end
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./front-end/package.json
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./front-end/src
+    - ./src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./front-end/public
+    - ./public
+  - CmdLine:
+    - npm install --silent && npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:alpine
+  Name: front
+  Platform: ""
+  SourceCode: FROM node:alpine as front
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: front
+    Name: copy
+    SourcesAndDest:
+    - ./front-end/build
+    - view
+  - Chown: ""
+    From: back
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: back
+    Name: copy
+    SourcesAndDest:
+    - /speech_to_text_app/converter
+    - .
+  - CmdLine:
+    - ./converter
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

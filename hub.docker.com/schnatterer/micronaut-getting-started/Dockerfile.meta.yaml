@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: mavencache
+  BaseName: maven:3.6.0-jdk-8-alpine
+  Commands:
+  - Env:
+    - Key: MAVEN_OPTS
+      Value: -Dmaven.repo.local=/mvn
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pom.xml
+    - /mvn/
+  - Name: workdir
+    Path: /mvn
+  - CmdLine:
+    - mvn package dependency:resolve dependency:resolve-plugins
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.6.0-jdk-8-alpine
+  Name: mavencache
+  Platform: ""
+  SourceCode: FROM maven:3.6.0-jdk-8-alpine as mavencache
+- As: graalvm
+  BaseName: oracle/graalvm-ce:1.0.0-rc15
+  Commands:
+  - Env:
+    - Key: MAVEN_OPTS
+      Value: -Dmaven.repo.local=/mvn
+    Name: env
+  - Chown: ""
+    From: mavencache
+    Name: copy
+    SourcesAndDest:
+    - /mvn/
+    - /mvn/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /home/app/micronaut-getting-started
+  - Name: workdir
+    Path: /home/app/micronaut-getting-started
+  - CmdLine:
+    - ./mvnw package
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - native-image --no-server -cp target/micronaut-getting-started-*.jar
+    Name: run
+    PrependShell: true
+  From:
+    Image: oracle/graalvm-ce:1.0.0-rc15
+  Name: graalvm
+  Platform: ""
+  SourceCode: FROM oracle/graalvm-ce:1.0.0-rc15 as graalvm
+- BaseName: scratch
+  Commands:
+  - Name: expose
+    Ports:
+    - "8080"
+  - Chown: ""
+    From: graalvm
+    Name: copy
+    SourcesAndDest:
+    - /home/app/micronaut-getting-started
+    - .
+  - Name: user
+    User: "1000"
+  - CmdLine:
+    - ./micronaut-getting-started
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

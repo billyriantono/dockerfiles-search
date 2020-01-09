@@ -1,0 +1,99 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: openjdk:11
+  Commands:
+  - Maintainer: Marc Tönsing <marc@marc.tv>
+    Name: maintainer
+  - Key: paperspigot_ci_url
+    Name: arg
+    Value: https://papermc.io/api/v1/paper/1.15.1/latest/download
+  - Env:
+    - Key: PAPERSPIGOT_CI_URL
+      Value: $paperspigot_ci_url
+    Name: env
+  - Name: workdir
+    Path: /opt/minecraft
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ${PAPERSPIGOT_CI_URL}
+    - paperclip.jar
+  - CmdLine:
+    - useradd -ms /bin/bash minecraft &&     chown minecraft /opt/minecraft -R
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: minecraft
+  - CmdLine:
+    - /usr/local/openjdk-11/bin/java -jar /opt/minecraft/paperclip.jar; exit 0
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /opt/minecraft/cache/patched*.jar paperspigot.jar
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:11
+  Name: build
+  Platform: ""
+  SourceCode: FROM openjdk:11 AS build
+- As: runtime
+  BaseName: openjdk:11
+  Commands:
+  - Name: workdir
+    Path: /data
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /opt/minecraft/paperspigot.jar
+    - /opt/minecraft/paperspigot.jar
+  - Key: RCON_CLI_VER
+    Name: arg
+    Value: 1.4.6
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/itzg/rcon-cli/releases/download/${RCON_CLI_VER}/rcon-cli_${RCON_CLI_VER}_linux_amd64.tar.gz
+    - /tmp/rcon-cli.tgz
+  - CmdLine:
+    - tar -x -C /usr/local/bin -f /tmp/rcon-cli.tgz rcon-cli &&   rm /tmp/rcon-cli.tgz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - server.properties
+    - /opt/minecraft/server.properties
+  - Name: volume
+    Volumes:
+    - '"/data"'
+  - Name: expose
+    Ports:
+    - 25565/tcp
+  - Name: expose
+    Ports:
+    - 25565/udp
+  - Key: memory_size
+    Name: arg
+    Value: 3G
+  - Env:
+    - Key: MEMORYSIZE
+      Value: $memory_size
+    Name: env
+  - Name: workdir
+    Path: /data
+  - CmdLine:
+    - /usr/local/openjdk-11/bin/java -jar -Xms$MEMORYSIZE -Xmx$MEMORYSIZE -XX:+UseG1GC
+      -XX:+UnlockExperimentalVMOptions -XX:MaxGCPauseMillis=100 -XX:+DisableExplicitGC
+      -XX:TargetSurvivorRatio=90 -XX:G1NewSizePercent=50 -XX:G1MaxNewSizePercent=80
+      -XX:G1MixedGCLiveThresholdPercent=35 -XX:+AlwaysPreTouch -XX:+ParallelRefProcEnabled
+      -Dusing.aikars.flags=mcflags.emc.gs -Dcom.mojang.eula.agree=true /opt/minecraft/paperspigot.jar
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: openjdk:11
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM openjdk:11 AS runtime

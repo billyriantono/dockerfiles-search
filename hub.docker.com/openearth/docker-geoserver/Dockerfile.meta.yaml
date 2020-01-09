@@ -1,0 +1,133 @@
+MetaArgs: null
+Stages:
+- BaseName: tomcat:8.0-jre8
+  Commands:
+  - Maintainer: Erna/Maarten
+    Name: maintainer
+  - CmdLine:
+    - export DEBIAN_FRONTEND=noninteractive
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - dpkg-divert --local --rename --add /sbin/initctl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y update
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GS_VERSION
+      Value: 2.11.0
+    Name: env
+  - Env:
+    - Key: GEOSERVER_DATA_DIR
+      Value: /opt/geoserver/data_dir
+    Name: env
+  - CmdLine:
+    - mkdir -p $GEOSERVER_DATA_DIR
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_VERSION
+      Value: ""
+    Name: env
+  - Env:
+    - Key: JAVA_DEBIAN_VERSION
+      Value: ""
+    Name: env
+  - CmdLine:
+    - ln -s /usr/lib/jvm/java-8-openjdk-amd64 /usr/lib/jvm/default-java
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/default-java
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - resources
+    - /tmp/resources
+  - CmdLine:
+    - if ls /tmp/resources/*jdk-*-linux-x64.tar.gz > /dev/null 2>&1; then       mkdir
+      /var/cache/oracle-jdk8-installer &&       mv /tmp/resources/*jdk-*-linux-x64.tar.gz
+      /var/cache/oracle-jdk8-installer/;     fi;
+    Name: run
+    PrependShell: true
+  - Key: ORACLE_JDK
+    Name: arg
+    Value: "false"
+  - CmdLine:
+    - if ls /var/cache/oracle-jdk8-installer/*jdk-*-linux-x64.tar.gz > /dev/null 2>&1
+      || [ "$ORACLE_JDK" = true ]; then        apt-get autoremove --purge -y openjdk-8-jre-headless
+      &&        echo oracle-java8-installer shared/accepted-oracle-license-v1-1 select
+      true          | debconf-set-selections &&        echo "deb http://ppa.launchpad.net/webupd8team/java/ubuntu
+      xenial main"          > /etc/apt/sources.list.d/webupd8team-java.list &&        apt-key
+      adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys EEA14886 &&        rm
+      -rf /var/lib/apt/lists/* &&        apt-get update &&        apt-get install
+      -y oracle-java8-installer oracle-java8-set-default &&        ln -s --force /usr/lib/jvm/java-8-oracle
+      /usr/lib/jvm/default-java &&        rm -rf /var/lib/apt/lists/* &&        rm
+      -rf /var/cache/oracle-jdk8-installer;        if [ -f /tmp/resources/jce_policy.zip
+      ]; then          unzip -j /tmp/resources/jce_policy.zip -d /tmp/jce_policy &&          mv
+      /tmp/jce_policy/*.jar $JAVA_HOME/jre/lib/security/;        fi;     fi;
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - if [ ! -f /tmp/resources/jai-1_1_3-lib-linux-amd64.tar.gz ]; then     wget http://download.java.net/media/jai/builds/release/1_1_3/jai-1_1_3-lib-linux-amd64.tar.gz
+      -P ./resources;    fi;     if [ ! -f /tmp/resources/jai_imageio-1_1-lib-linux-amd64.tar.gz
+      ]; then     wget http://download.java.net/media/jai-imageio/builds/release/1.1/jai_imageio-1_1-lib-linux-amd64.tar.gz
+      -P ./resources;    fi;     mv resources/jai-1_1_3-lib-linux-amd64.tar.gz ./
+      &&     mv resources/jai_imageio-1_1-lib-linux-amd64.tar.gz ./ &&     gunzip
+      -c jai-1_1_3-lib-linux-amd64.tar.gz | tar xf - &&     gunzip -c jai_imageio-1_1-lib-linux-amd64.tar.gz
+      | tar xf - &&     mv /tmp/jai-1_1_3/lib/*.jar $JAVA_HOME/jre/lib/ext/ &&     mv
+      /tmp/jai-1_1_3/lib/*.so $JAVA_HOME/jre/lib/amd64/ &&     mv /tmp/jai_imageio-1_1/lib/*.jar
+      $JAVA_HOME/jre/lib/ext/ &&     mv /tmp/jai_imageio-1_1/lib/*.so $JAVA_HOME/jre/lib/amd64/
+      &&     rm /tmp/jai-1_1_3-lib-linux-amd64.tar.gz &&     rm -r /tmp/jai-1_1_3
+      &&     rm /tmp/jai_imageio-1_1-lib-linux-amd64.tar.gz &&     rm -r /tmp/jai_imageio-1_1
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $CATALINA_HOME
+  - CmdLine:
+    - if [ ! -f /tmp/resources/geoserver.zip ]; then     wget -c http://downloads.sourceforge.net/project/geoserver/GeoServer/${GS_VERSION}/geoserver-${GS_VERSION}-war.zip       -O
+      /tmp/resources/geoserver.zip;     fi;     unzip /tmp/resources/geoserver.zip
+      -d /tmp/geoserver     && unzip /tmp/geoserver/geoserver.war -d $CATALINA_HOME/webapps/geoserver     &&
+      rm -rf $CATALINA_HOME/webapps/geoserver/data     && rm -rf /tmp/geoserver
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if ls /tmp/resources/plugins/*.zip > /dev/null 2>&1; then       for p in /tmp/resources/plugins/*.zip;
+      do         unzip $p -d /tmp/gs_plugin         && mv /tmp/gs_plugin/*.jar $CATALINA_HOME/webapps/geoserver/WEB-INF/lib/         &&
+      rm -rf /tmp/gs_plugin;       done;     fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -f /tmp/resources/overlays/README.txt &&     if ls /tmp/resources/overlays/*
+      > /dev/null 2>&1; then       cp -rf /tmp/resources/overlays/* /;     fi;
+    Name: run
+    PrependShell: true
+  - Key: TOMCAT_EXTRAS
+    Name: arg
+    Value: "true"
+  - CmdLine:
+    - if [ "$TOMCAT_EXTRAS" = false ]; then     rm -rf $CATALINA_HOME/webapps/ROOT
+      &&     rm -rf $CATALINA_HOME/webapps/docs &&     rm -rf $CATALINA_HOME/webapps/examples
+      &&     rm -rf $CATALINA_HOME/webapps/host-manager &&     rm -rf $CATALINA_HOME/webapps/manager;   fi;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /tmp/resources
+    Name: run
+    PrependShell: true
+  From:
+    Image: tomcat:8.0-jre8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tomcat:8.0-jre8

@@ -1,0 +1,192 @@
+MetaArgs: null
+Stages:
+- As: api
+  BaseName: golang:1.9
+  Commands:
+  - Name: workdir
+    Path: /go/src/github.com/logicmonitor/k8s-chart-manager-controller
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y install bsdtar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/golang/protobuf/protoc-gen-go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L https://github.com/google/protobuf/releases/download/v3.3.0/protoc-3.3.0-linux-x86_64.zip
+      | bsdtar -xf - --strip-components=1 -C /bin bin/protoc     && chmod +x /bin/protoc
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./proto
+    - ./proto
+  - CmdLine:
+    - mkdir api
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - protoc -I proto proto/api.proto     --go_out=plugins=grpc:api
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.9
+  Name: api
+  Platform: ""
+  SourceCode: FROM golang:1.9 as api
+- As: codegen
+  BaseName: golang:1.9-alpine
+  Commands:
+  - CmdLine:
+    - apk add --update git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get k8s.io/apimachinery/pkg/runtime
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/kubernetes/code-generator/cmd/deepcopy-gen || true     &&
+      cd /go/src/github.com/kubernetes/code-generator     && git checkout remotes/origin/release-1.8     &&
+      go get -d ./...     && go install ./cmd/deepcopy-gen
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH/src/github.com/logicmonitor/k8s-chart-manager-controller
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - ./
+  - CmdLine:
+    - deepcopy-gen     --go-header-file="hack/boilerplate.go.txt"     --input-dirs="github.com/logicmonitor/k8s-chart-manager-controller/pkg/apis/v1alpha1"     --bounding-dirs
+      "github.com/logicmonitor/k8s-chart-manager-controller/pkg/apis/v1alpha1"     --output-file-base
+      zz_generated.deepcopy
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.9-alpine
+  Name: codegen
+  Platform: ""
+  SourceCode: FROM golang:1.9-alpine as codegen
+- As: build
+  BaseName: golang:1.9
+  Commands:
+  - Name: workdir
+    Path: $GOPATH/src/github.com/logicmonitor/k8s-chart-manager-controller
+  - Chown: ""
+    From: codegen
+    Name: copy
+    SourcesAndDest:
+    - $GOPATH/src/github.com/logicmonitor/k8s-chart-manager-controller
+    - ./
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /chart-manager-controller
+      -ldflags "-X \"github.com/logicmonitor/k8s-chart-manager-controller/pkg/constants.Version=${VERSION}\""
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.9
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.9 as build
+- As: test
+  BaseName: golang:1.9
+  Commands:
+  - Key: CI
+    Name: arg
+    Value: null
+  - Env:
+    - Key: CI
+      Value: $CI
+    Name: env
+  - Name: workdir
+    Path: $GOPATH/src/github.com/logicmonitor/k8s-chart-manager-controller
+  - CmdLine:
+    - go get -u github.com/alecthomas/gometalinter
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gometalinter --install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - $GOPATH/src/github.com/logicmonitor/k8s-chart-manager-controller
+    - ./
+  - CmdLine:
+    - chmod +x ./scripts/test.sh; sync; ./scripts/test.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp coverage.txt /coverage.txt
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.9
+  Name: test
+  Platform: ""
+  SourceCode: FROM golang:1.9 as test
+- BaseName: alpine:3.6
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Jeff Wozniak <jeff.wozniak@logicmonitor.com>"'
+    Name: label
+  - CmdLine:
+    - apk --update add ca-certificates     && rm -rf /var/cache/apk/*     && rm -rf
+      /var/lib/apk/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: api
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/logicmonitor/k8s-chart-manager-controller/api/*
+    - /tmp/
+  - Chown: ""
+    From: codegen
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/logicmonitor/k8s-chart-manager-controller/pkg/apis/v1alpha1/zz_generated.deepcopy.go
+    - /tmp/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /chart-manager-controller
+    - /bin
+  - Chown: ""
+    From: test
+    Name: copy
+    SourcesAndDest:
+    - /coverage.txt
+    - /coverage.txt
+  - CmdLine:
+    - chart-manager-controller
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - manage
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.6
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.6

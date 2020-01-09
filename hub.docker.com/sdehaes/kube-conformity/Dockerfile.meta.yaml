@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12-alpine3.9
+  Commands:
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - CmdLine:
+    - apk --no-cache add git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/golang/dep/cmd/dep
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/stijndehaes/kube-conformity
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - dep ensure -vendor-only
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go test -v ./...
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOARCH
+      Value: amd64
+    Name: env
+  - CmdLine:
+    - go build -o /bin/kube-conformity -v   -ldflags "-X main.version=$(git describe
+      --tags --always --dirty) -w -s"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /tmp/result/ && cp /bin/kube-conformity /tmp/result/kube-conformity
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mailtemplate.html
+    - /tmp/result/mailtemplate.html
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.yaml
+    - /tmp/result/config.yaml
+  From:
+    Image: golang:1.12-alpine3.9
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12-alpine3.9 as builder
+- BaseName: gcr.io/distroless/base
+  Commands:
+  - Maintainer: Stijn De Haes <stijndehaes@gmail.com>
+    Name: maintainer
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/result/
+    - /
+  - CmdLine:
+    - /kube-conformity
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: gcr.io/distroless/base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM gcr.io/distroless/base

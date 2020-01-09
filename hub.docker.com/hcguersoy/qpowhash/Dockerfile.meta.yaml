@@ -1,0 +1,94 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: quay.io/quarkus/centos-quarkus-maven:19.2.1
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pom.xml
+    - /usr/src/app/pom.xml
+  - CmdLine:
+    - mvn -f /usr/src/app/pom.xml dependency:go-offline -B
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /usr/src/app/src
+  - Name: user
+    User: root
+  - CmdLine:
+    - chown -R quarkus /usr/src/app
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: quarkus
+  - CmdLine:
+    - mvn -f /usr/src/app/pom.xml -Pnative clean package
+    Name: run
+    PrependShell: true
+  From:
+    Image: quay.io/quarkus/centos-quarkus-maven:19.2.1
+  Name: build
+  Platform: ""
+  SourceCode: FROM quay.io/quarkus/centos-quarkus-maven:19.2.1 AS build
+- As: watchdog
+  BaseName: openfaas/of-watchdog:0.7.2
+  Commands: null
+  From:
+    Image: openfaas/of-watchdog:0.7.2
+  Name: watchdog
+  Platform: ""
+  SourceCode: FROM openfaas/of-watchdog:0.7.2 as watchdog
+- BaseName: debian:buster-slim
+  Commands:
+  - Name: workdir
+    Path: /work/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/target/*-runner
+    - /work/application
+  - CmdLine:
+    - chmod 775 /work
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: watchdog
+    Name: copy
+    SourcesAndDest:
+    - /fwatchdog
+    - /usr/bin/fwatchdog
+  - CmdLine:
+    - chmod +x /usr/bin/fwatchdog
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+  - Env:
+    - Key: upstream_url
+      Value: '"http://127.0.0.1:8000"'
+    Name: env
+  - Env:
+    - Key: mode
+      Value: '"http"'
+    Name: env
+  - Env:
+    - Key: fprocess
+      Value: '"/work/application"'
+    Name: env
+  - CmdLine:
+    - /usr/bin/fwatchdog
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:buster-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:buster-slim

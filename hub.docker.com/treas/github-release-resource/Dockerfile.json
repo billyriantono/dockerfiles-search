@@ -1,0 +1,153 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "golang:alpine",
+      "SourceCode": "FROM golang:alpine as builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "golang:alpine"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "/go/src/github.com/concourse/github-release-resource"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "CGO_ENABLED",
+              "Value": "0"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "GOPATH",
+              "Value": "/go/src/github.com/concourse/github-release-resource/Godeps/_workspace:${GOPATH}"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PATH",
+              "Value": "/go/src/github.com/concourse/github-release-resource/Godeps/_workspace/bin:${PATH}"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "go build -o /assets/out github.com/concourse/github-release-resource/cmd/out"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "go build -o /assets/in github.com/concourse/github-release-resource/cmd/in"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "go build -o /assets/check github.com/concourse/github-release-resource/cmd/check"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "set -e; for pkg in $(go list ./...); do \t\tgo test -o \"/tests/$(basename $pkg).test\" -c $pkg; \tdone"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "resource",
+      "BaseName": "alpine:edge",
+      "SourceCode": "FROM alpine:edge AS resource",
+      "Platform": "",
+      "As": "resource",
+      "From": {
+        "Image": "alpine:edge"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add --update bash tzdata ca-certificates mailcap"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/assets",
+            "/opt/resource"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "tests",
+      "BaseName": "resource",
+      "SourceCode": "FROM resource AS tests",
+      "Platform": "",
+      "As": "tests",
+      "From": {
+        "Stage": {
+          "Named": "resource",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/tests",
+            "/tests"
+          ]
+        },
+        {
+          "CmdLine": [
+            "set -e; for test in /tests/*.test; do \t\t$test; \tdone"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "resource",
+      "SourceCode": "FROM resource",
+      "Platform": "",
+      "From": {
+        "Stage": {
+          "Named": "resource",
+          "Index": 1
+        }
+      },
+      "Commands": null
+    }
+  ]
+}

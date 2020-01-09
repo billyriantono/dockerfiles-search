@@ -1,0 +1,121 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: debian:9-slim
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./cpanfile
+    - /root
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get install -y wget lsb-release gnupg libterm-readline-gnu-perl
+      &&     wget https://dev.mysql.com/get/mysql-apt-config_0.8.9-1_all.deb -O /root/mysql-apt.config.deb
+      &&     dpkg -i /root/mysql-apt.config.deb &&     apt-get update &&     apt-get
+      install -y --no-install-recommends         wget         ca-certificates         build-essential         uuid-dev         libgmp3-dev         libxml2-dev         libexpat1-dev         zlib1g-dev         libssl-dev         libjpeg62-turbo-dev         libpng-dev         libgif-dev         libv8-dev         libmysqlclient-dev         libssh2-1-dev
+      &&         wget -O- http://git.io/cpm | perl - install --global --cpanfile=/root/cpanfile
+      &&         rm -rf /root/.perl-cpm/* /root/.cpanm/* /usr/local/share/man/* /root/*.deb
+      &&         apt-get remove build-essential -y &&         apt-get autoremove -y
+      &&         apt-get clean -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -ms /bin/bash k1plaza
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /k1plaza
+  - CmdLine:
+    - mkdir file_storage repositories managed_apps &&     chown k1plaza:k1plaza file_storage
+      repositories managed_apps
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'apt-get install -y --no-install-recommends sudo &&     apt-get clean -y &&     echo
+      ''k1plaza ALL=(ALL:ALL) NOPASSWD: ALL'' > /etc/sudoers.d/k1plaza'
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3000"
+  - Name: stopsignal
+    Signal: QUIT
+  - Name: user
+    User: k1plaza:k1plaza
+  From:
+    Image: debian:9-slim
+  Name: base
+  Platform: ""
+  SourceCode: FROM debian:9-slim AS base
+- As: production
+  BaseName: base
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./share
+    - share
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./script
+    - script
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./lib
+    - lib
+  - Env:
+    - Key: MOJO_MODE
+      Value: production
+    Name: env
+  - CmdLine:
+    - hypnotoad
+    - ./script/k1plaza
+    - -f
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: production
+  Platform: ""
+  SourceCode: FROM base AS production
+- As: developer
+  BaseName: production
+  Commands:
+  - Name: user
+    User: root
+  - CmdLine:
+    - mkdir -p /usr/share/man/man1/ &&     apt-get install -y --no-install-recommends
+      openjdk-8-jdk-headless &&     apt-get clean -y
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: k1plaza
+  - Env:
+    - Key: K1PLAZA_DEVELOPER
+      Value: "1"
+    - Key: MOJO_MODE
+      Value: development
+    Name: env
+  - Name: stopsignal
+    Signal: TERM
+  - CmdLine:
+    - ./script/k1plaza
+    - daemon
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: production
+  Name: developer
+  Platform: ""
+  SourceCode: FROM production AS developer

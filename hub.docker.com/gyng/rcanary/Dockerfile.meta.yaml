@@ -1,0 +1,87 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: japaric/x86_64-unknown-linux-musl:v0.1.11
+  Commands:
+  - Env:
+    - Key: PATH
+      Value: '"/root/.cargo/bin:${PATH}"'
+    Name: env
+  - Key: RUST_VERSION
+    Name: arg
+    Value: 1.30.0
+  - Key: ARCHITECTURE
+    Name: arg
+    Value: x86_64-unknown-linux-musl
+  - CmdLine:
+    - set -x     && apt-get update     && DEBIAN_FRONTEND=noninteractive apt-get install
+      -y --no-install-recommends                                           build-essential                                           ca-certificates                                           curl                                           libcurl3                                           git                                           file                                           libssl-dev                                           pkg-config     &&
+      curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain ${RUST_VERSION}     &&
+      rustup target add "${ARCHITECTURE}"     && apt-get remove -y --auto-remove curl     &&
+      apt-get clean     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Cargo.toml
+    - Cargo.lock
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - librcanary/Cargo.toml
+    - ./librcanary/Cargo.toml
+  - CmdLine:
+    - cargo fetch --locked -v
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - ./
+  - CmdLine:
+    - cargo build --release --target "${ARCHITECTURE}" -v --frozen
+    Name: run
+    PrependShell: true
+  From:
+    Image: japaric/x86_64-unknown-linux-musl:v0.1.11
+  Name: builder
+  Platform: ""
+  SourceCode: FROM japaric/x86_64-unknown-linux-musl:v0.1.11 as builder
+- BaseName: alpine:3.5
+  Commands:
+  - Key: ARCHITECTURE
+    Name: arg
+    Value: x86_64-unknown-linux-musl
+  - CmdLine:
+    - apk add --update ca-certificates     && rm -rf /var/cache/apk/* /tmp/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SSL_CERT_DIR
+      Value: /etc/ssl/certs
+    Name: env
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/src/target/${ARCHITECTURE}/release/rcanary
+    - .
+  - CmdLine:
+    - /app/rcanary
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.5
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.5

@@ -1,0 +1,53 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.10
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/xiaopal/kube-leaderelect
+  - Name: workdir
+    Path: /go/src/github.com/xiaopal/kube-leaderelect
+  - CmdLine:
+    - "CGO_ENABLED=0 GOOS=linux go build -o /kube-leaderelect -ldflags '-s -w' cmd/*.go
+      && \tchmod +x /kube-leaderelect"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.10 as build
+- BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - "apk add --no-cache bash coreutils curl openssh-client openssl git findutils
+      socat && \tcurl -sSL 'http://npc.nos-eastchina1.126.net/dl/jq_1.5_linux_amd64.tar.gz'
+      | tar -zx -C /usr/bin && \tcurl -sSL \"http://npc.nos-eastchina1.126.net/dl/dumb-init_1.2.0_amd64.tar.gz\"
+      | tar -zx -C /usr/bin && \tcurl -sSL 'https://npc.nos-eastchina1.126.net/dl/kubernetes-client-v1.9.3-linux-amd64.tar.gz'
+      | tar -zx -C /usr/ && \tln -s /usr/kubernetes/client/bin/kubectl /usr/bin/kubectl"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /kube-leaderelect
+    - /kube-leaderelect
+  - CmdLine:
+    - ln -s /kube-leaderelect /usr/bin/kube-leaderelect
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/dumb-init
+    - --
+    - /kube-leaderelect
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

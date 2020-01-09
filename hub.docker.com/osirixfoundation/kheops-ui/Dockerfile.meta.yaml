@@ -1,0 +1,165 @@
+MetaArgs: null
+Stages:
+- As: build-stage
+  BaseName: node:10-alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk add yarn python g++ make && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package*.json
+    - ./
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .env.prod
+    - .env
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10-alpine
+  Name: build-stage
+  Platform: ""
+  SourceCode: FROM node:10-alpine as build-stage
+- As: production-stage
+  BaseName: nginx:stable
+  Commands:
+  - Env:
+    - Key: SECRET_FILE_PATH
+      Value: /run/secrets
+    Name: env
+  - Chown: ""
+    From: build-stage
+    Name: copy
+    SourcesAndDest:
+    - /app/script/ui.conf
+    - /etc/nginx/conf.d/ui.conf
+  - Chown: ""
+    From: build-stage
+    Name: copy
+    SourcesAndDest:
+    - /app/dist
+    - /usr/share/nginx/html
+  - Chown: ""
+    From: build-stage
+    Name: copy
+    SourcesAndDest:
+    - /app/src/assets
+    - /usr/share/nginx/html/assets
+  - Chown: ""
+    From: build-stage
+    Name: copy
+    SourcesAndDest:
+    - /app/script/docker-entrypoint-nginx.sh
+    - /docker-entrypoint.sh
+  - Env:
+    - Key: SERVER_NAME
+      Value: localhost
+    Name: env
+  - CmdLine:
+    - chmod +x /docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3000"
+  - Chown: ""
+    From: build-stage
+    Name: copy
+    SourcesAndDest:
+    - /app/docker/metricbeat.conf
+    - /etc/nginx/conf.d/metricbeat.conf
+  - Chown: ""
+    From: osirixfoundation/kheops-beat:latest
+    Name: copy
+    SourcesAndDest:
+    - /install/deb/
+    - .
+  - CmdLine:
+    - dpkg -i metricbeat-amd64.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm metricbeat-amd64.deb
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-stage
+    Name: copy
+    SourcesAndDest:
+    - /app/docker/metricbeat.yml
+    - /etc/metricbeat/metricbeat.yml
+  - CmdLine:
+    - chmod go-w /etc/metricbeat/metricbeat.yml
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-stage
+    Name: copy
+    SourcesAndDest:
+    - /app/docker/metricbeat_nginx.yml
+    - /etc/metricbeat/modules.d/nginx.yml
+  - CmdLine:
+    - chmod go-w /etc/metricbeat/modules.d/nginx.yml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dpkg -i filebeat-amd64.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm filebeat-amd64.deb
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-stage
+    Name: copy
+    SourcesAndDest:
+    - /app/docker/filebeat.yml
+    - /etc/filebeat/filebeat.yml
+  - CmdLine:
+    - chmod go-w /etc/filebeat/filebeat.yml
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-stage
+    Name: copy
+    SourcesAndDest:
+    - /app/docker/filebeat_nginx.yml
+    - /etc/filebeat/modules.d/nginx.yml
+  - CmdLine:
+    - chmod go-w /etc/filebeat/modules.d/nginx.yml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /var/log/nginx/access.log /var/log/nginx/error.log
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./docker-entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginx:stable
+  Name: production-stage
+  Platform: ""
+  SourceCode: FROM nginx:stable as production-stage

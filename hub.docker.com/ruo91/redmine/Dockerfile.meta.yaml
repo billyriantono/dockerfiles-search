@@ -1,0 +1,167 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:16.04
+  Commands:
+  - Maintainer: Yongbok Kim <ruo91@yongbok.net>
+    Name: maintainer
+  - CmdLine:
+    - sed -i 's/archive.ubuntu.com/ftp.daumkakao.com/g' /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y curl supervisor openssh-server net-tools
+      aptitude iputils-ping nano  ruby-dev imagemagick git build-essential redis-server
+      ruby-redis-rails nginx mariadb-server libmysqlclient-dev libmagickcore-dev pkg-config
+      libmagickwand-dev
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SRC_DIR
+      Value: /opt
+    Name: env
+  - Name: workdir
+    Path: $SRC_DIR
+  - Env:
+    - Key: DB_NAME
+      Value: redmine
+    Name: env
+  - Env:
+    - Key: DB_USER
+      Value: redmine
+    Name: env
+  - Env:
+    - Key: DB_PASS
+      Value: redmine
+    Name: env
+  - Env:
+    - Key: DB_USER_ROOT
+      Value: root
+    Name: env
+  - Env:
+    - Key: REDMINE_CREATE_DB_SCRIPTS
+      Value: /tmp/redmine_create_db.sh
+    Name: env
+  - CmdLine:
+    - echo '#!/bin/bash' > $REDMINE_CREATE_DB_SCRIPTS  && echo '# Global vars' >>
+      $REDMINE_CREATE_DB_SCRIPTS  && echo "export DB_NAME="$DB_NAME"" >> $REDMINE_CREATE_DB_SCRIPTS  &&
+      echo "export DB_USER="$DB_USER"" >> $REDMINE_CREATE_DB_SCRIPTS  && echo "export
+      DB_PASS="$DB_USER"" >> $REDMINE_CREATE_DB_SCRIPTS  && echo "export DB_USER_ROOT="$DB_USER_ROOT""
+      >> $REDMINE_CREATE_DB_SCRIPTS  && echo '' >> $REDMINE_CREATE_DB_SCRIPTS  &&
+      echo '# MariaDB Start' >> $REDMINE_CREATE_DB_SCRIPTS  && echo 'service mysql
+      start' >> $REDMINE_CREATE_DB_SCRIPTS  && echo '' >> $REDMINE_CREATE_DB_SCRIPTS  &&
+      echo '# MariaDB root password' >> $REDMINE_CREATE_DB_SCRIPTS  && echo "mysqladmin
+      -u $DB_USER_ROOT password '$DB_PASS'" >> $REDMINE_CREATE_DB_SCRIPTS  && echo
+      '' >> $REDMINE_CREATE_DB_SCRIPTS  && echo '# Create an redmine database & user'
+      >> $REDMINE_CREATE_DB_SCRIPTS  && echo "mysql -u root -p$DB_PASS -e 'CREATE
+      DATABASE $DB_NAME CHARACTER SET utf8;'" >> $REDMINE_CREATE_DB_SCRIPTS  && echo
+      "mysql -u root -p$DB_PASS -e 'CREATE USER '$DB_USER'@'localhost' IDENTIFIED
+      BY \"$DB_PASS\";'" >> $REDMINE_CREATE_DB_SCRIPTS  && echo "mysql -u root -p$DB_PASS
+      -e 'GRANT ALL PRIVILEGES ON $DB_USER.* TO '$DB_USER'@'localhost';'" >> $REDMINE_CREATE_DB_SCRIPTS  &&
+      echo "mysql -u $DB_USER_ROOT -p$DB_PASS -e 'FLUSH PRIVILEGES;'" >> $REDMINE_CREATE_DB_SCRIPTS  &&
+      chmod a+x $REDMINE_CREATE_DB_SCRIPTS  && $REDMINE_CREATE_DB_SCRIPTS
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: RAILS_ENV
+      Value: production
+    Name: env
+  - Env:
+    - Key: REDMINE_HOME
+      Value: $SRC_DIR/redmine
+    Name: env
+  - CmdLine:
+    - git clone https://github.com/redmine/redmine.git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - conf/redmine/database.yml
+    - $REDMINE_HOME/config/database.yml
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - conf/redmine/configuration.yml
+    - $REDMINE_HOME/config/configuration.yml
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - conf/redmine/redis.rb
+    - $REDMINE_HOME/config/initializers/redis.rb
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - conf/redmine/production.rb
+    - $REDMINE_HOME/config/environments/production.rb
+  - CmdLine:
+    - cd $REDMINE_HOME  && useradd -M -s /sbin/nologin redmine  && gem install bundler  &&
+      bundle install --without development test  && bundle exec rake generate_secret_token  &&
+      service mysql start  && bundle exec rake db:migrate  && bundle exec rake REDMINE_LANG=en
+      redmine:load_default_data  && mkdir -p tmp tmp/pdf public/plugin_assets  &&
+      chown -R redmine:redmine files log tmp public/plugin_assets  && chmod -R 755
+      files log tmp public/plugin_assets
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: REDMINE_START_SCRIPT
+      Value: /bin/redmine.sh
+    Name: env
+  - CmdLine:
+    - echo '#!/bin/bash' > $REDMINE_START_SCRIPT  && echo "export REDMINE_HOME=$REDMINE_HOME"
+      >> $REDMINE_START_SCRIPT  && echo 'cd $REDMINE_HOME && bundle exec rails server
+      webrick -e production > /var/log/redmine.log 2>&1 &' >> $REDMINE_START_SCRIPT  &&
+      chmod a+x $REDMINE_START_SCRIPT
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - conf/nginx/default
+    - /etc/nginx/sites-available/default
+  - CmdLine:
+    - sed -i 's/bind 127.0.0.1/bind 0.0.0.0/g' /etc/redis/redis.conf  && sed -i 's/#
+      unixsocket \/var\/run\/redis\/redis.sock/unixsocket \/tmp\/redis.sock/g' /etc/redis/redis.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/log/supervisor
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - conf/supervisord.conf
+    - /etc/supervisor/conf.d/supervisord.conf
+  - CmdLine:
+    - mkdir /var/run/sshd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i '/^#UseLogin/ s:.*:UseLogin yes:' /etc/ssh/sshd_config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/\#AuthorizedKeysFile/AuthorizedKeysFile/g' /etc/ssh/sshd_config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i '/^PermitRootLogin/ s:.*:PermitRootLogin yes:' /etc/ssh/sshd_config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'root:redmine' |chpasswd
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "22"
+    - "80"
+  - CmdLine:
+    - /usr/bin/supervisord
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:16.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM     ubuntu:16.04

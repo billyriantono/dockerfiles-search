@@ -1,0 +1,68 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: maven:3.6.0-jdk-8
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /build
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - cd aws-sdk-java/aws-java-sdk-s3 && mvn -Dgpg.skip=true install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn -Dmaven.test.skip=true package
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.6.0-jdk-8
+  Name: build
+  Platform: ""
+  SourceCode: FROM maven:3.6.0-jdk-8 AS build
+- As: runtime
+  BaseName: openjdk:8u191-jre-alpine3.9
+  Commands:
+  - CmdLine:
+    - apk add --no-cache bash ca-certificates &&     addgroup -S runtime &&     adduser
+      -S -G runtime -h /run runtime &&     mkdir -p /run/target/conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/s3s3mirror.sh
+    - /run/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/target/s3s3mirror-1.2.6-SNAPSHOT.jar
+    - /run/target/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/target/classes/log4j.xml
+    - /run/target/conf/
+  - CmdLine:
+    - chown -R root:root /run &&     chmod -R a-ws /run
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /run
+  - Name: user
+    User: runtime
+  - CmdLine:
+    - ./s3s3mirror.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:8u191-jre-alpine3.9
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM openjdk:8u191-jre-alpine3.9 AS runtime

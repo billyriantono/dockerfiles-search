@@ -1,0 +1,110 @@
+MetaArgs: null
+Stages:
+- As: backend-build
+  BaseName: rustlang/rust:nightly-slim
+  Commands:
+  - CmdLine:
+    - apt-get update   && apt-get install -yqq libsqlite3-dev libmariadbclient-dev-compat
+      libpq-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - foodi-backend
+    - /app/foodi-backend
+  - CmdLine:
+    - cd foodi-backend   && cargo build --release   && cargo install diesel_cli
+    Name: run
+    PrependShell: true
+  From:
+    Image: rustlang/rust:nightly-slim
+  Name: backend-build
+  Platform: ""
+  SourceCode: FROM rustlang/rust:nightly-slim AS backend-build
+- As: frontend-build
+  BaseName: node:current-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - foodi-frontend
+    - /app/foodi-frontend
+  - CmdLine:
+    - cd foodi-frontend   && yarn install   && PARCEL_WORKERS=2 yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:current-alpine
+  Name: frontend-build
+  Platform: ""
+  SourceCode: FROM node:current-alpine AS frontend-build
+- BaseName: openresty/openresty:stretch
+  Commands:
+  - CmdLine:
+    - apt-get update   && apt-get install -yqq libsqlite3-0 libmariadbclient18 libpq5   &&
+      apt-get clean   && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: backend-build
+    Name: copy
+    SourcesAndDest:
+    - /app/foodi-backend/target/release/foodi-backend
+    - /usr/bin
+  - Chown: ""
+    From: backend-build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/cargo/bin/diesel
+    - /usr/bin
+  - Chown: ""
+    From: frontend-build
+    Name: copy
+    SourcesAndDest:
+    - /app/foodi-frontend/dist
+    - /app/dist
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/bin/entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx.conf
+    - /usr/local/openresty/nginx/conf/nginx.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - foodi-backend/sample-database.sqlite
+    - /app/database.sqlite
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - foodi-backend/Rocket.toml
+    - /app/Rocket.toml
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /usr/bin/entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openresty/openresty:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openresty/openresty:stretch

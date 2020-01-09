@@ -1,0 +1,80 @@
+MetaArgs: null
+Stages:
+- BaseName: php:7-fpm-stretch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"pierre@piwik.org"'
+    Name: label
+  - CmdLine:
+    - "set -ex; \t\tsavedAptMark=\"$(apt-mark showmanual)\"; \t\tapt-get update; \tapt-get
+      dist-upgrade -y; \tapt-get install -y --no-install-recommends \t\tlibfreetype6-dev
+      \t\tlibgeoip-dev \t\tlibjpeg-dev \t\tlibldap2-dev \t\tlibpng-dev \t\tlibzip-dev
+      \t; \t\tdebMultiarch=\"$(dpkg-architecture --query DEB_BUILD_MULTIARCH)\"; \tdocker-php-ext-configure
+      gd --with-freetype-dir=/usr --with-png-dir=/usr --with-jpeg-dir=/usr; \tdocker-php-ext-configure
+      ldap --with-libdir=\"lib/$debMultiarch\"; \tdocker-php-ext-install \t\tgd \t\tldap
+      \t\tmysqli \t\topcache \t\tpdo_mysql \t\tzip \t; \t\tpecl install APCu-5.1.11;
+      \tpecl install geoip-1.1.1; \tpecl install redis-3.1.6; \t\tdocker-php-ext-enable
+      \t\tapcu \t\tgeoip \t\tredis \t; \t\tapt-mark auto '.*' > /dev/null; \tapt-mark
+      manual $savedAptMark; \tldd \"$(php -r 'echo ini_get(\"extension_dir\");')\"/*.so
+      \t\t| awk '/=>/ { print $3 }' \t\t| sort -u \t\t| xargs -r dpkg-query -S \t\t|
+      cut -d: -f1 \t\t| sort -u \t\t| xargs -rt apt-mark manual; \t\tapt-get purge
+      -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false; \trm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MATOMO_VERSION
+      Value: 3.5.1
+    Name: env
+  - CmdLine:
+    - "set -ex; \tfetchDeps=\" \t\tdirmngr \t\tgnupg \t\"; \tapt-get update; \tapt-get
+      install -y --no-install-recommends \t\t$fetchDeps \t; \t\tcurl -fsSL -o piwik.tar.gz
+      \t\t\"https://builds.matomo.org/piwik-${MATOMO_VERSION}.tar.gz\"; \tcurl -fsSL
+      -o piwik.tar.gz.asc \t\t\"https://builds.matomo.org/piwik-${MATOMO_VERSION}.tar.gz.asc\";
+      \texport GNUPGHOME=\"$(mktemp -d)\";     (       (echo \"Trying keys.gnupg.net\"
+      && gpg --no-tty --keyserver keys.gnupg.net --recv-keys 814E346FA01A20DBB04B6807B5DBD5925590A237)
+      ||       (echo \"Trying hkp://ipv4.pool.sks-keyservers.net\" && gpg --no-tty
+      --keyserver hkp://ipv4.pool.sks-keyservers.net --recv-keys 814E346FA01A20DBB04B6807B5DBD5925590A237)
+      ||       (echo \"Trying hkp://p80.pool.sks-keyservers.net:80\" && gpg --no-tty
+      --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 814E346FA01A20DBB04B6807B5DBD5925590A237)
+      ||       (echo \"Trying hkp://pgp.mit.edu:80\" && gpg --no-tty --keyserver hkp://pgp.mit.edu:80
+      --recv-keys 814E346FA01A20DBB04B6807B5DBD5925590A237)     ); \tgpg --batch --verify
+      piwik.tar.gz.asc piwik.tar.gz; \tgpgconf --kill all; \trm -rf \"$GNUPGHOME\"
+      piwik.tar.gz.asc; \ttar -xzf piwik.tar.gz -C /usr/src/; \trm piwik.tar.gz; \tapt-get
+      purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false $fetchDeps;
+      \trm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php.ini
+    - /usr/local/etc/php/conf.d/php-piwik.ini
+  - CmdLine:
+    - "set -ex; \tcurl -fsSL -o /usr/src/piwik/misc/GeoIPCity.dat.gz https://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz;
+      \tgunzip /usr/src/piwik/misc/GeoIPCity.dat.gz"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /entrypoint.sh
+  - Name: volume
+    Volumes:
+    - /var/www/html
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - php-fpm
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:7-fpm-stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7-fpm-stretch

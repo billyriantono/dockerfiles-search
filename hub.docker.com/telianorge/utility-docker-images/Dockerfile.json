@@ -1,0 +1,182 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "jsonnet-cloner",
+      "BaseName": "alpine/git:latest",
+      "SourceCode": "FROM alpine/git:latest as jsonnet-cloner",
+      "Platform": "",
+      "As": "jsonnet-cloner",
+      "From": {
+        "Image": "alpine/git:latest"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "GOPATH",
+              "Value": "/go"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "git clone https://github.com/google/go-jsonnet.git $GOPATH/src/github.com/google/go-jsonnet"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd $GOPATH/src/github.com/google/go-jsonnet \u0026\u0026 git checkout v0.10.0"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "builder",
+      "BaseName": "golang:1.10",
+      "SourceCode": "FROM golang:1.10 as builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "golang:1.10"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "GOPATH",
+              "Value": "/go"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "go get github.com/fatih/color"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "jsonnet-cloner",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "$GOPATH/src/github.com/google/go-jsonnet",
+            "$GOPATH/src/github.com/google/go-jsonnet"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "$GOPATH/src/github.com/google/go-jsonnet"
+        },
+        {
+          "CmdLine": [
+            "CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /jsonnet-amd64 -v jsonnet/cmd.go"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "remarshal-cloner",
+      "BaseName": "alpine/git:latest",
+      "SourceCode": "FROM alpine/git:latest as remarshal-cloner",
+      "Platform": "",
+      "As": "remarshal-cloner",
+      "From": {
+        "Image": "alpine/git:latest"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "git clone https://github.com/dbohdan/remarshal.git /src/remarshal"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd /src/remarshal \u0026\u0026 git checkout v0.8.0"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "resource",
+      "BaseName": "python:3.6-alpine3.7",
+      "SourceCode": "FROM python:3.6-alpine3.7 as resource",
+      "Platform": "",
+      "As": "resource",
+      "From": {
+        "Image": "python:3.6-alpine3.7"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/jsonnet-amd64",
+            "/usr/local/bin/jsonnet"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "remarshal-cloner",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/src/remarshal",
+            "/src/remarshal"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apk add --update make"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "chmod +x /usr/local/bin/jsonnet"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/src/remarshal"
+        },
+        {
+          "CmdLine": [
+            "python setup.py install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "resource",
+      "SourceCode": "FROM resource",
+      "Platform": "",
+      "From": {
+        "Stage": {
+          "Named": "resource",
+          "Index": 3
+        }
+      },
+      "Commands": null
+    }
+  ]
+}

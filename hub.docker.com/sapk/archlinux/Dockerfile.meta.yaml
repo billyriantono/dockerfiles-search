@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine
+  Commands:
+  - Env:
+    - Key: VERSION
+      Value: '"2019.08.01"'
+    Name: env
+  - Env:
+    - Key: BOOTSTRAP
+      Value: '"https://archive.archlinux.org/iso/${VERSION}/archlinux-bootstrap-${VERSION}-x86_64.tar.gz"'
+    Name: env
+  - Env:
+    - Key: PACMAN_MIRRORLIST
+      Value: '"Server = https://mirrors.kernel.org/archlinux/\$repo/os/\$arch"'
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - $BOOTSTRAP
+    - /bootstrap.tar.gz
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - tar xzvf /bootstrap.tar.gz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root.x86_64
+  - CmdLine:
+    - echo 'en_US.UTF-8 UTF-8' > ./etc/locale.gen  && echo $PACMAN_MIRRORLIST > ./etc/pacman.d/mirrorlist
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine AS builder
+- As: cleaner
+  BaseName: scratch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: Antoine GIRARD <antoine.girard@sapk.fr>
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /root.x86_64/
+    - /
+  - CmdLine:
+    - pacman-key --init  && pacman-key --populate archlinux  && pacman -Sy --noconfirm
+      sed grep  && pacman -R --noconfirm arch-install-scripts  && pacman -Syu --noconfirm  &&
+      pacman -Q  && pacman -Scc --noconfirm  && rm -r /usr/share/man/* /usr/share/doc/*  &&
+      ls -d /usr/share/locale/* | egrep -v "en_U|alias" | xargs rm -rf
+    Name: run
+    PrependShell: true
+  From:
+    Scratch: true
+  Name: cleaner
+  Platform: ""
+  SourceCode: FROM scratch AS cleaner
+- BaseName: scratch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: Antoine GIRARD <antoine.girard@sapk.fr>
+    Name: label
+  - Chown: ""
+    From: cleaner
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /
+  - CmdLine:
+    - /bin/bash
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

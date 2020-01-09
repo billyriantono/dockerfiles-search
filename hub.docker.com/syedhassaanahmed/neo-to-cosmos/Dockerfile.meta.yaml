@@ -1,0 +1,74 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: mcr.microsoft.com/dotnet/core/sdk:2.2-alpine3.9
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - NeoToCosmos/NeoToCosmos.csproj
+    - NeoToCosmos/
+  - CmdLine:
+    - dotnet restore "NeoToCosmos/NeoToCosmos.csproj"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Name: workdir
+    Path: '"/src/NeoToCosmos"'
+  - CmdLine:
+    - dotnet build "NeoToCosmos.csproj" -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: mcr.microsoft.com/dotnet/core/sdk:2.2-alpine3.9
+  Name: build
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/sdk:2.2-alpine3.9 AS build
+- As: publish
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - dotnet publish "NeoToCosmos.csproj" -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build AS publish
+- As: final
+  BaseName: mcr.microsoft.com/dotnet/core/runtime:2.2-alpine3.9
+  Commands:
+  - CmdLine:
+    - echo "@edgetesting http://dl-cdn.alpinelinux.org/alpine/edge/testing" >>/etc/apk/repositories
+      &&     apk add --update rocksdb-dev@edgetesting libstdc++ &&     rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - CmdLine:
+    - dotnet
+    - NeoToCosmos.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: mcr.microsoft.com/dotnet/core/runtime:2.2-alpine3.9
+  Name: final
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/runtime:2.2-alpine3.9 AS final

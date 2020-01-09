@@ -1,0 +1,78 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: haskell:8.6.3
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Paul Dziemiela <Paul@Dziemiela.com>"'
+    Name: label
+  - Env:
+    - Key: POSTGREST_VERSION
+      Value: 5.2.0
+    Name: env
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - CmdLine:
+    - printf "#!/bin/sh\nexit 0" > /usr/sbin/policy-rc.d &&    apt-get update                                     &&    apt-get
+      install -y --no-install-recommends                  vim                                                      build-essential                                          pkg-config                                               clang                                                    zip                                                      unzip                                                    wget                                                     libpq-dev                                       &&    rm
+      -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp                                            &&    wget -nv https://github.com/begriffs/pg_listen/archive/master.zip
+      &&    unzip -q master.zip                                &&    cd /tmp/pg_listen-master                           &&    make                                               &&    mv
+      pg_listen /usr/local/bin                        &&    chmod 755 /usr/local/bin/pg_listen                 &&    rm
+      -Rf /tmp/pg_listen-master
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp                                            &&    wget -nv https://github.com/PostgREST/postgrest/archive/v${POSTGREST_VERSION}.tar.gz
+      &&    tar -xf v${POSTGREST_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp/postgrest-${POSTGREST_VERSION}/src/PostgREST  &&    sed -i.bak -e 's/ActionInvoke{isReadOnly=True}
+      -> HT.Read/ActionInvoke{isReadOnly=True} -> HT.Write/' App.hs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp/postgrest-${POSTGREST_VERSION}             &&    stack build                                                 --install-ghc                                            --copy-bins                                              --local-bin-path
+      /usr/local/bin                          --verbosity info                                &&    rm
+      -Rf /tmp/postgrest-${POSTGREST_VERSION}
+    Name: run
+    PrependShell: true
+  From:
+    Image: haskell:8.6.3
+  Name: builder
+  Platform: ""
+  SourceCode: FROM haskell:8.6.3 AS builder
+- BaseName: debian:stretch
+  Commands:
+  - CmdLine:
+    - apt-get update                                     &&    apt-get install -y
+      --no-install-recommends                  apt-utils                                                dos2unix                                                 psmisc                                                   supervisor                                               libpq-dev                                       &&    rm
+      -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/pg_listen
+    - /usr/local/bin
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/postgrest
+    - /usr/local/bin
+  - Name: expose
+    Ports:
+    - "3000"
+  From:
+    Image: debian:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch

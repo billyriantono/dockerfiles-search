@@ -1,0 +1,196 @@
+MetaArgs:
+- DefaultValue: "3.8"
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: "3.8"
+Stages:
+- As: pagespeed
+  BaseName: alpine:$ALPINE_VERSION
+  Commands:
+  - Key: MOD_PAGESPEED_TAG
+    Name: arg
+    Value: v1.13.35.2
+  - Key: NGX_PAGESPEED_TAG
+    Name: arg
+    Value: v1.13.35.2-stable
+  - CmdLine:
+    - apk add --no-cache         apache2-dev         apr-dev         apr-util-dev         build-base         curl         gettext-dev         git         gperf         icu-dev         libjpeg-turbo-dev         libpng-dev         libressl-dev         pcre-dev         py-setuptools         zlib-dev     ;
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src
+  - CmdLine:
+    - git clone -b ${MOD_PAGESPEED_TAG}               --recurse-submodules               --depth=1               -c
+      advice.detachedHead=false               -j`nproc`               https://github.com/apache/incubator-pagespeed-mod.git               modpagespeed     ;
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/modpagespeed
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - patches/modpagespeed/*.patch
+    - ./
+  - CmdLine:
+    - for i in *.patch; do printf "\r\nApplying patch ${i%%.*}\r\n"; patch -p1 < $i
+      || exit 1; done
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/modpagespeed/tools/gyp
+  - CmdLine:
+    - ./setup.py install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/modpagespeed
+  - CmdLine:
+    - build/gyp_chromium --depth=.                        -D use_system_libs=1     &&     cd
+      /usr/src/modpagespeed/pagespeed/automatic &&     make psol BUILDTYPE=Release               CFLAGS+="-I/usr/include/apr-1"               CXXFLAGS+="-I/usr/include/apr-1
+      -DUCHAR_TYPE=uint16_t"               -j`nproc`     ;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /usr/src/ngxpagespeed/psol/lib/Release/linux/x64 &&     mkdir -p /usr/src/ngxpagespeed/psol/include/out/Release
+      &&     cp -R out/Release/obj /usr/src/ngxpagespeed/psol/include/out/Release/
+      &&     cp -R pagespeed/automatic/pagespeed_automatic.a /usr/src/ngxpagespeed/psol/lib/Release/linux/x64/
+      &&     cp -R net           pagespeed           testing           third_party           url           /usr/src/ngxpagespeed/psol/include/     ;
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - git clone -b ${NGX_PAGESPEED_TAG}               --recurse-submodules               --shallow-submodules               --depth=1               -c
+      advice.detachedHead=false               -j`nproc`               https://github.com/apache/incubator-pagespeed-ngx.git               ngxpagespeed
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:$ALPINE_VERSION
+  Name: pagespeed
+  Platform: ""
+  SourceCode: FROM alpine:$ALPINE_VERSION as pagespeed
+- BaseName: alpine:$ALPINE_VERSION
+  Commands:
+  - Env:
+    - Key: UID
+      Value: "991"
+    - Key: GID
+      Value: "991"
+    Name: env
+  - Key: NGINX_VERSION
+    Name: arg
+    Value: 1.15.8
+  - Key: OPENSSL_VER
+    Name: arg
+    Value: 3.0.0-dev
+  - Key: NGINX_CT
+    Name: arg
+    Value: 1.3.2
+  - Key: GPG_NGINX
+    Name: arg
+    Value: '"B0F4 2533 73F8 F6F5 10D4  2178 520A 9993 A1C0 52F8"'
+  - Key: NGINX_MODULES
+    Name: arg
+    Value: '"   --with-http_ssl_module   --with-http_v2_module   --with-http_gzip_static_module   --with-http_stub_status_module   --with-http_slice_module   --with-stream   --with-stream_ssl_module   --with-ipv6   --with-compat   --with-file-aio   --with-threads   --with-pcre-jit   --without-http_ssi_module   --without-http_scgi_module   --without-http_uwsgi_module   --without-http_geo_module   --without-http_autoindex_module   --without-http_split_clients_module   --without-http_empty_gif_module   --without-http_browser_module"'
+  - Key: NGINX_3RD_PARTY_MODULES
+    Name: arg
+    Value: '"   --add-dynamic-module=/tmp/ngxpagespeed   --add-module=/tmp/headers-more-nginx-module   --add-module=/tmp/ngx_brotli   --add-module=/tmp/nginx-ct"'
+  - Name: workdir
+    Path: /tmp
+  - Chown: ""
+    From: pagespeed
+    Name: copy
+    SourcesAndDest:
+    - /tmp/ngxpagespeed
+    - /tmp/ngxpagespeed
+  - Chown: ""
+    From: pagespeed
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/ngxpagespeed
+    - /tmp/ngxpagespeed/
+  - CmdLine:
+    - '__core=10 && echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+      && apk -U update && apk add --update --no-cache   openssl   pcre   su-exec   tzdata
+      && apk add --update --no-cache -t build-dependencies   apr   apr-dev   apr-util   apr-util-dev   automake   autoconf   bind-tools   binutils   build-base   ca-certificates   cmake   curl   g++   gcc   geoip-dev   git   go   gnupg   gperf   icu   icu-dev   icu-libs   jemalloc-dev   libgcc   libgd   linux-headers   libjpeg-turbo   libjpeg-turbo-dev   libpng-dev   libressl-dev   libstdc++   libtool   libuuid   libxml2   libxml2-dev   libxslt-dev   make   musl-dev   paxctl   pcre-dev   python   python-dev   tar   unzip
+      && git clone -b master https://github.com/openssl/openssl.git openssl && git
+      clone --single-branch --depth=1 https://github.com/hakasenyang/openssl-patch.git
+      && cd openssl && git reset --hard 4089b4340701e3c13e07169e67a7d14519c98658 &&
+      patch -p1 < ../openssl-patch/openssl-equal-${OPENSSL_VER}_ciphers.patch && patch
+      -p1 < ../openssl-patch/openssl-${OPENSSL_VER}-chacha_draft.patch && cd /tmp
+      && wget -O nginx-ct.zip -c https://github.com/grahamedgecombe/nginx-ct/archive/v${NGINX_CT}.zip
+      && unzip nginx-ct.zip && mv nginx-ct-${NGINX_CT} nginx-ct && cd /tmp && git
+      clone --single-branch --depth=1 https://github.com/eustas/ngx_brotli && cd ngx_brotli
+      && git submodule update --init --recursive && cd /tmp && git clone --single-branch
+      --depth=1 https://github.com/openresty/headers-more-nginx-module && cd /tmp
+      && git clone --single-branch --depth=1 https://github.com/cloudflare/zlib.git
+      && cd zlib && make -f Makefile.in distclean && cd /tmp && NGINX_TARBALL="nginx-${NGINX_VERSION}.tar.gz"
+      && wget -q https://nginx.org/download/${NGINX_TARBALL} && wget -q https://nginx.org/download/${NGINX_TARBALL}.asc
+      && wget -q https://nginx.org/keys/mdounin.key && gpg --import mdounin.key &&
+      FINGERPRINT="$(LANG=C gpg --verify ${NGINX_TARBALL}.asc ${NGINX_TARBALL} 2>&1   |
+      sed -n "s#Primary key fingerprint: \(.*\)#\1#p")" && if [ -z "${FINGERPRINT}"
+      ]; then echo "Warning! Invalid GPG signature!" && exit 1; fi && if [ "${FINGERPRINT}"
+      != "${GPG_NGINX}" ]; then echo "Warning! Wrong GPG fingerprint!" && exit 1;
+      fi && tar xzf ${NGINX_TARBALL} && cd nginx-${NGINX_VERSION} && curl https://raw.githubusercontent.com/hakasenyang/openssl-patch/master/remove_nginx_server_header.patch
+      | patch -p1 && curl https://raw.githubusercontent.com/hakasenyang/openssl-patch/master/nginx_strict-sni.patch
+      | patch -p1 && ./configure   --prefix=/usr/local/nginx   --sbin-path=/usr/local/nginx/sbin/nginx   --modules-path=/usr/local/nginx/modules   --http-log-path=/var/log/nginx/access.log   --error-log-path=/var/log/nginx/error.log   --with-zlib=/tmp/zlib   --with-zlib-opt=''-g
+      -Ofast -fPIC -m64 -march=native -fstack-protector-strong -D_FORTIFY_SOURCE=2''   --with-openssl=/tmp/openssl   --with-openssl-opt=''enable-tls1_3
+      no-ssl3 enable-ec_nistp_64_gcc_128 -fPIC -g -Ofast -m64 -march=native -fstack-protector-strong
+      -D_FORTIFY_SOURCE=2 -ljemalloc -Wl,-flto''   --with-cc-opt="-g -Ofast -fPIC
+      -march=native -fstack-protector-strong -D_FORTIFY_SOURCE=2 -m64 -O3 -fno-strict-aliasing
+      -DTCP_FASTOPEN=23 -D_GLIBCXX_USE_CXX11_ABI=0 -ffast-math -flto -fuse-linker-plugin
+      --param=ssp-buffer-size=4 -Wformat -Werror=format-security -Wno-deprecated-declarations
+      -gsplit-dwarf"   --with-ld-opt="-lapr-1 -laprutil-1 -licudata -licuuc -lrt -lpng
+      -ljemalloc -lturbojpeg -ljpeg -Wl,-Bsymbolic-functions -fPIC -Wl,-z,relro -Wl,-z,now"   ${NGINX_MODULES}   ${NGINX_3RD_PARTY_MODULES}
+      && make -j$__core && make install && make clean && strip -s /usr/local/nginx/sbin/nginx   /usr/local/nginx/modules/*.so
+      && apk del --purge build-dependencies && rm -rf /tmp/* /var/cache/apk/* /root/.gnupg'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: pagespeed
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/envsubst
+    - /usr/local/bin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs
+    - /
+  - Name: workdir
+    Path: /usr/local/nginx
+  - CmdLine:
+    - chmod +x -R . && openssl dhparam -out ./conf/conf.d/dhparam.pem 2048 && openssl
+      rand 48 > ./conf/conf.d/ticket-1.key && openssl rand 48 > ./conf/conf.d/ticket-2.key
+      && apk del --purge openssl
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/log/nginx
+    - /usr/local/nginx
+  - Name: expose
+    Ports:
+    - "4430"
+    - "8000"
+  - Labels:
+    - Key: description
+      Value: '"Nginx Built From Source"'
+    - Key: openssl
+      Value: '"OpenSSL-${OPENSSL_VER}"'
+    - Key: nginx
+      Value: '"Nginx-${NGINX_VERSION}"'
+    - Key: maintainer
+      Value: '"TangelSaki <tangel@tangel.me>"'
+    Name: label
+  - CmdLine:
+    - /usr/local/nginx/sbin/run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:$ALPINE_VERSION
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:$ALPINE_VERSION

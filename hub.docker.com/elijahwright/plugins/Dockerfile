@@ -1,0 +1,33 @@
+FROM rednoah/filebot
+
+MAINTAINER Reinhard Pointner <rednoah@filebot.net>
+
+ENV FILEBOT_NODE_VERSION 0.2.4
+
+
+WORKDIR /usr/local/filebot-node
+
+RUN FILEBOT_NODE_SHA256=8d13170b4e34ac0953ba58a99d30cad18328b825f70330d3f7b91f10256df981 \
+ && FILEBOT_NODE_PACKAGE=filebot-node-${FILEBOT_NODE_VERSION}-generic.tar.xz \
+ && curl -L -O https://downloads.sourceforge.net/project/filebot/filebot-node/filebot-node-$FILEBOT_NODE_VERSION/$FILEBOT_NODE_PACKAGE \
+ && echo "$FILEBOT_NODE_SHA256 *$FILEBOT_NODE_PACKAGE" | sha256sum --check --strict \
+ && tar xvf $FILEBOT_NODE_PACKAGE \
+ && rm $FILEBOT_NODE_PACKAGE \
+ && find . -executable -type f -delete
+
+RUN curl -sL https://deb.nodesource.com/setup_7.x | bash \
+ && apt-get install -y nodejs \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY filebot-node /usr/bin/filebot-node
+
+
+ENV FILEBOT_NODE_AUTH NONE
+
+ENV FILEBOT_NODE_HTTP YES
+ENV FILEBOT_NODE_HTTP_PORT 5452
+
+
+EXPOSE $FILEBOT_NODE_HTTP_PORT
+
+ENTRYPOINT ["/usr/bin/filebot-node"]

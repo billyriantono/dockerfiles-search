@@ -1,0 +1,119 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - Maintainer: Andrew Stilliard <andrew.stilliard@gmail.com>
+    Name: maintainer
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - echo "deb http://http.debian.net/debian jessie main\ndeb-src http://http.debian.net/debian
+      jessie main\ndeb http://http.debian.net/debian jessie-updates main\ndeb-src
+      http://http.debian.net/debian jessie-updates main\ndeb http://security.debian.org
+      jessie/updates main\ndeb-src http://security.debian.org jessie/updates main\n"
+      > /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y --force-yes --fix-missing install dpkg-dev debhelper
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y build-dep pure-ftpd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir /tmp/pure-ftpd/ && \tcd /tmp/pure-ftpd/ && \tapt-get source pure-ftpd
+      && \tcd pure-ftpd-* && \t./configure --with-tls && \tsed -i '/^optflags=/ s/$/
+      --without-capabilities/g' ./debian/rules && \tdpkg-buildpackage -b -uc"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dpkg -i /tmp/pure-ftpd/pure-ftpd-common*.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y install openbsd-inetd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dpkg -i /tmp/pure-ftpd/pure-ftpd_*.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-mark hold pure-ftpd pure-ftpd-common
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd ftpgroup
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -g ftpgroup -d /home/ftpusers -s /dev/null ftpuser
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get install -y rsyslog && \techo \"\" >> /etc/rsyslog.conf && \techo \"#PureFTP
+      Custom Logging\" >> /etc/rsyslog.conf && \techo \"ftp.* /var/log/pure-ftpd/pureftpd.log\"
+      >> /etc/rsyslog.conf && \techo \"Updated /etc/rsyslog.conf with /var/log/pure-ftpd/pureftpd.log\""
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - /run.sh
+  - CmdLine:
+    - chmod u+x /run.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MAX_CLIENT_NUMBER
+      Value: "50"
+    Name: env
+  - Env:
+    - Key: MAX_CLIENTperIP
+      Value: "10"
+    Name: env
+  - Env:
+    - Key: SERVICE_PORT
+      Value: "21"
+    Name: env
+  - Env:
+    - Key: PASSIVE_PORTRANGE
+      Value: 30000:30009
+    Name: env
+  - Env:
+    - Key: OPENSSL_SUBJ
+      Value: '"/C=TH"'
+    Name: env
+  - Name: volume
+    Volumes:
+    - /home/ftpusers
+    - /etc/pure-ftpd/passwd
+  - CmdLine:
+    - "cd /etc/pure-ftpd/conf/ && \techo \"yes\" | tee AntiWarez ChrootEveryone CreateHomeDir
+      CustomerProof Daemonize DontResolve IPV4Only NoAnonymous NoChmod NoRename ProhibitDotFilesRead
+      ProhibitDotFilesWrite LogPID NATmode && \techo \"no\" | tee AllowAnonymousFXP
+      AllowDotFiles AllowUserFXP AnonymousCanCreateDirs AnonymousCantUpload AnonymousOnly
+      AutoRename BrokenClientsCompatibility CallUploadScript DisplayDotFiles IPV6Only
+      KeepAllFiles PAMAuthentication UnixAuthentication VerboseLog"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /run.sh --bind $SERVICE_PORT -p $PASSIVE_PORTRANGE -c $MAX_CLIENT_NUMBER -C
+      $MAX_CLIENTperIP -l puredb:/etc/pure-ftpd/pureftpd.pdb -E -j -R
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

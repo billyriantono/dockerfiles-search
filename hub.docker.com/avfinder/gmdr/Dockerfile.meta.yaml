@@ -1,0 +1,115 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: nvidia/cuda:10.0-devel
+  Commands:
+  - CmdLine:
+    - set -ex &&     apt-get update &&     apt-get --no-install-recommends --yes install         libncurses5-dev         libncursesw5-dev         cmake         git         curl         libssl-dev         pkg-config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://sh.rustup.rs -sSf | sh -s -- -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/mimblewimble/grin-miner && cd grin-miner && git
+      submodule update --init
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd grin-miner && sed -i '/^cuckoo_miner = {/s/^/#/' Cargo.toml && sed -i '/^#.*build-cuda-plugins"]/s/^#//'
+      Cargo.toml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd grin-miner && $HOME/.cargo/bin/cargo build --release
+    Name: run
+    PrependShell: true
+  From:
+    Image: nvidia/cuda:10.0-devel
+  Name: builder
+  Platform: ""
+  SourceCode: FROM nvidia/cuda:10.0-devel as builder
+- BaseName: nvidia/cuda:10.0-base
+  Commands:
+  - CmdLine:
+    - set -ex &&     apt-get update &&     apt-get --no-install-recommends --yes install     libncurses5     libncursesw5
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /grin-miner/target/release/grin-miner
+    - /grin-miner/target/release/gmdr
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /grin-miner/target/release/plugins/*
+    - /grin-miner/target/release/plugins/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /grin-miner/grin-miner.toml
+    - /grin-miner/grin-miner.toml
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /grin-miner/grin-miner.toml
+    - /grin-miner/target/release/grin-miner.toml
+  - Name: workdir
+    Path: /grin-miner/target/release
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - avx2.toml
+    - avx2.toml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cpu.toml
+    - cpu.toml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cpu.toml
+    - grin-miner.toml
+  - CmdLine:
+    - sed -i -e 's/run_tui = true/run_tui = false/' grin-miner.toml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/stdout_log_level = "Info"/stdout_log_level = "Error"/' grin-miner.toml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/file_log_level = "Debug"/file_log_level = "Info"/' grin-miner.toml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/#miner_plugin_dir = "target\/debug\/plugins"/miner_plugin_dir =
+      "plugins"/' grin-miner.toml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo '#!/bin/bash\nif [ $# -eq 1 ]\nthen\n  sed -i -e 's/127.0.0.1:3416/\$1/g'
+      grin-miner.toml\nelse\n  sed -i -e 's/127.0.0.1:3416/47.99.240.58:8080/g' grin-miner.toml\nfi\n./gmdr'
+      > run.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sh
+    - run.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: nvidia/cuda:10.0-base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nvidia/cuda:10.0-base

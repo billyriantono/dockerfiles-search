@@ -1,0 +1,73 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:jessie
+  Commands:
+  - Maintainer: david.varga@realcity.io
+    Name: maintainer
+  - CmdLine:
+    - apt-get update     && apt-get install -y automake gcc make xsltproc bash asciidoc
+      valgrind git     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - git clone https://github.com/tinyproxy/tinyproxy.git /build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./autogen.sh   && ./configure   && make   && make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:jessie
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:jessie as builder
+- BaseName: debian:jessie
+  Commands:
+  - CmdLine:
+    - apt-get update     && apt-get install -y bash $(apt-cache depends tinyproxy   |
+      grep Depends | sed "s/.*ends:\ //" | tr '\n' ' ')     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd nobody
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/tinyproxy
+    - /usr/local/bin/tinyproxy
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/etc/tinyproxy
+    - /usr/local/etc/tinyproxy
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entry.sh
+    - entry.sh
+  - CmdLine:
+    - sed -i -e 's|^PidFile.*|PidFile "/tmp/tinyproxy.pid"|'       /usr/local/etc/tinyproxy/tinyproxy.conf         &&
+      echo "Allow  0.0.0.0/0"                                >> /usr/local/etc/tinyproxy/tinyproxy.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entry.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "8888"
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

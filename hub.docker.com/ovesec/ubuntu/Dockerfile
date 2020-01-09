@@ -1,0 +1,110 @@
+# vim:set ft=dockerfile:
+FROM i386/ubuntu:16.04
+
+RUN set -ex \
+    && export DEBIAN_FRONTEND=noninteractive \
+    && apt-get update -y \
+    && apt-get dist-upgrade -y \
+    # apt-utils for slient install
+    && apt-get install -y --no-install-recommends apt-utils \
+    # make the "en_US.UTF-8" locale
+    && apt-get install -y --no-install-recommends locales \
+    && localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8 \
+    && apt-get autoremove --purge -y && apt-get clean && rm -rf /var/lib/apt/lists/*
+ENV LANG en_US.utf8
+
+# common tools
+RUN set -ex \
+    && export DEBIAN_FRONTEND=noninteractive \
+    && apt-get update -y \
+    && apt-get install -y --no-install-recommends \
+        # apt-file for file searching(run `apt-file update` before use it)
+        apt-file \
+        # security tools
+        ca-certificates gnupg dirmngr openssl libssl-dev libssl1.0.0 openssh-client \
+        # develop tools
+        autoconf automake binutils make file patch \
+        # network tools
+        iputils-ping iproute2 curl wget netcat-openbsd socat \
+        # other tools
+        sudo bc vim-nox-py2 less bzip2 xz-utils procps tmux git \
+    && apt-get autoremove --purge -y && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# gcc g++ gdb
+RUN set -ex \
+    && export DEBIAN_FRONTEND=noninteractive \
+    && dpkg --add-architecture i386 \
+    && dpkg --add-architecture amd64 \
+    && apt-get update -y \
+    && apt-get dist-upgrade -y \
+    && apt-get install -y --no-install-recommends \
+        gcc-multilib g++-multilib multiarch-support gdb \
+    && apt-get autoremove --purge -y && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# python2 and python3 and modules
+RUN set -ex \
+    && export DEBIAN_FRONTEND=noninteractive \
+    && apt-get update -y \
+    && apt-get install -y --no-install-recommends \
+        pandoc libcapstone3\
+        python python-dev \
+        python3 python3-dev \
+    && cd ~ \
+    && wget https://bootstrap.pypa.io/get-pip.py \
+    && python2 ~/get-pip.py \
+    && python3 ~/get-pip.py \
+    && python2 -m pip install --upgrade pwn ropgadget \
+    && rm -f ~/get-pip.py ~/.wget-hsts \
+    && rm -rf ~/.cache/pip \
+    && apt-get autoremove --purge -y && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# pwndbg and dot files and radare2
+RUN set -ex \
+    && export DEBIAN_FRONTEND=noninteractive \
+    && apt-get update -y \
+    && apt-get install -y --no-install-recommends \
+        libc6:i386 libstdc++6:i386 libgcc1:i386 zlib1g:i386 libncurses5:i386 \
+        libglib2.0-dev libc6-dbg libc6-dbg:i386 \
+    && cd ~ \
+    && git clone --depth=1 https://github.com/pwndbg/pwndbg \
+    && cd pwndbg \
+    && git submodule update --init --recursive \
+    && export PYTHON="$(gdb -batch -q --nx -ex 'pi import sys; print(sys.executable)')$(gdb -batch -q --nx -ex 'pi import platform; print(".".join(platform.python_version_tuple()[:2]))')" \
+    && export INSTALLFLAGS="--no-cache-dir --target $(gdb -batch -q --nx -ex 'pi import site; print(site.getsitepackages()[0])')" \
+    && ${PYTHON} -m pip install ${INSTALLFLAGS} -Ur requirements.txt \
+    && echo "source $PWD/gdbinit.py" >> ~/.gdbinit \
+    \
+    && cd ~ \
+    && git clone --depth=1 https://github.com/kibaamor/linuxconfig \
+    && ~/linuxconfig/ossetup/setup_config.sh \
+    && rm -rf ~/linuxconfig \
+    && sed -i 's@^set termguicolors@"set termguicolors@g' ~/.vimrc \
+    && sed -i 's@^export LANG="zh_CN.UTF-8"@#export LANG="zh_CN.UTF-8"@g' ~/.bash_profile \
+    \
+    && cd ~ \
+    && git clone --depth=1 https://github.com/radare/radare2.git \
+    && cd radare2 \
+    && ./sys/install.sh \
+    && make install \
+    && rm -rf /usr/bin/r2-docker /usr/bin/r2-indent \
+    && rm -rf ~/radare2 \
+    \
+    && rm -rf ~/.cache/pip \
+    && apt-get autoremove --purge -y && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# metasploit-framework
+RUN set -ex \
+    && export DEBIAN_FRONTEND=noninteractive \
+    && apt-get update -y \
+    && cd ~ \
+    && curl https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/config/templates/metasploit-framework-wrappers/msfupdate.erb > msfinstall \
+    && chmod 755 ./msfinstall \
+    && ./msfinstall \
+    && rm -f ./msfinstall \
+    && apt-get autoremove --purge -y && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+USER root
+WORKDIR /root
+ENV HOME /root
+
+CMD ["/bin/bash"]

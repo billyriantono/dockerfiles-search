@@ -1,0 +1,218 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "GO_VERSION",
+      "DefaultValue": "1.12",
+      "ProvidedValue": null,
+      "Value": "1.12"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "build",
+      "BaseName": "golang:${GO_VERSION}-alpine",
+      "SourceCode": "FROM golang:${GO_VERSION}-alpine as build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Image": "golang:${GO_VERSION}-alpine"
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"Maxim Eryomenko \u003cmoeryomenko@gmail.com\u003e\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Env": [
+            {
+              "Key": "NGINX_VERSION",
+              "Value": "1.17.5"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "NJS_VERSION",
+              "Value": "0.3.2"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "CFLAGS",
+              "Value": "\"-O3\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "CXXFLAGS",
+              "Value": "\"-O3\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache     gcc libc-dev autoconf libtool automake     make cmake ninja pcre-dev zlib-dev     linux-headers libxslt-dev gd-dev geoip-dev     perl-dev libedit-dev git alpine-sdk findutils     libunwind-dev curl tar"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/src"
+        },
+        {
+          "CmdLine": [
+            "git clone https://boringssl.googlesource.com/boringssl     \u0026\u0026 cd boringssl     \u0026\u0026 mkdir build     \u0026\u0026 cd build     \u0026\u0026 cmake -GNinja ..     \u0026\u0026 ninja     \u0026\u0026 mkdir -p ../.openssl/lib     \u0026\u0026 cd ../.openssl     \u0026\u0026 ln -s ../include include     \u0026\u0026 cp ../build/crypto/libcrypto.a lib/     \u0026\u0026 cp ../build/ssl/libssl.a  lib/     \u0026\u0026 cd /src"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir njs     \u0026\u0026 curl -SL http://hg.nginx.org/njs/archive/${NJS_VERSION}.tar.gz | tar xz -C njs --strip-components=1"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "git clone --recurse-submodules https://github.com/google/ngx_brotli.git"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "NGX_BROTLI_STATIC_MODULE_ONLY",
+              "Value": "1"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "CFLAGS",
+              "Value": "\"-static -static-libgcc -ldl -O3 -pipe  -O -W -Wall -Wpointer-arith -Wno-unused-parameter -fPIE -fstack-protector-all -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "mkdir nginx     \u0026\u0026 curl -SL http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz | tar xz -C nginx --strip-components=1     \u0026\u0026 cd nginx     \u0026\u0026 ./configure --prefix=/usr/share/nginx \t               --sbin-path=/usr/bin/nginx                    --conf-path=/etc/nginx/nginx.conf                    --error-log-path=/var/log/nginx/error.log                    --http-log-path=/var/log/nginx/access.log                    --lock-path=/run/lock/subsys/nginx                    --user=1000                    --group=1000                    --with-threads                    --with-file-aio                    --with-http_geoip_module                    --with-http_gzip_static_module                    --with-http_ssl_module                    --with-http_v2_module                    --with-http_realip_module                    --with-http_gunzip_module                    --with-http_gzip_static_module                    --with-http_slice_module                    --with-http_stub_status_module                    --without-select_module                    --without-poll_module                    --add-module=\"/src/njs/nginx\"                    --add-module=\"/src/ngx_brotli\"                    --with-openssl=\"/src/boringssl\"                    --with-cc-opt=\"-I /src/boringssl/.openssl/include/\"                    --with-ld-opt=\"-static -Wl,-Bsymbolic-functions -Wl,-z,relro -L /src/boringssl/.openssl/lib/\"                    --with-cpu-opt=generic     \u0026\u0026 touch \"/src/boringssl/.openssl/include/openssl/ssl.h\"     \u0026\u0026 make \u0026\u0026 make install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir /user     \u0026\u0026 echo '1000:x:65534:65534:1000:/:' \u003e /user/passwd     \u0026\u0026 echo '1000:x:65534:' \u003e /user/group"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "scratch",
+      "SourceCode": "FROM scratch",
+      "Platform": "",
+      "From": {
+        "Scratch": true
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/user/group",
+            "/user/passwd",
+            "/etc/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/etc/ssl/certs/ca-certificates.crt",
+            "/etc/ssl/certs/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/etc/nginx",
+            "/etc/nginx"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/bin/nginx",
+            "/usr/bin/nginx"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/share/nginx",
+            "/usr/share/nginx"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/var/log/nginx",
+            "/var/log/nginx"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "80"
+          ]
+        },
+        {
+          "Name": "stopsignal",
+          "Signal": "SIGTERM"
+        },
+        {
+          "CmdLine": [
+            "/usr/bin/nginx",
+            "-g",
+            "daemon off;"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

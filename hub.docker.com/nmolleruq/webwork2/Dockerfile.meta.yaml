@@ -1,0 +1,132 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:16.04
+  Commands:
+  - Env:
+    - Key: WEBWORK_URL
+      Value: /webwork2
+    - Key: WEBWORK_ROOT_URL
+      Value: http://localhost
+    - Key: WEBWORK_DB_HOST
+      Value: db
+    - Key: WEBWORK_DB_PORT
+      Value: "3306"
+    - Key: WEBWORK_DB_NAME
+      Value: webwork
+    - Key: WEBWORK_DB_USER
+      Value: webworkWrite
+    - Key: WEBWORK_DB_PASSWORD
+      Value: passwordRW
+    - Key: WEBWORK_SMTP_SERVER
+      Value: localhost
+    - Key: WEBWORK_SMTP_SENDER
+      Value: webwork@example.com
+    - Key: WEBWORK_TIMEZONE
+      Value: America/New_York
+    - Key: APACHE_RUN_USER
+      Value: www-data
+    - Key: APACHE_RUN_GROUP
+      Value: www-data
+    - Key: APACHE_PID_FILE
+      Value: /var/run/apache2/apache2.pid
+    - Key: APACHE_RUN_DIR
+      Value: /var/run/apache2
+    - Key: APACHE_LOCK_DIR
+      Value: /var/lock/apache2
+    - Key: APACHE_LOG_DIR
+      Value: /var/log/apache2
+    - Key: APP_ROOT
+      Value: /opt/webwork
+    - Key: DEV
+      Value: "0"
+    - Key: PG_VERSION
+      Value: rel-PG-2.14
+    Name: env
+  - Env:
+    - Key: WEBWORK_DB_DSN
+      Value: DBI:mysql:${WEBWORK_DB_NAME}:${WEBWORK_DB_HOST}:${WEBWORK_DB_PORT}
+    - Key: WEBWORK_ROOT
+      Value: $APP_ROOT/webwork2
+    - Key: PG_ROOT
+      Value: $APP_ROOT/pg
+    - Key: PATH
+      Value: $PATH:$APP_ROOT/webwork2/bin
+    Name: env
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends --no-install-suggests        apache2        curl        dvipng        gcc        libapache2-request-perl        libcrypt-ssleay-perl        libdatetime-perl        libdancer-perl        libdancer-plugin-database-perl        libdbd-mysql-perl        libemail-address-perl        libexception-class-perl        libextutils-xsbuilder-perl        libfile-find-rule-perl-perl        libgd-perl        libhtml-scrubber-perl        libjson-perl        liblocale-maketext-lexicon-perl        libmail-sender-perl        libmime-tools-perl        libnet-ip-perl        libnet-ldap-perl        libnet-oauth-perl        libossp-uuid-perl        libpadwalker-perl        libpath-class-perl        libphp-serialization-perl        libsoap-lite-perl        libsql-abstract-perl        libstring-shellquote-perl        libtemplate-perl        libtext-csv-perl        libtimedate-perl        libuuid-tiny-perl        libxml-parser-perl        libxml-writer-perl        libapache2-reload-perl        make        netpbm        preview-latex-style        texlive        texlive-latex-extra        libc6-dev        git        mysql-client     &&
+      curl -Lk https://cpanmin.us | perl - App::cpanminus     && cpanm install XML::Parser::EasyTree
+      Iterator Iterator::Util Pod::WSDL Array::Utils HTML::Template XMLRPC::Lite Mail::Sender
+      Email::Sender::Simple Data::Dump Statistics::R::IO     && rm -fr /var/lib/apt/lists/*
+      ./cpanm /root/.cpanm /tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $APP_ROOT/courses $APP_ROOT/libraries $APP_ROOT/webwork2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fSL https://github.com/openwebwork/pg/archive/${PG_VERSION}.tar.gz -o
+      /tmp/${PG_VERSION}.tar.gz     && tar xzf /tmp/${PG_VERSION}.tar.gz     && mv
+      pg-${PG_VERSION} $APP_ROOT/pg     && curl -fSL https://github.com/openwebwork/webwork-open-problem-library/archive/master.tar.gz
+      -o /tmp/opl.tar.gz     && tar xzf /tmp/opl.tar.gz     && mv webwork-open-problem-library-master
+      $APP_ROOT/libraries/webwork-open-problem-library     && rm /tmp/opl.tar.gz     &&
+      curl -fSL https://github.com/mathjax/MathJax/archive/master.tar.gz -o /tmp/mathjax.tar.gz     &&
+      tar xzf /tmp/mathjax.tar.gz     && mv MathJax-master $APP_ROOT/MathJax     &&
+      rm /tmp/mathjax.tar.gz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $APP_ROOT/webwork2
+  - CmdLine:
+    - cd $APP_ROOT/webwork2/courses.dist     && cp *.lst $APP_ROOT/courses/     &&
+      cp -R modelCourse $APP_ROOT/courses/     && cd $APP_ROOT/pg/lib/chromatic     &&
+      gcc color.c -o color
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd $APP_ROOT/webwork2/conf     && cp webwork.apache2.4-config.dist webwork.apache2.4-config     &&
+      cp $APP_ROOT/webwork2/conf/webwork.apache2.4-config /etc/apache2/conf-enabled/webwork.conf     &&
+      a2dismod mpm_event     && a2enmod mpm_prefork     && sed -i -e 's/Timeout 300/Timeout
+      1200/' /etc/apache2/apache2.conf     && sed -i -e 's/MaxRequestWorkers     150/MaxRequestWorkers     20/'         -e
+      's/MaxConnectionsPerChild   0/MaxConnectionsPerChild   100/'         /etc/apache2/mods-available/mpm_prefork.conf     &&
+      cp $APP_ROOT/webwork2/htdocs/favicon.ico /var/www/html     && sed -i -e 's/^<Perl>$/      PerlPassEnv
+      WEBWORK_URL\n      PerlPassEnv WEBWORK_ROOT_URL\n      PerlPassEnv WEBWORK_DB_DSN\n      PerlPassEnv
+      WEBWORK_DB_USER\n      PerlPassEnv WEBWORK_DB_PASSWORD\n      PerlPassEnv WEBWORK_SMTP_SERVER\n      PerlPassEnv
+      WEBWORK_SMTP_SENDER\n      PerlPassEnv WEBWORK_TIMEZONE\n      \n<Perl>/' /etc/apache2/conf-enabled/webwork.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd $APP_ROOT/webwork2/     && chown www-data DATA ../courses htdocs/tmp htdocs/applets
+      logs tmp $APP_ROOT/pg/lib/chromatic     && chmod -R u+w DATA ../courses htdocs/tmp
+      htdocs/applets logs tmp $APP_ROOT/pg/lib/chromatic
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: workdir
+    Path: $APP_ROOT
+  - CmdLine:
+    - apache2
+    - -DFOREGROUND
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:16.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04

@@ -1,0 +1,131 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.13.5
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"zhoubowen <zhoubowen.sky@gmail.com>"'
+    Name: label
+  - Env:
+    - Key: SSR
+      Value: https://github.com/zhoubowen-sky/shadowsocksr.git
+    Name: env
+  - Env:
+    - Key: KCPTUN_URL
+      Value: https://github.com/xtaci/kcptun/releases/download/v20200103/kcptun-linux-amd64-20200103.tar.gz
+    Name: env
+  - Env:
+    - Key: BROOK_URL
+      Value: https://github.com/txthinking/brook/releases/download/v20200102/brook
+    Name: env
+  - CmdLine:
+    - cd /go/bin && wget ${KCPTUN_URL} && tar -xf *.gz && cp -f server_linux_amd64
+      server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /go/bin && wget ${BROOK_URL} && chmod a+x brook
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone ${SSR} && cd /go/shadowsocksr && bash initcfg.sh && rm -rf .git
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13.5
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.13.5 AS build
+- BaseName: alpine:3.11.2
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"zhoubowen <zhoubowen.sky@gmail.com>"'
+    Name: label
+  - Env:
+    - Key: SS_LIBEV_URL
+      Value: https://github.com/shadowsocks/shadowsocks-libev.git
+    Name: env
+  - Name: workdir
+    Path: /opt
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - mkdir -p /usr/local/sbin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps         build-base         cmake         boost-dev         openssl-dev         mariadb-connector-c-dev         git     &&
+      git clone https://github.com/trojan-gfw/trojan.git     && (cd trojan && cmake
+      . && make -j $(nproc) && strip -s trojan     && mv trojan /usr/local/sbin)     &&
+      rm -rf trojan     && apk del .build-deps     && apk add --no-cache --virtual
+      .trojan-rundeps         libstdc++         boost-system         boost-program_options         mariadb-connector-c
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --no-cache update && apk --no-cache upgrade
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --no-cache add monit openrc python
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps     autoconf     automake     build-base     git     c-ares-dev     libev-dev     libtool     libsodium-dev     linux-headers     mbedtls-dev     pcre-dev     &&
+      git clone ${SS_LIBEV_URL}     && cd shadowsocks-libev     && git submodule update
+      --init --recursive     && ./autogen.sh     && ./configure --prefix=/usr --disable-documentation     &&
+      make install     && apk del .build-deps     && apk add --no-cache       rng-tools       $(scanelf
+      --needed --nobanner /usr/bin/ss-*       | awk '{ gsub(/,/, "\nso:", $2); print
+      "so:" $2 }'       | sort -u)     && rm -rf /opt/shadowsocks-libev/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/server
+    - /usr/local/sbin/kcptun_server
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/shadowsocksr
+    - /usr/local/sbin/shadowsocksr
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/brook
+    - /usr/local/sbin/brook
+  - CmdLine:
+    - cp -rf script/kcptun.json /etc/     && cp -rf script/shadowsocks.json /etc/     &&
+      cp -rf script/shadowsocksr.json /etc/     && cp -rf script/trojan_server.json
+      /etc/     && cp -rf script/kcptunConsole /usr/local/sbin/     && cp -rf script/shadowsocksRConsole
+      /usr/local/sbin/     && cp -rf script/shadowsocksLibevConsole /usr/local/sbin/     &&
+      cp -rf script/brookConsole /usr/local/sbin/     && cp -rf script/trojanConsole
+      /usr/local/sbin/     && chmod a+x /usr/local/sbin/kcptunConsole     /usr/local/sbin/shadowsocksRConsole     /usr/local/sbin/brookConsole     /usr/local/sbin/trojanConsole     /usr/local/sbin/shadowsocksLibevConsole
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf .git .gitignore doc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /etc/monit.d     && cp -rf monit-config/monit.d /etc/     && rm -rf /etc/monitrc     &&
+      cp -rf monit-config/monitrc /etc/     && chown root:root /etc/monitrc     &&
+      chmod 0700 /etc/monitrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rc-update add monit
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.11.2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.11.2

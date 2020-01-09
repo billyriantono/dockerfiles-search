@@ -1,0 +1,62 @@
+MetaArgs: null
+Stages:
+- BaseName: kong:1.4.2-centos
+  Commands:
+  - Maintainer: Cristian Chiru <cristian.chiru@revomatico.com>
+    Name: maintainer
+  - Env:
+    - Key: PACKAGES
+      Value: '"openssl-devel kernel-headers gcc git openssh"'
+    - Key: KONG_OIDC_VER
+      Value: '"1.1.0-1"'
+    - Key: LUA_RESTY_OIDC_VER
+      Value: '"1.7.2-1"'
+    Name: env
+  - CmdLine:
+    - set -x     && yum update -y && yum install -y unzip ${PACKAGES}     && curl
+      -s https://raw.githubusercontent.com/jerfer/kong-oidc/master/kong-oidc-${KONG_OIDC_VER}.rockspec
+      | tee kong-oidc-${KONG_OIDC_VER}.rockspec |         sed -E -e 's/(tag =)[^,]+/\1
+      "master"/' -e "s/(lua-resty-openidc ~>)[^\"]+/\1 ${LUA_RESTY_OIDC_VER}/" > kong-oidc-${KONG_OIDC_VER}.rockspec     &&
+      luarocks build kong-oidc-${KONG_OIDC_VER}.rockspec     && TPL=/usr/local/share/lua/`lua
+      <<< "print(_VERSION)" | awk '{print $2}'`/kong/templates/nginx_kong.lua     &&
+      sed -i "/server_name kong;/a\ \nset_decode_base64 \$session_secret \${{X_SESSION_SECRET}};\n"
+      "$TPL"     && sed -i -E '/^lua_shared_dict kong\s+.+$/i\ \nvariables_hash_max_size
+      2048;\n> if x_session_storage == "shm" then\nlua_shared_dict \${{X_SESSION_SHM_STORE}}
+      \${{X_SESSION_SHM_STORE_SIZE}};\n> end\n> if not \(x_proxy_cache_storage_name
+      == "kong_cache"\) then\nlua_shared_dict \${{X_PROXY_CACHE_STORAGE_NAME}} \${{X_PROXY_CACHE_STORAGE_SIZE}};\n>
+      end\n' "$TPL"     && sed -i "/server_name kong;/a\ \n    set \$session_storage
+      \${{X_SESSION_STORAGE}};\n    set \$session_name \${{X_SESSION_NAME}};\n    set
+      \$session_memcache_prefix \${{X_SESSION_MEMCACHE_PREFIX}};\n    set \$session_memcache_host
+      \${{X_SESSION_MEMCACHE_HOST}};\n    set \$session_memcache_port \${{X_SESSION_MEMCACHE_PORT}};\n    set
+      \$session_memcache_uselocking \${{X_SESSION_MEMCACHE_USELOCKING}};\n    set
+      \$session_memcache_spinlockwait \${{X_SESSION_MEMCACHE_SPINLOCKWAIT}};\n    set
+      \$session_memcache_maxlockwait \${{X_SESSION_MEMCACHE_MAXLOCKWAIT}};\n    set
+      \$session_memcache_pool_timeout \${{X_SESSION_MEMCACHE_POOL_TIMEOUT}};\n    set
+      \$session_memcache_pool_size \${{X_SESSION_MEMCACHE_POOL_SIZE}};\n    set \$session_shm_store
+      \${{X_SESSION_SHM_STORE}};\n    set \$session_shm_uselocking \${{X_SESSION_SHM_USELOCKING}};\n    set
+      \$session_shm_lock_exptime \${{X_SESSION_SHM_LOCK_EXPTIME}};\n    set \$session_shm_lock_timeout
+      \${{X_SESSION_SHM_LOCK_TIMEOUT}};\n    set \$session_shm_lock_step \${{X_SESSION_SHM_LOCK_STEP}};\n    set
+      \$session_shm_lock_ratio \${{X_SESSION_SHM_LOCK_RATIO}};\n    set \$session_shm_lock_max_step
+      \${{X_SESSION_SHM_LOCK_MAX_STEP}};\n" "$TPL"     && TPL=/usr/local/share/lua/`lua
+      <<< "print(_VERSION)" | awk '{print $2}'`/kong/templates/kong_defaults.lua     &&
+      sed -i "/\]\]/i\ \nx_proxy_cache_storage_size = 5m\nx_proxy_cache_storage_name
+      = kong_cache\n\nx_session_storage = cookie\nx_session_name = oidc_session\nx_session_secret
+      = ''\n\nx_session_memcache_prefix = oidc_sessions\nx_session_memcache_host =
+      memcached\nx_session_memcache_port = '11211'\nx_session_memcache_uselocking
+      = off\nx_session_memcache_spinlockwait = '10000'\nx_session_memcache_maxlockwait
+      = '30'\nx_session_memcache_pool_timeout = '10'\nx_session_memcache_pool_size
+      = '10'\n\nx_session_shm_store_size = 5m\nx_session_shm_store = oidc_sessions\nx_session_shm_uselocking
+      = off\nx_session_shm_lock_exptime = '30'\nx_session_shm_lock_timeout = '5'\nx_session_shm_lock_step
+      = '0.001'\nx_session_shm_lock_ratio = '2'\nx_session_shm_lock_max_step = '0.5'\n\n"
+      "$TPL"     && rm -fr *.rock*     && yum remove -y ${PACKAGES}     && yum autoremove
+      -y     && yum install -y hostname     && yum clean all     && rm -rf /var/cache/yum     &&
+      mkdir -p /usr/local/kong     && chown -R kong:kong /usr/local/kong     && setcap
+      'cap_net_bind_service=+ep' /usr/local/bin/kong     && setcap 'cap_net_bind_service=+ep'
+      /usr/local/openresty/nginx/sbin/nginx
+    Name: run
+    PrependShell: true
+  From:
+    Image: kong:1.4.2-centos
+  Name: ""
+  Platform: ""
+  SourceCode: FROM kong:1.4.2-centos

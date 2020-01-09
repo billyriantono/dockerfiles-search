@@ -1,0 +1,255 @@
+MetaArgs: null
+Stages:
+- As: maven
+  BaseName: maven:3.6.1-jdk-8-alpine
+  Commands: null
+  From:
+    Image: maven:3.6.1-jdk-8-alpine
+  Name: maven
+  Platform: ""
+  SourceCode: FROM maven:3.6.1-jdk-8-alpine as maven
+- As: mavencache
+  BaseName: maven
+  Commands:
+  - Env:
+    - Key: MAVEN_OPTS
+      Value: -Dmaven.repo.local=/mvn
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - cas/pom.xml
+    - /cas/pom.xml
+  - Name: workdir
+    Path: /cas
+  - CmdLine:
+    - mvn dependency:resolve dependency:resolve-plugins
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: maven
+  Name: mavencache
+  Platform: ""
+  SourceCode: FROM maven as mavencache
+- As: mavenbuild
+  BaseName: maven
+  Commands:
+  - Env:
+    - Key: MAVEN_OPTS
+      Value: -Dmaven.repo.local=/mvn
+    Name: env
+  - Chown: ""
+    From: mavencache
+    Name: copy
+    SourcesAndDest:
+    - /mvn/
+    - /mvn/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - cas/
+    - /cas/
+  - Name: workdir
+    Path: /cas
+  - CmdLine:
+    - mvn package
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: maven
+  Name: mavenbuild
+  Platform: ""
+  SourceCode: FROM maven as mavenbuild
+- As: downloader
+  BaseName: maven
+  Commands:
+  - Env:
+    - Key: SMEAGOL_VERSION
+      Value: v0.5.6
+    Name: env
+  - Env:
+    - Key: CATALINA_HOME
+      Value: /dist/usr/local/tomcat/webapps
+    Name: env
+  - Env:
+    - Key: SCM_SCRIPT_PLUGIN_VERSION
+      Value: 2.0.0-rc1
+    Name: env
+  - Env:
+    - Key: SCM_CAS_PLUGIN_VERSION
+      Value: 2.0.0-rc1
+    Name: env
+  - Env:
+    - Key: SCM_VERSION
+      Value: 2.0.0-rc1
+    Name: env
+  - Env:
+    - Key: SCM_PKG_URL
+      Value: https://maven.scm-manager.org/nexus/content/repositories/releases/sonia/scm/scm-server/${SCM_VERSION}/scm-server-${SCM_VERSION}-app.tar.gz
+    Name: env
+  - Env:
+    - Key: SCM_REQUIRED_PLUGINS
+      Value: /dist/opt/scm-server/required-plugins
+    Name: env
+  - Chown: ""
+    From: mavenbuild
+    Name: copy
+    SourcesAndDest:
+    - /cas/target/cas.war
+    - /tmp/cas.war
+  - CmdLine:
+    - set -x
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache --update zip unzip curl unzip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${CATALINA_HOME}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -O /tmp/smeagol-exec.war https://jitpack.io/com/github/cloudogu/smeagol/${SMEAGOL_VERSION}/smeagol-${SMEAGOL_VERSION}.war
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip /tmp/cas.war -d ${CATALINA_HOME}/cas
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --fail -Lks ${SCM_PKG_URL} -o /tmp/scm-server.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gunzip /tmp/scm-server.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar -C /opt -xf /tmp/scm-server.tar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip /opt/scm-server/var/webapp/scm-webapp.war -d ${CATALINA_HOME}/scm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${SCM_REQUIRED_PLUGINS}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --fail -Lks https://maven.scm-manager.org/nexus/content/repositories/plugin-releases/sonia/scm/plugins/scm-script-plugin/${SCM_SCRIPT_PLUGIN_VERSION}/scm-script-plugin-${SCM_SCRIPT_PLUGIN_VERSION}.smp
+      -o ${SCM_REQUIRED_PLUGINS}/scm-script-plugin.smp
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --fail -Lks https://maven.scm-manager.org/nexus/content/repositories/plugin-releases/sonia/scm/plugins/scm-cas-plugin/${SCM_CAS_PLUGIN_VERSION}/scm-cas-plugin-${SCM_CAS_PLUGIN_VERSION}.smp
+      -o ${SCM_REQUIRED_PLUGINS}/scm-cas-plugin.smp
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /scm/logback.xml
+    - ${CATALINA_HOME}/scm/WEB-INF/classes/logback.xml
+  - Key: PLANTUMLSERVER
+    Name: arg
+    Value: '"http://www.plantuml.com/plantuml/png/"'
+  - CmdLine:
+    - set -x &&   zip -F /tmp/smeagol-exec.war --out /tmp/smeagol.war &&   unzip /tmp/smeagol.war
+      -d ${CATALINA_HOME}/smeagol &&   sed -i "s#rendererURL:\"/plantuml/png/#rendererURL:\"${PLANTUMLSERVER}#g"
+      "$(ls ${CATALINA_HOME}/smeagol/WEB-INF/classes/static/static/js/main*.js)"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cas/etc/
+    - /dist/etc/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scm/resources
+    - /dist
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tomcat
+    - /dist/usr/local/tomcat
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - smeagol/application.yml
+    - /dist/usr/local/tomcat/application.yml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - smeagol/logback.xml
+    - ${CATALINA_HOME}/smeagol/WEB-INF/classes/logback.xml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /dist
+  From:
+    Stage:
+      Index: 0
+      Named: maven
+  Name: downloader
+  Platform: ""
+  SourceCode: FROM maven as downloader
+- BaseName: tomcat:8.5.41-jre8-alpine
+  Commands:
+  - Key: USER_ID
+    Name: arg
+    Value: '"1000"'
+  - Key: GROUP_ID
+    Name: arg
+    Value: '"1000"'
+  - Chown: ""
+    From: downloader
+    Name: copy
+    SourcesAndDest:
+    - /dist
+    - /
+  - CmdLine:
+    - apk update &&   apk upgrade &&   cd ${CATALINA_HOME}/webapps/ && rm -rf docs
+      examples manager host-manager &&   find ${CATALINA_HOME}/webapps/ROOT/* ! -path
+      . ! -name index.* -delete &&   mkdir -p /home/tomcat/.scm  &&   umask "007"
+      &&   addgroup -g ${GROUP_ID} -S tomcat &&   adduser -u ${USER_ID} -S tomcat
+      -G tomcat &&   chown -R tomcat:tomcat ${CATALINA_HOME} &&   chown -R tomcat:tomcat
+      /home/tomcat &&   chown -R tomcat:tomcat /etc/cas &&   chown -R tomcat:tomcat
+      /etc/ssl/certs/java/cacerts &&   chmod 777 /usr/local/tomcat/temp &&   chmod
+      774 /etc/ssl/certs/java/cacerts &&   chmod -R 770 /home/tomcat &&   chmod 400
+      ${CATALINA_HOME}/conf/*
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /home/tomcat/.scm
+  - Name: expose
+    Ports:
+    - "2222"
+    - "8443"
+  - Name: user
+    User: tomcat
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: tomcat:8.5.41-jre8-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tomcat:8.5.41-jre8-alpine

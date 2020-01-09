@@ -1,0 +1,71 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add       build-base       linux-headers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add       curl       make
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM alpine as base
+- As: busybox
+  BaseName: base
+  Commands:
+  - Key: BUSYBOX_VERSION
+    Name: arg
+    Value: 1.30.1
+  - CmdLine:
+    - curl -LO https://busybox.net/downloads/busybox-${BUSYBOX_VERSION}.tar.bz2       &&
+      tar -xjf busybox-${BUSYBOX_VERSION}.tar.bz2       && mkdir /busybox       &&
+      mv busybox-${BUSYBOX_VERSION}/* /busybox       && rm -rf busybox-${BUSYBOX_VERSION}*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /busybox
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .config/.defconfig
+    - .config
+  - CmdLine:
+    - make && make install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: busybox
+  Platform: ""
+  SourceCode: FROM base as busybox
+- BaseName: alpine
+  Commands:
+  - Chown: ""
+    From: busybox
+    Name: copy
+    SourcesAndDest:
+    - /busybox/busybox
+    - /staticbox/bin/busybox
+  - CmdLine:
+    - for f in /bin/*; do       if [[ -h $f  ]]; then         ln -sf /staticbox/bin/busybox
+      /staticbox/bin/$(basename $f);       fi     done
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /staticbox/bin:$PATH
+    Name: env
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

@@ -1,0 +1,77 @@
+MetaArgs: null
+Stages:
+- BaseName: ansible/centos7-ansible
+  Commands:
+  - Maintainer: '"magicalyak" <tom.gamull@gmail.com>'
+    Name: maintainer
+  - Env:
+    - Key: SERVER_NAME
+      Value: localhost
+    Name: env
+  - Env:
+    - Key: ADMIN_PASSWORD
+      Value: changeme
+    Name: env
+  - Env:
+    - Key: ANSIBLE_TOWER_VER
+      Value: latest
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./inventory
+    - /opt/inventory
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./ansible-setup.service
+    - /opt/ansible-setup.service
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./docker-entrypoint.sh
+    - /docker-entrypoint.sh
+  - CmdLine:
+    - yum -y update; yum clean all;  (cd /lib/systemd/system/sysinit.target.wants/;
+      for i in *; do [ $i == systemd-tmpfiles-setup.service ] || rm -f $i; done);  rm
+      -f /lib/systemd/system/multi-user.target.wants/*; rm -f /etc/systemd/system/*.wants/*;
+      rm -f /lib/systemd/system/local-fs.target.wants/*;  rm -f /lib/systemd/system/sockets.target.wants/*udev*;  rm
+      -f /lib/systemd/system/sockets.target.wants/*initctl*;  rm -f /lib/systemd/system/basic.target.wants/*;  rm
+      -f /lib/systemd/system/anaconda.target.wants/*;  yum makecache fast &&  yum
+      -y install deltarpm epel-release initscripts &&  yum -y update &&  yum -y install
+      ansible sudo which wget &&  cd /opt &&  sed -i -e 's/^\(Defaults\s*requiretty\)/#---
+      \1/'  /etc/sudoers &&  echo "Setting password to $ADMIN_PASSWORD" &&  sed -i
+      "s/changeme/$ADMIN_PASSWORD/g" /opt/inventory &&  echo "Setting connection to
+      $SERVER_NAME" &&  echo -e '[local]\nlocalhost ansible_connection=local' > /etc/ansible/hosts
+      &&  echo "Setting rebuild flag in /certs in case it isn't mapped" &&  mkdir
+      -p /certs/.deleteme &&  touch /certs/.rebuild &&  echo "Cleaning up...." &&  yum
+      clean all &&  rm -rf         /tmp/*         /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "443"
+    - "8080"
+  - Name: volume
+    Volumes:
+    - /sys/fs/cgroup
+    - /var/lib/pgsql/9.4/data
+    - /certs
+  - CmdLine:
+    - echo "Setting up ansible-setup service to run at boot" &&     echo "# ansible-setup.env"
+      > /opt/ansible-setup.env &&     echo "SERVER_NAME=$SERVER_NAME" >> /opt/ansible-setup.env
+      &&     echo "ANSIBLE_TOWER_VER=$ANSIBLE_TOWER_VER" >> /opt/ansible-setup.env
+      &&     echo "ADMIN_PASSWORD=$ADMIN_PASSWORD" >> /opt/ansible-setup.env &&     chmod
+      +x /docker-entrypoint.sh &&     cp /opt/ansible-setup.service /etc/systemd/system/ansible-setup.service
+      &&     systemctl enable ansible-setup.service
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/sbin/init
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ansible/centos7-ansible
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ansible/centos7-ansible

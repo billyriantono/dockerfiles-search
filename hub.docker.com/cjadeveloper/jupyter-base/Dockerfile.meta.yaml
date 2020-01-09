@@ -1,0 +1,196 @@
+MetaArgs:
+- DefaultValue: ubuntu:bionic-20191029
+  Key: BASE_CONTAINER
+  ProvidedValue: null
+  Value: ubuntu:bionic-20191029
+Stages:
+- BaseName: ${BASE_CONTAINER}
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Cristian Javier Azulay <cjadeveloper@gmail.com>"'
+    Name: label
+  - Key: NB_USER
+    Name: arg
+    Value: '"johndoe"'
+  - Key: NB_UID
+    Name: arg
+    Value: '"1000"'
+  - Key: NB_GID
+    Name: arg
+    Value: '"100"'
+  - Name: user
+    User: root
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get -yq dist-upgrade   && apt-get install -yq --no-install-recommends     apt-utils     curl     gnupg     gnupg2     gnupg1     apt-transport-https     debconf-utils     gcc     build-essential     g++-5     wget     bzip2     ca-certificates     sudo     locales     fonts-liberation     run-one   &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://packages.microsoft.com/config/ubuntu/18.04/prod.list > /etc/apt/sources.list.d/mssql-release.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && ACCEPT_EULA=Y apt-get install -y msodbcsql17 unixodbc-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && ACCEPT_EULA=Y apt-get install -y mssql-tools
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash -c "source ~/.bashrc"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "es_AR.UTF-8 UTF-8" > /etc/locale.gen && locale-gen
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CONDA_DIR
+      Value: /opt/conda
+    - Key: SHELL
+      Value: /bin/bash
+    - Key: NB_USER
+      Value: $NB_USER
+    - Key: NB_UID
+      Value: $NB_UID
+    - Key: NB_GID
+      Value: $NB_GID
+    - Key: LC_ALL
+      Value: es_AR.UTF-8
+    - Key: LANG
+      Value: es_AR.UTF-8
+    - Key: LANGUAGE
+      Value: es_AR:es
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $CONDA_DIR/bin:$PATH
+    - Key: HOME
+      Value: /home/$NB_USER
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - fix-permissions.sh
+    - /usr/local/bin/fix-permissions.sh
+  - CmdLine:
+    - sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "auth requisite pam_deny.so" >> /etc/pam.d/su && sed -i.bak -e 's/^%admin/#%admin/'
+      /etc/sudoers && sed -i.bak -e 's/^%sudo/#%sudo/' /etc/sudoers && useradd -m
+      -s /bin/bash -N -u $NB_UID $NB_USER && mkdir -p $CONDA_DIR && chown $NB_USER:$NB_GID
+      $CONDA_DIR && chmod g+w /etc/passwd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - fix-permissions.sh $HOME && fix-permissions.sh "$(dirname $CONDA_DIR)"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $NB_UID
+  - Name: workdir
+    Path: $HOME
+  - CmdLine:
+    - mkdir /home/$NB_USER/work && fix-permissions.sh /home/$NB_USER
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MINICONDA_VERSION
+      Value: 4.6.14
+    - Key: CONDA_VERSION
+      Value: 4.7.10
+    Name: env
+  - CmdLine:
+    - cd /tmp && wget --quiet https://repo.continuum.io/miniconda/Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh
+      && echo "718259965f234088d785cad1fbd7de03 *Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh"
+      | md5sum -c - && /bin/bash Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh -f
+      -b -p $CONDA_DIR && rm Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh && echo
+      "conda ${CONDA_VERSION}" >> $CONDA_DIR/conda-meta/pinned && $CONDA_DIR/bin/conda
+      config --system --prepend channels conda-forge && $CONDA_DIR/bin/conda config
+      --system --set auto_update_conda false && $CONDA_DIR/bin/conda config --system
+      --set show_channel_urls true && $CONDA_DIR/bin/conda install --quiet --yes conda
+      && $CONDA_DIR/bin/conda update --all --quiet --yes && conda list python | grep
+      '^python ' | tr -s ' ' | cut -d '.' -f 1,2 | sed 's/$/.*/' >> $CONDA_DIR/conda-meta/pinned
+      && conda clean --all -f -y && rm -rf /home/$NB_USER/.cache/yarn && fix-permissions.sh
+      $CONDA_DIR && fix-permissions.sh /home/$NB_USER
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - conda install --quiet --yes 'tini=0.18.0' && conda list tini | grep tini | tr
+      -s ' ' | cut -d ' ' -f 1,2 >> $CONDA_DIR/conda-meta/pinned && conda clean --all
+      -f -y && fix-permissions.sh $CONDA_DIR && fix-permissions.sh /home/$NB_USER
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - conda install --quiet --yes  'notebook=6.0.0'  'jupyterhub=1.0.0'  'jupyterlab=1.1.3'
+      && conda clean --all -f -y && npm cache clean --force && jupyter notebook --generate-config
+      && rm -rf $CONDA_DIR/share/jupyter/lab/staging && rm -rf /home/$NB_USER/.cache/yarn
+      && fix-permissions.sh $CONDA_DIR && fix-permissions.sh /home/$NB_USER
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8888"
+  - CmdLine:
+    - tini
+    - -g
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - start-notebook.sh
+    Name: cmd
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start-notebook.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start-singleuser.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - jupyter_notebook_config.py
+    - /etc/jupyter/
+  - Name: user
+    User: root
+  - CmdLine:
+    - fix-permissions.sh /etc/jupyter/
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $NB_UID
+  From:
+    Image: ${BASE_CONTAINER}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${BASE_CONTAINER}

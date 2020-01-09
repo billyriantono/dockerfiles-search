@@ -1,0 +1,125 @@
+MetaArgs: null
+Stages:
+- As: docs
+  BaseName: python:3-alpine
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /usr/src/app/shaarli
+  - CmdLine:
+    - cd /usr/src/app/shaarli     && pip install --no-cache-dir mkdocs     && mkdocs
+      build --clean
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3-alpine
+  Name: docs
+  Platform: ""
+  SourceCode: FROM python:3-alpine as docs
+- As: composer
+  BaseName: composer:latest
+  Commands:
+  - Chown: ""
+    From: docs
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/shaarli
+    - /app/shaarli
+  - CmdLine:
+    - cd shaarli     && composer --prefer-dist --no-dev install
+    Name: run
+    PrependShell: true
+  From:
+    Image: composer:latest
+  Name: composer
+  Platform: ""
+  SourceCode: FROM composer:latest as composer
+- As: node
+  BaseName: node:12-alpine
+  Commands:
+  - Chown: ""
+    From: composer
+    Name: copy
+    SourcesAndDest:
+    - /app/shaarli
+    - shaarli
+  - CmdLine:
+    - cd shaarli     && yarn install     && yarn run build     && rm -rf node_modules
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12-alpine
+  Name: node
+  Platform: ""
+  SourceCode: FROM node:12-alpine as node
+- BaseName: alpine:3.8
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Shaarli Community"'
+    Name: label
+  - CmdLine:
+    - apk --update --no-cache add         ca-certificates         nginx         php7         php7-ctype         php7-curl         php7-fpm         php7-gd         php7-iconv         php7-intl         php7-json         php7-mbstring         php7-openssl         php7-session         php7-xml         php7-zlib         s6
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .docker/nginx.conf
+    - /etc/nginx/nginx.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .docker/php-fpm.conf
+    - /etc/php7/php-fpm.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .docker/services.d
+    - /etc/services.d
+  - CmdLine:
+    - rm -rf /etc/php7/php-fpm.d/www.conf     && sed -i 's/post_max_size.*/post_max_size
+      = 10M/' /etc/php7/php.ini     && sed -i 's/upload_max_filesize.*/upload_max_filesize
+      = 10M/' /etc/php7/php.ini
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/www
+  - Chown: ""
+    From: node
+    Name: copy
+    SourcesAndDest:
+    - /shaarli
+    - shaarli
+  - CmdLine:
+    - chown -R nginx:nginx .     && ln -sf /dev/stdout /var/log/nginx/shaarli.access.log     &&
+      ln -sf /dev/stderr /var/log/nginx/shaarli.error.log
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/www/shaarli/cache
+  - Name: volume
+    Volumes:
+    - /var/www/shaarli/data
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /bin/s6-svscan
+    - /etc/services.d
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine: []
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

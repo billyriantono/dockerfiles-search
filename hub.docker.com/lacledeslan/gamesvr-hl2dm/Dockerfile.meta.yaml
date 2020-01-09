@@ -1,0 +1,115 @@
+MetaArgs: null
+Stages:
+- As: hl2dm-builder
+  BaseName: lacledeslan/steamcmd:linux
+  Commands:
+  - CmdLine:
+    - echo $'\n\nDownloading LL custom content from public ftp server' &&        mkdir
+      --parents /tmp/maps/ &&        cd /tmp/maps/ &&        wget -m             ftp://llgameserverbot:6gDyfNJhm4UsraE5@raw.content.lacledeslan.net/hl2dm/maps/             -nH
+      --no-verbose --cut-dirs 4 &&        rm -f .listing &&    echo "Decompressing
+      downloaded content" &&        bzip2 --decompress /tmp/maps/*.*.bz2 &&        rm
+      -f /tmp/maps/*.bz2 &&    echo "Moving uncompressed files to destination" &&        mkdir
+      /output/hl2mp/maps --parents &&        mv /tmp/maps/*.* /output/hl2mp/maps;
+    Name: run
+    PrependShell: true
+  From:
+    Image: lacledeslan/steamcmd:linux
+  Name: hl2dm-builder
+  Platform: ""
+  SourceCode: FROM lacledeslan/steamcmd:linux as hl2dm-builder
+- BaseName: debian:stable-slim
+  Commands:
+  - Key: BUILDNODE
+    Name: arg
+    Value: unspecified
+  - Key: SOURCE_COMMIT
+    Name: arg
+    Value: unspecified
+  - Health:
+      Test:
+      - NONE
+    Name: healthcheck
+  - CmdLine:
+    - dpkg --add-architecture i386 &&    apt-get update && apt-get install -y         ca-certificates
+      lib32gcc1 lib32tinfo5 libcurl4-gnutls-dev:i386 libstdc++6 libstdc++6:i386 libtcmalloc-minimal4:i386
+      procps screen &&    apt-get clean &&    rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/*;
+    Name: run
+    PrependShell: true
+  - Labels:
+    - Key: maintainer
+      Value: '"Laclede''s LAN <contact @lacledeslan.com>"'
+    - Key: com.lacledeslan.build-node
+      Value: $BUILDNODE
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.url
+      Value: '"https://github.com/LacledesLAN/README.1ST"'
+    - Key: org.label-schema.vcs-ref
+      Value: $SOURCE_COMMIT
+    - Key: org.label-schema.vendor
+      Value: '"Laclede''s LAN"'
+    - Key: org.label-schema.description
+      Value: '"Half-Life 2 Deathmatch Dedicated Server"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/LacledesLAN/gamesvr-hl2dm"'
+    Name: label
+  - CmdLine:
+    - useradd --home /app --gid root --system HL2DM &&    mkdir -p /app/ll-tests &&    chown
+      HL2DM:root -R /app;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./build-cache
+    - /app
+  - Chown: ""
+    From: hl2dm-builder
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /app/steamcmd
+  - Chown: ""
+    From: hl2dm-builder
+    Name: copy
+    SourcesAndDest:
+    - /output
+    - /app
+  - CmdLine:
+    - chown -R HL2DM:root /app;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./ll-tests
+    - /app/ll-tests
+  - CmdLine:
+    - chmod +rx /app/ll-tests/*.sh &&    chmod +rwx /app/ll-tests &&    chown HL2DM:root
+      -R /app/ll-tests;
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: HL2DM
+  - CmdLine:
+    - echo $'\n\nDownloading Half-Life 2 Deathmatch Server via SteamCMD' &&        /app/steamcmd/steamcmd.sh             +login
+      anonymous             +force_install_dir /app             +app_update 232370
+      validate             +quit;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo $'\n\nLinking steamclient.so to prevent srcds_run errors' &&        mkdir
+      --parents /app/.steam/sdk32 &&        ln -s /app/bin/steamclient.so /app/.steam/sdk32/steamclient.so
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Expression: USER root
+    Name: onbuild
+  From:
+    Image: debian:stable-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stable-slim

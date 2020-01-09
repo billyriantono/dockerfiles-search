@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.10-alpine
+  Commands:
+  - CmdLine:
+    - apk add -U --no-cache ca-certificates git build-base make gcc musl-dev linux-headers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get git.egem.io/team/go-egem.git ; exit 0
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /go/src/git.egem.io/team/go-egem.git && chmod +x build/env.sh && make egem
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.10-alpine as builder
+- BaseName: alpine:latest
+  Commands:
+  - Maintainer: 'Zibastian <Discord: @zibastian>'
+    Name: maintainer
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/git.egem.io/team/go-egem.git/build/bin/egem
+    - /usr/bin/
+  - CmdLine:
+    - apk add -U --no-cache nodejs npm git curl su-exec
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install -g pm2
+    Name: run
+    PrependShell: true
+  - Key: usr
+    Name: arg
+    Value: egem
+  - CmdLine:
+    - "addgroup -g 900 ${usr} &&     adduser -D -u 900 -G ${usr} -h /opt/${usr} ${usr}
+      \t&& mkdir -p /opt/${usr} \t&& chown -R ${usr}:${usr} /opt/${usr}"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "su-exec ${usr} mkdir -p /opt/${usr}/live-net/egem \t&& su-exec ${usr} curl
+      -o /opt/${usr}/live-net/egem/static-nodes.json https://raw.githubusercontent.com/TeamEGEM/EGEM-Bootnodes/master/static-nodes.json"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - su-exec ${usr} git clone https://github.com/TeamEGEM/egem-net-intelligence-api.git
+      /opt/${usr}/egem-net-intelligence-api
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opt/${usr}/egem-net-intelligence-api && su-exec ${usr} npm install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker-entrypoint.sh
+    - /usr/bin/docker-entrypoint
+  - CmdLine:
+    - chmod +x /usr/bin/docker-entrypoint
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-entrypoint
+    Name: cmd
+    PrependShell: false
+  - Name: user
+    User: ${usr}
+  - Name: workdir
+    Path: /opt/${usr}
+  - Name: expose
+    Ports:
+    - 30666/tcp
+  - Name: expose
+    Ports:
+    - 30666/udp
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

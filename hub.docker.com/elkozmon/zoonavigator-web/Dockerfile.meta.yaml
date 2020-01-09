@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: npm
+  BaseName: node:9.11.1-alpine
+  Commands:
+  - Maintainer: Lubos Kozmon <lubosh91@gmail.com>
+    Name: maintainer
+  - Key: ZOONAV_VERSION
+    Name: arg
+    Value: null
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - apk --no-cache add tar   && npm install -g @angular/cli   && npm install   &&
+      ng build --prod   && echo $ZOONAV_VERSION > dist/.version
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:9.11.1-alpine
+  Name: npm
+  Platform: ""
+  SourceCode: FROM node:9.11.1-alpine as npm
+- BaseName: nginx:1.13.12-alpine
+  Commands:
+  - Env:
+    - Key: DOCKERIZE_VERSION
+      Value: v0.6.0
+    - Key: SERVER_HTTP_PORT
+      Value: "8000"
+    - Key: API_HOST
+      Value: api
+    - Key: API_PORT
+      Value: "9000"
+    - Key: API_REQUEST_TIMEOUT_MILLIS
+      Value: "10000"
+    Name: env
+  - Chown: ""
+    From: npm
+    Name: copy
+    SourcesAndDest:
+    - /src/docker/files
+    - /
+  - Chown: ""
+    From: npm
+    Name: copy
+    SourcesAndDest:
+    - /src/dist
+    - /app
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apk --no-cache add curl tar   && curl     -Lo dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz     https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz   &&
+      tar xzvf dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz -C /usr/local/bin   &&
+      rm dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz   && chmod +x     run.sh     healthcheck.sh   &&
+      apk del tar
+    Name: run
+    PrependShell: true
+  - Health:
+      Interval: 300000000000
+      Test:
+      - CMD-SHELL
+      - ./healthcheck.sh
+      Timeout: 3000000000
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - ./run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginx:1.13.12-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx:1.13.12-alpine

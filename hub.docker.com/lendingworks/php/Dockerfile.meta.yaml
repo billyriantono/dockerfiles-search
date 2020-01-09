@@ -1,0 +1,97 @@
+MetaArgs:
+- DefaultValue: null
+  Key: PHP_TYPE
+  ProvidedValue: null
+  Value: null
+- DefaultValue: "7.2"
+  Key: PHP_VERSION
+  ProvidedValue: null
+  Value: "7.2"
+Stages:
+- BaseName: php:${PHP_VERSION}-${PHP_TYPE}-alpine
+  Commands:
+  - Env:
+    - Key: CONTAINER_VERSION
+      Value: '''1.0.0'''
+    Name: env
+  - CmdLine:
+    - apk add --no-cache --update --virtual build-deps     autoconf     g++     make     zlib-dev     freetype     libjpeg-turbo     freetype-dev     libpng-dev     libjpeg-turbo-dev     libxml2-dev     curl-dev     postgresql-dev     libmemcached-dev     cyrus-sasl-dev   &&
+      apk add --no-cache     socat     libpng     libmemcached     bash     sed     mysql-client     postgresql-client     curl     wget     sudo     tzdata   &&
+      docker-php-ext-install -j$(nproc)     exif     mbstring     zip     bcmath     gd     curl     json     pdo     pdo_mysql     pdo_pgsql     opcache     soap     xml     pcntl   &&
+      pecl install igbinary memcached redis   && docker-php-ext-enable igbinary memcached
+      redis   && rm -rf /tmp/pear   && apk del --no-cache build-deps
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -s -L https://github.com/drush-ops/drush/releases | egrep -o '/drush-ops/drush/releases/download/[v.0-8]*/drush.phar'
+      | head -n1 | wget --base=http://github.com/ -i - -O /usr/local/bin/drush
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /usr/local/bin/drush
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin
+      --filename=composer   && mkdir /.composer   && composer global require hirak/prestissimo
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./conf/install-fpm-healthcheck.sh
+    - /usr/local/bin/install-fpm-healthcheck
+  - Env:
+    - Key: FPM_HEALTHCHECK_VERSION
+      Value: '"0.4.0"'
+    Name: env
+  - Key: PHP_TYPE
+    Name: arg
+    Value: null
+  - CmdLine:
+    - /usr/local/bin/install-fpm-healthcheck ${PHP_TYPE} ${FPM_HEALTHCHECK_VERSION}
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NEWRELIC_VERSION
+      Value: '"8.7.0.242"'
+    Name: env
+  - CmdLine:
+    - mkdir -p /opt && cd /opt   && export NEWRELIC_RELEASE="newrelic-php5-${NEWRELIC_VERSION}-linux-musl"   &&
+      wget "http://download.newrelic.com/php_agent/archive/${NEWRELIC_VERSION}/${NEWRELIC_RELEASE}.tar.gz"   &&
+      gzip -dc ${NEWRELIC_RELEASE}.tar.gz | tar xf -   && cd "${NEWRELIC_RELEASE}"   &&
+      NR_INSTALL_SILENT=true NR_INSTALL_USE_CP_NOT_LN=true ./newrelic-install install   &&
+      cd ..   && rm -rf "${NEWRELIC_RELEASE}"*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NEWRELIC_ENABLED
+      Value: "0"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./conf/fpm-zz-docker.conf
+    - /usr/local/etc/php-fpm.d/zz-docker.conf
+  - Name: expose
+    Ports:
+    - "9090"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./conf/php.ini
+    - /usr/local/etc/php/
+  - CmdLine:
+    - mkdir -p /data/www
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /data/www
+  From:
+    Image: php:${PHP_VERSION}-${PHP_TYPE}-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:${PHP_VERSION}-${PHP_TYPE}-alpine

@@ -1,0 +1,116 @@
+MetaArgs: null
+Stages:
+- As: go_builder
+  BaseName: golang:1.11
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y libmagic-dev libc6
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/maliceio/malice-fileinfo
+  - Name: workdir
+    Path: /go/src/github.com/maliceio/malice-fileinfo
+  - CmdLine:
+    - go get -u github.com/golang/dep/cmd/dep
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dep ensure
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -ldflags "-s -w -X main.Version=v$(cat VERSION) -X main.BuildTime=$(date
+      -u +%Y%m%d)" -o /bin/info
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11
+  Name: go_builder
+  Platform: ""
+  SourceCode: FROM golang:1.11 as go_builder
+- BaseName: ubuntu:bionic
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"https://github.com/blacktop"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.repository
+      Value: = "https://github.com/malice-plugins/fileinfo.git"
+    Name: label
+  - Labels:
+    - Key: malice.plugin.category
+      Value: '"metadata"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.mime
+      Value: '"*"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.docker.engine
+      Value: '"*"'
+    Name: label
+  - CmdLine:
+    - groupadd -r malice   && useradd --no-log-init -r -g malice malice   && mkdir
+      /malware   && chown -R malice:malice /malware
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SSDEEP
+      Value: 2.14.1
+    Name: env
+  - Env:
+    - Key: EXIFTOOL
+      Value: "11.11"
+    Name: env
+  - CmdLine:
+    - buildDeps='ca-certificates   build-essential   openssl   unzip   curl'   &&
+      set -x   && apt-get update -qq   && apt-get install -yq --no-install-recommends
+      $buildDeps libmagic-dev libc6   && echo "Downloading TRiD and Database..."   &&
+      curl -Ls http://mark0.net/download/trid_linux_64.zip > /tmp/trid_linux_64.zip   &&
+      curl -Ls http://mark0.net/download/triddefs.zip > /tmp/triddefs.zip   && cd
+      /tmp   && unzip trid_linux_64.zip   && unzip triddefs.zip   && chmod +x trid   &&
+      mv trid /usr/bin/   && mv triddefs.trd /usr/bin/   && echo "Installing ssdeep..."   &&
+      curl -Ls https://github.com/ssdeep-project/ssdeep/releases/download/release-$SSDEEP/ssdeep-$SSDEEP.tar.gz
+      >   /tmp/ssdeep-$SSDEEP.tar.gz   && cd /tmp   && tar xzf ssdeep-$SSDEEP.tar.gz   &&
+      cd ssdeep-$SSDEEP   && ./configure   && make   && make install   && echo "Installing
+      exiftool..."   && curl -Ls https://www.sno.phy.queensu.ca/~phil/exiftool/Image-ExifTool-$EXIFTOOL.tar.gz
+      >   /tmp/exiftool.tar.gz   && cd /tmp   && tar xzf exiftool.tar.gz   && cd Image-ExifTool-$EXIFTOOL   &&
+      perl Makefile.PL   && make test   && make install   && echo "Clean up unnecessary
+      files..."   && apt-get purge -y --auto-remove $buildDeps   && apt-get clean   &&
+      rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.gnupg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update -qq && apt-get install -yq --no-install-recommends ca-certificates
+      gosu   && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: go_builder
+    Name: copy
+    SourcesAndDest:
+    - /bin/info
+    - /bin/info
+  - Name: workdir
+    Path: /malware
+  - CmdLine:
+    - gosu
+    - malice
+    - info
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:bionic
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic

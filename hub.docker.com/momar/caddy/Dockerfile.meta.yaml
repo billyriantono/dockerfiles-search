@@ -1,0 +1,113 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git tzdata zip ca-certificates libcap &&    git clone https://github.com/mholt/caddy.git
+      /data
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /data
+  - CmdLine:
+    - 'tag=$(git describe --abbrev=0 --tags) && echo -e "Latest tagged version: $tag"
+      && git -c advice.detachedHead=false checkout "$tag"'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's|var EnableTelemetry = true|var EnableTelemetry = false|' caddy/caddymain/run.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - for plugin in ${CADDY_PLUGINS}; do sed -i 's|// This is where other plugins
+      get plugged in (imported)|\0\n\t_ "'"$plugin"'"|' caddy/caddymain/run.go; done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static" -s -w'
+      -o /go/bin/caddy ./caddy
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - data
+    - /build/data
+  - CmdLine:
+    - mkdir -p /build/bin /build/etc/ssl/certs /build/lib &&    cp /go/bin/caddy /usr/sbin/setcap
+      /bin/busybox /build/bin/ &&    cp /lib/ld-musl-x86_64.so.1 /usr/lib/libcap.so.2
+      /build/lib/ &&    cp /etc/ssl/certs/ca-certificates.crt /build/etc/ssl/certs/
+      &&    cd /usr/share/zoneinfo && zip -q -r -0 /build/etc/zoneinfo.zip .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1-alpine AS build
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build
+    - /
+  - CmdLine:
+    - /bin/busybox
+    - chown
+    - -R
+    - 1000:1000
+    - /data
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - /bin/setcap
+    - cap_net_bind_service=ep
+    - /bin/caddy
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - /bin/busybox
+    - rm
+    - -rf
+    - /data/caddy/.gitkeep
+    - /bin/setcap
+    - /bin/busybox
+    - /lib
+    Name: run
+    PrependShell: false
+  - Name: workdir
+    Path: /data
+  - Name: user
+    User: "1000"
+  - Env:
+    - Key: ZONEINFO
+      Value: /etc/zoneinfo.zip
+    - Key: PATH
+      Value: /bin
+    - Key: CADDYPATH
+      Value: /data/caddy
+    Name: env
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: expose
+    Ports:
+    - "443"
+  - CmdLine:
+    - /bin/caddy
+    - -agree=true
+    - -conf=/data/Caddyfile
+    - -log=stdout
+    - -email
+    - noreply@example.org
+    - -grace=2s
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

@@ -1,0 +1,120 @@
+MetaArgs: null
+Stages:
+- As: gotty-build
+  BaseName: golang:1.12-alpine
+  Commands:
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - Env:
+    - Key: GOOS
+      Value: linux
+    Name: env
+  - Env:
+    - Key: GOARCH
+      Value: amd64
+    Name: env
+  - CmdLine:
+    - apk add --update git make &&   go get -d github.com/webkubectl/gotty &&   go
+      get -u github.com/golang/dep/cmd/dep && cd $GOPATH/src/github.com/webkubectl/gotty
+      &&   make gotty && cp gotty / && ls -l /gotty && /gotty -v
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12-alpine
+  Name: gotty-build
+  Platform: ""
+  SourceCode: FROM golang:1.12-alpine as gotty-build
+- BaseName: ubuntu:18.04
+  Commands:
+  - Name: user
+    User: root
+  - Key: ARCH
+    Name: arg
+    Value: amd64
+  - CmdLine:
+    - rm -f /bin/sh && ln -s /bin/bash /bin/sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: KUBECTL_VERSION
+      Value: v1.16.2
+    Name: env
+  - Env:
+    - Key: K9S_VERSION
+      Value: 0.9.3
+    Name: env
+  - Chown: ""
+    From: gotty-build
+    Name: copy
+    SourcesAndDest:
+    - /gotty
+    - /usr/bin/
+  - CmdLine:
+    - apt-get update &&     apt-get install -y --no-install-recommends curl ca-certificates
+      jq iproute2 less bash-completion unzip sysstat acl net-tools iputils-ping telnet
+      dnsutils wget vim git &&     curl -sLf https://storage.googleapis.com/kubernetes-release/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl
+      > /usr/bin/kubectl && chmod +x /usr/bin/kubectl &&     git clone https://github.com/ahmetb/kubectx
+      /opt/kubectx && chmod -R 755 /opt/kubectx && ln -s /opt/kubectx/kubectx /usr/local/bin/kubectx
+      && ln -s /opt/kubectx/kubens /usr/local/bin/kubens &&     git clone --depth
+      1 https://github.com/ahmetb/kubectl-aliases /opt/kubectl-aliases && chmod -R
+      755 /opt/kubectl-aliases &&     git clone --depth 1 https://github.com/junegunn/fzf
+      /opt/fzf && chmod -R 755 /opt/fzf && /opt/fzf/install && ln -s /opt/fzf/bin/fzf
+      /usr/local/bin/fzf &&     mkdir -p /tmp/k9s && cd /tmp/k9s && wget https://github.com/derailed/k9s/releases/download/${K9S_VERSION}/k9s_${K9S_VERSION}_Linux_x86_64.tar.gz
+      && tar -xvf k9s_${K9S_VERSION}_Linux_x86_64.tar.gz && chmod +x k9s && mv k9s
+      /usr/bin &&     chmod +x /usr/bin/gotty &&     DEBIAN_FRONTEND=noninteractive
+      apt-get --purge remove -y git &&     DEBIAN_FRONTEND=noninteractive apt-get
+      autoremove -y &&     DEBIAN_FRONTEND=noninteractive apt-get clean && rm -rf
+      /var/lib/apt/lists/* /tmp/* /var/tmp/* &&     chmod -R 755 /tmp && mkdir -p
+      /opt/webkubectl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start-webkubectl.sh
+    - /opt/webkubectl
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start-session.sh
+    - /opt/webkubectl
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - init-kubectl.sh
+    - /opt/webkubectl
+  - CmdLine:
+    - chmod -R 700 /opt/webkubectl
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SESSION_STORAGE_SIZE
+      Value: 10M
+    Name: env
+  - Env:
+    - Key: WELCOME_BANNER
+      Value: '"Welcome to Web Kubectl, try kubectl --help."'
+    Name: env
+  - Env:
+    - Key: KUBECTL_INSECURE_SKIP_TLS_VERIFY
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: GOTTY_OPTIONS
+      Value: '"--port 8080 --permit-write --permit-arguments"'
+    Name: env
+  - CmdLine:
+    - sh
+    - /opt/webkubectl/start-webkubectl.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

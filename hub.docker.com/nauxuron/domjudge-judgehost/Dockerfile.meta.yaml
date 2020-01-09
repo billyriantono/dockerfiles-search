@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: debian:stretch
+  Commands:
+  - Env:
+    - Key: DOMJUDGE_VERSION
+      Value: 5.1.3
+    Name: env
+  - Env:
+    - Key: BUILDDEPS
+      Value: '"make curl autoconf automake patch gcc g++ ca-certificates libcgroup-dev
+        unzip"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - patches
+    - /tmp/patches
+  - CmdLine:
+    - "export DEBIAN_FRONTEND=noninteractive && \tapt-get update && apt-get install
+      -y --no-install-recommends $BUILDDEPS && \tgroupadd -g 2000 domjudge && \tuseradd
+      -u 2000 -g 2000 -d / -s /bin/false domjudge && \tmkdir -p /src && \tcurl -L
+      -o /src/domjudge-${DOMJUDGE_VERSION}.zip https://github.com/DOMjudge/domjudge/archive/${DOMJUDGE_VERSION}.zip
+      && \tunzip /src/domjudge-${DOMJUDGE_VERSION}.zip -d /src && \tcd /src/domjudge-${DOMJUDGE_VERSION}
+      && \tfor patch in /tmp/patches/*.patch; do patch -p1 -i $patch; done && \tmake
+      configure && /src/domjudge-${DOMJUDGE_VERSION}/configure --with-domjudge-user=domjudge
+      --disable-submitclient && make judgehost && make install-judgehost"
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch
+  Name: build
+  Platform: ""
+  SourceCode: FROM debian:stretch as build
+- BaseName: debian:stretch
+  Commands:
+  - Env:
+    - Key: RUNDEPS
+      Value: '"unzip php7.0-cli php7.0-curl php7.0-json procps sudo ca-certificates
+        libcgroup-dev"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - languages
+    - /tmp/languages
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /opt/domjudge
+    - /opt/domjudge
+  - CmdLine:
+    - "export DEBIAN_FRONTEND=noninteractive && \tapt-get update && \tapt-get install
+      -y --no-install-recommends $RUNDEPS $(cat /tmp/languages) && \tapt-get autoremove
+      -y && apt-get clean && rm -rf /var/lib/apt/lists/* && \tgroupadd -g 2000 domjudge
+      && \tuseradd -u 2000 -g 2000 -d / -s /bin/false domjudge && \tuseradd -d / -g
+      nogroup -s /bin/false domjudge-run && \tcd /opt/domjudge/judgehost && \tchown
+      -R domjudge judgings lib log run tmp && \tcp /opt/domjudge/judgehost/etc/sudoers-domjudge
+      /etc/sudoers.d/ && \tchmod 440 /etc/sudoers.d/sudoers-domjudge && visudo -c
+      && \tsed -i 's/true/false/g' /opt/domjudge/judgehost/etc/judgehost-config.php
+      && \tmkdir /cgroup"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - /usr/local/bin/start.sh
+  - CmdLine:
+    - start.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /opt/domjudge/judgehost/bin/judgedaemon
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch

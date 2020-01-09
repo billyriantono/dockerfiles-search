@@ -1,0 +1,104 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: abiosoft/caddy:builder
+  Commands:
+  - Key: version
+    Name: arg
+    Value: '"0.10.14"'
+  - Key: plugins
+    Name: arg
+    Value: '"cors,realip,expires,cache,prometheus"'
+  - CmdLine:
+    - go get -v github.com/abiosoft/parent
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - VERSION=${version} PLUGINS=${plugins} /bin/sh /usr/bin/builder.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: abiosoft/caddy:builder
+  Name: builder
+  Platform: ""
+  SourceCode: FROM abiosoft/caddy:builder as builder
+- BaseName: php:7.1-fpm-alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache --virtual temp add build-base                        autoconf
+      &&     apk --no-cache add zeromq-dev                        libxml2-dev                        composer                        sox                        git
+      &&     pecl install zmq-beta &&     docker-php-ext-enable zmq &&     docker-php-ext-install
+      mysqli &&     docker-php-ext-install soap &&     docker-php-ext-install pcntl
+      &&     docker-php-ext-install bcmath &&     docker-php-ext-install opcache &&     apk
+      del temp
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TZ
+      Value: Europe/Amsterdam
+    Name: env
+  - CmdLine:
+    - apk --update add     tzdata   && cp /usr/share/zoneinfo/$TZ /etc/localtime &&
+      echo $TZ > /etc/timezone
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache --repository http://dl-3.alpinelinux.org/alpine/edge/community
+      gnu-libiconv
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LD_PRELOAD
+      Value: /usr/lib/preloadable_libiconv.so php
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /install/caddy
+    - /usr/bin/caddy
+  - CmdLine:
+    - /usr/bin/caddy -version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/caddy -plugins
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/parent
+    - /bin/parent
+  - Env:
+    - Key: ACME_AGREE
+      Value: '"false"'
+    Name: env
+  - Env:
+    - Key: ENABLE_TELEMETRY
+      Value: '"false"'
+    Name: env
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: workdir
+    Path: /srv
+  - CmdLine:
+    - /bin/parent
+    - caddy
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --conf
+    - /etc/Caddyfile
+    - --log
+    - stdout
+    - --agree=$ACME_AGREE
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:7.1-fpm-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.1-fpm-alpine

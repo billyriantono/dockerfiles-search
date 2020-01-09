@@ -1,0 +1,133 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:precise
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Rohit Goswami <rohit.1995@mail.ru>"'
+    Name: label
+  - Labels:
+    - Key: name
+      Value: '"platoBot"'
+    Name: label
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - echo exit 0 > /usr/sbin/policy-rc.d
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install --yes wget; wget http://ftp.au.debian.org/debian/pool/main/n/netselect/netselect_0.3.ds1-26_amd64.deb;
+      dpkg -i netselect_0.3.ds1-26_amd64.deb; rm -rf netselect_*; netselect -s 20
+      -t 40 $(wget -qO - mirrors.ubuntu.com/mirrors.txt); sed -i 's/http:\/\/us.archive.ubuntu.com\/ubuntu\//http:\/\/ubuntu.uberglobalmirror.com\/archive\//'
+      /etc/apt/sources.list; apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install --yes curl libtool automake cmake ragel zlib1g-dev
+      libjpeg8-dev libjbig2dec0-dev gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+      texinfo libtool m4 build-essential gettext ccache git sudo pkg-config; apt-get
+      clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: RUSTUP_HOME
+      Value: /usr/local/rustup
+    - Key: CARGO_HOME
+      Value: /usr/local/cargo
+    - Key: PATH
+      Value: /usr/local/cargo/bin:$PATH
+    - Key: RUST_VERSION
+      Value: 1.26.1
+    Name: env
+  - CmdLine:
+    - 'set -eux;         dpkgArch="$(dpkg --print-architecture)";     case "${dpkgArch##*-}"
+      in         amd64) rustArch=''x86_64-unknown-linux-gnu''; rustupSha256=''c9837990bce0faab4f6f52604311a19bb8d2cde989bea6a7b605c8e526db6f02''
+      ;;         armhf) rustArch=''armv7-unknown-linux-gnueabihf''; rustupSha256=''297661e121048db3906f8c964999f765b4f6848632c0c2cfb6a1e93d99440732''
+      ;;         arm64) rustArch=''aarch64-unknown-linux-gnu''; rustupSha256=''a68ac2d400409f485cb22756f0b3217b95449884e1ea6fd9b70522b3c0a929b2''
+      ;;         i386) rustArch=''i686-unknown-linux-gnu''; rustupSha256=''27e6109c7b537b92a6c2d45ac941d959606ca26ec501d86085d651892a55d849''
+      ;;         *) echo >&2 "unsupported architecture: ${dpkgArch}"; exit 1 ;;     esac;         url="https://static.rust-lang.org/rustup/archive/1.11.0/${rustArch}/rustup-init";     wget
+      "$url";     echo "${rustupSha256} *rustup-init" | sha256sum -c -;     chmod
+      +x rustup-init;     ./rustup-init -y --no-modify-path --default-toolchain $RUST_VERSION;     rm
+      rustup-init;     chmod -R a+w $RUSTUP_HOME $CARGO_HOME;     rustup --version;     cargo
+      --version;     rustc --version;'
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: USER
+      Value: build
+    Name: env
+  - CmdLine:
+    - useradd --create-home ${USER} && echo "${USER}:${USER}" | chpasswd && adduser
+      ${USER} sudo
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/${USER}/
+  - Env:
+    - Key: CCACHE_SIZE
+      Value: 50G
+    - Key: CCACHE_DIR
+      Value: $HOME/.ccache
+    - Key: USE_CCACHE
+      Value: "1"
+    - Key: CCACHE_COMPRESS
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: CCACHE_DIR
+      Value: /home/build/.ccache
+    Name: env
+  - CmdLine:
+    - ccache -M 50G
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo chown -R ${USER}:${USER} /home/${USER}
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${USER}
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: teletype
+    Name: env
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -c
+  - CmdLine:
+    - git config --global user.name "${USER}" && git config --global user.email "${USER}@localhost"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo $'transfer() { if [ $# -eq 0 ]; then echo -e "No arguments specified. Usage:\necho
+      transfer /tmp/test.md\ncat /tmp/test.md | transfer test.md"; return 1; fi' >>
+      ~/.bashrc && echo $'tmpfile=$( mktemp -t transferXXX ); if tty -s; then basefile=$(basename
+      "$1" | sed -e 's/[^a-zA-Z0-9._-]/-/g'); curl --progress-bar --upload-file "$1"
+      "https://transfer.sh/$basefile" >> $tmpfile; else curl --progress-bar --upload-file
+      "-" "https://transfer.sh/$1" >> $tmpfile ; fi; cat $tmpfile; rm -f $tmpfile;
+      } ' >> ~/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://sh.rustup.rs -sSf | bash -s -- -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rustup target add arm-unknown-linux-gnueabihf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ~/.cargo && touch ~/.cargo/config; echo $'[target.arm-unknown-linux-gnueabihf]\nlinker
+      = "arm-linux-gnueabihf-gcc"\nrustflags = ["-C", "target-feature=+v7,+vfp3,+a9,+neon"]'
+      >> ~/.cargo/config
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:precise
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:precise

@@ -1,0 +1,219 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: alpine:latest
+  Commands:
+  - Maintainer: Jan Rohwer <jan@rohwer.online>
+    Name: maintainer
+  - Key: SEAFILE_VERSION
+    Name: arg
+    Value: '"7.0.5"'
+  - Key: LIBEVHTP_VERSION
+    Name: arg
+    Value: '"1.2.10"'
+  - Key: LIBSEARPC_VERSION
+    Name: arg
+    Value: '"3.1-latest"'
+  - Key: PKG_CONFIG_PATH
+    Name: arg
+    Value: /usr/local/lib/pkgconfig
+  - CmdLine:
+    - apk add -U --no-cache --virtual .build_dep     curl-dev libevent-dev glib-dev
+      util-linux-dev intltool     sqlite-dev libarchive-dev libtool jansson-dev vala
+      fuse-dev     cmake make musl-dev gcc g++ automake autoconf bsd-compat-headers     python-dev
+      file mariadb-dev mariadb-dev py-pip git openssl jpeg-dev zlib-dev libxml2-dev
+      libxslt-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /seafile
+  - CmdLine:
+    - wget https://github.com/criticalstack/libevhtp/archive/${LIBEVHTP_VERSION}.tar.gz
+      -O- | tar xzf -     && cd libevhtp-${LIBEVHTP_VERSION}/ && cmake -DEVHTP_DISABLE_SSL=ON
+      -DEVHTP_BUILD_SHARED=ON . && make -j4 && make install && cp oniguruma/onigposix.h
+      /usr/include/     && cd .. && rm -rf libevhtp-${LIBEVHTP_VERSION}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://github.com/haiwen/libsearpc/archive/v${LIBSEARPC_VERSION}.tar.gz
+      -O- | tar xzf -     && wget https://github.com/haiwen/ccnet-server/archive/v${SEAFILE_VERSION}-server.tar.gz
+      -O- | tar xzf -     && wget https://github.com/haiwen/seafile-server/archive/v${SEAFILE_VERSION}-server.tar.gz
+      -O- | tar xzf -     && wget https://github.com/haiwen/seahub/archive/v${SEAFILE_VERSION}-server.tar.gz
+      -O- | tar xzf -     && wget https://github.com/haiwen/seafobj/archive/v${SEAFILE_VERSION}-server.tar.gz
+      -O- | tar xzf -     && wget https://github.com/haiwen/seafdav/archive/v${SEAFILE_VERSION}-server.tar.gz
+      -O- | tar xzf -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd libsearpc-${LIBSEARPC_VERSION}/ && ./autogen.sh && ./configure && make -j4
+      && make install &&     cd .. && rm -rf libsearpc-${LIBSEARPC_VERSION}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd ccnet-server-${SEAFILE_VERSION}-server/ && \t./autogen.sh &&     ./configure
+      --with-mysql --with-postgresql --enable-python && \t\tmake -j4 && make install
+      && cd .. && rm -rf ccnet-server-${SEAFILE_VERSION}-server"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd seafile-server-${SEAFILE_VERSION}-server/ &&     ./autogen.sh &&     ./configure
+      --with-mysql --with-postgresql --enable-python && \t\tmake -j4 && make install
+      && \tcd .. && mv seafile-server-${SEAFILE_VERSION}-server seafile-server"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd seahub-${SEAFILE_VERSION}-server/ &&     cd .. && mv seahub-${SEAFILE_VERSION}-server
+      seafile-server/seahub
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd seafile-server/seahub &&     pip install -r requirements.txt --prefix /usr/local
+      &&     pip install --prefix /usr/local gunicorn django-picklefield requests
+      flup SQLAlchemy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd seafobj-${SEAFILE_VERSION}-server/ &&     mv seafobj /usr/local/lib/python2.7/site-packages
+      && cd .. && rm -rf seafobj-${SEAFILE_VERSION}-server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd seafdav-${SEAFILE_VERSION}-server/ &&     mv wsgidav /usr/local/lib/python2.7/site-packages
+      && cd .. && rm -rf seafdav-${SEAFILE_VERSION}-server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo -n "$SEAFILE_VERSION" > /seafile/version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /seafile/logs &&     mkdir /seafile/pids &&     mkdir /seafile/data
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: build
+  Platform: ""
+  SourceCode: FROM alpine:latest AS build
+- BaseName: alpine:latest
+  Commands:
+  - Maintainer: Jan Rohwer <jan@rohwer.online>
+    Name: maintainer
+  - Env:
+    - Key: SERVER_NAME
+      Value: '"Seafile"'
+    Name: env
+  - Env:
+    - Key: SERVER_DOMAIN
+      Value: '"seafile.domain.com"'
+    Name: env
+  - Env:
+    - Key: MYSQL_HOST
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: MYSQL_PORT
+      Value: '"3306"'
+    Name: env
+  - Env:
+    - Key: MYSQL_USER
+      Value: '"seafile"'
+    Name: env
+  - Env:
+    - Key: MYSQL_PASS
+      Value: '"seafile"'
+    Name: env
+  - Env:
+    - Key: ENABLE_SEAFDAV
+      Value: '"false"'
+    Name: env
+  - CmdLine:
+    - "ln -s /etc/profile.d/color_prompt /etc/profile.d/color_prompt.sh &&     apk
+      -U --no-cache add bash openssl python py-setuptools py-imaging sqlite         libevent
+      util-linux glib jansson libarchive libjpeg libxml2 libxslt \t    postgresql-libs
+      py-pillow py-mysqldb mariadb-client syslog-ng supervisor tini"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /seafile
+  - CmdLine:
+    - echo $'export PYTHONPATH=/usr/lib/python2.7/site-packages/:/usr/local/lib/python2.7/site-packages/:/seafile/seafile-server/seahub/thirdpart\n
+      export SEAHUB_LOG_DIR=/seafile/logs\n export CCNET_CONF_DIR=/seafile/data/ccnet\n
+      export SEAFILE_CONF_DIR=/seafile/data/seafile-data\n export SEAFILE_CENTRAL_CONF_DIR=/seafile/data/conf'
+      >> /etc/profile.d/seafile.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - addgroup -g 2016 seafile &&     adduser -D -s /bin/sh -g "Seafile Server" -G
+      seafile -h /seafile -u 2016 seafile
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /seafile/
+    - /seafile/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /usr/local
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - syslog-ng.conf
+    - /etc/syslog-ng/syslog-ng.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/supervisord.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - seahub.conf
+    - /seafile/seahub.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - seafile-admin.sql
+    - /seafile/seafile-admin.sql
+  - CmdLine:
+    - chown -R seafile:seafile /seafile &&     chmod +x /docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8000"
+    - "8080"
+    - "8082"
+  - Name: volume
+    Volumes:
+    - /seafile/data
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - exec /usr/bin/supervisord -c /etc/supervisord.conf
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

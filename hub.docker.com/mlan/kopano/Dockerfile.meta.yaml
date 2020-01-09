@@ -1,0 +1,265 @@
+MetaArgs:
+- DefaultValue: ubuntu
+  Key: DIST
+  ProvidedValue: null
+  Value: ubuntu
+- DefaultValue: "18.04"
+  Key: REL
+  ProvidedValue: null
+  Value: "18.04"
+- DefaultValue: null
+  Key: ARCH
+  ProvidedValue: null
+  Value: null
+Stages:
+- As: base
+  BaseName: ${ARCH:+$ARCH/}$DIST:$REL
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: mlan
+    Name: label
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: DOCKER_BIN_DIR
+      Value: /usr/local/bin
+    - Key: DOCKER_RUNSV_DIR
+      Value: /etc/service
+    - Key: DOCKER_ENTRY_DIR
+      Value: /etc/entrypoint.d
+    - Key: DOCKER_EXIT_DIR
+      Value: /etc/exitpoint.d
+    - Key: DOCKER_CONF_DIR1
+      Value: /etc/kopano
+    - Key: DOCKER_CONF_DIR2
+      Value: /usr/share/z-push
+    - Key: DOCKER_USER
+      Value: kopano
+    - Key: DOCKER_BUILD_DEB_DIR
+      Value: /tmp/deb
+    - Key: DOCKER_BUILD_PASSES
+      Value: "1"
+    - Key: SYSLOG_OPTIONS
+      Value: '''-S'''
+    - Key: SYSLOG_LEVEL
+      Value: "4"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/*/bin
+    - $DOCKER_BIN_DIR/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/*/entrypoint.d
+    - $DOCKER_ENTRY_DIR/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/*/exitpoint.d
+    - $DOCKER_EXIT_DIR/
+  - CmdLine:
+    - "apt-get update && apt-get install --yes --no-install-recommends \tapt-utils
+      \tbusybox-syslogd \trunit \twget \tcurl \tca-certificates \ttar \tgnupg \t&&
+      setup-runit.sh \"syslogd -n -O - -l $SYSLOG_LEVEL $SYSLOG_OPTIONS\""
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${ARCH:+$ARCH/}$DIST:$REL
+  Name: base
+  Platform: ""
+  SourceCode: "FROM\t${ARCH:+$ARCH/}$DIST:$REL AS base"
+- As: base-man
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - "rm -f /etc/dpkg/dpkg.cfg.d/excludes \t&& apt-get update \t&& dpkg -l | grep
+      ^ii | cut -d' ' -f3 | xargs apt-get install -y --reinstall \t&& apt-get install
+      --yes --no-install-recommends \tman \tmanpages \tbash-completion \t&& rm -r
+      /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: base-man
+  Platform: ""
+  SourceCode: "FROM\tbase AS base-man"
+- As: core
+  BaseName: base-man
+  Commands:
+  - Key: DIST
+    Name: arg
+    Value: null
+  - Key: REL
+    Name: arg
+    Value: null
+  - Key: ARCH
+    Name: arg
+    Value: amd64
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: DOCKER_RUNSV_DIR
+      Value: /etc/service
+    - Key: DOCKER_BIN_DIR
+      Value: /usr/local/bin
+    - Key: LMTP_LISTEN
+      Value: '*:2003'
+    - Key: DOCKER_BUILD_DEB_DIR
+      Value: /tmp/deb
+    - Key: DOCKER_BUILD_PASSES
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - "mkdir -p $DOCKER_BUILD_DEB_DIR \t&& webaddr=$(kopano-webaddr.sh core \thttps://download.kopano.io/community
+      ${DIST} ${REL} ${ARCH}) \t&& echo \"$webaddr<->${DIST} ${REL} ${ARCH}<-\" \t&&
+      curl $webaddr | tar -xzC $DOCKER_BUILD_DEB_DIR \t&& apt-get update \t&& for
+      i in $(seq ${DOCKER_BUILD_PASSES}); do echo \"\\033[1;36mKOPANO CORE INSTALL
+      PASS: $i\\033[0m\" \t&& dpkg --install --force-depends --skip-same-version --recursive
+      $DOCKER_BUILD_DEB_DIR \t&& apt-get install --yes --no-install-recommends --fix-broken;
+      done \t&& mkdir -p /var/lib/kopano/attachments && chown kopano: /var/lib/kopano/attachments
+      \t&& rm -rf $DOCKER_BUILD_DEB_DIR \t&& setup-runit.sh \t\"kopano-dagent -l\"
+      \t\"kopano-gateway -F\" \t\"kopano-ical -F\" \t\"-f kopano-search -F\" \t\"kopano-server
+      -F\" \t\"kopano-spooler -F\" \t\"-d kopano-grapi serve\" \t\"-d kopano-kapid
+      serve --log-timestamp=false\" \t\"-d kopano-konnectd serve --log-timestamp=false\"
+      \t\"-d kopano-monitor -F\" \t\"-d kopano-presence -F\" \t\"-d kopano-spamd -F\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - runsvdir -P ${DOCKER_RUNSV_DIR}
+    Name: cmd
+    PrependShell: true
+  - CmdLine:
+    - entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Health:
+      Test:
+      - CMD-SHELL
+      - sv status ${DOCKER_RUNSV_DIR}/*
+    Name: healthcheck
+  From:
+    Stage:
+      Index: 1
+      Named: base-man
+  Name: core
+  Platform: ""
+  SourceCode: FROM base-man AS core
+- As: core-webapp
+  BaseName: core
+  Commands:
+  - Key: DIST
+    Name: arg
+    Value: null
+  - Key: REL
+    Name: arg
+    Value: null
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: DOCKER_RUNSV_DIR
+      Value: /etc/service
+    - Key: DOCKER_BUILD_DEB_DIR
+      Value: /tmp/deb
+    - Key: DOCKER_BUILD_PASSES
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - "apt-get install --yes --no-install-recommends apache2 libapache2-mod-php \t&&
+      mkdir -p $DOCKER_BUILD_DEB_DIR \t&& webaddr=$(kopano-webaddr.sh webapp \thttps://download.kopano.io/community
+      ${DIST} ${REL} all) \t&& echo \"$webaddr<->${DIST} ${REL} all<-\" \t&& curl
+      $webaddr | tar -xzC $DOCKER_BUILD_DEB_DIR \t&& apt-get update \t&& for i in
+      $(seq ${DOCKER_BUILD_PASSES}); do echo \"\\033[1;36mKOPANO WEBAPP INSTALL PASS:
+      $i\\033[0m\" \t&& dpkg --install --force-depends --skip-same-version --recursive
+      $DOCKER_BUILD_DEB_DIR \t&& apt-get install --yes --no-install-recommends --fix-broken;
+      done \t&& dpkg-reconfigure php7-mapi \t&& conf replace /etc/kopano/webapp/config.php
+      'define(\"INSECURE_COOKIES\", false);' 'define(\"INSECURE_COOKIES\", true);'
+      \t&& conf replace /etc/apache2/sites-available/kopano-webapp.conf 'Alias /webapp
+      /usr/share/kopano-webapp' '<VirtualHost *:80>\\\\nDocumentRoot /usr/share/kopano-webapp'
+      \t&& echo '</VirtualHost>' >> /etc/apache2/sites-available/kopano-webapp.conf
+      \t&& conf modify /etc/apache2/apache2.conf '^ErrorLog' syslog:user \t&& echo
+      'CustomLog \"||/usr/bin/logger -t apache -i -p user.debug\" common' >> /etc/apache2/apache2.conf
+      \t&& echo 'ServerName localhost' >> /etc/apache2/apache2.conf \t&& mkdir -p
+      /etc/kopano/theme/Custom \t&& ln -sf /etc/kopano/theme/Custom /usr/share/kopano-webapp/plugins/.
+      \t&& a2dissite 000-default.conf \t&& a2ensite kopano-webapp \t&& rm -rf $DOCKER_BUILD_DEB_DIR
+      \t&& setup-runit.sh \"-f -s /etc/apache2/envvars -q apache2 -DFOREGROUND -DNO_DETACH
+      -k start\""
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  From:
+    Stage:
+      Index: 2
+      Named: core
+  Name: core-webapp
+  Platform: ""
+  SourceCode: FROM core AS core-webapp
+- As: full
+  BaseName: core-webapp
+  Commands:
+  - Key: DIST
+    Name: arg
+    Value: null
+  - Key: REL
+    Name: arg
+    Value: null
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: DOCKER_RUNSV_DIR
+      Value: /etc/service
+    - Key: DOCKER_BUILD_DEB_DIR
+      Value: /tmp/deb
+    - Key: DOCKER_BUILD_PASSES
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - "debaddr=\"$(kopano-webaddr.sh --deb final http://repo.z-hub.io/z-push: ${DIST}
+      ${REL})\" \t&& echo \"deb $debaddr/ /\" > /etc/apt/sources.list.d/z-push.list
+      \t&& wget -qO - $debaddr/Release.key | apt-key add - \t&& mkdir -p /var/lib/z-push
+      && chown www-data: /var/lib/z-push \t&& mkdir -p /var/log/z-push && chown www-data:
+      /var/log/z-push \t&& apt-get update && apt-get install --yes --no-install-recommends
+      \tz-push-backend-kopano \tz-push-kopano \tz-push-config-apache \tz-push-autodiscover
+      \tz-push-state-sql \t&& conf addafter /etc/apache2/conf-available/z-push.conf
+      'Alias /Microsoft-Server-ActiveSync' 'AliasMatch (?i)/Autodiscover/Autodiscover.xml
+      \"/usr/share/z-push/autodiscover/autodiscover.php\"' '</IfModule>' \t&& conf
+      replace /usr/share/z-push/config.php 'define(\\x27LOGBACKEND\\x27, \\x27filelog\\x27);'
+      'define(\\x27LOGBACKEND\\x27, \\x27syslog\\x27);'"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 3
+      Named: core-webapp
+  Name: full
+  Platform: ""
+  SourceCode: FROM core-webapp AS full
+- As: debugtools
+  BaseName: full
+  Commands:
+  - CmdLine:
+    - "apt-get update && apt-get install --yes --no-install-recommends \tless \tnano
+      \tldap-utils \thtop \tnet-tools \tlsof \tiputils-ping"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 4
+      Named: full
+  Name: debugtools
+  Platform: ""
+  SourceCode: FROM full AS debugtools

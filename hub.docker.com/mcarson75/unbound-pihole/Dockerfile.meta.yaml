@@ -1,0 +1,295 @@
+MetaArgs: null
+Stages:
+- As: openssl
+  BaseName: debian:buster
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Matthew Vance"'
+    Name: label
+  - Env:
+    - Key: VERSION_OPENSSL
+      Value: openssl-1.1.1c
+    - Key: SHA256_OPENSSL
+      Value: f6fb3079ad15076154eda9413fed42877d668e7069d9b87396d0804fdb3f4c90
+    - Key: SOURCE_OPENSSL
+      Value: https://www.openssl.org/source/
+    - Key: OPGP_OPENSSL
+      Value: 7953AC1FBC3DC8B3B292393ED5E9E43F7DF9EE8C
+    Name: env
+  - Name: workdir
+    Path: /tmp/src
+  - CmdLine:
+    - set -e -x &&     build_deps="build-essential ca-certificates curl dirmngr gnupg
+      libidn2-0-dev libssl-dev" &&     DEBIAN_FRONTEND=noninteractive apt-get update
+      && apt-get install -y --no-install-recommends       $build_deps &&     curl
+      -L $SOURCE_OPENSSL$VERSION_OPENSSL.tar.gz -o openssl.tar.gz &&     echo "${SHA256_OPENSSL}
+      ./openssl.tar.gz" | sha256sum -c - &&     curl -L $SOURCE_OPENSSL$VERSION_OPENSSL.tar.gz.asc
+      -o openssl.tar.gz.asc &&     GNUPGHOME="$(mktemp -d)" &&     export GNUPGHOME
+      &&     ( gpg --no-tty --keyserver ipv4.pool.sks-keyservers.net --recv-keys "$OPGP_OPENSSL"     ||
+      gpg --no-tty --keyserver ha.pool.sks-keyservers.net --recv-keys "$OPGP_OPENSSL"
+      ) &&     gpg --batch --verify openssl.tar.gz.asc openssl.tar.gz &&     tar xzf
+      openssl.tar.gz &&     cd $VERSION_OPENSSL &&     ./config --prefix=/opt/openssl
+      no-weak-ssl-ciphers no-ssl3 no-shared enable-ec_nistp_64_gcc_128 -DOPENSSL_NO_HEARTBEATS
+      -fstack-protector-strong &&     make depend &&     make &&     make install_sw
+      &&     apt-get purge -y --auto-remove       $build_deps &&     rm -rf         /tmp/*         /var/tmp/*         /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:buster
+  Name: openssl
+  Platform: ""
+  SourceCode: FROM debian:buster as openssl
+- As: unbound
+  BaseName: debian:buster
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Matthew Vance"'
+    Name: label
+  - Env:
+    - Key: NAME
+      Value: unbound
+    - Key: UNBOUND_VERSION
+      Value: 1.9.5
+    - Key: UNBOUND_SHA256
+      Value: 8a8d400f697c61d73d109c250743a1b6b79848297848026d82b43e831045db57
+    - Key: UNBOUND_DOWNLOAD_URL
+      Value: https://nlnetlabs.nl/downloads/unbound/unbound-1.9.5.tar.gz
+    Name: env
+  - Name: workdir
+    Path: /tmp/src
+  - Chown: ""
+    From: openssl
+    Name: copy
+    SourcesAndDest:
+    - /opt/openssl
+    - /opt/openssl
+  - CmdLine:
+    - build_deps="curl gcc libc-dev libevent-dev libexpat1-dev make" &&     set -x
+      &&     DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends       $build_deps       bsdmainutils       ca-certificates       ldnsutils       libevent-2.1-6       libexpat1
+      &&     curl -sSL $UNBOUND_DOWNLOAD_URL -o unbound.tar.gz &&     echo "${UNBOUND_SHA256}
+      *unbound.tar.gz" | sha256sum -c - &&     tar xzf unbound.tar.gz &&     rm -f
+      unbound.tar.gz &&     cd unbound-1.9.5 &&     groupadd _unbound &&     useradd
+      -g _unbound -s /etc -d /dev/null _unbound &&     ./configure         --disable-dependency-tracking         --prefix=/opt/unbound         --with-pthreads         --with-username=_unbound         --with-ssl=/opt/openssl         --with-libevent         --enable-event-api
+      &&     make install &&     mv /opt/unbound/etc/unbound/unbound.conf /opt/unbound/etc/unbound/unbound.conf.example
+      &&     apt-get purge -y --auto-remove       $build_deps &&     rm -rf         /opt/unbound/share/man         /tmp/*         /var/tmp/*         /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:buster
+  Name: unbound
+  Platform: ""
+  SourceCode: FROM debian:buster as unbound
+- BaseName: debian:buster
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Matthew Vance"'
+    Name: label
+  - Env:
+    - Key: NAME
+      Value: unbound
+    - Key: VERSION
+      Value: "1.1"
+    - Key: SUMMARY
+      Value: '"${NAME} is a validating, recursive, and caching DNS resolver."'
+    - Key: DESCRIPTION
+      Value: '"${NAME} is a validating, recursive, and caching DNS resolver."'
+    Name: env
+  - Labels:
+    - Key: summary
+      Value: '"${SUMMARY}"'
+    - Key: description
+      Value: '"${DESCRIPTION}"'
+    - Key: io.k8s.description
+      Value: '"${DESCRIPTION}"'
+    - Key: io.k8s.display-name
+      Value: '"Unbound ${UNBOUND_VERSION}"'
+    - Key: name
+      Value: '"mvance/${NAME}"'
+    - Key: maintainer
+      Value: '"Matthew Vance"'
+    Name: label
+  - Name: workdir
+    Path: /tmp/src
+  - Chown: ""
+    From: unbound
+    Name: copy
+    SourcesAndDest:
+    - /opt
+    - /opt
+  - CmdLine:
+    - set -x &&     DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install
+      -y --no-install-recommends       bsdmainutils       ca-certificates       ldnsutils       libevent-2.1-6      libexpat1
+      &&     groupadd _unbound &&     useradd -g _unbound -s /etc -d /dev/null _unbound
+      &&     apt-get purge -y --auto-remove       $build_deps &&     rm -rf         /opt/unbound/share/man         /tmp/*         /var/tmp/*         /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - unbound-defaults/
+    - /opt/unbound/defaults/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - unbound_init.sh
+    - /
+  - CmdLine:
+    - chmod +x /unbound_init.sh && chown _unbound:_unbound /opt/unbound/defaults/unbound.conf
+      &&     chown _unbound:_unbound /opt/unbound/defaults/unbound.log
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/unbound/
+  - Env:
+    - Key: PATH
+      Value: /opt/unbound/sbin:"$PATH"
+    Name: env
+  - Name: expose
+    Ports:
+    - "5053"
+  - Env:
+    - Key: S6OVERLAY_RELEASE
+      Value: https://github.com/just-containers/s6-overlay/releases/download/v1.21.7.0/s6-overlay-amd64.tar.gz
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - install.sh
+    - /usr/local/bin/install.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - VERSION
+    - /etc/docker-pi-hole-version
+  - Env:
+    - Key: PIHOLE_INSTALL
+      Value: /root/ph_install.sh
+    Name: env
+  - CmdLine:
+    - bash -ex install.sh 2>&1 &&     rm -rf /var/cache/apt/archives /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /s6-init
+    Name: entrypoint
+    PrependShell: false
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - s6/debian-root
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - s6/service
+    - /usr/local/bin/service
+  - Env:
+    - Key: PHP_ENV_CONFIG
+      Value: '''/etc/lighttpd/conf-enabled/15-fastcgi-php.conf'''
+    Name: env
+  - Env:
+    - Key: PHP_ERROR_LOG
+      Value: '''/var/log/lighttpd/error.log'''
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./start.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./bash_functions.sh
+    - /
+  - Env:
+    - Key: IPv6
+      Value: "True"
+    Name: env
+  - Name: expose
+    Ports:
+    - "53"
+    - 53/udp
+  - Name: expose
+    Ports:
+    - 67/udp
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: expose
+    Ports:
+    - "443"
+  - Env:
+    - Key: S6_LOGGING
+      Value: "0"
+    Name: env
+  - Env:
+    - Key: S6_KEEP_ENV
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: S6_BEHAVIOUR_IF_STAGE2_FAILS
+      Value: "2"
+    Name: env
+  - Env:
+    - Key: ServerIP
+      Value: 0.0.0.0
+    Name: env
+  - Env:
+    - Key: FTL_CMD
+      Value: no-daemon
+    Name: env
+  - Env:
+    - Key: DNSMASQ_USER
+      Value: root
+    Name: env
+  - Env:
+    - Key: VERSION
+      Value: v4.3.2
+    Name: env
+  - Env:
+    - Key: ARCH
+      Value: amd64
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /opt/pihole:${PATH}
+    Name: env
+  - Labels:
+    - Key: image
+      Value: '"pihole/pihole:v4.3.2_amd64"'
+    Name: label
+  - Labels:
+    - Key: maintainer
+      Value: '"adam@diginc.us"'
+    Name: label
+  - Labels:
+    - Key: url
+      Value: '"https://www.github.com/pi-hole/docker-pi-hole"'
+    Name: label
+  - Health:
+      Interval: 20000000000
+      StartPeriod: 20000000000
+      Test:
+      - CMD-SHELL
+      - drill @127.0.0.1 cloudflare.com || exit 1
+      Timeout: 6000000000
+    Name: healthcheck
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -c
+  From:
+    Image: debian:buster
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:buster

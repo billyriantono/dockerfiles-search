@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: node:10.4.1-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - npm i yarn -g
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./frontend/
+    - /app
+  - CmdLine:
+    - rm -rf ./node_modules && yarn install && yarn replace && yarn dev && yarn build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cat ./node_modules/irisnet-crypto/chains/iris/conf.json
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.4.1-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:10.4.1-alpine as builder
+- As: go-builder
+  BaseName: golang:1.10.3-alpine3.7
+  Commands:
+  - Env:
+    - Key: GOPATH
+      Value: /root/go
+    Name: env
+  - Env:
+    - Key: REPO_PATH
+      Value: $GOPATH/src/github.com/irisnet/explorer/backend
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $GOPATH/bin:$PATH
+    Name: env
+  - CmdLine:
+    - mkdir -p GOPATH REPO_PATH
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./backend/
+    - $REPO_PATH
+  - Name: workdir
+    Path: $REPO_PATH
+  - CmdLine:
+    - apk add --no-cache make git && go get github.com/golang/dep/cmd/dep && dep ensure
+      && make build
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10.3-alpine3.7
+  Name: go-builder
+  Platform: ""
+  SourceCode: FROM golang:1.10.3-alpine3.7 as go-builder
+- BaseName: alpine:3.7
+  Commands:
+  - Name: workdir
+    Path: /app/backend
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/dist/
+    - /app/frontend/dist
+  - Chown: ""
+    From: go-builder
+    Name: copy
+    SourcesAndDest:
+    - /root/go/src/github.com/irisnet/explorer/backend/build/
+    - /app/backend/
+  - CmdLine:
+    - ./irisplorer
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

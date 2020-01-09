@@ -1,0 +1,113 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: umputun/baseimage:buildgo-latest
+  Commands:
+  - Key: CI
+    Name: arg
+    Value: null
+  - Key: COVERALLS_TOKEN
+    Name: arg
+    Value: null
+  - Key: TRAVIS
+    Name: arg
+    Value: null
+  - Key: TRAVIS_BRANCH
+    Name: arg
+    Value: null
+  - Key: TRAVIS_COMMIT
+    Name: arg
+    Value: null
+  - Key: TRAVIS_JOB_ID
+    Name: arg
+    Value: null
+  - Key: TRAVIS_JOB_NUMBER
+    Name: arg
+    Value: null
+  - Key: TRAVIS_OS_NAME
+    Name: arg
+    Value: null
+  - Key: TRAVIS_PULL_REQUEST
+    Name: arg
+    Value: null
+  - Key: TRAVIS_PULL_REQUEST_SHA
+    Name: arg
+    Value: null
+  - Key: TRAVIS_REPO_SLUG
+    Name: arg
+    Value: null
+  - Key: TRAVIS_TAG
+    Name: arg
+    Value: null
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /build/docker-logger
+  - Name: workdir
+    Path: /build/docker-logger
+  - CmdLine:
+    - cd app && go test -v -mod=vendor -covermode=count -coverprofile=/profile.cov
+      ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - golangci-lint run --out-format=tab --tests=false ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - revison=$(/script/git-rev.sh) &&     echo "revision=${revison}" &&     go build
+      -mod=vendor -o docker-logger -ldflags "-X main.revision=$revison -s -w" ./app
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ -z "$COVERALLS_TOKEN" ] ; then echo "coverall not enabled" ;     else goveralls
+      -coverprofile=/profile.cov -service=travis-ci -repotoken $COVERALLS_TOKEN ||
+      echo "coverall failed!"; fi
+    Name: run
+    PrependShell: true
+  From:
+    Image: umputun/baseimage:buildgo-latest
+  Name: build
+  Platform: ""
+  SourceCode: FROM umputun/baseimage:buildgo-latest as build
+- BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache tzdata
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/docker-logger
+    - /srv/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - init.sh
+    - /init.sh
+  - CmdLine:
+    - chmod +x /init.sh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /srv
+  - Name: volume
+    Volumes:
+    - /srv/logs
+  - CmdLine:
+    - /srv/docker-logger
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - /init.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

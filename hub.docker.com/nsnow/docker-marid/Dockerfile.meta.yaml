@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:11-jdk-stretch
+  Commands:
+  - Name: user
+    User: root
+  - Name: workdir
+    Path: /tmp/opsgenie
+  - Env:
+    - Key: REMCO_VER
+      Value: 0.11.1
+    Name: env
+  - Env:
+    - Key: OGINT_VER
+      Value: 2019.18.07
+    Name: env
+  - Env:
+    - Key: MARID_VER
+      Value: 1.0.0
+    Name: env
+  - Env:
+    - Key: JRUBY_VER
+      Value: 9.2.7.0
+    Name: env
+  - Env:
+    - Key: TINI_VERSION
+      Value: v0.18.0
+    Name: env
+  - CmdLine:
+    - set -eux pipefail &&   apt-get -y update && apt-get -y install     curl     wget     vim
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "wget https://github.com/HeavyHorst/remco/releases/download/v${REMCO_VER}/remco_${REMCO_VER}_linux_amd64.zip
+      && \tunzip remco_${REMCO_VER}_linux_amd64.zip && rm remco_${REMCO_VER}_linux_amd64.zip
+      && \tmv remco_linux /bin/remco &&   chmod +rx /bin/remco"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -o OpsGenieClient-v2-${OGINT_VER}.zip https://codeload.github.com/opsgenie/opsgenie-integration/zip/OpsGenieClient-v2-${OGINT_VER}
+      &&   unzip OpsGenieClient-v2-${OGINT_VER}.zip &&   dpkg -i opsgenie-integration-OpsGenieClient-v2-${OGINT_VER}/jiraservicedesk/packages/opsgenie-jiraServiceDesk_${MARID_VER}_all.deb
+      &&   curl -o /var/lib/opsgenie/marid/jruby-complete-${JRUBY_VER}.jar https://s3.amazonaws.com/jruby.org/downloads/${JRUBY_VER}/jruby-complete-${JRUBY_VER}.jar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - passwd -d opsgenie &&   addgroup opsgenie sudo
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -O /tini https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini
+      &&   wget -O /tini.asc https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini.asc
+      &&   gpg --batch --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys
+      595E85A6B1B4779EA4DAAEC70B588DFF0527A9B7 &&   gpg --batch --verify /tini.asc
+      /tini &&   chmod +rx /tini
+    Name: run
+    PrependShell: true
+  - Chown: opsgenie:root
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - remco
+    - /etc/remco
+  - Name: user
+    User: opsgenie
+  - Name: workdir
+    Path: /var/opsgenie
+  - Chown: opsgenie:opsgenie
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./files/entrypoint.sh
+    - ./
+  - CmdLine:
+    - chmod ug+x ./entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: expose
+    Ports:
+    - "17777"
+  - Name: volume
+    Volumes:
+    - /var/opsgenie/marid/static
+  - CmdLine:
+    - /tini
+    - --
+    - ./entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:11-jdk-stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:11-jdk-stretch

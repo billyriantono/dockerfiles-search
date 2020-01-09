@@ -1,0 +1,161 @@
+MetaArgs:
+- DefaultValue: rocker/tidyverse
+  Key: src_image
+  ProvidedValue: null
+  Value: rocker/tidyverse
+- DefaultValue: latest
+  Key: src_image_tag
+  ProvidedValue: null
+  Value: latest
+- DefaultValue: v0.18.0
+  Key: TINI_VERSION
+  ProvidedValue: null
+  Value: v0.18.0
+- DefaultValue: "1.11"
+  Key: GOSU_VERSION
+  ProvidedValue: null
+  Value: "1.11"
+- DefaultValue: 3.1.0
+  Key: GOMPLATE_VERSION
+  ProvidedValue: null
+  Value: 3.1.0
+Stages:
+- As: base
+  BaseName: ${src_image}:${src_image_tag}
+  Commands:
+  - CmdLine:
+    - apt-get update -qq &&     apt-get install -y     apache2     libapache2-mod-auth-openidc     libapache2-mod-auth-cas     curl     apache2-dev     dh-autoreconf
+      &&     rm -rf /var/lib/apt/lists/* &&     a2dissite '*' &&     for x in log
+      run lock; do mkdir -p /var/$x/apache2; done &&     ln -sf /dev/stdout /var/log/apache2/access.log
+      &&     ln -sf /dev/stderr /var/log/apache2/error.log &&     for x in log run
+      lock; do chmod -R a+rwX /var/$x/apache2; done &&     echo 'options(shiny.port
+      = 3838, shiny.host = "127.0.0.1")' >> /usr/local/lib/R/etc/Rprofile.site
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /build     && cd /build     && git clone https://github.com/apereo/mod_auth_cas     &&
+      cd mod_auth_cas     && autoreconf -ivf     && ./configure     && make     &&
+      make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /build
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${src_image}:${src_image_tag}
+  Name: base
+  Platform: ""
+  SourceCode: FROM ${src_image}:${src_image_tag} AS base
+- As: build-env
+  BaseName: base
+  Commands:
+  - Key: TINI_VERSION
+    Name: arg
+    Value: null
+  - Key: GOSU_VERSION
+    Name: arg
+    Value: null
+  - Key: GOMPLATE_VERSION
+    Name: arg
+    Value: null
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini
+    - /out/tini
+  - CmdLine:
+    - chmod +x /out/tini
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/tianon/gosu/releases/download/${GOSU_VERSION}/gosu-amd64
+    - /out/usr/local/bin/gosu
+  - CmdLine:
+    - chmod +x /out/usr/local/bin/gosu
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/hairyhenderson/gomplate/releases/download/v${GOMPLATE_VERSION}/gomplate_linux-amd64-slim
+    - /out/usr/local/bin/gomplate
+  - CmdLine:
+    - chmod +x /out/usr/local/bin/gomplate
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /apache2
+    - /out/etc/apache2
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /entrypoint.sh
+    - /out/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /apache.sh
+    - /out/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /runApp.r
+    - /out/
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM base AS build-env
+- BaseName: base
+  Commands:
+  - Env:
+    - Key: PORT
+      Value: "8080"
+    Name: env
+  - Env:
+    - Key: SHINY_PORT
+      Value: "3838"
+    Name: env
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /out
+    - /
+  - CmdLine:
+    - a2enmod proxy proxy_http proxy_wstunnel rewrite auth_openidc remoteip &&     a2ensite
+      shiny
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod auth_cas
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /runApp.r
+    - -e
+    - 01_hello
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

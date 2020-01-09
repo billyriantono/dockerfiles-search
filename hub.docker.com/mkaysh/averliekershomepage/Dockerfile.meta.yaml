@@ -1,0 +1,170 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: microsoft/dotnet:2.1-aspnetcore-runtime
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Name: expose
+    Ports:
+    - "80"
+  From:
+    Image: microsoft/dotnet:2.1-aspnetcore-runtime
+  Name: base
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1-aspnetcore-runtime AS base
+- As: build
+  BaseName: microsoft/dotnet:2.1-sdk
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server/Server/Server.csproj
+    - Server/Server.csproj
+  - CmdLine:
+    - dotnet restore Server/Server.csproj
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server
+    - .
+  - Name: workdir
+    Path: /src/Server
+  - CmdLine:
+    - dotnet build Server.csproj -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.1-sdk
+  Name: build
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1-sdk AS build
+- As: publish
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - dotnet publish Server.csproj -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build AS publish
+- As: yarninstall
+  BaseName: node:alpine
+  Commands:
+  - CmdLine:
+    - apk add python2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add build-base
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add yarn
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn global add @angular/cli
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client/package.json
+    - ./package.json
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client/yarn.lock
+    - ./yarn.lock
+  - CmdLine:
+    - yarn --pure-lockfile
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:alpine
+  Name: yarninstall
+  Platform: ""
+  SourceCode: FROM node:alpine AS yarninstall
+- As: copy_client_sources
+  BaseName: yarninstall
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client
+    - .
+  From:
+    Stage:
+      Index: 3
+      Named: yarninstall
+  Name: copy_client_sources
+  Platform: ""
+  SourceCode: FROM yarninstall AS copy_client_sources
+- As: ngbuild
+  BaseName: copy_client_sources
+  Commands:
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - yarn run build:production
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 4
+      Named: copy_client_sources
+  Name: ngbuild
+  Platform: ""
+  SourceCode: FROM copy_client_sources AS ngbuild
+- As: final
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y libgdiplus && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - Chown: ""
+    From: ngbuild
+    Name: copy
+    SourcesAndDest:
+    - /src/dist/
+    - wwwroot/
+  - CmdLine:
+    - dotnet
+    - Server.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: final
+  Platform: ""
+  SourceCode: FROM base AS final

@@ -1,0 +1,129 @@
+MetaArgs:
+- DefaultValue: /flink-kubernetes
+  Key: REPOSITORY
+  ProvidedValue: null
+  Value: /flink-kubernetes
+Stages:
+- As: builder
+  BaseName: gradle:5.4.1-jdk8
+  Commands:
+  - Key: REPOSITORY
+    Name: arg
+    Value: null
+  - Name: user
+    User: root
+  - CmdLine:
+    - mkdir -p $REPOSITORY
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $REPOSITORY
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - gradle clean shadowJar
+    Name: run
+    PrependShell: true
+  From:
+    Image: gradle:5.4.1-jdk8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM gradle:5.4.1-jdk8 AS builder
+- BaseName: openjdk:8-jdk
+  Commands:
+  - Env:
+    - Key: FLINK_HOME
+      Value: /opt/flink
+    Name: env
+  - Key: REPOSITORY
+    Name: arg
+    Value: null
+  - Env:
+    - Key: FLINK_VERSION
+      Value: 1.9.0
+    - Key: HADOOP_SCALA_VARIANT
+      Value: scala_2.11
+    Name: env
+  - CmdLine:
+    - set -ex;   apt-get update;   apt-get -y install libsnappy1v5;   apt-get -y install
+      netcat net-tools;   apt-get -y install gettext-base;   rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOSU_VERSION
+      Value: "1.11"
+    Name: env
+  - CmdLine:
+    - set -ex;   wget -nv -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg
+      --print-architecture)";   wget -nv -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg
+      --print-architecture).asc";   export GNUPGHOME="$(mktemp -d)";   rm -rf "$GNUPGHOME"
+      /usr/local/bin/gosu.asc;   chmod +x /usr/local/bin/gosu;   gosu nobody true
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd --system --gid=9999 flink &&     useradd --system --home-dir $FLINK_HOME
+      --uid=9999 --gid=flink flink
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $FLINK_HOME
+  - Env:
+    - Key: FLINK_URL_FILE_PATH
+      Value: flink/flink-${FLINK_VERSION}/flink-${FLINK_VERSION}-bin-${HADOOP_SCALA_VARIANT}.tgz
+    Name: env
+  - Env:
+    - Key: FLINK_TGZ_URL
+      Value: https://www.apache.org/dyn/closer.cgi?action=download&filename=${FLINK_URL_FILE_PATH}
+    Name: env
+  - CmdLine:
+    - set -ex;   wget -nv -O flink.tgz "$FLINK_TGZ_URL";     tar -xf flink.tgz --strip-components=1;   rm
+      flink.tgz;     chown -R flink:flink .;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $REPOSITORY/build/libs/flink-kubernetes-all.jar
+    - /opt/flink/lib
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $REPOSITORY/flink-conf.yaml
+    - /usr/local
+  - CmdLine:
+    - chmod -R 777 /opt/flink
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R flink:flink /var
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "6123"
+    - "8081"
+  - CmdLine:
+    - local
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jdk
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk

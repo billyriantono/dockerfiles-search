@@ -1,0 +1,81 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: epages/bob:node12
+  Commands:
+  - Name: user
+    User: node
+  - Env:
+    - Key: WORKSPACE
+      Value: '''/home/node/workspace'''
+    Name: env
+  - CmdLine:
+    - mkdir -p ${WORKSPACE}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${WORKSPACE}
+  From:
+    Image: epages/bob:node12
+  Name: base
+  Platform: ""
+  SourceCode: FROM epages/bob:node12 as base
+- As: builder
+  BaseName: base
+  Commands:
+  - Chown: node
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - npm ci
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - node_modules/.bin/webpack -p
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base as builder
+- As: runner
+  BaseName: node:10.15.3-alpine
+  Commands:
+  - Name: user
+    User: node
+  - Chown: node
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/node/workspace/node_modules
+    - /home/node/node_modules
+  - Chown: node
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/node/workspace
+    - /home/node/
+  - Env:
+    - Key: NODE_ENV
+      Value: '"production"'
+    Name: env
+  - Name: workdir
+    Path: /home/node/
+  - CmdLine:
+    - ./node_modules/.bin/babel-node app.js
+    Name: cmd
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3000"
+  From:
+    Image: node:10.15.3-alpine
+  Name: runner
+  Platform: ""
+  SourceCode: FROM node:10.15.3-alpine as runner

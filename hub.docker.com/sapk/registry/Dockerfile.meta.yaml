@@ -1,0 +1,61 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: golang:alpine
+  Commands:
+  - Key: GOOS
+    Name: arg
+    Value: linux
+  - Key: GOARCH
+    Name: arg
+    Value: amd64
+  - CmdLine:
+    - set -ex  && apk add --no-cache make git file  && go get -u -v github.com/docker/distribution/registry  &&
+      cd ${GOPATH}/src/github.com/docker/distribution  && CGO_ENABLED=0 make PREFIX=${GOPATH}
+      clean binaries && file ./bin/registry | grep "statically linked"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM golang:alpine AS build-env
+- BaseName: alpine
+  Commands:
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/docker/distribution/bin/registry
+    - /bin/registry
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/docker/distribution/cmd/registry/config-example.yml
+    - /etc/docker/registry/config.yml
+  - Name: volume
+    Volumes:
+    - /var/lib/registry
+  - Name: expose
+    Ports:
+    - "5000"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /etc/docker/registry/config.yml
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

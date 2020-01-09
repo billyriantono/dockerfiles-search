@@ -1,0 +1,172 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:buster-slim
+  Commands:
+  - Env:
+    - Key: GIT_BRANCH_RIAK
+      Value: riak-2.9.0p5
+    Name: env
+  - Env:
+    - Key: GIT_BRANCH_OTP
+      Value: basho-otp-16
+    Name: env
+  - Env:
+    - Key: APT_RUNTIME_DEPS
+      Value: '"git libodbc1 wget"'
+    Name: env
+  - Env:
+    - Key: APT_BUILD_DEPS
+      Value: '"autoconf curl ca-certificates dpkg-dev gcc libncurses-dev make unixodbc-dev"'
+    Name: env
+  - Env:
+    - Key: APT_RIAK_DEPS
+      Value: '"build-essential libc6-dev libpam0g-dev"'
+    Name: env
+  - Env:
+    - Key: OPENSSL_VERSION
+      Value: 1.0.2u
+    Name: env
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y --no-install-recommends $APT_RUNTIME_DEPS $APT_BUILD_DEPS
+      $APT_RIAK_DEPS
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz; tar -xf
+      openssl-${OPENSSL_VERSION}.tar.gz;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd openssl-${OPENSSL_VERSION}; \t./config shared no-krb5 -fPIC; \tmake depend;
+      \tmake; \tmake install"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -n -b $GIT_BRANCH_OTP 'https://github.com/basho/otp.git' $GIT_BRANCH_OTP
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd $GIT_BRANCH_OTP; git checkout -q $GIT_BRANCH_OTP; \t./otp_build setup -a
+      --prefix=/usr/local \t\t \t\t\t\t --enable-m64-build \t\t\t\t\t\t --with-ssl
+      \t\t\t\t\t\t --without-odbc \t\t\t\t\t\t --disable-hipe \t\t\t\t\t\t --enable-smp-support
+      \t\t\t\t\t\t --enable-threads \t\t\t\t\t\t --enable-kernel-poll; \tmake install"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -n -b $GIT_BRANCH_RIAK https://github.com/basho/riak.git $GIT_BRANCH_RIAK;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd $GIT_BRANCH_RIAK; git checkout -q $GIT_BRANCH_RIAK; make rel
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:buster-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:buster-slim AS builder
+- BaseName: debian:buster-slim
+  Commands:
+  - Env:
+    - Key: RIAK_HOME
+      Value: /usr/lib/riak
+    Name: env
+  - Env:
+    - Key: RIAK_VERSION
+      Value: 2.9.0
+    Name: env
+  - Env:
+    - Key: RIAK_SRC_PATH
+      Value: /riak-2.9.0p5
+    Name: env
+  - Name: expose
+    Ports:
+    - "8087"
+  - Name: expose
+    Ports:
+    - "8098"
+  - CmdLine:
+    - mkdir -p /etc/riak/schemas /etc/riak/prestart.d /etc/riak/poststart.d /usr/lib/riak/
+      /var/lib/riak /var/log/riak
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "groupadd -g 105 riak; \tuseradd -u 102 -g 105 -c \"Riak user\" -d /var/lib/riak
+      riak; \tchown -R riak:riak /var/lib/riak /var/log/riak"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get update; \tapt-get install -y libncurses6; \tapt-get clean; \trm -rf
+      /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /docker-entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-riak.conf.sh
+    - /etc/riak/prestart.d/riak.conf.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-advanced.config.sh
+    - /etc/riak/prestart.d/advanced.config.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - riak-env.sh
+    - /usr/lib/env.sh
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $RIAK_SRC_PATH/rel/riak/bin/riak*
+    - /usr/sbin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $RIAK_SRC_PATH/rel/riak/erts-5.10.3
+    - /usr/lib/riak/erts-5.10.3
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $RIAK_SRC_PATH/rel/riak/lib
+    - /usr/lib/riak/lib
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $RIAK_SRC_PATH/rel/riak/releases
+    - /usr/lib/riak/releases
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/ssl
+    - /usr/local/ssl
+  - Name: workdir
+    Path: /var/lib/riak
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:buster-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:buster-slim

@@ -1,0 +1,122 @@
+MetaArgs: null
+Stages:
+- As: entrypoint
+  BaseName: golang:alpine
+  Commands:
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    - Key: GOOS
+      Value: linux
+    - Key: GOARCH
+      Value: amd64
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - main.go
+    - /go/src/github.com/9seconds/docker-shadow/main.go
+  - CmdLine:
+    - set -ex   && apk add --update     git   && cd /go/src/github.com/9seconds/docker-shadow   &&
+      go build -a -installsuffix cgo -ldflags="-s -w" -o /entry
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: entrypoint
+  Platform: ""
+  SourceCode: FROM golang:alpine AS entrypoint
+- As: v2ray-plugin
+  BaseName: golang:alpine
+  Commands:
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    - Key: GOOS
+      Value: linux
+    - Key: GOARCH
+      Value: amd64
+    Name: env
+  - CmdLine:
+    - set -ex   && apk add --update     git   && git clone --single-branch --depth
+      1     https://github.com/shadowsocks/v2ray-plugin.git   && cd v2ray-plugin   &&
+      go build -a -installsuffix cgo -ldflags="-s -w" -o /plugin
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: v2ray-plugin
+  Platform: ""
+  SourceCode: FROM golang:alpine AS v2ray-plugin
+- As: runit-docker
+  BaseName: shadowsocks/shadowsocks-libev
+  Commands:
+  - Name: user
+    User: root
+  - CmdLine:
+    - set -ex   && apk --update --no-cache add     gcc     git     make     musl-dev   &&
+      git clone --depth 1 --single-branch https://github.com/pixers/runit-docker /tmp/runit-docker   &&
+      cd /tmp/runit-docker   && make
+    Name: run
+    PrependShell: true
+  From:
+    Image: shadowsocks/shadowsocks-libev
+  Name: runit-docker
+  Platform: ""
+  SourceCode: FROM shadowsocks/shadowsocks-libev AS runit-docker
+- BaseName: shadowsocks/shadowsocks-libev
+  Commands:
+  - CmdLine:
+    - /entry
+    Name: entrypoint
+    PrependShell: false
+  - Env:
+    - Key: LD_PRELOAD
+      Value: /lib/runit-docker.so
+    Name: env
+  - Name: expose
+    Ports:
+    - 443/tcp
+    - 443/udp
+  - Name: user
+    User: root
+  - CmdLine:
+    - set -ex   && apk add --update --no-cache runit rng-tools
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: entrypoint
+    Name: copy
+    SourcesAndDest:
+    - /entry
+    - /entry
+  - Chown: ""
+    From: v2ray-plugin
+    Name: copy
+    SourcesAndDest:
+    - /plugin
+    - /usr/bin/v2ray-plugin
+  - Chown: ""
+    From: runit-docker
+    Name: copy
+    SourcesAndDest:
+    - /tmp/runit-docker/runit-docker.so
+    - /lib/runit-docker.so
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - show
+    - /usr/bin/show
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - runit/shadowsocks/run
+    - /etc/service/shadowsocks/run
+  From:
+    Image: shadowsocks/shadowsocks-libev
+  Name: ""
+  Platform: ""
+  SourceCode: FROM shadowsocks/shadowsocks-libev

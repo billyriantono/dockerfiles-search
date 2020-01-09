@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:3.10
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Artem Kolin <artemkaxboy@gmail.com>"'
+    Name: label
+  - CmdLine:
+    - apk add --no-cache --no-progress alpine-sdk git bash &&     git clone https://github.com/artemkaxboy/3proxy.git
+      /3proxy &&     make -f /3proxy/Makefile.Linux -C /3proxy
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.10 as builder
+- BaseName: artemkaxboy/baseimage:app-0.1
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Artem Kolin <artemkaxboy@gmail.com>"'
+    Name: label
+  - CmdLine:
+    - mkdir /etc/3proxy/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /3proxy/bin/3proxy
+    - /etc/3proxy/
+  - CmdLine:
+    - apk --no-cache --no-progress add bash curl shadow tini tor &&     chmod +x /etc/3proxy/3proxy
+      &&     mkdir /etc/3proxy/cfg &&     mkdir -p /etc/tor/run &&     chown -Rh tor.
+      /var/lib/tor /etc/tor/run &&     chmod 0750 /etc/tor/run &&     rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - torrc
+    - /etc/tor/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - torproxy.sh
+    - /usr/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - 3proxy.cfg
+    - /etc/3proxy/cfg/
+  - Name: expose
+    Ports:
+    - "1080"
+    - 5353/udp
+    - "9040"
+    - "9050"
+  - Health:
+      Interval: 60000000000
+      StartPeriod: 90000000000
+      Test:
+      - CMD-SHELL
+      - curl --socks5-hostname localhost:9050 -L 'https://api.ipify.org'
+      Timeout: 15000000000
+    Name: healthcheck
+  - Name: volume
+    Volumes:
+    - /etc/tor
+    - /var/lib/tor
+    - /data
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /usr/bin/torproxy.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: artemkaxboy/baseimage:app-0.1
+  Name: ""
+  Platform: ""
+  SourceCode: FROM artemkaxboy/baseimage:app-0.1

@@ -1,0 +1,95 @@
+MetaArgs:
+- DefaultValue: null
+  Key: VERSION
+  ProvidedValue: null
+  Value: null
+Stages:
+- As: dev
+  BaseName: php:${VERSION}-fpm-alpine
+  Commands:
+  - CmdLine:
+    - apk update &&     apk add --no-cache --virtual dev-deps git autoconf gcc g++
+      make &&     apk add --no-cache zlib-dev libzip-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pecl install xdebug &&     docker-php-ext-enable xdebug &&     docker-php-ext-install
+      pdo_mysql zip
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./default.ini
+    - /usr/local/etc/php/conf.d/default.ini
+  - Env:
+    - Key: APP_ENV
+      Value: dev
+    Name: env
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - wget https://getcomposer.org/installer &&     php installer --install-dir=/usr/local/bin/
+      --filename=composer &&     rm installer &&     composer global require hirak/prestissimo
+    Name: run
+    PrependShell: true
+  From:
+    Image: php:${VERSION}-fpm-alpine
+  Name: dev
+  Platform: ""
+  SourceCode: FROM php:${VERSION}-fpm-alpine AS dev
+- As: test
+  BaseName: dev
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ../../
+    - .
+  - CmdLine:
+    - composer install --no-interaction --optimize-autoloader
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R www-data:www-data .
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: dev
+  Name: test
+  Platform: ""
+  SourceCode: FROM dev AS test
+- As: prod
+  BaseName: test
+  Commands:
+  - Env:
+    - Key: APP_ENV
+      Value: prod
+    Name: env
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - composer install --no-dev --no-interaction --optimize-autoloader
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk del dev-deps &&     composer global remove hirak/prestissimo &&     rm /usr/local/bin/composer
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: test
+  Name: prod
+  Platform: ""
+  SourceCode: FROM test AS prod

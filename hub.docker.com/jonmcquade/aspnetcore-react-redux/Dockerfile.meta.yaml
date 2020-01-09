@@ -1,0 +1,226 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: jonmcquade/dotnetcore-runtime-sdk-node-python:dotnetcore-asp
+  Commands:
+  - Key: aspenv
+    Name: arg
+    Value: '"Production"'
+  - Env:
+    - Key: ASPNETCORE_ENVIRONMENT
+      Value: $aspenv
+    Name: env
+  - Key: runtime
+    Name: arg
+    Value: '"Release"'
+  - Env:
+    - Key: RUNTIME
+      Value: $runtime
+    Name: env
+  - Key: verbosity
+    Name: arg
+    Value: '"detailed"'
+  - Env:
+    - Key: VERBOSITY
+      Value: $verbosity
+    Name: env
+  - Key: serverUrls
+    Name: arg
+    Value: '"http://*:$PORT;http://*:$SSL_PORT"'
+  - Env:
+    - Key: ASPNETCORE_URLS
+      Value: $serverUrls
+    Name: env
+  - Env:
+    - Key: DOTNET_SKIP_FIRST_TIME_EXPERIENCE
+      Value: "true"
+    Name: env
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src
+    - .
+  - CmdLine:
+    - echo '.NET SDK Version:' && dotnet --version RUN echo -e "\n\n\nBuilding to
+      /app ...\n\n\n"         && dotnet build -c $RUNTIME -r alpine.3.6-x64 -v $VERBOSITY
+      -o /app         && echo -e "\n\n\nContents of /app ...\n\n\n" && cd /app &&
+      ls -l
+    Name: run
+    PrependShell: true
+  From:
+    Image: jonmcquade/dotnetcore-runtime-sdk-node-python:dotnetcore-asp
+  Name: build
+  Platform: ""
+  SourceCode: FROM jonmcquade/dotnetcore-runtime-sdk-node-python:dotnetcore-asp AS
+    build
+- As: publish
+  BaseName: build
+  Commands:
+  - Key: aspenv
+    Name: arg
+    Value: '"Production"'
+  - Env:
+    - Key: ASPNETCORE_ENVIRONMENT
+      Value: $aspenv
+    Name: env
+  - Key: runtime
+    Name: arg
+    Value: '"Release"'
+  - Env:
+    - Key: RUNTIME
+      Value: $runtime
+    Name: env
+  - Key: verbosity
+    Name: arg
+    Value: '"detailed"'
+  - Env:
+    - Key: VERBOSITY
+      Value: $verbosity
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./README.md
+    - /
+  - CmdLine:
+    - echo -e "\n\n\n...Publishing to /app/dist ...\n\n\n"     && dotnet publish --self-contained
+      -c $RUNTIME -r alpine.3.6-x64 -v $VERBOSITY -o /app/dist
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build AS publish
+- As: base
+  BaseName: microsoft/dotnet:2.1.0-preview1-runtime-deps-alpine
+  Commands:
+  - Key: aspenv
+    Name: arg
+    Value: '"Production"'
+  - Env:
+    - Key: ASPNETCORE_ENVIRONMENT
+      Value: $aspenv
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/entrypoint
+    - /
+  - CmdLine:
+    - apk add --update icu-libs libuv nodejs nodejs-npm      && ln -s /usr/lib/libuv.so.1
+      /usr/lib/libuv.so
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /dotnetcorespa
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/Properties
+    - ./Properties
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./README.md
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/tpl
+    - ./tpl
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/App_Data
+    - ./App_Data
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app/dist
+    - .
+  From:
+    Image: microsoft/dotnet:2.1.0-preview1-runtime-deps-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1.0-preview1-runtime-deps-alpine as base
+- As: final
+  BaseName: base
+  Commands:
+  - Key: aspenv
+    Name: arg
+    Value: '"Production"'
+  - Env:
+    - Key: ASPNETCORE_ENVIRONMENT
+      Value: $aspenv
+    Name: env
+  - Key: port
+    Name: arg
+    Value: '"3000"'
+  - Env:
+    - Key: PORT
+      Value: $port
+    Name: env
+  - Key: sslPort
+    Name: arg
+    Value: '"3001"'
+  - Env:
+    - Key: SSL_PORT
+      Value: $sslPort
+    Name: env
+  - Env:
+    - Key: DOTNET_SDK_VERSION
+      Value: 2.1.300-preview1-008174
+    Name: env
+  - Env:
+    - Key: DOTNET_SYSTEM_GLOBALIZATION_INVARIANT
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: DOTNET_SKIP_FIRST_TIME_EXPERIENCE
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - Key: serverUrls
+    Name: arg
+    Value: '"http://*:$PORT;https://*:$SSL_PORT"'
+  - Env:
+    - Key: ASPNETCORE_URLS
+      Value: $serverUrls
+    Name: env
+  - Name: expose
+    Ports:
+    - $port
+    - $sslPort
+    - "3000"
+    - "3001"
+  - CmdLine:
+    - /dotnetcorespa/FlightSearch
+    Name: cmd
+    PrependShell: true
+  From:
+    Stage:
+      Index: 2
+      Named: base
+  Name: final
+  Platform: ""
+  SourceCode: FROM base AS final

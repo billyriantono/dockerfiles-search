@@ -1,0 +1,202 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:14.04
+  Commands:
+  - Maintainer: Stefan Janssen, stefan.m.janssen@gmail.com
+    Name: maintainer
+  - Env:
+    - Key: TOOLNAME
+      Value: amphora2
+    Name: env
+  - CmdLine:
+    - apt-get update -y
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PACKAGES
+      Value: wget curl git ca-certificates make libc6-dev libc-dev gcc-4.8-locales
+        gcc-multilib manpages-dev autoconf automake1.9 libtool flex bison gdb gcc-4.8-multilib
+        libgcc1-dbg libgomp1-dbg libitm1-dbg libatomic1-dbg libasan0-dbg libtsan0-dbg
+        libquadmath0-dbg gcc cpanminus clustalo libgd-perl bioperl emboss patch xz-utils
+    Name: env
+  - CmdLine:
+    - apt-get install -y --no-install-recommends ${PACKAGES}
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PREFIX
+      Value: /biobox/
+    Name: env
+  - CmdLine:
+    - mkdir -p ${PREFIX}/src/ ${PREFIX}/bin/ ${PREFIX}/lib/ ${PREFIX}/share/
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: ${PREFIX}/bin:${PATH}
+    Name: env
+  - Env:
+    - Key: VALIDATOR
+      Value: /bbx/validator/
+    Name: env
+  - Env:
+    - Key: BASE_URL
+      Value: https://s3-us-west-1.amazonaws.com/bioboxes-tools/validate-biobox-file
+    Name: env
+  - Env:
+    - Key: VERSION
+      Value: 0.x.y
+    Name: env
+  - CmdLine:
+    - mkdir -p ${VALIDATOR}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget       --quiet       --output-document -      ${BASE_URL}/${VERSION}/validate-biobox-file.tar.xz     |
+      tar xJf -       --directory ${VALIDATOR}       --strip-components=1
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: ${PATH}:${VALIDATOR}
+    Name: env
+  - CmdLine:
+    - wget -q -O ${PREFIX}/share/schema.yaml https://raw.githubusercontent.com/pbelmann/rfc/feature/new-profiling-inteface/container/profiling/schema.yaml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/martinwu/AMPHORA2.git ${PREFIX}/src/${TOOLNAME}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q -O ${PREFIX}/src/hmmer3.tgz http://eddylab.org/software/hmmer3/3.0/hmmer-3.0.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xzvf ${PREFIX}/src/hmmer3.tgz -C ${PREFIX}/src/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm ${PREFIX}/src/hmmer3.tgz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cn=`find ${PREFIX}/src/ -name "hmmer-*" -type d` && mv $cn ${PREFIX}/src/hmmer3
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${PREFIX}/src/hmmer3 && ./configure --prefix=${PREFIX} && make && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/stamatak/standard-RAxML.git ${PREFIX}/src/raxml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${PREFIX}/src/raxml && make -f Makefile.gcc && rm *.o
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${PREFIX}/src/raxml && make -f Makefile.PTHREADS.gcc && rm *.o
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp ${PREFIX}/src/raxml/raxmlHPC* ${PREFIX}/bin/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cpanm -v LWP::Simple
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - bioperl_newick.patch
+    - ${PREFIX}/src/
+  - CmdLine:
+    - patch /usr/share/perl5/Bio/TreeIO/NewickParser.pm < ${PREFIX}/src/bioperl_newick.patch
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GITHUB
+      Value: https://raw.githubusercontent.com/CAMI-challenge/docker_profiling_tools/master/
+    Name: env
+  - CmdLine:
+    - wget -q -O ${PREFIX}/bin/downloadTaxonomy.pl ${GITHUB}/downloadTaxonomy.pl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod a+x ${PREFIX}/bin/downloadTaxonomy.pl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - downloadTaxonomy.pl ${PREFIX}/src/${TOOLNAME}/Taxonomy/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - contig.taxonid.patch
+    - ${PREFIX}/src/${TOOLNAME}/Taxonomy/
+  - CmdLine:
+    - patch ${PREFIX}/src/${TOOLNAME}/Taxonomy/contig.taxonid < ${PREFIX}/src/${TOOLNAME}/Taxonomy/contig.taxonid.patch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q -O ${PREFIX}/lib/Utils.pm ${GITHUB}/Utils.pm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q -O ${PREFIX}/lib/YAMLsj.pm ${GITHUB}/YAMLsj.pm
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - checkTaxids.pl
+    - ${PREFIX}/bin/checkTaxids.pl
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - convert_${TOOLNAME}.pl
+    - ${PREFIX}/bin/convert.pl
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - task_${TOOLNAME}.pl
+    - ${PREFIX}/bin/task.pl
+  - CmdLine:
+    - chmod a+x ${PREFIX}/bin/task.pl ${PREFIX}/bin/convert.pl ${PREFIX}/bin/checkTaxids.pl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - perl -I ${PREFIX}/lib/ ${PREFIX}/bin/checkTaxids.pl ${PREFIX}/src/${TOOLNAME}/Taxonomy/contig.taxonid
+      ${PREFIX}/src/${TOOLNAME}/Taxonomy/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - Phylotyping.pl.patch
+    - ${PREFIX}/src/${TOOLNAME}/Scripts/
+  - CmdLine:
+    - patch ${PREFIX}/src/${TOOLNAME}/Scripts/Phylotyping.pl < ${PREFIX}/src/${TOOLNAME}/Scripts/Phylotyping.pl.patch
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: AMPHORA2_home
+      Value: ${PREFIX}/src/${TOOLNAME}
+    Name: env
+  - Env:
+    - Key: YAML
+      Value: '"/bbx/mnt/input/biobox.yaml"'
+    Name: env
+  - CmdLine:
+    - task.pl
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:14.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:14.04

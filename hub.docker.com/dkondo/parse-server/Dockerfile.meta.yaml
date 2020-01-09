@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: node:lts-alpine
+  Commands:
+  - Key: parserelease
+    Name: arg
+    Value: 3.6.0
+  - CmdLine:
+    - apk update;     apk add git;     git clone https://github.com/parse-community/parse-server.git
+      -b ${parserelease} /tmp
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - npm ci
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:lts-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM node:lts-alpine as build
+- As: release
+  BaseName: node:lts-alpine
+  Commands:
+  - Key: parserelease
+    Name: arg
+    Value: 3.6.0
+  - Name: volume
+    Volumes:
+    - /parse-server/cloud
+    - /parse-server/config
+  - Name: workdir
+    Path: /parse-server
+  - Chown: node:node
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/package*.json
+    - ./
+  - CmdLine:
+    - npm ci --production --ignore-scripts
+    Name: run
+    PrependShell: true
+  - Chown: node:node
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/bin
+    - bin
+  - Chown: node:node
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/public_html
+    - public_html
+  - Chown: node:node
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/views
+    - views
+  - Chown: node:node
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/lib
+    - lib
+  - CmdLine:
+    - mkdir -p logs && chown -R node:node logs
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PORT
+      Value: "1337"
+    Name: env
+  - Name: expose
+    Ports:
+    - $PORT
+  - Name: user
+    User: node
+  - CmdLine:
+    - node
+    - ./bin/parse-server
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: node:lts-alpine
+  Name: release
+  Platform: ""
+  SourceCode: FROM node:lts-alpine as release

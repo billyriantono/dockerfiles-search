@@ -1,0 +1,125 @@
+MetaArgs: null
+Stages:
+- As: build_env
+  BaseName: alexiri/scipy:latest
+  Commands:
+  - Env:
+    - Key: FAVA_VERSION
+      Value: '"master"'
+    Name: env
+  - Env:
+    - Key: FINGERPRINT
+      Value: '"sha256:32:12:90:9a:70:64:82:1c:5b:52:cc:c3:0a:d0:79:db:e1:a8:62:1b:9a:9a:4c:f4:72:40:1c:a7:3a:d3:0a:8c"'
+    Name: env
+  - Env:
+    - Key: BUILDDEPS
+      Value: '"libxml2-dev libxslt-dev gcc musl-dev mercurial git nodejs make g++
+        lapack-dev gfortran"'
+    Name: env
+  - Env:
+    - Key: PV
+      Value: '"3.6"'
+    Name: env
+  - Name: workdir
+    Path: /root
+  - CmdLine:
+    - "apk add --update ${BUILDDEPS}         && pip install --upgrade pip \t&& python3
+      -mpip install importlib_metadata"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Install Beancount & Fava"         && hg clone --config hostsecurity.bitbucket.org:fingerprints=$FINGERPRINT
+      https://bitbucket.org/blais/beancount         && (cd beancount && hg log -l1)         &&
+      git clone --branch ${FAVA_VERSION} --depth 1 https://github.com/beancount/fava.git         &&
+      (cd fava && git log -1)         && echo "Deleting symlink files as they will
+      cause docker build error"         && find ./ -type l -delete -print         &&
+      python3 -mpip install ./beancount         && make -C fava         && make -C
+      fava mostlyclean         && python3 -mpip install ./fava
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo "Install Smart Importer"         && git clone https://github.com/beancount/smart_importer.git         &&
+      (cd smart_importer && git log -1)         && python3 -mpip install ./smart_importer         &&
+      python3 -mpip install beancount_portfolio_allocation #         && echo "strip
+      .so files:"         && find /usr/local/lib/python${PV}/site-packages -name *.so
+      -print0|xargs -0 strip -v         && echo "remove __pycache__ directories"         &&
+      find /usr/local/lib/python${PV} -name __pycache__ -exec rm -rf -v {} +         &&
+      find /usr/local/lib/python${PV} -name ''*.dist-info'' -exec rm -rf -v {} +'
+    Name: run
+    PrependShell: true
+  From:
+    Image: alexiri/scipy:latest
+  Name: build_env
+  Platform: ""
+  SourceCode: FROM alexiri/scipy:latest as build_env
+- BaseName: tiangolo/uwsgi-nginx-flask:python3.6-alpine3.7
+  Commands:
+  - Env:
+    - Key: BEANCOUNT_INPUT_FILE
+      Value: '"/data/example.beancount"'
+    Name: env
+  - Env:
+    - Key: PV
+      Value: '"3.6"'
+    Name: env
+  - CmdLine:
+    - rm -f /app/*
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - CmdLine:
+    - apk add --no-cache lapack libstdc++
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build_env
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/python${PV}/site-packages
+    - /usr/local/lib/python${PV}/site-packages
+  - Chown: ""
+    From: build_env
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/fava
+    - /usr/local/bin
+  - Chown: ""
+    From: build_env
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/bean*
+    - /usr/local/bin/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - amortize_over.py
+    - /usr/local/lib/python${PV}/site-packages
+  - CmdLine:
+    - cp -r /usr/local/lib/python${PV}/site-packages/fava/static /app
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - main.py
+    - /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - uwsgi.ini
+    - /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - example.beancount
+    - /data
+  From:
+    Image: tiangolo/uwsgi-nginx-flask:python3.6-alpine3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tiangolo/uwsgi-nginx-flask:python3.6-alpine3.7

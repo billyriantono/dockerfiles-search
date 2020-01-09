@@ -1,0 +1,168 @@
+MetaArgs: null
+Stages:
+- As: basic
+  BaseName: openjdk:8u171-jre-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Hugo Fonseca <https://github.com/hugomcfonseca>"'
+    Name: label
+  - Env:
+    - Key: RDECK_VERSION
+      Value: 2.11.4
+    - Key: RDECK_BASE
+      Value: /var/lib/rundeck
+    - Key: RDECK_CONFIG
+      Value: /etc/rundeck
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/rundeck/
+    - /etc/rundeck/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/
+    - ${RDECK_BASE}/scripts/
+  - CmdLine:
+    - PKGS="bash ca-certificates openssh-client"; apk add --update --no-cache ${PKGS}     &&
+      wget -qO ${RDECK_BASE}/rundeck.jar http://download.rundeck.org/jar/rundeck-launcher-${RDECK_VERSION}.jar     &&
+      echo -n "2bdac79aa28938b847266275b807ca031838830d *${RDECK_BASE}/rundeck.jar"|
+      sha1sum -c -     && java -jar ${RDECK_BASE}/rundeck.jar --installonly -b ${RDECK_BASE}
+      -c ${RDECK_CONFIG}     && mkdir -v -p "${RDECK_CONFIG}"/ssl  "${RDECK_CONFIG}"/keys
+      "${RDECK_CONFIG}"/projects     && echo "Creating Rundeck user and group..."
+      && addgroup rundeck && adduser -h ${RDECK_BASE} -D -s /bin/bash -G rundeck rundeck     &&
+      chmod -R u+x ${RDECK_BASE}/scripts/     && rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${RDECK_BASE}
+  - Name: volume
+    Volumes:
+    - ${RDECK_BASE}
+    - ${RDECK_CONFIG}
+  - Name: expose
+    Ports:
+    - "4440"
+    - "4443"
+  From:
+    Image: openjdk:8u171-jre-alpine
+  Name: basic
+  Platform: ""
+  SourceCode: FROM openjdk:8u171-jre-alpine as basic
+- As: templated
+  BaseName: basic
+  Commands:
+  - Env:
+    - Key: RDECK_KEYS_STORAGE_TYPE
+      Value: '"db"'
+    - Key: RDECK_PROJECT_STORAGE_TYPE
+      Value: '"db"'
+    - Key: RDECK_SSL_ENABLED
+      Value: '"true"'
+    - Key: RDECK_HOST
+      Value: '"localhost"'
+    - Key: RDECK_PORT
+      Value: "4440"
+    - Key: RDECK_URL
+      Value: '"localhost:4440"'
+    - Key: RDECK_THREADS_COUNT
+      Value: "10"
+    - Key: LOG_LEVEL
+      Value: '"INFO"'
+    - Key: ADMIN_USER
+      Value: '"admin"'
+    - Key: ADMIN_PASSWORD
+      Value: '"adminadmin"'
+    - Key: SSH_USER
+      Value: '"rundeck"'
+    - Key: PROJECT_NODES
+      Value: '{}'
+    - Key: PROJECT_DESCRIPTION
+      Value: '""'
+    - Key: PROJECT_ORGANIZATION
+      Value: '""'
+    - Key: DATASOURCE_DBNAME
+      Value: '"rundeck"'
+    - Key: DATASOURCE_HOST
+      Value: '"mysql-host"'
+    - Key: DATASOURCE_PASSWORD
+      Value: '""'
+    - Key: DATASOURCE_PORT
+      Value: '"3306"'
+    - Key: DATASOURCE_USER
+      Value: '"rundeck"'
+    - Key: KEYS_PRIV_KEY
+      Value: '""'
+    - Key: KEYS_PUB_KEY
+      Value: '""'
+    - Key: SSL_KEYSTORE_PASSWORD
+      Value: '""'
+    - Key: SSL_KEY_PASSWORD
+      Value: '""'
+    - Key: SSL_TRUSTSTORE_PASSWORD
+      Value: '""'
+    - Key: CONSOLE_LOGS
+      Value: '"false"'
+    Name: env
+  - Env:
+    - Key: CONFD_VERSION
+      Value: 0.16.0
+    - Key: CONFD_OPTS
+      Value: -backend=env
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/confd
+    - /etc/confd/
+  - CmdLine:
+    - wget -qO /usr/local/bin/confd https://github.com/kelseyhightower/confd/releases/download/v${CONFD_VERSION}/confd-${CONFD_VERSION}-linux-amd64     &&
+      chmod u+x /usr/local/bin/confd
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: basic
+  Name: templated
+  Platform: ""
+  SourceCode: FROM basic as templated
+- As: production
+  BaseName: templated
+  Commands:
+  - Env:
+    - Key: MYSQL_CONN_VERSION
+      Value: 8.0.11
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/supervisor
+    - /etc/supervisor/
+  - CmdLine:
+    - PKGS="curl jq python2 py-requests supervisor>=3.3.3"; apk add --update --no-cache
+      ${PKGS}     && DEPS="py2-pip"; apk add --update --no-cache --virtual .deps ${DEPS}     &&
+      PIP_PKGS="pip wheel mysql-connector-python==${MYSQL_CONN_VERSION}"; pip install
+      --upgrade ${PIP_PKGS}     && rm /etc/supervisord.conf     && ln -s /etc/supervisor/supervisord.conf
+      /etc/supervisord.conf     && apk del .deps     && rm -rf /var/cache/apk/* /tmp/*
+      /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ${RDECK_BASE}/scripts/run_confd_templates.sh     && confd ${CONFD_OPTS} -onetime     &&
+      exec supervisord -n -c /etc/supervisor/supervisord.conf
+    Name: cmd
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: templated
+  Name: production
+  Platform: ""
+  SourceCode: FROM templated as production

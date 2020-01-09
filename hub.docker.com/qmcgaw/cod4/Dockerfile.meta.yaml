@@ -1,0 +1,114 @@
+MetaArgs:
+- DefaultValue: stretch-slim
+  Key: DEBIAN_VERSION
+  ProvidedValue: null
+  Value: stretch-slim
+- DefaultValue: "3.9"
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: "3.9"
+Stages:
+- As: builder
+  BaseName: debian:${DEBIAN_VERSION}
+  Commands:
+  - Key: COD4X_VERSION
+    Name: arg
+    Value: v17.7.2
+  - CmdLine:
+    - dpkg --add-architecture i386 &&     apt-get update &&     apt-get install -y
+      nasm:i386 build-essential gcc-multilib g++-multilib unzip paxctl wget
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /cod4
+  - CmdLine:
+    - wget https://github.com/callofduty4x/CoD4x_Server/archive/${COD4X_VERSION}.tar.gz
+      &&     tar -xzf ${COD4X_VERSION}.tar.gz --strip-components=1 &&     rm ${COD4X_VERSION}.tar.gz
+      &&     sed -i 's/LINUX_LFLAGS=/LINUX_LFLAGS=-static /' makefile &&     make
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:${DEBIAN_VERSION}
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:${DEBIAN_VERSION} AS builder
+- BaseName: alpine:${ALPINE_VERSION}
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.schema-version
+      Value: '"1.0.0-rc1"'
+    - Key: maintainer
+      Value: '"quentin.mcgaw@gmail.com"'
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/qdm12/cod4-docker"'
+    - Key: org.label-schema.url
+      Value: '"https://github.com/qdm12/cod4-docker"'
+    - Key: org.label-schema.vcs-description
+      Value: '"Call of duty 4X Modern Warfare dedicated server"'
+    - Key: org.label-schema.vcs-usage
+      Value: '"https://github.com/qdm12/cod4-docker/blob/master/README.md#setup"'
+    - Key: org.label-schema.docker.cmd
+      Value: '"see readme of Github page"'
+    - Key: org.label-schema.docker.cmd.devel
+      Value: '"see readme of Github page"'
+    - Key: org.label-schema.docker.params
+      Value: '""'
+    - Key: org.label-schema.version
+      Value: '"1.8-17.7.2"'
+    - Key: image-size
+      Value: '"20.9MB"'
+    - Key: ram-usage
+      Value: '"80MB to 150MB"'
+    - Key: cpu-usage
+      Value: '"Low"'
+    Name: label
+  - Name: expose
+    Ports:
+    - 28960/udp
+  - Name: workdir
+    Path: /home/user/cod4
+  - Chown: "1000"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /cod4/bin/cod4x18_dedrun
+    - .
+  - Chown: "1000"
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - server.cfg
+    - vendor/xbase_00.iwd
+    - ./
+  - CmdLine:
+    - adduser -S user -h /home/user -u 1000 &&     chown -R user /home/user &&     chmod
+      -R 700 /home/user &&     chown -R user /home/user/cod4 &&     chmod -R 700 /home/user/cod4
+      &&     chmod 500 entrypoint.sh cod4x18_dedrun
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /home/user/cod4/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - +set dedicated 2+set sv_cheats "1"+set sv_maxclients "64"+exec server.cfg+map_rotate
+    Name: cmd
+    PrependShell: true
+  - Name: user
+    User: user
+  From:
+    Image: alpine:${ALPINE_VERSION}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:${ALPINE_VERSION}

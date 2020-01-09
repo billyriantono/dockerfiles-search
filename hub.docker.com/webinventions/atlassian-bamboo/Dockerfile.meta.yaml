@@ -1,0 +1,145 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stretch
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update -qq     && apt-get install -y wget curl git unzip libtcnative-1
+      xmlstarlet gosu apt-transport-https gnupg2 software-properties-common     &&
+      apt-get clean autoclean     && apt-get autoremove --yes     && rm -rf /var/lib/{apt,dpkg,cache,log}/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fsSL https://download.docker.com/linux/debian/gpg |  apt-key add - &&     add-apt-repository
+      "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs)
+      stable" &&     apt-get update && apt-get install -y docker-ce=17.06.* &&     echo
+      docker-ce hold | dpkg --set-selections &&     curl -L https://github.com/docker/compose/releases/download/1.17.0/docker-compose-`uname
+      -s`-`uname -m` -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ORACLE_JDK_VERSION
+      Value: jdk-8u151
+    Name: env
+  - Env:
+    - Key: ORACLE_JDK_URL
+      Value: http://download.oracle.com/otn-pub/java/jdk/8u151-b12/e758a0de34e24606bca991d704f6dcbf/jdk-8u151-linux-x64.tar.gz
+    Name: env
+  - CmdLine:
+    - 'mkdir -p /opt/jdk/$ORACLE_JDK_VERSION &&     wget --header "Cookie: oraclelicense=accept-securebackup-cookie"
+      -O /opt/jdk/$ORACLE_JDK_VERSION/$ORACLE_JDK_VERSION.tar.gz $ORACLE_JDK_URL &&     tar
+      -zxf /opt/jdk/$ORACLE_JDK_VERSION/$ORACLE_JDK_VERSION.tar.gz --strip-components=1
+      -C /opt/jdk/$ORACLE_JDK_VERSION &&     rm /opt/jdk/$ORACLE_JDK_VERSION/$ORACLE_JDK_VERSION.tar.gz
+      &&     update-alternatives --install /usr/bin/java java /opt/jdk/$ORACLE_JDK_VERSION/bin/java
+      100 &&     update-alternatives --install /usr/bin/javac javac /opt/jdk/$ORACLE_JDK_VERSION/bin/javac
+      100'
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DOWNLOAD_URL
+      Value: https://www.atlassian.com/software/bamboo/downloads/binary/atlassian-bamboo-
+    Name: env
+  - Env:
+    - Key: JAVA_HOME
+      Value: /opt/jdk/${ORACLE_JDK_VERSION}
+    Name: env
+  - Env:
+    - Key: JAVA_TRUSTSTORE
+      Value: ${JAVA_HOME}/jre/lib/security/cacerts
+    Name: env
+  - Env:
+    - Key: JAVA_TRUSTSTORE_PASSWORD
+      Value: changeit
+    Name: env
+  - Env:
+    - Key: JAVA_OPTS
+      Value: '"-Djavax.net.ssl.trustStore=${JAVA_TRUSTSTORE} -Djavax.net.ssl.trustStorePassword=${JAVA_TRUSTSTORE_PASSWORD}"'
+    Name: env
+  - Env:
+    - Key: RUN_USER
+      Value: atlassian
+    Name: env
+  - Env:
+    - Key: RUN_USER_UID
+      Value: "5000"
+    Name: env
+  - Env:
+    - Key: RUN_GROUP
+      Value: atlassian
+    Name: env
+  - Env:
+    - Key: RUN_GROUP_GID
+      Value: "5000"
+    Name: env
+  - CmdLine:
+    - groupadd --gid ${RUN_GROUP_GID} -r ${RUN_GROUP} &&     useradd -r --uid ${RUN_USER_UID}
+      -g ${RUN_GROUP} ${RUN_USER} &&     usermod -a -G docker ${RUN_USER}
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: BAMBOO_INSTALL_DIR
+      Value: /opt/atlassian/bamboo
+    Name: env
+  - Env:
+    - Key: BAMBOO_HOME
+      Value: /var/atlassian/bamboo/data
+    Name: env
+  - Env:
+    - Key: BAMBOO_VERSION
+      Value: 6.2.5
+    Name: env
+  - CmdLine:
+    - mkdir -p ${BAMBOO_INSTALL_DIR} ${BAMBOO_HOME} &&     curl -L --silent ${DOWNLOAD_URL}${BAMBOO_VERSION}.tar.gz
+      | tar -xz --strip=1 -C "$BAMBOO_INSTALL_DIR" &&     chown -R ${RUN_USER}:${RUN_GROUP}
+      ${BAMBOO_INSTALL_DIR} ${BAMBOO_HOME}
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MYSQL_CONNECTOR_VERSION
+      Value: 5.1.44
+    Name: env
+  - CmdLine:
+    - wget -O ${BAMBOO_INSTALL_DIR}/mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.tar.gz
+      http://dev.mysql.com/get/Downloads/Connector-J/mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.tar.gz
+      &&     tar xzf ${BAMBOO_INSTALL_DIR}/mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.tar.gz
+      -C ${BAMBOO_INSTALL_DIR} &&     mv ${BAMBOO_INSTALL_DIR}/mysql-connector-java-${MYSQL_CONNECTOR_VERSION}/mysql-connector-java-${MYSQL_CONNECTOR_VERSION}-bin.jar
+      ${BAMBOO_INSTALL_DIR}/lib/ &&     rm -rf ${BAMBOO_INSTALL_DIR}/mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.tar.gz
+      ${BAMBOO_INSTALL_DIR}/mysql-connector-java-${MYSQL_CONNECTOR_VERSION}
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: $BAMBOO_INSTALL_DIR/bin:$JAVA_HOME/bin:$PATH
+    Name: env
+  - Name: expose
+    Ports:
+    - "8085"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - chmod a+x /entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: workdir
+    Path: $BAMBOO_INSTALL_DIR
+  - CmdLine:
+    - start-bamboo.sh
+    - -fg
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch

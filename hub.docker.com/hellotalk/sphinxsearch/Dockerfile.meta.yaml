@@ -1,0 +1,70 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: centos:7
+  Commands:
+  - Env:
+    - Key: PATH
+      Value: '"/opt/rh/devtoolset-3/root/usr/bin:${PATH}"'
+    Name: env
+  - CmdLine:
+    - "yum install -y mysql-devel centos-release-scl-rh bison make wget \t&& yum --nogpgcheck
+      install -y devtoolset-3-gcc devtoolset-3-gcc-c++ \t&& update-alternatives --install
+      /usr/bin/gcc-4.9 gcc-4.9 /opt/rh/devtoolset-3/root/usr/bin/gcc 10 \t&& update-alternatives
+      --install /usr/bin/g++-4.9 g++-4.9 /opt/rh/devtoolset-3/root/usr/bin/g++ 10
+      \        && yum clean all         && rm -rf /var/cache/yum"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd /tmp         && wget https://ftp.gnu.org/gnu/glibc/glibc-2.27.tar.xz         &&
+      tar -xf glibc-2.27.tar.xz         && cd glibc-2.27         && mkdir build &&
+      cd build         && ../configure --prefix=/usr         && make -j48 && make
+      install \t&& cd /tmp/ && rm -rf *"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd /tmp \t&& wget http://sphinxsearch.com/files/sphinx-2.2.11-release.tar.gz
+      \t&& tar -xf sphinx-2.2.11-release.tar.gz \t&& cd sphinx-2.2.11-release \t&&
+      ./configure --prefix=/usr/local/sphinx \t&& make -j48 && make install \t&& cd
+      /tmp/ && rm -rf *"
+    Name: run
+    PrependShell: true
+  From:
+    Image: centos:7
+  Name: builder
+  Platform: ""
+  SourceCode: FROM centos:7 as builder
+- As: prod
+  BaseName: centos:7
+  Commands:
+  - Env:
+    - Key: PATH
+      Value: '"/usr/local/sphinx/bin:${PATH}"'
+    Name: env
+  - CmdLine:
+    - yum install -y mysql-devel psmisc         && yum clean all         && rm -rf
+      /var/cache/yum
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr
+    - /usr
+  - Name: expose
+    Ports:
+    - "9306"
+    - "9312"
+  - CmdLine:
+    - searchd
+    - --nodetach
+    - --config
+    - /usr/local/sphinx/etc/sphinx.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos:7
+  Name: prod
+  Platform: ""
+  SourceCode: FROM centos:7 as prod

@@ -1,0 +1,229 @@
+MetaArgs: null
+Stages:
+- As: robotv-build
+  BaseName: alpine:edge
+  Commands:
+  - Maintainer: Alexander pipelka <alexander.pipelka@gmail.com>
+    Name: maintainer
+  - Key: ROBOTV_VERSION
+    Name: arg
+    Value: ""
+  - Key: VDR_VERSION
+    Name: arg
+    Value: 2.3.8
+  - Name: user
+    User: root
+  - CmdLine:
+    - echo "http://dl-3.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apk update && apk add build-base freetype-dev fontconfig-dev gettext-dev \tlibjpeg-turbo-dev
+      libcap-dev pugixml-dev curl-dev git bzip2 libexecinfo-dev \tncurses-dev bash"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - echo "building roboTV version '${ROBOTV_VERSION}'"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget ftp://ftp.tvdr.de/vdr/Developer/vdr-${VDR_VERSION}.tar.bz2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar -jxf vdr-${VDR_VERSION}.tar.bz2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b ${ROBOTV_VERSION} https://github.com/pipelka/vdr-plugin-robotv.git
+      vdr-${VDR_VERSION}/PLUGINS/src/robotv
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/manio/vdr-plugin-dvbapi.git vdr-${VDR_VERSION}/PLUGINS/src/dvbapi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/vdr-projects/vdr-plugin-epgsearch.git vdr-${VDR_VERSION}/PLUGINS/src/epgsearch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b robotv https://github.com/pipelka/vdr-plugin-satip.git vdr-${VDR_VERSION}/PLUGINS/src/satip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/vdr-projects/vdr-plugin-streamdev.git vdr-${VDR_VERSION}/PLUGINS/src/streamdev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: vdr-${VDR_VERSION}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates/Make.*
+    - /build/vdr-${VDR_VERSION}/
+  - CmdLine:
+    - mkdir -p /build/patches
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - patches/
+    - /build/patches/
+  - CmdLine:
+    - for patch in `ls /build/patches/vdr`; do         echo ${patch} ;         patch
+      -p1 < /build/patches/vdr/${patch} ;     done
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: PLUGINS/src/epgsearch
+  - CmdLine:
+    - patch -p1 < /build/patches/epgsearch/install-conf.patch
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ../../..
+  - CmdLine:
+    - make -j 4
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/vdr
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - for plugin in robotv epgsearch satip streamdev-server ; do         strip -s
+      --strip-debug /opt/vdr/lib/libvdr-${plugin}.so.* ;     done ;     strip -s --strip-debug
+      /opt/vdr/bin/vdr
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -Rf /opt/vdr/man
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -Rf /opt/vdr/locale/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LIBS
+      Value: '"dvbhddevice dvbsddevice epgtableid0 hello osddemo pictures rcu skincurses
+        status svccli svcsvr svdrpdemo streamdev-client"'
+    Name: env
+  - CmdLine:
+    - for lib in ${LIBS} ; do     echo "removing /opt/vdr/lib/libvdr-$lib" ;         rm
+      -f /opt/vdr/lib/libvdr-${lib}* ;     done
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: robotv-build
+  Platform: ""
+  SourceCode: FROM alpine:edge AS robotv-build
+- As: robotv-server
+  BaseName: alpine:edge
+  Commands:
+  - Name: user
+    User: root
+  - Env:
+    - Key: DVBAPI_ENABLE
+      Value: '"0"'
+    - Key: DVBAPI_HOST
+      Value: '"127.0.0.1"'
+    - Key: DVBAPI_PORT
+      Value: '"2000"'
+    - Key: DVBAPI_OFFSET
+      Value: "0"
+    - Key: SATIP_NUMDEVICES
+      Value: '"2"'
+    - Key: SATIP_SERVER
+      Value: '"192.168.16.10"'
+    - Key: ROBOTV_TIMESHIFTDIR
+      Value: '"/video"'
+    - Key: ROBOTV_MAXTIMESHIFTSIZE
+      Value: '"4000000000"'
+    - Key: ROBOTV_PICONSURL
+      Value: ""
+    - Key: ROBOTV_SERIESFOLDER
+      Value: '"Serien"'
+    - Key: ROBOTV_CHANNELCACHE
+      Value: '"true"'
+    - Key: ROBOTV_EPGIMAGEURL
+      Value: ""
+    - Key: VDR_LOGLEVEL
+      Value: "2"
+    - Key: VDR_UPDATECHANNELS
+      Value: "3"
+    - Key: TZ
+      Value: '"Europe/Vienna"'
+    Name: env
+  - CmdLine:
+    - echo "http://dl-3.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk update && apk add freetype fontconfig libintl libexecinfo     libjpeg-turbo
+      libcap pugixml libcurl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt &&     mkdir -p /data &&     mkdir -p /video &&     mkdir -p /opt/templates
+      &&     mkdir -p /timeshift
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: robotv-build
+    Name: copy
+    SourcesAndDest:
+    - /opt/
+    - /opt/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/runvdr.sh
+    - /opt/vdr/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates/diseqc.conf
+    - /opt/templates/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates/sources.conf
+    - /opt/templates/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates/channels.conf
+    - /opt/templates/
+  - CmdLine:
+    - chmod +x /opt/vdr/runvdr.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /opt/vdr/runvdr.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:edge
+  Name: robotv-server
+  Platform: ""
+  SourceCode: FROM alpine:edge AS robotv-server

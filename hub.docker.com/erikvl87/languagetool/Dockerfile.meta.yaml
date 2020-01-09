@@ -1,0 +1,114 @@
+MetaArgs:
+- DefaultValue: 4.5.1
+  Key: LANGUAGE_TOOL_VERSION
+  ProvidedValue: null
+  Value: 4.5.1
+Stages:
+- As: build
+  BaseName: debian:stretch
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update -y     && apt-get install -y         locales         bash         openjdk-8-jdk-headless         git         maven         unzip     &&
+      apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen &&     dpkg-reconfigure
+      --frontend=noninteractive locales &&     update-locale LANG=en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - Key: LANGUAGE_TOOL_VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - git clone https://github.com/languagetool-org/languagetool.git --depth 1 -b
+      v${LANGUAGE_TOOL_VERSION}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /languagetool
+  - CmdLine:
+    - mvn
+    - --projects
+    - languagetool-standalone
+    - --also-make
+    - package
+    - -DskipTests
+    - --quiet
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - unzip /languagetool/languagetool-standalone/target/LanguageTool-${LANGUAGE_TOOL_VERSION}.zip
+      -d /dist
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch
+  Name: build
+  Platform: ""
+  SourceCode: FROM debian:stretch as build
+- BaseName: debian:stretch
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update -y     && apt-get install -y         bash         libgomp1         openjdk-8-jre-headless     &&
+      apt-get clean
+    Name: run
+    PrependShell: true
+  - Key: LANGUAGE_TOOL_VERSION
+    Name: arg
+    Value: null
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /dist
+    - .
+  - Name: workdir
+    Path: /LanguageTool-${LANGUAGE_TOOL_VERSION}
+  - CmdLine:
+    - mkdir /nonexistent && touch /nonexistent/.languagetool.cfg
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - start.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.properties
+    - config.properties
+  - CmdLine:
+    - groupadd -r languagetool && useradd --no-log-init -r -g languagetool languagetool
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: languagetool
+  - CmdLine:
+    - bash
+    - start.sh
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "8010"
+  From:
+    Image: debian:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch

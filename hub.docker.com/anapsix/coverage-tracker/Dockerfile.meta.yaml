@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- As: ruby
+  BaseName: ruby:alpine
+  Commands:
+  - Env:
+    - Key: APP_ROOT
+      Value: /app
+    - Key: RUNAS_USER
+      Value: app
+    Name: env
+  - Name: workdir
+    Path: ${APP_ROOT}
+  From:
+    Image: ruby:alpine
+  Name: ruby
+  Platform: ""
+  SourceCode: FROM ruby:alpine as ruby
+- As: runtime
+  BaseName: ruby
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gemfile*
+    - ${APP_ROOT}/
+  - CmdLine:
+    - apk add --no-cache -q make g++ &&     bundle install --deployment
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ${APP_ROOT}/
+  From:
+    Stage:
+      Index: 0
+      Named: ruby
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM ruby as runtime
+- As: test
+  BaseName: runtime
+  Commands:
+  - CmdLine:
+    - apk add --no-cache redis
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - redis-server --daemonize yes && bundle exec rake test
+    Name: cmd
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: runtime
+  Name: test
+  Platform: ""
+  SourceCode: FROM runtime as test
+- As: release
+  BaseName: runtime
+  Commands:
+  - CmdLine:
+    - adduser -h ${APP_ROOT} -D ${RUNAS_USER} &&     chown -R app:app ${APP_ROOT}
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${RUNAS_USER}
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - bundle exec rackup -o 0.0.0.0 -p 8080
+    Name: cmd
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: runtime
+  Name: release
+  Platform: ""
+  SourceCode: FROM runtime as release

@@ -1,0 +1,181 @@
+MetaArgs: null
+Stages:
+- BaseName: norbertm/debian-curl-http2:9
+  Commands:
+  - CmdLine:
+    - "set -eux; \t{ \t\techo 'Package: php*'; \t\techo 'Pin: release *'; \t\techo
+      'Pin-Priority: -1'; \t} > /etc/apt/preferences.d/no-debian-php"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHPIZE_DEPS
+      Value: "autoconf \t\tdpkg-dev \t\tfile \t\tg++ \t\tgcc \t\tlibc-dev \t\tmake
+        \t\tpkg-config \t\tre2c"
+    Name: env
+  - CmdLine:
+    - "apt-get update && apt-get install -y \t\t$PHPIZE_DEPS \t\tca-certificates \t\txz-utils
+      \t--no-install-recommends && rm -r /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_INI_DIR
+      Value: /usr/local/etc/php
+    Name: env
+  - CmdLine:
+    - mkdir -p $PHP_INI_DIR/conf.d
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get update \t&& apt-get install -y --no-install-recommends \t\tapache2
+      \t&& rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: APACHE_CONFDIR
+      Value: /etc/apache2
+    Name: env
+  - Env:
+    - Key: APACHE_ENVVARS
+      Value: $APACHE_CONFDIR/envvars
+    Name: env
+  - CmdLine:
+    - "set -ex \t\t&& sed -ri 's/^export ([^=]+)=(.*)$/: ${\\1:=\\2}\\nexport \\1/'
+      \"$APACHE_ENVVARS\" \t\t&& . \"$APACHE_ENVVARS\" \t&& for dir in \t\t\"$APACHE_LOCK_DIR\"
+      \t\t\"$APACHE_RUN_DIR\" \t\t\"$APACHE_LOG_DIR\" \t\t/var/www/html \t; do \t\trm
+      -rvf \"$dir\" \t\t&& mkdir -p \"$dir\" \t\t&& chown -R \"$APACHE_RUN_USER:$APACHE_RUN_GROUP\"
+      \"$dir\"; \tdone"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2dismod mpm_event && a2enmod mpm_prefork
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -ex \t&& . \"$APACHE_ENVVARS\" \t&& ln -sfT /dev/stderr \"$APACHE_LOG_DIR/error.log\"
+      \t&& ln -sfT /dev/stdout \"$APACHE_LOG_DIR/access.log\" \t&& ln -sfT /dev/stdout
+      \"$APACHE_LOG_DIR/other_vhosts_access.log\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "{ \t\techo '<FilesMatch \\.php$>'; \t\techo '\\tSetHandler application/x-httpd-php';
+      \t\techo '</FilesMatch>'; \t\techo; \t\techo 'DirectoryIndex disabled'; \t\techo
+      'DirectoryIndex index.php index.html'; \t\techo; \t\techo '<Directory /var/www/>';
+      \t\techo '\\tOptions -Indexes'; \t\techo '\\tAllowOverride All'; \t\techo '</Directory>';
+      \t} | tee \"$APACHE_CONFDIR/conf-available/docker-php.conf\" \t&& a2enconf docker-php"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_EXTRA_BUILD_DEPS
+      Value: apache2-dev
+    Name: env
+  - Env:
+    - Key: PHP_EXTRA_CONFIGURE_ARGS
+      Value: --with-apxs2 --disable-cgi
+    Name: env
+  - Env:
+    - Key: PHP_CFLAGS
+      Value: '"-fstack-protector-strong -fpic -fpie -O2"'
+    Name: env
+  - Env:
+    - Key: PHP_CPPFLAGS
+      Value: '"$PHP_CFLAGS"'
+    Name: env
+  - Env:
+    - Key: PHP_LDFLAGS
+      Value: '"-Wl,-O1 -Wl,--hash-style=both -pie"'
+    Name: env
+  - Env:
+    - Key: GPG_KEYS
+      Value: 0BD78B5F97500D450838F95DFE857D9A90D90EC1 6E4F6AB321FDC07F2C332E3AC2BF0BC433CFC8B3
+    Name: env
+  - Env:
+    - Key: PHP_VERSION
+      Value: 5.6.37
+    Name: env
+  - Env:
+    - Key: PHP_URL
+      Value: '"https://secure.php.net/get/php-5.6.37.tar.xz/from/this/mirror"'
+    - Key: PHP_ASC_URL
+      Value: '"https://secure.php.net/get/php-5.6.37.tar.xz.asc/from/this/mirror"'
+    Name: env
+  - Env:
+    - Key: PHP_SHA256
+      Value: '"5000d82610f9134aaedef28854ec3591f68dedf26a17b8935727dac2843bd256"'
+    - Key: PHP_MD5
+      Value: '""'
+    Name: env
+  - CmdLine:
+    - "set -xe; \t\tfetchDeps=' \t\twget \t'; \tif ! command -v gpg > /dev/null; then
+      \t\tfetchDeps=\"$fetchDeps \t\t\tdirmngr \t\t\tgnupg \t\t\"; \tfi; \tapt-get
+      update; \tapt-get install -y --no-install-recommends $fetchDeps; \trm -rf /var/lib/apt/lists/*;
+      \t\tmkdir -p /usr/src; \tcd /usr/src; \t\twget -O php.tar.xz \"$PHP_URL\"; \t\tif
+      [ -n \"$PHP_SHA256\" ]; then \t\techo \"$PHP_SHA256 *php.tar.xz\" | sha256sum
+      -c -; \tfi; \tif [ -n \"$PHP_MD5\" ]; then \t\techo \"$PHP_MD5 *php.tar.xz\"
+      | md5sum -c -; \tfi; \t\tif [ -n \"$PHP_ASC_URL\" ]; then \t\twget -O php.tar.xz.asc
+      \"$PHP_ASC_URL\"; \t\texport GNUPGHOME=\"$(mktemp -d)\"; \t\tfor key in $GPG_KEYS;
+      do \t\t\tgpg --keyserver ha.pool.sks-keyservers.net --recv-keys \"$key\"; \t\tdone;
+      \t\tgpg --batch --verify php.tar.xz.asc php.tar.xz; \t\tcommand -v gpgconf >
+      /dev/null && gpgconf --kill all; \t\trm -rf \"$GNUPGHOME\"; \tfi; \t\tapt-get
+      purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false $fetchDeps"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-source
+    - /usr/local/bin/
+  - CmdLine:
+    - "set -eux; \t\tsavedAptMark=\"$(apt-mark showmanual)\"; \tapt-get update; \tapt-get
+      install -y --no-install-recommends \t\tlibedit-dev \t\tlibsqlite3-dev \t\tlibssl-dev
+      \t\tlibssh2-1-dev \t\tlibxml2-dev \t\tzlib1g-dev \t\t${PHP_EXTRA_BUILD_DEPS:-}
+      \t; \trm -rf /var/lib/apt/lists/*; \t\texport \t\tCFLAGS=\"$PHP_CFLAGS\" \t\tCPPFLAGS=\"$PHP_CPPFLAGS\"
+      \t\tLDFLAGS=\"$PHP_LDFLAGS\" \t; \tdocker-php-source extract; \tcd /usr/src/php;
+      \tgnuArch=\"$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)\"; \tdebMultiarch=\"$(dpkg-architecture
+      --query DEB_BUILD_MULTIARCH)\"; \t./configure \t\t--build=\"$gnuArch\" \t\t--with-config-file-path=\"$PHP_INI_DIR\"
+      \t\t--with-config-file-scan-dir=\"$PHP_INI_DIR/conf.d\" \t\t\t\t--enable-option-checking=fatal
+      \t\t\t\t--with-mhash \t\t\t\t--enable-ftp \t\t--enable-mbstring \t\t--enable-mysqlnd
+      \t\t\t\t--with-curl \t\t--with-libedit \t\t--with-openssl \t\t--with-zlib \t\t\t\t$(test
+      \"$gnuArch\" = 's390x-linux-gnu' && echo '--without-pcre-jit') \t\t--with-libdir=\"lib/$debMultiarch\"
+      \t\t\t\t${PHP_EXTRA_CONFIGURE_ARGS:-} \t; \tmake -j \"$(nproc)\"; \tmake install;
+      \tfind /usr/local/bin /usr/local/sbin -type f -executable -exec strip --strip-all
+      '{}' + || true; \tmake clean; \tcd /; \tdocker-php-source delete; \t\tapt-mark
+      auto '.*' > /dev/null; \t[ -z \"$savedAptMark\" ] || apt-mark manual $savedAptMark;
+      \tfind /usr/local -type f -executable -exec ldd '{}' ';' \t\t| awk '/=>/ { print
+      $(NF-1) }' \t\t| sort -u \t\t| xargs -r dpkg-query --search \t\t| cut -d: -f1
+      \t\t| sort -u \t\t| xargs -r apt-mark manual \t; \tapt-get purge -y --auto-remove
+      -o APT::AutoRemove::RecommendsImportant=false; \t\tphp --version; \t\tpecl update-channels;
+      \trm -rf /tmp/pear ~/.pearrc"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-ext-*
+    - docker-php-entrypoint
+    - /usr/local/bin/
+  - CmdLine:
+    - docker-php-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - apache2-foreground
+    - /usr/local/bin/
+  - Name: workdir
+    Path: /var/www/html
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - apache2-foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: norbertm/debian-curl-http2:9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM norbertm/debian-curl-http2:9

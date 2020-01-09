@@ -1,0 +1,116 @@
+MetaArgs: null
+Stages:
+- As: runtime
+  BaseName: revolutionsystems/python:3.6.8-wee-optimized-lto
+  Commands:
+  - Labels:
+    - Key: stage
+      Value: RUNTIME
+    Name: label
+  From:
+    Image: revolutionsystems/python:3.6.8-wee-optimized-lto
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM revolutionsystems/python:3.6.8-wee-optimized-lto as runtime
+- As: build-setup
+  BaseName: runtime
+  Commands:
+  - CmdLine:
+    - apt-get update   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends     bash-completion     ca-certificates     file     fonts-texgyre     g++     gfortran     gsfonts     libbz2-1.0     libcurl3     libjpeg62-turbo     libopenblas-dev     libpangocairo-1.0-0     libpcre3     libtiff5     liblzma5     locales     make     unzip     zip     zlib1g   &&
+      BUILDDEPS="curl     default-jdk     libbz2-dev     libcairo2-dev     libcurl4-openssl-dev     libpango1.0-dev     libjpeg-dev     libicu-dev     libpcre3-dev     libpng-dev     libssl-dev     libtiff5-dev     liblzma-dev     libx11-dev     libxt-dev     perl     tcl8.6-dev     tk8.6-dev     texinfo     texlive-extra-utils     texlive-fonts-recommended     texlive-fonts-extra     texlive-latex-recommended     x11proto-core-dev     xauth     xfonts-base     xvfb     zlib1g-dev"   &&
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $BUILDDEPS
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y   wget   python3-dev
+    Name: run
+    PrependShell: true
+  - Labels:
+    - Key: stage
+      Value: BUILD-SETUP
+    Name: label
+  From:
+    Stage:
+      Index: 0
+      Named: runtime
+  Name: build-setup
+  Platform: ""
+  SourceCode: FROM runtime as build-setup
+- As: builder
+  BaseName: build-setup
+  Commands:
+  - CmdLine:
+    - mkdir -p /opt/texlive
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./texlive.profile
+    - /opt/texlive
+  - CmdLine:
+    - cd /tmp     && mkdir texlive     && cd texlive     && wget http://mirror.ctan.org/systems/texlive/tlnet/install-tl-unx.tar.gz     &&
+      tar xf install-tl-unx.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp/texlive/install-tl-2*     && ./install-tl -profile /opt/texlive/texlive.profile
+      -repository http://mirror.ctan.org/systems/texlive/tlnet/     && cd /tmp     &&
+      rm -rf /tmp/texlive
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /usr/local/texlive/distribution/bin/x86_64-linux:$PATH
+    Name: env
+  - Labels:
+    - Key: stage
+      Value: BUILDER
+    Name: label
+  From:
+    Stage:
+      Index: 1
+      Named: build-setup
+  Name: builder
+  Platform: ""
+  SourceCode: FROM build-setup as builder
+- BaseName: runtime
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /usr/local
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /root
+    - /root
+  - CmdLine:
+    - /sbin/ldconfig
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /usr/local/texlive/distribution/bin/x86_64-linux:$PATH
+    Name: env
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  - Labels:
+    - Key: stage
+      Value: FINAL
+    Name: label
+  From:
+    Stage:
+      Index: 0
+      Named: runtime
+  Name: ""
+  Platform: ""
+  SourceCode: FROM runtime

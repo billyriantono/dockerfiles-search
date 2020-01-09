@@ -1,0 +1,114 @@
+MetaArgs: null
+Stages:
+- As: frontend-builder
+  BaseName: node:alpine
+  Commands:
+  - Name: workdir
+    Path: /go/src/coolerfall.com/colina
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./frontend
+    - /go/src/coolerfall.com/colina/frontend
+  - CmdLine:
+    - apk --no-cache add git &&     cd /go/src/coolerfall.com/colina/frontend/embed
+      &&     yarn install && yarn build &&     cd /go/src/coolerfall.com/colina/frontend/admin
+      &&     yarn install && yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:alpine
+  Name: frontend-builder
+  Platform: ""
+  SourceCode: FROM node:alpine AS frontend-builder
+- As: backend-builder
+  BaseName: anbillon/go-builder
+  Commands:
+  - Name: workdir
+    Path: /go/src/coolerfall.com/colina
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./backend
+    - /go/src/coolerfall.com/colina/backend
+  - CmdLine:
+    - apk --no-cache add ca-certificates &&     cd /go/src/coolerfall.com/colina &&     mkdir
+      -p bin/dist
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: frontend-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/coolerfall.com/colina/frontend/embed/dist
+    - /go/src/coolerfall.com/colina/bin/dist/embed
+  - Chown: ""
+    From: frontend-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/coolerfall.com/colina/frontend/admin/dist
+    - /go/src/coolerfall.com/colina/bin/dist/admin
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Key: GITCOMMIT
+    Name: arg
+    Value: null
+  - Key: BUILDTIME
+    Name: arg
+    Value: null
+  - CmdLine:
+    - cd /go/src/coolerfall.com/colina/backend &&     dep ensure -v &&     CGO_ENABLED=0
+      GOOS=linux packr build -a -tags netgo -ldflags     "-w      -X 'coolerfall.com/colina/backend/misc.Version=$VERSION'      -X
+      'coolerfall.com/colina/backend/misc.GitCommit=$GITCOMMIT'      -X 'coolerfall.com/colina/backend/misc.BuildTime=$BUILDTIME'"
+      -o colina &&     mv colina ../bin/
+    Name: run
+    PrependShell: true
+  From:
+    Image: anbillon/go-builder
+  Name: backend-builder
+  Platform: ""
+  SourceCode: FROM anbillon/go-builder AS backend-builder
+- BaseName: alpine:3.8
+  Commands:
+  - Maintainer: Vincent Cheung <coolingfall@gmail.com>
+    Name: maintainer
+  - Chown: ""
+    From: backend-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/coolerfall.com/colina/bin/colina
+    - /usr/local/bin/
+  - Chown: ""
+    From: backend-builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - chmod +x /usr/local/bin/docker-entrypoint.sh &&     apk add --no-cache postgresql-client
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - colina
+    - serve
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "3000"
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

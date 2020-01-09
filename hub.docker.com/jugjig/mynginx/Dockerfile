@@ -1,0 +1,2 @@
+# BASE IMAGE
+FROM nginx

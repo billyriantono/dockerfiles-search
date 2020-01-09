@@ -1,0 +1,104 @@
+MetaArgs: null
+Stages:
+- As: mpd-builder
+  BaseName: ubuntu:latest
+  Commands:
+  - Env:
+    - Key: BRANCH
+      Value: "0.21"
+    Name: env
+  - Env:
+    - Key: SUBVERSION
+      Value: "16"
+    Name: env
+  - Env:
+    - Key: VERSION
+      Value: ${BRANCH}.${SUBVERSION}
+    Name: env
+  - Name: workdir
+    Path: /usr/src/mpd/
+  - CmdLine:
+    - apt update && apt -y install g++   libpcre3-dev   libmad0-dev libmpg123-dev
+      libid3tag0-dev   libflac-dev libvorbis-dev libopus-dev   libadplug-dev libaudiofile-dev
+      libsndfile1-dev libfaad-dev   libfluidsynth-dev libgme-dev libmikmod2-dev libmodplug-dev   libmpcdec-dev
+      libwavpack-dev libwildmidi-dev   libsidplay2-dev libsidutils-dev libresid-builder-dev   libavcodec-dev
+      libavformat-dev   libmp3lame-dev libtwolame-dev libshine-dev   libsamplerate0-dev
+      libsoxr-dev   libbz2-dev libcdio-paranoia-dev libiso9660-dev libmms-dev   libzzip-dev   libcurl4-gnutls-dev
+      libyajl-dev libexpat-dev   libasound2-dev libao-dev libjack-jackd2-dev libopenal-dev   libpulse-dev
+      libshout3-dev   libsndio-dev   libmpdclient-dev   libnfs-dev libsmbclient-dev   libupnp-dev   libavahi-client-dev   libsqlite3-dev   libsystemd-dev   libgtest-dev   libboost-dev   libicu-dev   wget   python3-pip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip3 install meson && apt install ninja-build &&      wget http://www.musicpd.org/download/mpd/${BRANCH}/mpd-${VERSION}.tar.xz
+      &&      tar xf mpd-${VERSION}.tar.xz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd mpd-${VERSION} &&      /usr/local/bin/meson . output/release --buildtype=debugoptimized
+      -Db_ndebug=true &&    ninja -C output/release
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:latest
+  Name: mpd-builder
+  Platform: ""
+  SourceCode: FROM ubuntu:latest as mpd-builder
+- As: mpd
+  BaseName: ubuntu:latest
+  Commands:
+  - Name: workdir
+    Path: /usr/local/bin
+  - Env:
+    - Key: BRANCH
+      Value: "0.21"
+    Name: env
+  - Env:
+    - Key: SUBVERSION
+      Value: "16"
+    Name: env
+  - Env:
+    - Key: VERSION
+      Value: ${BRANCH}.${SUBVERSION}
+    Name: env
+  - Chown: ""
+    From: mpd-builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/mpd/mpd-${VERSION}/output/release/mpd
+    - .
+  - CmdLine:
+    - useradd mpd && mkdir -p /run/mpd && mkdir -p /var/lib/mpd && mkdir /var/lib/mpd/playlists
+      && touch /var/lib/mpd/tag_cache && touch /var/lib/mpd/mpd.log && touch /var/lib/mpd/state
+      && touch /var/lib/mpd/sticker.sql && chown mpd:mpd -R /var/lib/mpd && chown
+      mpd:mpd -R /run/mpd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt update && apt -y --no-install-recommends install libzzip-0-13 libavahi-client3
+      libsqlite3-0 libshine3 libmpdclient2 libpulse0 libopus0 libiso9660-10 libtwolame0
+      libmp3lame0 libwildmidi2 libwavpack1 libresid-builder0c2a libsidutils0 libmpg123-0
+      libmpcdec6 libmodplug1 libmikmod3 libmad0 libgme0 libfaad2 libaudiofile1 libfluidsynth1
+      libadplug-2.2.1-0v5 libshout3 libao4 libid3tag0 libsoxr0 libyajl2 libnfs11 libmms0
+      libsmbclient libupnp6 libavutil55 libavcodec57 libavformat57 libcurl4 libcurl3-gnutls
+      libcdio-paranoia2 libcdio-cdda2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "6600"
+  - CmdLine:
+    - /usr/local/bin/mpd
+    - /etc/mpd.conf
+    - --stdout
+    - --no-daemon
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:latest
+  Name: mpd
+  Platform: ""
+  SourceCode: FROM ubuntu:latest as mpd

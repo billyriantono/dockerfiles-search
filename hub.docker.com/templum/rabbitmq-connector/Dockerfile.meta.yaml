@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- As: base_builder
+  BaseName: golang:1.11-alpine
+  Commands:
+  - CmdLine:
+    - apk add ca-certificates git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/Templum/rabbitmq-connector/
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - go.sum
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-alpine
+  Name: base_builder
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine as base_builder
+- As: builder
+  BaseName: base_builder
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - VERSION=$(git describe --all --exact-match `git rev-parse HEAD` | grep tags
+      | sed 's/tags\///') &&   GIT_COMMIT=$(git describe --always) &&   CGO_ENABLED=0
+      GOOS=linux go build -ldflags "-s -w   -X github.com/Templum/openfaas-rabbitmq-connector/pkg/version.Version=${VERSION}   -X
+      github.com/Templum/openfaas-rabbitmq-connector/pkg/version.GitCommit=${GIT_COMMIT}"   -a
+      -installsuffix cgo -o rmq-connector .
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base_builder
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base_builder as builder
+- BaseName: alpine:3.8
+  Commands:
+  - CmdLine:
+    - addgroup -S app     && adduser -S -g app app     && apk --no-cache add ca-certificates
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/app
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/Templum/rabbitmq-connector/rmq-connector
+    - .
+  - CmdLine:
+    - chown -R app:app ./
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  - CmdLine:
+    - ./rmq-connector
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

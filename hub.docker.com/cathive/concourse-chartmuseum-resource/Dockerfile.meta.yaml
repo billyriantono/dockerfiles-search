@@ -1,0 +1,103 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: node:12.10.0
+  Commands:
+  - CmdLine:
+    - apt-get -y update && apt-get -y install curl gzip tar unzip
+    Name: run
+    PrependShell: true
+  - Key: HELM_DOWNLOAD_URL
+    Name: arg
+    Value: '"https://get.helm.sh/helm-v2.14.3-linux-amd64.tar.gz"'
+  - CmdLine:
+    - curl -s -j -k -L "${HELM_DOWNLOAD_URL}" > /tmp/helm.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "38614a665859c0f01c9c1d84fa9a5027364f936814d1e47839b05327e400bf55  /tmp/helm.tar.gz"
+      | sha256sum -c
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /data
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /data
+  - CmdLine:
+    - gunzip -c "/tmp/helm.tar.gz" | tar -xf - && mv "/data/linux-amd64/helm" "/data/helm"
+      && rm -f "/tmp/helm.tar.gz" && rm -rf "/tmp/linux-amd64"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /src
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - npm -s install && npm -s run build && npm -s test && npm -s pack && mv cathive-concourse-chartmuseum-resource-*.tgz
+      /data/cathive-concourse-chartmuseum-resource.tgz
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12.10.0
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:12.10.0 as builder
+- BaseName: node:12.10.0-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache gnupg ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - '"/data/helm"'
+    - '"/usr/local/bin/helm"'
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - '"/data/cathive-concourse-chartmuseum-resource.tgz"'
+    - '"/tmp/cathive-concourse-chartmuseum-resource.tgz"'
+  - CmdLine:
+    - npm -s install -g /tmp/cathive-concourse-chartmuseum-resource.tgz && rm -f /tmp/cathive-concourse-chartmuseum-resource.tgz
+      && mkdir -p /opt/resource && ln -sf /usr/local/bin/concourse-chartmuseum-resource-check
+      /opt/resource/check && ln -sf /usr/local/bin/concourse-chartmuseum-resource-in
+      /opt/resource/in && ln -sf /usr/local/bin/concourse-chartmuseum-resource-out
+      /opt/resource/out
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: '"/usr/local/bin:/usr/bin:/bin"'
+    Name: env
+  - CmdLine:
+    - helm init --client-only
+    Name: run
+    PrependShell: true
+  - Labels:
+    - Key: maintainer
+      Value: '"Benjamin P. Jung <headcr4sh@gmail.com>"'
+    - Key: version
+      Value: '"0.7.1"'
+    - Key: org.concourse-ci.target-version
+      Value: '"5.4.1"'
+    - Key: org.concourse-ci.resource-id
+      Value: '"chartmuseum"'
+    - Key: org.concourse-ci.resource-name
+      Value: '"ChartMuseum package management"'
+    - Key: org.concourse-ci.resource-homepage
+      Value: '"https://github.com/cathive/concourse-chartmuseum-resource"'
+    Name: label
+  From:
+    Image: node:12.10.0-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:12.10.0-alpine

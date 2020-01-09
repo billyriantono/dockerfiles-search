@@ -1,0 +1,112 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: ubuntu:16.04
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends         build-essential         ca-certificates         curl         libssl-dev         pkg-config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://sh.rustup.rs -sSf | sh -s -- -y
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: '"/root/.cargo/bin:$PATH"'
+    Name: env
+  - Name: workdir
+    Path: /tmp/krill
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Cargo.toml
+    - /tmp/krill/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /tmp/krill/src/
+  - CmdLine:
+    - cargo build --release
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.04
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04 AS builder
+- BaseName: ubuntu:16.04
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/krill/target/release/krill
+    - /usr/local/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/krill/target/release/krillc
+    - /usr/local/bin/
+  - Key: RUN_USER
+    Name: arg
+    Value: krill
+  - Key: RUN_USER_UID
+    Name: arg
+    Value: "1012"
+  - Key: RUN_USER_GID
+    Name: arg
+    Value: "1012"
+  - CmdLine:
+    - apt-get update &&     apt-get install -y --no-install-recommends         ca-certificates         openssl         uuid-runtime         tzdata
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd -g ${RUN_USER_GID} ${RUN_USER} &&     useradd -g ${RUN_USER_GID} -u
+      ${RUN_USER_UID} ${RUN_USER}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/krill/data
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/krill.conf
+    - .
+  - CmdLine:
+    - 'chown -R ${RUN_USER}: .'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/entrypoint.sh
+    - /opt/
+  - CmdLine:
+    - 'chown ${RUN_USER}: /opt/entrypoint.sh'
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - 3000/tcp
+  - CmdLine:
+    - /opt/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - krill
+    - -c
+    - /var/krill/data/krill.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:16.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04

@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: clearlinux:latest
+  Commands:
+  - Key: swupd_args
+    Name: arg
+    Value: null
+  - CmdLine:
+    - swupd update --no-boot-update $swupd_args
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: clearlinux/os-core:latest
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/os-release
+    - /
+  - CmdLine:
+    - source /os-release &&     mkdir /install_root     && swupd os-install -V ${VERSION_ID}     --path
+      /install_root --statedir /swupd-state     --bundles=os-core-update,php-basic,curl
+      --no-boot-update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /os_core_install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: clearlinux/os-core:latest
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /os_core_install/
+  - CmdLine:
+    - cd / &&     find os_core_install | sed -e 's/os_core_install/install_root/'
+      | xargs rm -d &> /dev/null || true
+    Name: run
+    PrependShell: true
+  From:
+    Image: clearlinux:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM clearlinux:latest AS builder
+- BaseName: clearlinux/os-core:latest
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /install_root
+    - /
+  - CmdLine:
+    - "set -ex \tmkdir -p /var/www/html \t&& cd /usr/share/defaults/php \t&& { \t\techo
+      '[global]'; \t\techo 'error_log = /proc/self/fd/2'; \t\techo; echo '; https://github.com/docker-library/php/pull/725#issuecomment-443540114';
+      echo 'log_limit = 8192'; \t\techo; \t\techo '[www]'; \t\techo '; if we send
+      this to /proc/self/fd/1, it never appears'; \t\techo 'access.log = /proc/self/fd/2';
+      \t\techo; \t\techo 'clear_env = no'; \t\techo; \t\techo '; Ensure worker stdout
+      and stderr are sent to the main error log.'; \t\techo 'catch_workers_output
+      = yes'; \t\techo 'decorate_workers_output = no'; \t} | tee php-fpm.d/docker.conf
+      \t&& { \t\techo '[global]'; \t\techo 'daemonize = no'; \t\techo; \t\techo '[www]';
+      \        echo 'user = httpd';         echo 'group = httpd'; \t\techo 'listen
+      = 9000';         echo 'pm = dynamic'; \t} | tee php-fpm.d/zz-docker.conf"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/www/html
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-entrypoint
+    - /usr/local/bin/
+  - CmdLine:
+    - chmod +x /usr/local/bin/docker-php-entrypoint
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - Name: stopsignal
+    Signal: SIGQUIT
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - php-fpm
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: clearlinux/os-core:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM clearlinux/os-core:latest

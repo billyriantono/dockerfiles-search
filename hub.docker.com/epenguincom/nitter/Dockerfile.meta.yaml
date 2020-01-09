@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: nimlang/nim:alpine
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/zedeus/nitter/archive/master.zip
+    - /src/download/
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - apk update     && apk add libsass-dev libffi-dev openssl-dev unzip     && unzip
+      /src/download/master.zip     && mv nitter-master nitter     && cd nitter     &&
+      nimble build -y -d:release --passC:"-flto" --passL:"-flto"     && strip -s nitter     &&
+      nimble scss
+    Name: run
+    PrependShell: true
+  From:
+    Image: nimlang/nim:alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM nimlang/nim:alpine as build
+- BaseName: alpine:latest
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"ken@epenguin.com"'
+    Name: label
+  - CmdLine:
+    - apk --no-cache add tini pcre sqlite-libs curl &&  mkdir -p /build
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./entrypoint.sh
+    - /entrypoint.sh
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /src/nitter/nitter
+    - /usr/local/bin
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /src/nitter/nitter.conf
+    - /build
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /src/nitter/public
+    - /build/public
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: workdir
+    Path: /data
+  - Name: volume
+    Volumes:
+    - /data
+  - Health:
+      Test:
+      - CMD-SHELL
+      - curl --fail http://localhost:8080 || exit 1
+    Name: healthcheck
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - nitter
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

@@ -1,0 +1,165 @@
+MetaArgs: null
+Stages:
+- As: model_data
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache --update-cache add wget
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /data/patch_experts
+  - CmdLine:
+    - wget -q https://www.dropbox.com/s/7na5qsjzz8yfoer/cen_patches_0.25_of.dat &&    wget
+      -q https://www.dropbox.com/s/k7bj804cyiu474t/cen_patches_0.35_of.dat &&    wget
+      -q https://www.dropbox.com/s/ixt4vkbmxgab1iu/cen_patches_0.50_of.dat &&    wget
+      -q https://www.dropbox.com/s/2t5t1sdpshzfhpj/cen_patches_1.00_of.dat
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: model_data
+  Platform: ""
+  SourceCode: FROM alpine as model_data
+- As: ubuntu_base
+  BaseName: ubuntu:16.04
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Michael McDermott <mikemcdermott23@gmail.com>"'
+    Name: label
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - CmdLine:
+    - apt-get update -qq &&    apt-get install -qq curl &&    apt-get install -qq
+      --no-install-recommends         libopenblas-dev liblapack-dev         libavcodec-dev
+      libavformat-dev libswscale-dev         libtbb2 libtbb-dev libjpeg-dev         libpng-dev
+      libtiff-dev &&    rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update  && apt-get install -y --no-install-recommends         apt-transport-https
+      ca-certificates gnupg software-properties-common wget  && wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc
+      2>/dev/null | apt-key add -  && apt-add-repository -y 'deb https://apt.kitware.com/ubuntu/
+      xenial main'  && apt-get update  && apt-get install -y cmake  && apt-get clean  &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update  && apt-get install -y --no-install-recommends         build-essential         curl         software-properties-common         python3-pip  &&
+      add-apt-repository -y ppa:deadsnakes/ppa  && add-apt-repository -y ppa:ubuntu-toolchain-r/test  &&
+      apt-get update  && apt-get install -y python3.6 python3.6-dev  && apt-get clean  &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch /usr/bin/python3 && rm /usr/bin/python3
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/bin/python3.6 /usr/bin/python3
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/bin/python3.6 /usr/local/bin/python
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.04
+  Name: ubuntu_base
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04 as ubuntu_base
+- As: cv_deps
+  BaseName: ubuntu_base
+  Commands:
+  - Name: workdir
+    Path: /root/build-dep
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - CmdLine:
+    - apt-get update -qq && apt-get install -qq -y         cmake ninja-build pkg-config
+      build-essential checkinstall        g++-8 &&    rm -rf /var/lib/apt/lists/*
+      &&    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 800 --slave
+      /usr/bin/g++ g++ /usr/bin/g++-8
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl http://dlib.net/files/dlib-19.13.tar.bz2 -LO &&    tar xf dlib-19.13.tar.bz2
+      &&     rm dlib-19.13.tar.bz2 &&    mv dlib-19.13 dlib &&    mkdir -p dlib/build
+      &&    cd dlib/build &&    cmake -DCMAKE_BUILD_TYPE=Release -G Ninja .. &&    ninja
+      &&     ninja install &&     DESTDIR=/root/diff ninja install &&    ldconfig
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: OPENCV_VERSION
+      Value: 4.1.0
+    Name: env
+  - CmdLine:
+    - curl https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.tar.gz -LO &&    tar
+      xf ${OPENCV_VERSION}.tar.gz &&     rm ${OPENCV_VERSION}.tar.gz &&    mv opencv-${OPENCV_VERSION}
+      opencv &&     mkdir -p opencv/build &&     cd opencv/build &&     cmake -D CMAKE_BUILD_TYPE=RELEASE         -D
+      CMAKE_INSTALL_PREFIX=/usr/local         -D WITH_TBB=ON -D WITH_CUDA=OFF         -DWITH_QT=OFF
+      -DWITH_GTK=OFF        -G Ninja .. &&     ninja &&     ninja install &&    DESTDIR=/root/diff
+      ninja install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: ubuntu_base
+  Name: cv_deps
+  Platform: ""
+  SourceCode: FROM ubuntu_base as cv_deps
+- As: openface
+  BaseName: cv_deps
+  Commands:
+  - Name: workdir
+    Path: /root/openface
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - ./
+  - Chown: ""
+    From: model_data
+    Name: copy
+    SourcesAndDest:
+    - /data/patch_experts/*
+    - /root/openface/lib/local/LandmarkDetector/model/patch_experts/
+  - CmdLine:
+    - mkdir -p build && cd build &&     cmake -D CMAKE_BUILD_TYPE=RELEASE -G Ninja
+      .. &&     ninja &&    DESTDIR=/root/diff ninja install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 2
+      Named: cv_deps
+  Name: openface
+  Platform: ""
+  SourceCode: FROM cv_deps as openface
+- As: final
+  BaseName: ubuntu_base
+  Commands:
+  - Name: workdir
+    Path: /root
+  - Chown: ""
+    From: openface
+    Name: copy
+    SourcesAndDest:
+    - /root/diff
+    - /
+  - CmdLine:
+    - ldconfig
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: ubuntu_base
+  Name: final
+  Platform: ""
+  SourceCode: FROM ubuntu_base as final

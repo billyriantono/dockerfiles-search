@@ -1,0 +1,157 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.10-alpine
+  Commands:
+  - Env:
+    - Key: TERM
+      Value: xterm
+    - Key: BUILD_DATE
+      Value: '"2018-05-08"'
+    - Key: BUILD_TYPE
+      Value: '"stable"'
+    - Key: GRAFANA_VERSION
+      Value: '"5.1.1"'
+    - Key: PHANTOMJS_VERSION
+      Value: '"2.11"'
+    - Key: TZ
+      Value: '''Europe/Berlin'''
+    Name: env
+  - CmdLine:
+    - apk update --no-cache &&   apk upgrade --no-cache &&   apk add     ca-certificates
+      curl g++ git make python libuv nodejs nodejs-npm tzdata &&   cp /usr/share/zoneinfo/${TZ}
+      /etc/localtime &&   echo ${TZ} > /etc/timezone &&   echo "export TZ=${TZ}" >
+      /etc/enviroment &&   echo "export BUILD_DATE=${BUILD_DATE}" >> /etc/enviroment
+      &&   echo "export BUILD_TYPE=${BUILD_TYPE}" >> /etc/enviroment &&   echo "export
+      GRAFANA_VERSION=${GRAFANA_VERSION}" >> /etc/enviroment
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "get phantomjs ${PHANTOMJS_VERSION} from external ressources ..." &&   curl     --silent     --location     --retry
+      3     https://github.com/Overbryd/docker-phantomjs-alpine/releases/download/${PHANTOMJS_VERSION}/phantomjs-alpine-x86_64.tar.bz2   |
+      bunzip2   | tar x -C / &&   ln -s /phantomjs/phantomjs /usr/bin/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - export GOPATH=/opt/go &&   export GOMAXPROCS=4 &&   echo "get grafana sources
+      ..." &&   go get github.com/grafana/grafana || true &&   cd ${GOPATH}/src/github.com/grafana/grafana
+      &&   if [ "${BUILD_TYPE}" == "stable" ] ; then     echo "switch to stable Tag
+      v${GRAFANA_VERSION}" &&     git checkout tags/v${GRAFANA_VERSION} 2> /dev/null
+      ;   fi &&   echo "grafana setup .." &&   cd ${GOPATH}/src/github.com/grafana/grafana
+      &&   go run build.go setup  2> /dev/null &&   echo "grafana build .." &&   go
+      run build.go build  2> /dev/null &&   unset GOMAXPROCS &&   echo "build frontend
+      ..." &&   export JOBS=4 &&   cd ${GOPATH}/src/github.com/grafana/grafana &&   /usr/bin/npm
+      install          &&   /usr/bin/npm install -g yarn  &&   /usr/bin/yarn install
+      --pure-lockfile --no-progress &&   /usr/bin/npm run build &&   unset JOBS &&   cd
+      ${GOPATH}/src/github.com/grafana/grafana &&   mkdir -p /usr/share/grafana/bin/
+      &&   cp -ar ${GOPATH}/src/github.com/grafana/grafana/conf               /usr/share/grafana/
+      &&   cp -a  ${GOPATH}/src/github.com/grafana/grafana/bin/grafana-cli    /usr/share/grafana/bin/
+      &&   cp -a  ${GOPATH}/src/github.com/grafana/grafana/bin/grafana-server /usr/share/grafana/bin/
+      &&   if [ -d public ] ; then     cp -ar ${GOPATH}/src/github.com/grafana/grafana/public           /usr/share/grafana/
+      ;   elif [ -d public_gen ] ; then     cp -ar ${GOPATH}/src/github.com/grafana/grafana/public_gen       /usr/share/grafana/public
+      ;   fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "install grafana plugins ..." &&   for plugin in grafana-clock-panel grafana-piechart-panel
+      jdbranham-diagram-panel mtanda-histogram-panel btplc-trend-box-panel vonage-status-panel
+      michaeldmoore-annunciator-panel neocat-cal-heatmap-panel;   do      /usr/share/grafana/bin/grafana-cli
+      --pluginsDir "/usr/share/grafana/data/plugins" plugins install ${plugin} ;   done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: golang:1.10-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.10-alpine as builder
+- BaseName: alpine:3.7
+  Commands:
+  - Name: expose
+    Ports:
+    - "3000"
+  - Labels:
+    - Key: version
+      Value: '"1805"'
+    - Key: maintainer
+      Value: '"Bodo Schulz <bodo@boone-schulz.de>"'
+    - Key: org.label-schema.build-date
+      Value: ${BUILD_DATE}
+    - Key: org.label-schema.name
+      Value: '"Grafana Docker Image"'
+    - Key: org.label-schema.description
+      Value: '"Inofficial Grafana Docker Image"'
+    - Key: org.label-schema.url
+      Value: '"https://www.grafana.com"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/bodsch/docker-grafana"'
+    - Key: org.label-schema.vendor
+      Value: '"Bodo Schulz"'
+    - Key: org.label-schema.version
+      Value: ${GRAFANA_VERSION}
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: com.microscaling.docker.dockerfile
+      Value: '"/Dockerfile"'
+    - Key: com.microscaling.license
+      Value: '"GNU Lesser General Public License v3.0"'
+    Name: label
+  - CmdLine:
+    - apk --quiet --no-cache update &&   if [ -f /etc/enviroment ] ; then . /etc/enviroment;
+      fi &&   apk add --quiet --no-cache     bash ca-certificates curl jq mysql-client
+      netcat-openbsd pwgen sqlite yajl-tools &&   mkdir /var/log/grafana &&   rm -rf     /tmp/*     /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/enviroment
+    - /etc/enviroment
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/grafana
+    - /usr/share/grafana
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/phantomjs
+    - /usr/bin/phantomjs
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs/
+    - /
+  - Name: volume
+    Volumes:
+    - '['
+    - '"/usr/share/grafana/data"'
+    - '"/usr/share/grafana/public/dashboards"'
+    - '"/opt/grafana/dashboards"'
+    - ']'
+  - Name: workdir
+    Path: /usr/share/grafana
+  - Health:
+      Interval: 5000000000
+      Retries: 12
+      Test:
+      - CMD-SHELL
+      - curl --silent --fail localhost:3000 || exit 1
+      Timeout: 2000000000
+    Name: healthcheck
+  - CmdLine:
+    - /init/run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

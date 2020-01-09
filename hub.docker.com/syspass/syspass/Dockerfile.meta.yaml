@@ -1,0 +1,121 @@
+MetaArgs: null
+Stages:
+- As: bootstrap
+  BaseName: composer:1.7
+  Commands:
+  - Env:
+    - Key: SYSPASS_BRANCH
+      Value: '"master"'
+    Name: env
+  - CmdLine:
+    - git clone --branch ${SYSPASS_BRANCH} https://github.com/nuxsmin/sysPass.git   &&
+      composer install     --ignore-platform-reqs     --no-interaction     --no-plugins     --no-scripts     --prefer-dist     --optimize-autoloader     --working-dir
+      /app/sysPass
+    Name: run
+    PrependShell: true
+  From:
+    Image: composer:1.7
+  Name: bootstrap
+  Platform: ""
+  SourceCode: FROM composer:1.7 as bootstrap
+- As: app
+  BaseName: debian:stretch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: nuxsmin@syspass.org
+    - Key: version
+      Value: 3.1.1
+    - Key: php
+      Value: "7.0"
+    - Key: environment
+      Value: debug
+    Name: label
+  - CmdLine:
+    - "apt-get update \t&& DEBIAN_FRONTEND=noninteractive apt-get -y install     locales
+      \    apache2     libapache2-mod-php7.0     php-pear     php7.0     php7.0-cgi
+      \    php7.0-cli     php7.0-common     php7.0-fpm     php7.0-gd     php7.0-json
+      \    php7.0-mysql     php7.0-readline     php7.0-curl     php7.0-intl     php7.0-ldap
+      \    php7.0-mcrypt     php7.0-xml     php7.0-mbstring     php7.0-xdebug     git
+      \    gosu     unzip   && apt-get clean   && rm -r /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: APACHE_RUN_USER
+      Value: '"www-data"'
+    - Key: APACHE_RUN_GROUP
+      Value: '"www-data"'
+    - Key: APACHE_LOG_DIR
+      Value: '"/var/log/apache2"'
+    - Key: APACHE_LOCK_DIR
+      Value: '"/var/lock/apache2"'
+    - Key: APACHE_PID_FILE
+      Value: '"/var/run/apache2.pid"'
+    - Key: SYSPASS_DIR
+      Value: '"/var/www/html/sysPass"'
+    - Key: SYSPASS_UID
+      Value: "9001"
+    - Key: SYSPASS_DEV
+      Value: "0"
+    Name: env
+  - Name: workdir
+    Path: /var/www/html
+  - Labels:
+    - Key: build
+      Value: "19121601"
+    Name: label
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - syspass.conf
+    - /etc/apache2/sites-available/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - 20-xdebug.ini
+    - /etc/php/7.0/apache2/conf.d/20-xdebug.ini
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - init-functions
+    - /usr/local/sbin/
+  - CmdLine:
+    - chmod 755 /usr/local/sbin/entrypoint.sh   && a2dissite 000-default default-ssl   &&
+      a2ensite syspass   && a2enmod proxy_fcgi setenvif ssl rewrite   && a2enconf
+      php7.0-fpm   && ln -sf /dev/stdout ${APACHE_LOG_DIR}/access.log   && ln -sf
+      /dev/stderr ${APACHE_LOG_DIR}/error.log
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: bootstrap
+    Name: copy
+    SourcesAndDest:
+    - /app/sysPass/
+    - ${SYSPASS_DIR}/
+  - Chown: ""
+    From: bootstrap
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/composer
+    - /usr/bin/
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - CmdLine:
+    - /usr/local/sbin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - apache
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: app
+  Platform: ""
+  SourceCode: FROM debian:stretch as app

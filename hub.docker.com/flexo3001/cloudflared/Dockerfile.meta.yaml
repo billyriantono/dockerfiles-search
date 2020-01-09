@@ -1,0 +1,72 @@
+MetaArgs: null
+Stages:
+- As: gobuild
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk add build-base gcc git && go get -v github.com/cloudflare/cloudflared/cmd/cloudflared
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/cloudflare/cloudflared/cmd/cloudflared
+  - CmdLine:
+    - go build ./
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: gobuild
+  Platform: ""
+  SourceCode: FROM golang:alpine as gobuild
+- BaseName: alpine:latest
+  Commands:
+  - Env:
+    - Key: PORT
+      Value: "53"
+    Name: env
+  - Env:
+    - Key: DNS1
+      Value: 1.1.1.1
+    Name: env
+  - Env:
+    - Key: DNS2
+      Value: 1.0.0.1
+    Name: env
+  - Name: expose
+    Ports:
+    - $PORT/tcp
+    - $PORT/udp
+  - CmdLine:
+    - apk add bind-tools ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: gobuild
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/cloudflare/cloudflared/cmd/cloudflared/cloudflared
+    - /usr/local/bin/cloudflared
+  - Health:
+      Interval: 5000000000
+      StartPeriod: 5000000000
+      Test:
+      - CMD-SHELL
+      - nslookup -po=${PORT} cloudflare.com 127.0.0.1 || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - /bin/sh
+    - -c
+    - /usr/local/bin/cloudflared proxy-dns --address 0.0.0.0 --port ${PORT} --upstream
+      https://${DNS1}/dns-query --upstream https://${DNS2}/dns-query
+    Name: cmd
+    PrependShell: false
+  - Labels:
+    - Key: maintainer
+      Value: '"Marco Kundt"'
+    Name: label
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

@@ -1,0 +1,81 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:stretch-slim
+  Commands:
+  - Name: workdir
+    Path: /tmp/
+  - Env:
+    - Key: ODYSSEY_VERSION
+      Value: '"1.0rc1"'
+    Name: env
+  - CmdLine:
+    - set -ex     && apt-get update     && apt-get install -y --no-install-recommends             build-essential             cmake             git             libssl-dev     &&
+      git clone --branch ${ODYSSEY_VERSION} --depth 1 git://github.com/yandex/odyssey.git     &&
+      cd odyssey     && mkdir build     && cd build     && cmake -DCMAKE_BUILD_TYPE=Release
+      ..     && make     && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim as builder
+- BaseName: debian:stretch-slim
+  Commands:
+  - CmdLine:
+    - set -ex     && apt-get update     && apt-get install -y --no-install-recommends
+      libssl-dev     && rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/odyssey/build/sources/odyssey
+    - /usr/local/bin/
+  - CmdLine:
+    - mkdir -p /etc/odyssey/tmpl /etc/odyssey/conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/odyssey/odyssey.conf
+    - /etc/odyssey/odyssey.conf
+  - Env:
+    - Key: DOCKERIZE_VERSION
+      Value: v0.6.1
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y wget     && wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz     &&
+      tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz     &&
+      rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz     && rm -rf /var/lib/apt/lists/*
+      /var/cache/apt/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "6432"
+  - Name: volume
+    Volumes:
+    - /etc/odyssey/tmpl/
+  - Name: workdir
+    Path: /etc/odyssey/
+  - CmdLine:
+    - dockerize
+    - -template
+    - /etc/odyssey/tmpl/odyssey.conf.tmpl:/etc/odyssey/conf/odyssey.conf
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/local/bin/odyssey
+    - /etc/odyssey/conf/odyssey.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

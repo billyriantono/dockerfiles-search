@@ -1,0 +1,63 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.10.2-alpine
+  Commands:
+  - Key: CADDY_VERSION
+    Name: arg
+    Value: '"0.11.0"'
+  - CmdLine:
+    - 'apk add --no-cache git &&   git clone https://github.com/caddyserver/builds
+      /go/src/github.com/caddyserver/builds &&   git clone https://github.com/mholt/caddy
+      -b "v$CADDY_VERSION" /go/src/github.com/mholt/caddy &&     cd /go/src/github.com/mholt/caddy
+      &&     git checkout -b "v$CADDY_VERSION" &&   sed -i -e ''s#EnableTelemetry
+      = true#EnableTelemetry = false#'' /go/src/github.com/mholt/caddy/caddy/caddymain/run.go
+      &&   echo ">> Telemetry : Disabled"'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /go/src/github.com/mholt/caddy/caddy &&     go get ./... &&     go run build.go
+      &&     mv caddy /go/bin
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10.2-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.10.2-alpine as builder
+- BaseName: alpine:3.8
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/caddy
+    - /usr/bin/caddy
+  - CmdLine:
+    - apk add --no-cache --no-progress     curl     tini     ca-certificates &&   /usr/bin/caddy
+      -plugins
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Caddyfile
+    - /etc/caddy/Caddyfile
+  - CmdLine:
+    - /sbin/tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - caddy
+    - -agree
+    - --conf
+    - /etc/caddy/Caddyfile
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

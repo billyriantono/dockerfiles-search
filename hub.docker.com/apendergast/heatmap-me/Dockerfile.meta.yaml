@@ -1,0 +1,101 @@
+MetaArgs: null
+Stages:
+- As: backend
+  BaseName: apendergast/hm-docker-base:backend-latest
+  Commands: null
+  From:
+    Image: apendergast/hm-docker-base:backend-latest
+  Name: backend
+  Platform: ""
+  SourceCode: FROM apendergast/hm-docker-base:backend-latest as backend
+- As: frontend
+  BaseName: apendergast/hm-docker-base:frontend-latest
+  Commands:
+  - Chown: ""
+    From: backend
+    Name: copy
+    SourcesAndDest:
+    - /root/dummy
+    - /root/dummy
+  - Name: workdir
+    Path: /root/
+  - Key: GIT_BRANCH
+    Name: arg
+    Value: master
+  - Key: TIMESTAMP
+    Name: arg
+    Value: "0"
+  - CmdLine:
+    - echo "$TIMESTAMP" &&     git clone https://github.com/aloysius-pgast/heatmap-me.git
+      && cd heatmap-me &&     git checkout $GIT_BRANCH &&     npm install --unsafe-perm
+      &&     cp docker/config.docker.json config/config.json
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd heatmap-me/ui &&     cp -R /root/dummy/frontend/node_modules . && npm install
+      --unsafe-perm && npm run build && rm -fr node_modules
+    Name: run
+    PrependShell: true
+  From:
+    Image: apendergast/hm-docker-base:frontend-latest
+  Name: frontend
+  Platform: ""
+  SourceCode: FROM apendergast/hm-docker-base:frontend-latest as frontend
+- BaseName: apendergast/alpine-node:runtime-latest
+  Commands:
+  - Name: workdir
+    Path: /root/heatmap-me/
+  - Chown: ""
+    From: frontend
+    Name: copy
+    SourcesAndDest:
+    - /root/heatmap-me
+    - .
+  - Name: volume
+    Volumes:
+    - /root/heatmap-me/ssl
+    - /root/heatmap-me/custom_config
+  - Env:
+    - Key: cfg.logLevel
+      Value: '"info"'
+    Name: env
+  - Env:
+    - Key: cfg.gateway.restEndpoint
+      Value: '"http://172.17.0.1:8000"'
+    Name: env
+  - Env:
+    - Key: cfg.gateway.wsEndpoint
+      Value: '"ws://172.17.0.1:8001"'
+    Name: env
+  - Env:
+    - Key: cfg.gateway.sessionId
+      Value: '"mystream.heatmap-me"'
+    Name: env
+  - Env:
+    - Key: cfg.gateway.apiKey
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: cfg.computeInterval
+      Value: '"60"'
+    Name: env
+  - Env:
+    - Key: cfg.dataPeriods
+      Value: '"xm,15m,1h,4h,1d,5d"'
+    Name: env
+  - Name: expose
+    Ports:
+    - "8002"
+  - Name: expose
+    Ports:
+    - "8003"
+  - CmdLine:
+    - node
+    - ./index.js
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: apendergast/alpine-node:runtime-latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM apendergast/alpine-node:runtime-latest

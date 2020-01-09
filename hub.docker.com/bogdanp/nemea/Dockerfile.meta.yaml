@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- As: assets
+  BaseName: node:10.6
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /opt/nemea
+  - Name: workdir
+    Path: /opt/nemea
+  - CmdLine:
+    - npm install   && npx parcel build -d static assets/index.html   && npx parcel
+      build -d static -o track.js --experimental-scope-hoisting assets/js/track.js
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.6
+  Name: assets
+  Platform: ""
+  SourceCode: FROM node:10.6 AS assets
+- As: asset_compression
+  BaseName: python:3.7
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /opt/nemea
+  - Name: workdir
+    Path: /opt/nemea
+  - Chown: ""
+    From: assets
+    Name: copy
+    SourcesAndDest:
+    - /opt/nemea/static
+    - /opt/nemea/static
+  - CmdLine:
+    - pip install -U pip   && pip install whitenoise[brotli]   && python -m whitenoise.compress
+      static
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.7
+  Name: asset_compression
+  Platform: ""
+  SourceCode: FROM python:3.7 AS asset_compression
+- As: distribution
+  BaseName: jackfirth/racket:7.1
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /opt/nemea
+  - Name: workdir
+    Path: /opt/nemea
+  - Chown: ""
+    From: asset_compression
+    Name: copy
+    SourcesAndDest:
+    - /opt/nemea/static
+    - /opt/nemea/static
+  - CmdLine:
+    - raco pkg install --auto nemea/   && raco setup -D --tidy --check-pkg-deps --unused-pkg-deps
+      --pkgs nemea   && raco exe -o nemea.bin nemea/main.rkt   && raco distribute
+      dist nemea.bin
+    Name: run
+    PrependShell: true
+  From:
+    Image: jackfirth/racket:7.1
+  Name: distribution
+  Platform: ""
+  SourceCode: FROM jackfirth/racket:7.1 AS distribution
+- BaseName: debian
+  Commands:
+  - Chown: ""
+    From: distribution
+    Name: copy
+    SourcesAndDest:
+    - /opt/nemea/dist
+    - /opt/nemea
+  - Name: workdir
+    Path: /opt/nemea
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - /opt/nemea/bin/nemea.bin
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian

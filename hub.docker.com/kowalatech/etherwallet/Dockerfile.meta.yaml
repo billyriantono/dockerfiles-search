@@ -1,0 +1,81 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: node:9.5-alpine
+  Commands:
+  - CmdLine:
+    - apk add --update git python make g++ libnotify openssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install -g gulp-cli
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl genrsa -des3 -passout pass:x -out server.pass.key 2048 &&     openssl
+      rsa -passin pass:x -in server.pass.key -out server.key &&     openssl req -new
+      -key server.key -out server.csr -subj "/C=US/ST=California/L=California/O=localhost/OU=localhost/CN=localhost"
+      &&     openssl x509 -req -sha256 -days 365 -in server.csr -signkey server.key
+      -out server.crt
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /etherwallet
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /etherwallet
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run dist
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:9.5-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:9.5-alpine as builder
+- BaseName: nginx
+  Commands:
+  - CmdLine:
+    - echo "server {  listen 443 ssl;   ssl on;  ssl_certificate     /opt/ssl/server.crt;  ssl_certificate_key
+      /opt/ssl/server.key;  ssl_session_timeout 5m;   ssl_session_cache shared:SSL:10m;   ssl_protocols
+      TLSv1 TLSv1.1 TLSv1.2;   ssl_ciphers 'EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH';   ssl_prefer_server_ciphers
+      on;   server_name localhost;   location / {     root   /usr/share/nginx/html;     index  index.html
+      index.htm;   }  error_page   500 502 503 504  /50x.html;  location = /50x.html
+      {    root   /usr/share/nginx/html;  }}" > /etc/nginx/conf.d/ssl.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etherwallet/dist
+    - /usr/share/nginx/html
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /server.crt
+    - /opt/ssl/server.crt
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /server.key
+    - /opt/ssl/server.key
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: expose
+    Ports:
+    - "443"
+  From:
+    Image: nginx
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx

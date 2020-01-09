@@ -1,0 +1,141 @@
+MetaArgs:
+- DefaultValue: java
+  Key: FROM_IMG
+  ProvidedValue: null
+  Value: java
+- DefaultValue: "8"
+  Key: FROM_TAG
+  ProvidedValue: null
+  Value: "8"
+Stages:
+- BaseName: longe/${FROM_IMG}:${FROM_TAG}
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"xlongshu@163.com"'
+    Name: label
+  - Name: volume
+    Volumes:
+    - /data/hadoop
+  - Key: HADOOP_VERSION
+    Name: arg
+    Value: null
+  - Key: MIRROR_APACHE
+    Name: arg
+    Value: '"http://archive.apache.org/dist"'
+  - Env:
+    - Key: HADOOP_VERSION
+      Value: ${HADOOP_VERSION:-"2.7.7"}
+    Name: env
+  - Env:
+    - Key: HADOOP_INSTALL
+      Value: '"/opt/hadoop-$HADOOP_VERSION"'
+    Name: env
+  - CmdLine:
+    - set -xe     && DEBIAN_FRONTEND=noninteractive     && apt-get update     && apt-get
+      install -y --no-install-recommends     openssh-client openssh-server telnet
+      netcat tree libsnappy1v5 openssl     && apt-get clean     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -xe     && update-rc.d ssh defaults     && service ssh start && service
+      ssh stop     && mkdir -p $HOME/.ssh && chmod 700 $HOME/.ssh     && ssh-keygen
+      -q -N "" -t rsa -f $HOME/.ssh/id_rsa     && cat $HOME/.ssh/id_rsa.pub >> $HOME/.ssh/authorized_keys     &&
+      chmod 600 $HOME/.ssh/authorized_keys
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ssh_config
+    - /root/.ssh/config
+  - CmdLine:
+    - set -xe     && useradd hadoop -m -s /bin/bash     && usermod root -aG hadoop     &&
+      for user in hdfs yarn mapred; do          useradd ${user} -m -s /bin/bash -G
+      hadoop;        done     && for user in hadoop hdfs yarn mapred; do          cp
+      -R /root/.ssh /home/${user};          chown ${user}:hadoop -R /home/${user};        done
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/
+  - Env:
+    - Key: HADOOP_URL
+      Value: $MIRROR_APACHE/hadoop/common/hadoop-$HADOOP_VERSION/hadoop-$HADOOP_VERSION.tar.gz
+    Name: env
+  - CmdLine:
+    - set -x     && curl --silent --head $HADOOP_URL | head -n 1 | grep "200 OK"     &&
+      curl -fSL "$HADOOP_URL" -o hadoop-$HADOOP_VERSION.tar.gz     && tar -zxf hadoop-$HADOOP_VERSION.tar.gz
+      -C /opt/     && rm -f hadoop-$HADOOP_VERSION.tar.gz     && rm -rf $HADOOP_INSTALL/share/doc     &&
+      find $HADOOP_INSTALL -name "*.cmd" | xargs rm -rf     && find $HADOOP_INSTALL/share/hadoop
+      -path "*/sources" | xargs rm -rf     && find $HADOOP_INSTALL/share/hadoop -name
+      "*tests*.jar" | xargs rm -rf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -eux; $HADOOP_INSTALL/bin/hadoop version; $HADOOP_INSTALL/bin/hadoop checknative
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: USER
+      Value: root
+    Name: env
+  - Env:
+    - Key: HADOOP_HOME
+      Value: '"/opt/hadoop"'
+    - Key: HADOOP_CONF_DIR
+      Value: '"/etc/hadoop"'
+    - Key: HADOOP_DATA_DIR
+      Value: '"/data/hadoop"'
+    - Key: HADOOP_LOG_DIR
+      Value: '"/data/hadoop/logs"'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH
+    Name: env
+  - Env:
+    - Key: _PS1
+      Value: '"docker-hadoop-$HADOOP_VERSION"'
+    Name: env
+  - CmdLine:
+    - set -xe     && ln -s $HADOOP_INSTALL $HADOOP_HOME     && rm -rf $HADOOP_HOME/share/doc     &&
+      mkdir /docker-entrypoint.d     && mkdir -p ${HADOOP_CONF_DIR} ${HADOOP_DATA_DIR}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "/export JAVA_HOME/a\export JAVA_HOME=${JAVA_HOME}" ${HADOOP_HOME}/etc/hadoop/hadoop-env.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker_hadoop.sh
+    - /docker_hadoop.sh
+  - CmdLine:
+    - chmod +x /docker_hadoop.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - shell/*.sh
+    - /opt/
+  - CmdLine:
+    - chmod +x /opt/*.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /docker_hadoop.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - sshd
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: longe/${FROM_IMG}:${FROM_TAG}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM longe/${FROM_IMG}:${FROM_TAG}

@@ -1,0 +1,80 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.13-alpine
+  Commands:
+  - CmdLine:
+    - apk add --update git make zip bash gcc musl-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/terraform-providers/terraform-provider-openstack
+  - CmdLine:
+    - git clone https://github.com/terraform-providers/terraform-provider-openstack.git
+      .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/kayrus/ingress-terraform
+  - CmdLine:
+    - git clone https://github.com/kayrus/ingress-terraform.git .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.13-alpine as builder
+- BaseName: alpine:latest
+  Commands:
+  - Env:
+    - Key: TERRAFORM_VERSION
+      Value: 0.12.9
+    Name: env
+  - Env:
+    - Key: OS_DELAYED_AUTH
+      Value: "true"
+    Name: env
+  - CmdLine:
+    - apk add --no-cache ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+    - /bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/terraform-provider-openstack
+    - /root/.terraform.d/plugins/terraform-provider-openstack_v1.24.0_x4
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/kayrus/ingress-terraform/bin/terraform-ingress-controller
+    - /bin/terraform-ingress-controller
+  - CmdLine:
+    - for k in /bin/; do for i in $k*.zip; do unzip -qd $k $i; done && rm $k*.zip
+      && chmod +x $k*; done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/terraform-ingress-controller
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

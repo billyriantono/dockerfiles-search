@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- BaseName: openresty/openresty:alpine
+  Commands:
+  - Maintainer: Dmitriy Lekomtsev <lekomtsev@gmail.com>
+    Name: maintainer
+  - Env:
+    - Key: LAPIS_VERSION
+      Value: 1.6.0-1
+    Name: env
+  - Env:
+    - Key: RESTY_LUAROCKS_VERSION
+      Value: '"2.4.3"'
+    Name: env
+  - Env:
+    - Key: SRC_DIR
+      Value: /opt
+    Name: env
+  - Env:
+    - Key: OPENRESTY_PREFIX
+      Value: /opt/openresty
+    Name: env
+  - Env:
+    - Key: LAPIS_ENVIRONMENT
+      Value: docker
+    Name: env
+  - Env:
+    - Key: LAPIS_OPENRESTY
+      Value: $OPENRESTY_PREFIX/nginx/sbin/nginx
+    Name: env
+  - CmdLine:
+    - mkdir -p /app/src  && cd tmp/  && apk --no-cache add       openssl       yaml  &&
+      echo "#### Installing build dependencies"  && apk --no-cache add --virtual build-deps       curl       build-base       cmake       git       unzip       openssl-dev       yaml-dev  &&
+      echo "#### Installing luarocks"  && curl -fSL http://luarocks.github.io/luarocks/releases/luarocks-${RESTY_LUAROCKS_VERSION}.tar.gz       -o
+      luarocks-${RESTY_LUAROCKS_VERSION}.tar.gz  && tar xzf luarocks-${RESTY_LUAROCKS_VERSION}.tar.gz  &&
+      cd luarocks-${RESTY_LUAROCKS_VERSION}  && ./configure --prefix=/usr/local/openresty/luajit       --with-lua=/usr/local/openresty/luajit       --lua-suffix=jit-2.1.0-beta3       --with-lua-include=/usr/local/openresty/luajit/include/luajit-2.1  &&
+      make build  && make install  && cd /tmp  && rm -rf luarocks-${RESTY_LUAROCKS_VERSION}       luarocks-${RESTY_LUAROCKS_VERSION}.tar.gz  &&
+      echo "#### Installing lua-cjson"  && git clone https://github.com/openresty/lua-cjson.git  &&
+      cd lua-cjson  && luarocks make  && cd /tmp  && rm -rf lua-cjson  && echo "####
+      Installing YAML"  && luarocks --server=http://rocks.moonscript.org install lyaml  &&
+      echo "#### Testing YAML"  && echo "#### Installing Moonscript"  && luarocks
+      install moonscript  && echo "#### Installing Lapis"  && luarocks install lapis  &&
+      echo "#### Removing dev dependencies"  && apk del build-deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - preinstall*.moon
+    - /app/
+  - Name: workdir
+    Path: /app/src
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - lapis
+    Name: entrypoint
+    PrependShell: false
+  - Expression: ADD app.yml /app/
+    Name: onbuild
+  - Expression: RUN cd /tmp  && echo "#### Installing runtime dependencies before
+      any dev dependencies"  && moon /app/preinstall_runtime.moon /app/app.yml  &&
+      echo "#### Installing luarocks common buildtime deps"  && apk --no-cache add
+      --virtual build-deps       curl       build-base       cmake       git       unzip       tar       yaml  &&
+      echo "#### Launch Preinstall"  && moon /app/preinstall.moon /app/app.yml  &&
+      echo "#### Finishing Preinstall"  && apk del build-deps
+    Name: onbuild
+  - Expression: ADD . /app/src
+    Name: onbuild
+  - Expression: RUN moonc /app/src
+    Name: onbuild
+  - CmdLine:
+    - server
+    - production
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openresty/openresty:alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openresty/openresty:alpine

@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.11
+  Commands:
+  - Key: REPOSITORY
+    Name: arg
+    Value: github.com/ncarlier
+  - Key: ARTIFACT
+    Name: arg
+    Value: webhookd
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/$REPOSITORY/$ARTIFACT
+  - Name: workdir
+    Path: /go/src/$REPOSITORY/$ARTIFACT
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.11 AS builder
+- BaseName: docker:dind
+  Commands:
+  - Key: REPOSITORY
+    Name: arg
+    Value: github.com/ncarlier
+  - Key: ARTIFACT
+    Name: arg
+    Value: webhookd
+  - CmdLine:
+    - mkdir /lib64 && ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache git openssh-client jq bash
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - COMPOSE_VERSION="1.23.2" && apk add --no-cache   py-pip && pip install --no-cache-dir   docker-compose==${COMPOSE_VERSION}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/opt/webhookd/scripts /var/opt/webhookd/work
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/$REPOSITORY/$ARTIFACT/release/$ARTIFACT
+    - /usr/local/bin/$ARTIFACT
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/$REPOSITORY/$ARTIFACT/scripts
+    - /var/opt/webhookd/scripts
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - webhookd
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: docker:dind
+  Name: ""
+  Platform: ""
+  SourceCode: FROM docker:dind

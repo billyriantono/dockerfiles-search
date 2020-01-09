@@ -1,0 +1,75 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps go git libc-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go get -a -installsuffix cgo -buildmode=exe github.com/thekvs/microproxy
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM alpine AS build-env
+- BaseName: busybox
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Artem Yasinskiy <shkrid@gmail.com>"'
+    Name: label
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /root/go/bin/microproxy
+    - /
+  - Name: workdir
+    Path: /mp
+  - CmdLine:
+    - echo $'listen="0.0.0.0:3128"\naccess_log="/dev/stdout"\nactivity_log="/dev/stderr"\nallowed_connect_ports=[443,
+      80]\nauth_file="auth.txt"\nauth_type="basic"\nforwarded_for_header="delete"\nvia_header="delete"\nallowed_networks=["0.0.0.0/0"]\n'
+      > microproxy.toml
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3128"
+  - Env:
+    - Key: MP_USER
+      Value: microproxy
+    - Key: MP_PASS
+      Value: microproxy
+    Name: env
+  - CmdLine:
+    - '[ -f auth.txt ] || echo "$MP_USER:$MP_PASS" > auth.txt && /microproxy -config
+      microproxy.toml'
+    Name: cmd
+    PrependShell: true
+  - Key: '"BUILD_DATE'
+    Name: arg
+    Value: unknown"
+  - Key: '"VCS_REF'
+    Name: arg
+    Value: unknown"
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.name
+      Value: '"Docker-microproxy"'
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/shkrid/docker-microproxy"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  From:
+    Image: busybox
+  Name: ""
+  Platform: ""
+  SourceCode: FROM busybox

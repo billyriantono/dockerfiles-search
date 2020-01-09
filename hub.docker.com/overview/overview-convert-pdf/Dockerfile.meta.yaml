@@ -1,0 +1,210 @@
+MetaArgs: null
+Stages:
+- As: prebuild
+  BaseName: buildpack-deps:stretch-curl
+  Commands:
+  - CmdLine:
+    - set -x       && apt-get -q -y update       && apt-get -q -y install git build-essential
+      python
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DEPOT_TOOLS_VERSION
+      Value: e8856eea42cf284071511107e818ce9980b30636
+    Name: env
+  - CmdLine:
+    - set -x       && cd /usr/src && git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git       &&
+      cd /usr/src/depot_tools && git checkout $DEPOT_TOOLS_VERSION
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PDFIUM_VERSION
+      Value: 92c8b1a07b01f428ec3f2b6d04acc109bfdeb3da
+    Name: env
+  - CmdLine:
+    - 'set -x       && mkdir -p /usr/src/pdfium_repo       && cd /usr/src/pdfium_repo       &&
+      /usr/src/depot_tools/gclient root       && /usr/src/depot_tools/gclient config
+      --spec ''solutions = [ { "url": "https://pdfium.googlesource.com/pdfium.git",
+      "managed": False, "name": "pdfium", }, ]''       && PATH="/usr/src/depot_tools:$PATH"
+      /usr/src/depot_tools/gclient sync --no-history --revision=$PDFIUM_VERSION'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x       && echo "deb [arch=amd64] http://storage.googleapis.com/bazel-apt
+      stable jdk1.8" | tee /etc/apt/sources.list.d/bazel.list       && curl https://bazel.build/bazel-release.pub.gpg
+      | apt-key add -       && apt-get -q -y update       && apt-get -q -y install
+      libboost-dev bazel pkg-config ninja-build clang libc++-dev python3
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x       && cd /usr/src/pdfium_repo/pdfium       && /usr/src/depot_tools/gn
+      gen out/Release --args="use_goma=false is_debug=false pdf_use_skia=false pdf_use_skia_paths=false
+      pdf_enable_xfa=false pdf_enable_v8=false pdf_is_standalone=true is_component_build=false
+      clang_use_chrome_plugins=false symbol_level=0 pdf_is_complete_lib=true"       &&
+      ninja -C out/Release pdfium       && mkdir -p /usr/include/pdfium       && cp
+      -a out/Release/obj/libpdfium.a /usr/lib/libpdfium.a       && cp -a public/ /usr/include/pdfium/public
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  From:
+    Image: buildpack-deps:stretch-curl
+  Name: prebuild
+  Platform: ""
+  SourceCode: FROM buildpack-deps:stretch-curl AS prebuild
+- As: build
+  BaseName: prebuild
+  Commands: null
+  From:
+    Stage:
+      Index: 0
+      Named: prebuild
+  Name: build
+  Platform: ""
+  SourceCode: FROM prebuild AS build
+- As: framework
+  BaseName: overview/overview-convert-framework:0.0.12
+  Commands: null
+  From:
+    Image: overview/overview-convert-framework:0.0.12
+  Name: framework
+  Platform: ""
+  SourceCode: FROM overview/overview-convert-framework:0.0.12 AS framework
+- As: base
+  BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache jq ca-certificates
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: framework
+    Name: copy
+    SourcesAndDest:
+    - /app/run
+    - /app/
+  - Chown: ""
+    From: framework
+    Name: copy
+    SourcesAndDest:
+    - /app/convert-stream-to-mime-multipart
+    - /app/convert
+  From:
+    Image: alpine:3.7
+  Name: base
+  Platform: ""
+  SourceCode: FROM alpine:3.7 AS base
+- As: test-base
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache python3
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 3
+      Named: base
+  Name: test-base
+  Platform: ""
+  SourceCode: FROM base AS test-base
+- As: compiled
+  BaseName: prebuild
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Makefile
+    - /src/Makefile
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - main
+    - /src/main
+  - CmdLine:
+    - make all
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: prebuild
+  Name: compiled
+  Platform: ""
+  SourceCode: FROM prebuild AS compiled
+- As: test
+  BaseName: test-base
+  Commands:
+  - Chown: ""
+    From: compiled
+    Name: copy
+    SourcesAndDest:
+    - /src/split-and-extract-pdf
+    - /app/
+  - Chown: ""
+    From: compiled
+    Name: copy
+    SourcesAndDest:
+    - /src/extract-pdf
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - do-convert-stream-to-mime-multipart
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - test
+    - /app/test/
+  - CmdLine:
+    - python3 /app/test/test_*.py
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 4
+      Named: test-base
+  Name: test
+  Platform: ""
+  SourceCode: FROM test-base AS test
+- As: production
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: compiled
+    Name: copy
+    SourcesAndDest:
+    - /src/split-and-extract-pdf
+    - /app/
+  - Chown: ""
+    From: compiled
+    Name: copy
+    SourcesAndDest:
+    - /src/extract-pdf
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - do-convert-stream-to-mime-multipart
+    - /app/
+  - CmdLine:
+    - /app/run
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 3
+      Named: base
+  Name: production
+  Platform: ""
+  SourceCode: FROM base AS production

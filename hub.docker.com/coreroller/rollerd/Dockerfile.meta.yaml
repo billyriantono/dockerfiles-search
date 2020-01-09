@@ -1,0 +1,88 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Key: GIT_REMOTE_URL
+    Name: arg
+    Value: https://github.com/coreroller/coreroller
+  - Key: GIT_BRANCH
+    Name: arg
+    Value: master
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - set -x     && apk --no-cache add git curl musl-dev     ca-certificates tzdata     &&
+      mkdir -p /build /coreroller/static     && git clone --branch v0.4.4 https://github.com/constabulary/gb
+      /go/src/github.com/constabulary/gb     && go get github.com/constabulary/gb/...     &&
+      git clone --single-branch --branch ${GIT_BRANCH} ${GIT_REMOTE_URL}     && cd
+      coreroller/backend     && /go/bin/gb build     && cp /build/coreroller/backend/bin/rollerd
+      /coreroller
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- As: assets
+  BaseName: node:9-alpine
+  Commands:
+  - Name: workdir
+    Path: /build
+  - Key: GIT_REMOTE_URL
+    Name: arg
+    Value: https://github.com/coreroller/coreroller
+  - Key: GIT_BRANCH
+    Name: arg
+    Value: master
+  - CmdLine:
+    - apk --no-cache add git     && git clone --single-branch --branch ${GIT_BRANCH}
+      ${GIT_REMOTE_URL}     && cd /build/coreroller/frontend     && npm install     &&
+      npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:9-alpine
+  Name: assets
+  Platform: ""
+  SourceCode: FROM node:9-alpine as assets
+- BaseName: alpine:3.8
+  Commands:
+  - CmdLine:
+    - apk --no-cache add ca-certificates tzdata     && mkdir -p /coreroller/static
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/coreroller/backend/bin/rollerd
+    - /coreroller/
+  - Chown: ""
+    From: assets
+    Name: copy
+    SourcesAndDest:
+    - /build/coreroller/frontend/built/
+    - /coreroller/static/
+  - Env:
+    - Key: COREROLLER_DB_URL
+      Value: '"postgres://postgres@postgresqld.local:5432/coreroller?sslmode=disable"'
+    Name: env
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - /coreroller/rollerd
+    - -http-static-dir=/coreroller/static
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

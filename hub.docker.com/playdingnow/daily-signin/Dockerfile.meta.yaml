@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: node:10.2.1-slim
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"palydingnow@gmail.com"'
+    Name: label
+  - CmdLine:
+    - apt-get update && apt-get install -y wget --no-install-recommends     && wget
+      -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add
+      -     && sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/
+      stable main" >> /etc/apt/sources.list.d/google.list'     && apt-get update     &&
+      apt-get install -y $(apt-cache depends google-chrome-unstable | awk '/Depends:/{print$2}')
+      --no-install-recommends     && rm -rf /var/lib/apt/lists/*     && apt-get purge
+      --auto-remove -y curl     && rm -rf /src/*.deb
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package-lock.json
+    - .
+  From:
+    Image: node:10.2.1-slim
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:10.2.1-slim AS base
+- As: dependencies
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - npm set progress=false && npm config set depth 0
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm i --production
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://install.goreleaser.com/github.com/tj/node-prune.sh && sh node-prune.sh
+      && ./bin/node-prune
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: dependencies
+  Platform: ""
+  SourceCode: FROM base AS dependencies
+- As: release
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /src-app
+  - Chown: ""
+    From: dependencies
+    Name: copy
+    SourcesAndDest:
+    - /app/node_modules
+    - ./node_modules
+  - CmdLine:
+    - mkdir
+    - dev-images
+    Name: run
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - /src-app
+  - CmdLine:
+    - npm
+    - start
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: release
+  Platform: ""
+  SourceCode: FROM base AS release

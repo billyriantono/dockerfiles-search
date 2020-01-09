@@ -1,0 +1,113 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Key: GOOS
+    Name: arg
+    Value: linux
+  - Key: GOARCH
+    Name: arg
+    Value: amd64
+  - Key: ENABLE_UPX
+    Name: arg
+    Value: "true"
+  - Key: UPX_COMP_RATIO
+    Name: arg
+    Value: brute
+  - CmdLine:
+    - apk --no-cache --update add git upx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b ${VERSION:-master} https://github.com/jedisct1/dnscrypt-proxy src
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/dnscrypt-proxy
+  - CmdLine:
+    - set -ex     && go clean     && go build -ldflags="-s -w" -o /app/dnscrypt-proxy     &&
+      cp /go/src/dnscrypt-proxy/example-* /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - set -ex ;     if [[ $ENABLE_UPX == 'true' ]]; then         upx ${UPX_COMP_RATIO:+--$UPX_COMP_RATIO}
+      dnscrypt-proxy ;     fi
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- BaseName: alpine:latest
+  Commands:
+  - Maintainer: Alto <alto@pendragon.kr>
+    Name: maintainer
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SERVER_NAMES
+      Value: '''cloudflare, google'''
+    - Key: PROTO_DNSCRYPT
+      Value: '''true'''
+    - Key: PROTO_DOH
+      Value: '''true'''
+    - Key: REQUIRE_DNSSEC
+      Value: '''false'''
+    - Key: REQUIRE_NOLOG
+      Value: '''true'''
+    - Key: REQUIRE_NOFILTER
+      Value: '''true'''
+    - Key: FALLBACK_RESOLVER
+      Value: 1.1.1.1:53
+    - Key: LISTEN_ADDRESSES
+      Value: 0.0.0.0:53
+    - Key: ENABLE_AUTO_CONFIG
+      Value: '''true'''
+    - Key: VERSION
+      Value: ${VERSION:-default}
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /rootfs
+    - /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /app
+  - Name: volume
+    Volumes:
+    - /data
+  - CmdLine:
+    - set -ex     && apk --no-cache --update add             tini             ca-certificates     &&
+      chmod +x /app/dnscrypt-proxy     && chmod +x /entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Name: expose
+    Ports:
+    - 53/tcp
+    - 53/udp
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

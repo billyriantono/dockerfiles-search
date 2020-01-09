@@ -1,0 +1,131 @@
+MetaArgs:
+- DefaultValue: docker
+  Key: MVN_PROFILE
+  ProvidedValue: null
+  Value: docker
+Stages:
+- As: maven
+  BaseName: maven:3.6-jdk-8
+  Commands:
+  - Key: MVN_PROFILE
+    Name: arg
+    Value: null
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker/files/lib/mvn
+    - /build/lib
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./pom.xml
+    - /build/pom.xml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src
+    - /build/src
+  - Name: workdir
+    Path: /build/lib
+  - CmdLine:
+    - mvn install:install-file -Dfile=coffee-common-cipher-1.0.jar -DpomFile=coffee-common-cipher-1.0.pom
+      &&   mvn install:install-file -Dfile=coffee-common-core-1.0.jar -DpomFile=coffee-common-core-1.0.pom
+      &&   mvn install:install-file -Dfile=coffee-server-core-1.0.jar -DpomFile=coffee-server-core-1.0.pom
+      &&   mvn install:install-file -Dfile=coffee-server-webcore-1.0.jar -DpomFile=coffee-server-webcore-1.0.pom
+      &&   mvn install:install-file -Dfile=hcis-utils-1.9.12.jar -DpomFile=hcis-utils-1.9.12.pom
+      &&   mvn install:install-file -Dfile=bootstrap-1.0.9.jar -DpomFile=bootstrap-1.0.9.pom
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - mvn -Dproject.build.sourceEncoding=UTF-8     package -P ${MVN_PROFILE} &&   cp
+      target/*.war target/wr.war
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.6-jdk-8
+  Name: maven
+  Platform: ""
+  SourceCode: FROM maven:3.6-jdk-8 AS maven
+- BaseName: payara/micro
+  Commands:
+  - Key: MVN_PROFILE
+    Name: arg
+    Value: null
+  - Name: user
+    User: root
+  - Env:
+    - Key: PAYARA_PATH
+      Value: /opt/payara
+    Name: env
+  - Env:
+    - Key: LIB_DIR
+      Value: $PAYARA_PATH/ext
+    Name: env
+  - Env:
+    - Key: FOP_CONF_DIR
+      Value: $PAYARA_PATH/fop/conf
+    Name: env
+  - Env:
+    - Key: FOP_CONF
+      Value: $FOP_CONF_DIR/fop.xconf
+    Name: env
+  - Env:
+    - Key: APP_DIR
+      Value: /opt/WR
+    Name: env
+  - CmdLine:
+    - set -xe &&   apk --no-cache add ttf-dejavu fontconfig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - umask 0002 &&   mkdir -p $LIB_DIR &&   mkdir -p $FOP_CONF_DIR &&   mkdir -p
+      $APP_DIR
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker/files/lib/ext
+    - $LIB_DIR
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker/files/lib/fop/conf
+    - $FOP_CONF_DIR
+  - Chown: ""
+    From: maven
+    Name: copy
+    SourcesAndDest:
+    - build/target/wr.war
+    - $DEPLOY_DIR
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker/files/entrypoint.sh
+    - $PAYARA_PATH/entrypoint.sh
+  - CmdLine:
+    - chown payara:payara $PAYARA_PATH/entrypoint.sh &&   chmod +x $PAYARA_PATH/entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: payara
+  - Name: workdir
+    Path: $PAYARA_PATH
+  - CmdLine:
+    - sh
+    - ./entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: payara/micro
+  Name: ""
+  Platform: ""
+  SourceCode: FROM payara/micro

@@ -1,0 +1,78 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.13.4-alpine3.10
+  Commands:
+  - CmdLine:
+    - apk --no-cache add gcc musl-dev git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -u github.com/pottava/aws-s3-proxy
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/pottava/aws-s3-proxy
+  - Env:
+    - Key: APP_VERSION
+      Value: v2.0.0
+    Name: env
+  - CmdLine:
+    - git checkout "${APP_VERSION}" > /dev/null 2>&1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go mod verify
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - githash=$(git rev-parse --short HEAD 2>/dev/null)     && today=$(date +%Y-%m-%d
+      --utc)     && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build     -ldflags '-s
+      -w -X main.ver=${APP_VERSION} -X main.commit=${githash} -X main.date=${today}'     -o
+      /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13.4-alpine3.10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.13.4-alpine3.10 AS builder
+- As: libs
+  BaseName: alpine:3.10
+  Commands:
+  - CmdLine:
+    - apk --no-cache add ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: libs
+  Platform: ""
+  SourceCode: FROM alpine:3.10 AS libs
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: libs
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /aws-s3-proxy
+  - CmdLine:
+    - /aws-s3-proxy
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

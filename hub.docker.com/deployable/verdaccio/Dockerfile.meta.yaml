@@ -1,0 +1,142 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: mhart/alpine-node:8.11.1
+  Commands:
+  - Env:
+    - Key: VERDACCIO_VERSION
+      Value: 2.7.3
+    Name: env
+  - Key: VERDACCIO_LABEL
+    Name: arg
+    Value: verdaccio
+  - Key: VERDACCIO_LABEL_VERSION
+    Name: arg
+    Value: $VERDACCIO_LABEL-$VERDACCIO_VERSION
+  - Key: DOCKER_BUILD_PROXY
+    Name: arg
+    Value: ''''''
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - $VERDACCIO_LABEL_VERSION/package.json
+    - $VERDACCIO_LABEL_VERSION/yarn.lock
+    - /app/
+  - CmdLine:
+    - yarn install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - $VERDACCIO_LABEL_VERSION
+    - /app
+  - CmdLine:
+    - set -uex;     export http_proxy=${http_proxy:-${DOCKER_BUILD_PROXY}};     apk
+      update;     apk add g++ python-dev make;     export http_proxy=;     cd /app;     yarn
+      install --pure-lockfile;     yarn cache clean;     rm -rf /usr/local/share/.cache/yarn;     apk
+      del --purge python python-dev g++ musl-dev libc-dev gcc;     rm -rf /var/cache/apk;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /app && yarn run build:webui
+    Name: run
+    PrependShell: true
+  From:
+    Image: mhart/alpine-node:8.11.1
+  Name: build
+  Platform: ""
+  SourceCode: FROM mhart/alpine-node:8.11.1 AS build
+- BaseName: mhart/alpine-node:8.11.1
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Key: VERDACCIO_VERSION
+    Name: arg
+    Value: 2.7.3
+  - Key: VERDACCIO_LABEL
+    Name: arg
+    Value: verdaccio
+  - Key: VERDACCIO_LABEL_VERSION
+    Name: arg
+    Value: $VERDACCIO_LABEL-$VERDACCIO_VERSION
+  - CmdLine:
+    - set -uex;     adduser -D -g "" app;     adduser -D -g "" -G app appr;     mkdir
+      -p /app/storage;     chown app /app/storage;     chmod 755 /app/storage;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - $VERDACCIO_LABEL_VERSION/package.json
+    - $VERDACCIO_LABEL_VERSION/yarn.lock
+    - /app/
+  - CmdLine:
+    - yarn install --production --pure-lockfile
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - $VERDACCIO_LABEL_VERSION
+    - /app
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app/static
+    - /app/static
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /config.yaml
+    - /app/config.yaml
+  - CmdLine:
+    - set -uex;     touch /app/htpasswd;     chown -R app:app /app;     chown -R appr:app
+      /app/storage;     chmod 755 /app/bin/verdaccio;     chown appr:app /app/htpasswd;     chmod
+      640 /app/htpasswd;     find /app -type d -exec chmod 755 {} +;     find /app
+      -type f -exec chmod o+r {} +;     find /app -type f -exec chmod g+r {} +;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - /entrypoint.sh
+    - /docker-entrypoint.sh
+  - Name: user
+    User: appr
+  - Name: expose
+    Ports:
+    - "4873"
+  - Env:
+    - Key: PORT
+      Value: "4873"
+    Name: env
+  - Env:
+    - Key: PROTOCOL
+      Value: http
+    Name: env
+  - Name: volume
+    Volumes:
+    - /app/storage
+  - CmdLine: null
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - node
+    - --trace_gc
+    - /app/bin/verdaccio
+    - --config
+    - /app/config.yaml
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: mhart/alpine-node:8.11.1
+  Name: ""
+  Platform: ""
+  SourceCode: FROM mhart/alpine-node:8.11.1

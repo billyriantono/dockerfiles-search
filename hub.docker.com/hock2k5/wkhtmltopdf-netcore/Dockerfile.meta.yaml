@@ -1,0 +1,115 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: microsoft/dotnet:2.1-aspnetcore-runtime
+  Commands:
+  - CmdLine:
+    - apt update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt install -y libgdiplus
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/lib/libgdiplus.so /lib/x86_64-linux-gnu/libgdiplus.so
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y --no-install-recommends zlib1g fontconfig libfreetype6 libx11-6
+      libxext6 libxrender1 wget gdebi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://github.com/wkhtmltopdf/wkhtmltopdf/releases/download/0.12.5/wkhtmltox_0.12.5-1.stretch_amd64.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gdebi --n wkhtmltox_0.12.5-1.stretch_amd64.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt install libssl1.0-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/local/lib/libwkhtmltox.so /usr/lib/libwkhtmltox.so
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Name: expose
+    Ports:
+    - "80"
+  From:
+    Image: microsoft/dotnet:2.1-aspnetcore-runtime
+  Name: base
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1-aspnetcore-runtime AS base
+- As: build
+  BaseName: microsoft/dotnet:2.1-sdk
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - HtmlToPDF/HtmlToPDF.csproj
+    - HtmlToPDF/
+  - CmdLine:
+    - dotnet restore HtmlToPDF/HtmlToPDF.csproj
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Name: workdir
+    Path: /src/HtmlToPDF
+  - CmdLine:
+    - dotnet build HtmlToPDF.csproj -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.1-sdk
+  Name: build
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1-sdk AS build
+- As: publish
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - dotnet publish HtmlToPDF.csproj -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build AS publish
+- As: final
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - CmdLine:
+    - dotnet
+    - HtmlToPDF.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: final
+  Platform: ""
+  SourceCode: FROM base AS final

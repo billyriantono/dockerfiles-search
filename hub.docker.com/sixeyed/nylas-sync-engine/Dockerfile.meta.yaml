@@ -1,0 +1,120 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:precise
+  Commands:
+  - Maintainer: elton@sixeyed.com
+    Name: maintainer
+  - CmdLine:
+    - "apt-get update && apt-get -y install python-software-properties\t\t   git                    mercurial
+      \                   wget                    supervisor                    mysql-client
+      \                   python                    python-dev                    python-pip
+      \                   python-setuptools                    build-essential                    libmysqlclient-dev
+      \                   gcc                    g++                    libzmq-dev
+      \                   libxml2-dev                    libxslt-dev                    lib32z1-dev
+      \                   libffi-dev                    pkg-config                    python-lxml
+      \                   tmux                    curl                    tnef                    stow
+      \                   sudo \t\t   lua5.2 \t\t   liblua5.2-dev \t\t   unzip     &&
+      apt-get -y autoremove && apt-get clean && rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build
+  - Env:
+    - Key: LIBSODIUM_VER
+      Value: 1.0.0
+    Name: env
+  - CmdLine:
+    - curl -L -O https://github.com/jedisct1/libsodium/releases/download/${LIBSODIUM_VER}/libsodium-${LIBSODIUM_VER}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'ced1fe3d2066953fea94f307a92f8ae41bf0643739a44309cbe43aa881dbc9a5 *libsodium-1.0.0.tar.gz'
+      | sha256sum -c || exit 1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar -xzf libsodium-${LIBSODIUM_VER}.tar.gz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build/libsodium-1.0.0
+  - CmdLine:
+    - ./configure --prefix=/usr/local/stow/libsodium-${LIBSODIUM_VER} &&                  make
+      -j4 &&                  rm -rf /usr/local/stow/libsodium-${LIBSODIUM_VER} &&                  mkdir
+      -p /usr/local/stow/libsodium-${LIBSODIUM_VER} &&                  make install
+      &&                  stow -d /usr/local/stow -R libsodium-${LIBSODIUM_VER} &&                  ldconfig
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build
+  - CmdLine:
+    - rm -rf libsodium-${LIBSODIUM_VER} libsodium-${LIBSODIUM_VER}.tar.gz &&     pip
+      install 'pip>=1.5.6' 'setuptools>=5.3' && hash pip && pip install 'pip>=1.5.6'
+      'setuptools>=5.3' tox &&     rm -rf /usr/lib/python2.7/dist-packages/setuptools.egg-info
+    Name: run
+    PrependShell: true
+  - Key: TAG
+    Name: arg
+    Value: production
+  - Name: workdir
+    Path: /opt
+  - CmdLine:
+    - curl -L -O https://github.com/nylas/sync-engine/archive/${TAG}.zip && unzip
+      ${TAG}.zip && rm ${TAG}.zip && mv sync-engine-${TAG} sync-engine
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/sync-engine
+  - CmdLine:
+    - pip install --upgrade pip &&     pip install 'pip==8.1.2' 'setuptools>=5.3'
+      &&     hash pip &&     pip install 'pip==8.1.2' 'setuptools>=5.3' &&     rm
+      -rf /usr/lib/python2.7/dist-packages/setuptools.egg-info
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find . -name \*.pyc -delete &&    pip install -r requirements.txt && pip install
+      -e . &&     useradd inbox &&     mkdir -p /etc/inboxapp
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.json
+    - /etc/inboxapp/config.json
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - secrets.yml
+    - /etc/inboxapp/secrets.yml
+  - CmdLine:
+    - chmod 0644 /etc/inboxapp/config.json && chmod 0600 /etc/inboxapp/secrets.yml
+      && chown -R inbox:inbox /etc/inboxapp
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y autoremove && apt-get clean &&    mkdir -p /var/lib/inboxapp/parts
+      && mkdir -p /var/log/inboxapp && chown inbox:inbox /var/log/inboxapp &&    chown
+      -R inbox:inbox /var/lib/inboxapp && chown -R inbox:inbox /opt/sync-engine
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/sync-engine/
+  - Name: volume
+    Volumes:
+    - /var/lib/inboxapp
+  - Name: expose
+    Ports:
+    - "5555"
+  - Name: user
+    User: inbox
+  - CmdLine:
+    - bin/create-db && bin/inbox-api && bin/inbox-start
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:precise
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:precise

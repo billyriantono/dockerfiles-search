@@ -1,0 +1,169 @@
+MetaArgs:
+- DefaultValue: dist
+  Key: BUILD_TARGET
+  ProvidedValue: null
+  Value: dist
+Stages:
+- As: backend-base
+  BaseName: python:3.8.0
+  Commands:
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -c
+  - Env:
+    - Key: PYTHONDONTWRITEBYTECODE
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: VIRTUAL_ENV
+      Value: '"/data/venv"'
+    Name: env
+  - Name: workdir
+    Path: /data
+  - CmdLine:
+    - pip install poetry==0.12.17 && python3 -m venv $VIRTUAL_ENV
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: '"$VIRTUAL_ENV/bin:$PATH"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pyproject.toml
+    - poetry.lock
+    - ./
+  - CmdLine:
+    - poetry install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /data/mig3
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  From:
+    Image: python:3.8.0
+  Name: backend-base
+  Platform: ""
+  SourceCode: FROM python:3.8.0 AS backend-base
+- As: frontend-base
+  BaseName: node:13.3.0-stretch
+  Commands:
+  - Name: workdir
+    Path: /data/mig3-ui
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mig3-ui/package.json
+    - mig3-ui/yarn.lock
+    - ./
+  - CmdLine:
+    - yarn install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mig3-ui
+    - ./
+  From:
+    Image: node:13.3.0-stretch
+  Name: frontend-base
+  Platform: ""
+  SourceCode: FROM node:13.3.0-stretch AS frontend-base
+- As: backend-dev
+  BaseName: backend-base
+  Commands:
+  - CmdLine:
+    - /data/mig3/backend_dev_entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: backend-base
+  Name: backend-dev
+  Platform: ""
+  SourceCode: FROM backend-base as backend-dev
+- As: frontend-dev
+  BaseName: frontend-base
+  Commands:
+  - CmdLine:
+    - yarn
+    - serve
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: frontend-base
+  Name: frontend-dev
+  Platform: ""
+  SourceCode: FROM frontend-base AS frontend-dev
+- As: frontend-build
+  BaseName: frontend-base
+  Commands:
+  - CmdLine:
+    - yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: frontend-base
+  Name: frontend-build
+  Platform: ""
+  SourceCode: FROM frontend-base AS frontend-build
+- As: dist
+  BaseName: backend-base
+  Commands:
+  - Chown: ""
+    From: frontend-build
+    Name: copy
+    SourcesAndDest:
+    - /data/mig3-ui/dist
+    - /data/mig3/mig3-ui/dist
+  - CmdLine:
+    - make
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: backend-base
+  Name: dist
+  Platform: ""
+  SourceCode: FROM backend-base as dist
+- As: final
+  BaseName: ${BUILD_TARGET}
+  Commands:
+  - Key: BUILD_TARGET
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: com.github.mverteuil.mig3.build-target
+      Value: '"${BUILD_TARGET}"'
+    Name: label
+  - CmdLine:
+    - 'echo "Finalized: ${BUILD_TARGET}"'
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${BUILD_TARGET}
+  Name: final
+  Platform: ""
+  SourceCode: FROM ${BUILD_TARGET} AS final

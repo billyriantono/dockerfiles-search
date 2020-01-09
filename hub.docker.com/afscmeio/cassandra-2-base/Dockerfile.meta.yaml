@@ -1,0 +1,110 @@
+MetaArgs: null
+Stages:
+- BaseName: afscmeio/java-8-base
+  Commands:
+  - Maintainer: AFSCME DevOps <devops@afscme.io>
+    Name: maintainer
+  - CmdLine:
+    - yum -y install deltarpm  && yum -y install ca-certificates curl less net-tools
+      unzip util-linux  && yum -y update  && yum -y clean all
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOSU_VER
+      Value: "1.9"
+    - Key: GOSU_ARCH
+      Value: amd64
+    - Key: GOSU_PATH
+      Value: https://github.com/tianon/gosu/releases/download
+    - Key: CASSANDRA_USER
+      Value: cassandra
+    - Key: CASSANDRA_UID
+      Value: "1002"
+    - Key: CASSANDRA_VER
+      Value: 2.2.6
+    - Key: MX4J_PATH
+      Value: http://downloads.sourceforge.net/sourceforge/mx4j
+    - Key: MX4J_VER
+      Value: 3.0.2
+    Name: env
+  - Env:
+    - Key: DSC_PKG_NAME
+      Value: ${CASSANDRA_USER}22-${CASSANDRA_VER}-1
+    - Key: CASSANDRA_ETC
+      Value: /etc/${CASSANDRA_USER}
+    - Key: CASSANDRA_DATA
+      Value: /var/lib/${CASSANDRA_USER}
+    - Key: MX4J_TAG
+      Value: mx4j-${MX4J_VER}
+    Name: env
+  - Env:
+    - Key: CASSANDRA_CONFIG
+      Value: ${CASSANDRA_ETC}/conf
+    - Key: DSC_PACKAGE
+      Value: ${DSC_PKG_NAME}.noarch.rpm
+    - Key: MX4J_FILE
+      Value: ${MX4J_TAG}.zip
+    Name: env
+  - CmdLine:
+    - groupadd -r ${CASSANDRA_USER} --gid=${CASSANDRA_UID}  && useradd -r -g ${CASSANDRA_USER}
+      --uid=${CASSANDRA_UID} -G users ${CASSANDRA_USER}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --silent -o /usr/local/bin/gosu -SL "${GOSU_PATH}/${GOSU_VER}/gosu-${GOSU_ARCH}"  &&
+      chmod +x /usr/local/bin/gosu
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rpm --import "http://rpm.datastax.com/rpm/repo_key"  && echo -e "[datastax]\nname=DataStax\
+      Repo\ for\ Apache\ Cassandra\nbaseurl=http://rpm.datastax.com/community\nenabled=1\ngpgcheck=1\n"
+      > /etc/yum.repos.d/datastax.repo  && yum -y install ${DSC_PKG_NAME}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -ri 's/^(JVM_PATCH_VERSION)=.*/\1=25/' ${CASSANDRA_CONFIG}/cassandra-env.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir -p \"${CASSANDRA_DATA}\" \"${CASSANDRA_ETC}\" \t&& chown -R \"${CASSANDRA_USER}\".\"${CASSANDRA_USER}\"
+      \"${CASSANDRA_DATA}\" \"${CASSANDRA_ETC}\" \t&& chmod -R 775 \"${CASSANDRA_DATA}\"
+      \"${CASSANDRA_ETC}\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --silent --retry 3 -SLo /tmp/${MX4J_FILE} ${MX4J_PATH}/${MX4J_FILE}  &&
+      unzip -oqq /tmp/${MX4J_FILE} -d /tmp/  && cp -a /tmp/${MX4J_TAG}/lib/mx4j-tools.jar
+      /usr/share/cassandra/lib/  && chown ${CASSANDRA_USER}.${CASSANDRA_USER} /usr/share/cassandra/lib/mx4j*.jar
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - '"${CASSANDRA_DATA}"'
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /docker-entrypoint.sh
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "7000"
+    - "7001"
+    - "7199"
+    - "8081"
+    - "9042"
+    - "9160"
+  - CmdLine:
+    - cassandra
+    - -f
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: afscmeio/java-8-base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM afscmeio/java-8-base

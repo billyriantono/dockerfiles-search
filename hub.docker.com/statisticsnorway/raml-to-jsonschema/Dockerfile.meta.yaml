@@ -1,0 +1,77 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: statisticsnorway/alpine-jdk11-buildtools:latest
+  Commands:
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - git clone https://github.com/statisticsnorway/raml-to-jsonschema.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /raml-to-jsonschema
+  - CmdLine:
+    - mvn -B clean install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - jlink
+    - --strip-debug
+    - --no-header-files
+    - --no-man-pages
+    - --compress=2
+    - --module-path
+    - /opt/jdk/jmods
+    - --output
+    - /linked
+    - --add-modules
+    - jdk.unsupported,java.base,java.logging,java.sql,java.naming,java.desktop
+    Name: run
+    PrependShell: false
+  From:
+    Image: statisticsnorway/alpine-jdk11-buildtools:latest
+  Name: build
+  Platform: ""
+  SourceCode: FROM statisticsnorway/alpine-jdk11-buildtools:latest as build
+- BaseName: alpine:latest
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /linked
+    - /opt/jdk/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /raml-to-jsonschema/target/raml-to-jsonschema-*.jar
+    - /opt/raml-to-jsonschema/bin/
+  - Env:
+    - Key: PATH
+      Value: /opt/jdk/bin:$PATH
+    Name: env
+  - CmdLine:
+    - mkdir -p /raml-project
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /raml-project
+  - Name: workdir
+    Path: /raml-project
+  - CmdLine:
+    - java
+    - -cp
+    - /opt/raml-to-jsonschema/bin/*
+    - no.ssb.raml.RamltoJsonSchemaConverter
+    - jsonschemas/
+    - schemas/
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

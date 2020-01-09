@@ -1,0 +1,8 @@
+FROM mysql:5.7
+
+    ENV MYSQL_DB=Confirmations
+    ENV MYSQL_PASSWORD=Confirmpass200
+    ENV MYSQL_ROOT_PASSWORD=123
+    ENV MYSQL_USER=root
+
+    EXPOSE 3306

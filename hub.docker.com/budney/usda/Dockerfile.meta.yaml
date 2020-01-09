@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: percona:latest
+  Commands:
+  - Name: user
+    User: root
+  - Env:
+    - Key: PASSWORD
+      Value: secret
+    Name: env
+  - Env:
+    - Key: USDANL
+      Value: http://github.com/nmaster/usdanl-sr28-mysql.git
+    Name: env
+  - Name: workdir
+    Path: /tmp
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - fix-utf8.sh
+    - fix_db_names.pl
+    - sr28_import.patch
+    - init-usda-db.sql
+    - fndds-data.sql
+    - init-dri-db.sql
+    - dri-data.sql
+    - /tmp/
+  - CmdLine:
+    - yum updateinfo && yum install -y     dos2unix     git     less     patch     unzip     wget     &&
+      yum clean all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex;     git clone $USDANL;     cd usdanl-sr28-mysql;     patch -p0 < ../sr28_import.patch;     sed
+      -i -e 's}LOAD DATA INFILE}LOAD DATA LOCAL INFILE}' sr28_import.sh;     sed -i
+      -e 's}usdanlsr28}usda}g' sr28_import.sh sr28_schema.sql;     (MYSQL_ROOT_PASSWORD=$PASSWORD
+      runuser -pu mysql /docker-entrypoint.sh mysqld 2>/dev/null & ) ;     sleep 60;     for
+      n in {59..0}; do         sleep 2;         if echo 'SELECT 1' | mysql -u root
+      --password=$PASSWORD &> /dev/null; then             break;         fi;     done;     if
+      ["$n" = 0]; then         /bin/false;     fi;     sh ./sr28_import.sh root $PASSWORD;     cp
+      ../init-usda-db.sql ../usda.sql;     mysqldump -u root --password=$PASSWORD
+      usda         | perl ../fix_db_names.pl >> ../usda.sql;     mysql -u root --password=$PASSWORD
+      < ../usda.sql;     cp ../init-usda-db.sql ../usda.sql;     mysqldump -u root
+      --password=$PASSWORD usda >> ../usda.sql;     cat ../init-dri-db.sql ../dri-data.sql         |
+      mysql -u root --password=$PASSWORD;     cat ../init-dri-db.sql > ../dri-data.sql;     mysqldump
+      -u root --password=$PASSWORD dietary_reference_intake >> ../dri-data.sql;
+    Name: run
+    PrependShell: true
+  From:
+    Image: percona:latest
+  Name: build
+  Platform: ""
+  SourceCode: FROM percona:latest as build
+- BaseName: percona:latest
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Len Budney (len.budney@gmail.com)"'
+    Name: label
+  - Labels:
+    - Key: '"net.jeenyus.usda.source"'
+      Value: '"https://www.ars.usda.gov/northeast-area/beltsville-md-bhnrc/beltsville-human-nutrition-research-center/nutrient-data-laboratory/docs/sr28-download-files/"'
+    Name: label
+  - Labels:
+    - Key: '"net.jeenyus.usda.instructions"'
+      Value: '"https://www.percona.com/doc/percona-server/LATEST/installation/docker.html"'
+    Name: label
+  - Labels:
+    - Key: '"net.jeenyus.usda.scripts"'
+      Value: '"https://github.com/nmaster/usdanl-sr28-mysql"'
+    Name: label
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/usda.sql
+    - /tmp/dri-data.sql
+    - /tmp/fndds-data.sql
+    - /docker-entrypoint-initdb.d/
+  - Name: expose
+    Ports:
+    - "3306"
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - mysqld
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: percona:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM percona:latest

@@ -1,0 +1,133 @@
+MetaArgs: null
+Stages:
+- As: frontend_builder
+  BaseName: node:11.12
+  Commands:
+  - Name: workdir
+    Path: /build/
+  - CmdLine:
+    - npm install -g yarn
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /frontend/
+    - ./
+  - CmdLine:
+    - set -x   && yarn install   && yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:11.12
+  Name: frontend_builder
+  Platform: ""
+  SourceCode: FROM node:11.12 as frontend_builder
+- BaseName: python:3.7.2
+  Commands:
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - groupadd -r -g 999 app   && useradd -r -g app -u 999 app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - chown 999 /app
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Pipfile
+    - Pipfile.lock
+    - ./
+  - CmdLine:
+    - set -ex   && pip install pipenv   && pipenv install --system --deploy
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: frontend_builder
+    Name: copy
+    SourcesAndDest:
+    - /build/dist/static
+    - ./hottip/static
+  - Chown: ""
+    From: frontend_builder
+    Name: copy
+    SourcesAndDest:
+    - /build/dist/*.png
+    - ./hottip/static/
+  - Chown: ""
+    From: frontend_builder
+    Name: copy
+    SourcesAndDest:
+    - /build/dist/index.html
+    - ./hottip/templates/hottip/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Env:
+    - Key: DJANGO_SETTINGS_MODULE
+      Value: hottip_proj.settings
+    Name: env
+  - Env:
+    - Key: UWSGI_WSGI_FILE
+      Value: hottip_proj/wsgi.py
+    - Key: UWSGI_HTTP
+      Value: :8080
+    - Key: UWSGI_MASTER
+      Value: "1"
+    - Key: UWSGI_WORKERS
+      Value: "1"
+    - Key: UWSGI_THREADS
+      Value: "8"
+    - Key: UWSGI_UID
+      Value: "999"
+    - Key: UWSGI_GID
+      Value: "999"
+    - Key: UWSGI_LAZY_APPS
+      Value: "1"
+    - Key: UWSGI_WSGI_ENV_BEHAVIOR
+      Value: holy
+    - Key: UWSGI_STATIC_MAP
+      Value: '"/static/=/app/static/"'
+    - Key: UWSGI_STATIC_EXPIRES_URI
+      Value: '"/static/.*\.[a-f0-9]{12,}\.(css|js|png|jpg|jpeg|gif|ico|woff|ttf|otf|svg|scss|map|txt)
+        315360000"'
+    - Key: UWSGI_LOG_FORMAT
+      Value: '"host:%(addr) time:%(time) method:%(method) uri:%(uri) proto:%(proto)
+        status:%(status) size:%(size) referer:%(referer) ua:%(uagent)"'
+    Name: env
+  - CmdLine:
+    - DATABASE_TYPE=none     python manage.py collectstatic --noinput
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - ./docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - uwsgi
+    - --http-auto-chunked
+    - --http-keepalive
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3.7.2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.7.2

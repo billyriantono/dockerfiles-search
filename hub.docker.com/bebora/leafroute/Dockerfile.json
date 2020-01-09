@@ -1,0 +1,101 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "build-stage",
+      "BaseName": "alpine:3.9",
+      "SourceCode": "FROM alpine:3.9 AS build-stage",
+      "Platform": "",
+      "As": "build-stage",
+      "From": {
+        "Image": "alpine:3.9"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk update \u0026\u0026     apk add --no-cache         boost-dev         build-base         cmake         curl         curl-dev         git         libexecinfo-dev         ninja         openssl-dev         websocket++         zlib-dev"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "git clone https://github.com/Microsoft/cpprestsdk.git \u0026\u0026     cd cpprestsdk \u0026\u0026     mkdir build-cpprestsdk \u0026\u0026     cd build-cpprestsdk \u0026\u0026     cmake -G Ninja ..         -DCMAKE_BUILD_TYPE=Release         -DBUILD_TESTS=OFF         -DBUILD_SAMPLES=OFF \u0026\u0026     ninja \u0026\u0026     ninja install \u0026\u0026     cd ../.. \u0026\u0026     rm -rf cpprestsdk \u0026\u0026     mkdir build \u0026\u0026     git clone https://github.com/awslabs/aws-lambda-cpp /tmp/aws-lambda-cpp \u0026\u0026     cd /tmp/aws-lambda-cpp \u0026\u0026     mkdir build \u0026\u0026     cd build \u0026\u0026     cmake ..         -DCMAKE_BUILD_TYPE=Release         -DCMAKE_INSTALL_PREFIX=/usr \u0026\u0026     make \u0026\u0026 make install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "/leafrouting"
+          ]
+        },
+        {
+          "CmdLine": [
+            "cd /leafrouting/routesfetcher/external \u0026\u0026     if [ \"$(ls -A arlib)\" ];         then echo \"Arlib found\";         else echo \"Arlib missing, cloning\" \u0026\u0026 git clone https://github.com/leonardoarcari/arlib ;     fi \u0026\u0026     if [ \"$(ls -A json11)\" ];             then echo \"json11 found\";             else echo \"json11 missing, cloning\" \u0026\u0026 git clone https://github.com/dropbox/json11 ;     fi \u0026\u0026     cd ../.. \u0026\u0026     mkdir build-main \u0026\u0026     cd build-main \u0026\u0026     cmake .. \u0026\u0026     make cppserver \u0026\u0026     mv /leafrouting/build-main/cpprestsdk/cppserver /build/cppserver \u0026\u0026     rm -rf /leafrouting \u0026\u0026     cd /build \u0026\u0026     curl https://leafroute.tk/ids -o ids \u0026\u0026     curl https://leafroute.tk/weights -o weights"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "deploy-stage",
+      "BaseName": "alpine:3.9",
+      "SourceCode": "FROM alpine:3.9 AS deploy-stage",
+      "Platform": "",
+      "As": "deploy-stage",
+      "From": {
+        "Image": "alpine:3.9"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "build-stage",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/build",
+            "/leafroute-built"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build-stage",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/lib64/",
+            "/usr/local/lib64/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apk update \u0026\u0026     apk add --no-cache boost-system boost-program_options libstdc++"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "1337"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/leafroute-built"
+        },
+        {
+          "CmdLine": [
+            "./cppserver"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

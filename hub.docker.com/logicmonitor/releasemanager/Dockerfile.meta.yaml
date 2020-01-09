@@ -1,0 +1,104 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.9
+  Commands:
+  - Name: workdir
+    Path: $GOPATH/src/github.com/logicmonitor/k8s-release-manager
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - ./
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /releasemanager -ldflags "-X
+      \"github.com/logicmonitor/k8s-release-manager/pkg/constants.Version=${VERSION}\""
+      cmd/releasemanager/main.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.9
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.9 as build
+- As: test
+  BaseName: golang:1.9
+  Commands:
+  - Key: CI
+    Name: arg
+    Value: null
+  - Env:
+    - Key: CI
+      Value: $CI
+    Name: env
+  - Name: workdir
+    Path: $GOPATH/src/github.com/logicmonitor/k8s-release-manager
+  - CmdLine:
+    - go get -u github.com/alecthomas/gometalinter
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gometalinter --install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - $GOPATH/src/github.com/logicmonitor/k8s-release-manager
+    - ./
+  - CmdLine:
+    - chmod +x ./scripts/test.sh; sync; ./scripts/test.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp coverage.txt /coverage.txt
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.9
+  Name: test
+  Platform: ""
+  SourceCode: FROM golang:1.9 as test
+- BaseName: alpine:3.6
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Jeff Wozniak <jeff.wozniak@logicmonitor.com>"'
+    Name: label
+  - CmdLine:
+    - apk --update add ca-certificates     && rm -rf /var/cache/apk/*     && rm -rf
+      /var/lib/apk/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /releasemanager
+    - /bin
+  - Chown: ""
+    From: test
+    Name: copy
+    SourcesAndDest:
+    - /coverage.txt
+    - /coverage.txt
+  - CmdLine:
+    - releasemanager
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - watch
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.6
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.6

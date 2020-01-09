@@ -1,0 +1,133 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: openjdk:8-jdk-alpine
+  Commands:
+  - Name: workdir
+    Path: /app/source
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/default-jvm
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /usr/local/bin:$PATH
+    Name: env
+  - Env:
+    - Key: FC_LANG
+      Value: en-US
+    Name: env
+  - Env:
+    - Key: LC_CTYPE
+      Value: en_US.UTF-8
+    Name: env
+  - Key: METABASE_VERSION
+    Name: arg
+    Value: v0.33.0
+  - Key: METABASE_PULLS
+    Name: arg
+    Value: ""
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://raw.github.com/technomancy/leiningen/stable/bin/lein
+    - /usr/local/bin/lein
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem
+    - /tmp/rds-combined-ca-bundle.pem
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - apply-pulls
+    - /app/source/
+  - CmdLine:
+    - apk add --update --no-cache wget bash curl patch java-cacerts     ttf-dejavu
+      fontconfig git make gettext bash yarn &&     keytool -noprompt -import -trustcacerts
+      -alias aws-rds       -file /tmp/rds-combined-ca-bundle.pem       -keystore /etc/ssl/certs/java/cacerts       -keypass
+      changeit -storepass changeit &&     chmod 744 /usr/local/bin/lein &&     lein
+      upgrade &&     true
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --branch $METABASE_VERSION --depth 1 https://github.com/metabase/metabase
+      &&     cd metabase &&     git checkout tags/$METABASE_VERSION &&     /app/source/apply-pulls
+      &&     rm -f locales/pl.po locales/fr.po locales/nl.po locales/it.po &&     lein
+      deps &&     yarn &&     bin/build &&     cp /app/source/metabase/target/uberjar/metabase.jar
+      /app/source/metabase.jar &&     lein install-for-building-drivers &&     cd
+      .. &&     true
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth 1 https://github.com/tlrobinson/metabase-http-driver &&     cd
+      metabase-http-driver &&     lein clean &&     DEBUG=1 LEIN_SNAPSHOTS_IN_RELEASE=true
+      lein uberjar &&     true
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8-jdk-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-alpine as builder
+- As: runner
+  BaseName: openjdk:8-jre-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/default-jvm
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /usr/local/bin:$PATH
+    Name: env
+  - Env:
+    - Key: FC_LANG
+      Value: en-US
+    Name: env
+  - Env:
+    - Key: LC_CTYPE
+      Value: en_US.UTF-8
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/java/cacerts
+    - /usr/lib/jvm/default-jvm/jre/lib/security/cacerts
+  - CmdLine:
+    - apk add --update --no-cache bash &&     mkdir -p bin target/uberjar
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/source/metabase.jar
+    - /app/target/uberjar/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/source/metabase-http-driver/target/uberjar/http.metabase-driver.jar
+    - /app/plugins/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/source/metabase/bin/start
+    - /app/bin/
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - /app/bin/start
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:8-jre-alpine
+  Name: runner
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre-alpine as runner

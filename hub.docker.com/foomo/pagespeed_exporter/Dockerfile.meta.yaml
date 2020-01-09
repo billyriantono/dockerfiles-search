@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: golang:alpine
+  Commands:
+  - Maintainer: Stefan Martinov <stefan.martinov@bestbytes.com>
+    Name: maintainer
+  - CmdLine:
+    - apk add --no-cache git make bash upx   && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./go.mod
+    - ./go.sum
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  From:
+    Image: golang:alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM golang:alpine as base
+- As: builder
+  BaseName: base
+  Commands:
+  - Maintainer: Stefan Martinov <stefan.martinov@bestbytes.com>
+    Name: maintainer
+  - CmdLine:
+    - go build -ldflags "-X main.Version=`git rev-parse --short HEAD`" -o /pagespeed_exporter
+      pagespeed_exporter.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - upx /pagespeed_exporter
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base as builder
+- BaseName: alpine
+  Commands:
+  - Maintainer: Stefan Martinov <stefan.martinov@bestbytes.com>
+    Name: maintainer
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /pagespeed_exporter
+    - /bin/pagespeed_exporter
+  - CmdLine:
+    - apk update     && apk --no-cache add ca-certificates
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9271"
+  - CmdLine:
+    - /bin/pagespeed_exporter
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

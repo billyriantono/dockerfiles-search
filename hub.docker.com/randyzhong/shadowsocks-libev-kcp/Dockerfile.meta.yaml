@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:latest
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"noreply@randyzhong.me"'
+    Name: label
+  - Key: SS_LIBEV_VERSION
+    Name: arg
+    Value: 3.2.5
+  - Key: SS_LIBEV_URL
+    Name: arg
+    Value: https://github.com/shadowsocks/shadowsocks-libev/releases/download/v${SS_LIBEV_VERSION}/shadowsocks-libev-${SS_LIBEV_VERSION}.tar.gz
+  - Key: KCP_VERSION
+    Name: arg
+    Value: "20190515"
+  - Key: KCP_URL
+    Name: arg
+    Value: https://github.com/xtaci/kcptun/releases/download/v${KCP_VERSION}/kcptun-linux-amd64-${KCP_VERSION}.tar.gz
+  - Key: TIMEZONE
+    Name: arg
+    Value: Asia/Shanghai
+  - CmdLine:
+    - set -ex &&     apk add --no-cache --virtual .build-deps                                 autoconf                                 build-base                                 curl                                 libev-dev                                 libtool                                 linux-headers                                 libsodium-dev                                 mbedtls-dev                                 pcre-dev                                 tar                                 tzdata                                 c-ares-dev     &&
+      cp /usr/share/zoneinfo/${TIMEZONE} /etc/localtime     && cd /tmp     && curl
+      -sSL ${KCP_URL} | tar xz server_linux_amd64     && mv server_linux_amd64 /usr/bin/     &&
+      curl -sSL ${SS_LIBEV_URL} | tar xz --strip 1     && ./configure --prefix=/usr
+      --disable-documentation     && make install     && cd ../     && runDeps="$(         scanelf
+      --needed --nobanner /usr/bin/ss-*             | awk '{ gsub(/,/, "\nso:", $2);
+      print "so:" $2 }'             | xargs -r apk info --installed             |
+      sort -u     )"     && apk add --no-cache --virtual .run-deps $runDeps     &&
+      apk del .build-deps     && rm -rf /tmp/*        /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SS_SERVER_ADDR
+      Value: ${SS_SERVER_ADDR:-0.0.0.0}
+    - Key: SS_SERVER_PORT
+      Value: ${SS_SERVER_PORT:-5020}
+    - Key: SS_PASSWORD
+      Value: ${SS_PASSWORD:-secret}
+    - Key: SS_METHOD
+      Value: $(SS_METHOD:-aes-256-cfb}
+    - Key: SS_TIMEOUT
+      Value: ${SS_TIMEOUT:-300}
+    - Key: SS_DNS_ADDR1
+      Value: $(SS_DNS_ADDR1:-8.8.8.8}
+    - Key: SS_DNS_ADDR2
+      Value: $(SS_DNS_ADDR1:-8.8.4.4}
+    - Key: KCP_PORT
+      Value: ${KCP_PORT:-5021}
+    - Key: KCP_KEY
+      Value: ${KCP_KEY:-kcptun}
+    - Key: KCP_MODE
+      Value: ${KCP_MODE:-fast}
+    - Key: KCP_CRYPT
+      Value: ${KCP_CRYPT:-salsa20}
+    - Key: KCP_MTU
+      Value: ${KCP_MTU:-1350}
+    - Key: KCP_DSCP
+      Value: ${KCP_DSCP:-46}
+    Name: env
+  - Name: user
+    User: nobody
+  - Name: expose
+    Ports:
+    - ${SS_SERVER_PORT}/tcp
+    - ${SS_SERVER_PORT}/udp
+  - Name: expose
+    Ports:
+    - ${KCP_PORT}/udp
+  - CmdLine:
+    - ss-server -s $SS_SERVER_ADDR               -p $SS_SERVER_PORT               -k
+      $SS_PASSWORD               -m $SS_METHOD               -t $SS_TIMEOUT               --fast-open               -d
+      $SS_DNS_ADDR1               -d $SS_DNS_ADDR2               -u                &&
+      server_linux_amd64 -t 127.0.0.1:$SS_SERVER_PORT                -l :$KCP_PORT                --key
+      $KCP_KEY                --mode $KCP_MODE                --crypt $KCP_CRYPT                --mtu
+      $KCP_MTU                --dscp $KCP_DSCP                --nocomp
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

@@ -1,0 +1,123 @@
+MetaArgs: null
+Stages:
+- As: confd
+  BaseName: golang:1.9-stretch
+  Commands:
+  - Key: CONFD_VERSION
+    Name: arg
+    Value: 0.16.0
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/kelseyhightower/confd/archive/v${CONFD_VERSION}.tar.gz
+    - /tmp/
+  - CmdLine:
+    - apt-get update     && apt-get install -y     make     bzip2   && mkdir -p /go/src/github.com/kelseyhightower/confd
+      &&   cd /go/src/github.com/kelseyhightower/confd &&   tar --strip-components=1
+      -zxf /tmp/v${CONFD_VERSION}.tar.gz &&   go install github.com/kelseyhightower/confd
+      &&   rm -rf /tmp/v${CONFD_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.9-stretch
+  Name: confd
+  Platform: ""
+  SourceCode: FROM golang:1.9-stretch as confd
+- BaseName: ruby:2.4-slim-stretch
+  Commands:
+  - Key: DIASPORA_VER
+    Name: arg
+    Value: 0.7.12.0
+  - Env:
+    - Key: RAILS_ENV
+      Value: production
+    - Key: UID
+      Value: "942"
+    - Key: GID
+      Value: "942"
+    Name: env
+  - CmdLine:
+    - apt-get update     && apt-get install -y     build-essential     libssl-dev     libcurl4-openssl-dev     libxml2-dev     libxslt-dev     imagemagick     ghostscript     curl     libmagickwand-dev     git     libpq-dev     default-libmysqlclient-dev     nodejs     wget     libjemalloc-dev     gosu     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - addgroup --GID ${GID} diaspora     && adduser --uid ${UID} --gid ${GID}     --home
+      /diaspora --shell /bin/sh     --disabled-password --gecos "" diaspora
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: confd
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/confd
+    - /usr/local/bin/confd
+  - CmdLine:
+    - mkdir -p /etc/confd/conf.d
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /etc/confd/templates
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: diaspora
+  - Name: workdir
+    Path: /diaspora
+  - CmdLine:
+    - git clone --depth 1 -b v${DIASPORA_VER} https://github.com/diaspora/diaspora.git
+      diaspora
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -fr diaspora/.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /diaspora/diaspora/* /diaspora/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /diaspora/log     && cp config/database.yml.example config/database.yml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gem install bundler     && script/configure_bundler     && bin/bundle config
+      --local with postgresql mysql     && bin/bundle install --full-index -j$(getconf
+      _NPROCESSORS_ONLN)
+    Name: run
+    PrependShell: true
+  - Chown: root:staff
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoints/
+    - /usr/local/bin/
+  - Chown: root:staff
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/*.tmpl
+    - /etc/confd/templates/
+  - Chown: root:staff
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/*.toml
+    - /etc/confd/conf.d/
+  - Name: volume
+    Volumes:
+    - /diaspora/public
+  - Labels:
+    - Key: maintainer
+      Value: '"nikkoura"'
+    Name: label
+  - Labels:
+    - Key: source
+      Value: '"https://github.com/nikkoura/docker-diaspora"'
+    Name: label
+  From:
+    Image: ruby:2.4-slim-stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ruby:2.4-slim-stretch

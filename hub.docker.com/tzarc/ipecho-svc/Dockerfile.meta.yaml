@@ -1,0 +1,92 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:3.8
+  Commands:
+  - Labels:
+    - Key: Maintainer
+      Value: '"Nick Brassel <nick@tzarc.org>"'
+    - Key: Description
+      Value: '"Lightweight container for building statically-linked ipecho-svc under
+        Alpine Linux."'
+    Name: label
+  - CmdLine:
+    - mkdir /src     && apk update     && apk --no-cache add build-base abuild binutils
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --no-cache add clang clang-analyzer
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - mkdir -pv /src
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./main.c
+    - /src/
+  - CmdLine:
+    - '{ scan-build clang -O3 -static -o /src/ipecho-svc /src/main.c || true ; }     &&
+      strip -s /src/ipecho-svc     && { scan-build clang -g -O0 -static -o /src/ipecho-svc.dbg
+      /src/main.c || true ; }     && { tar -zcf /src/scan-build.tar.gz /tmp/scan-build-*
+      2>/dev/null || true ; }'
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.8 as builder
+- As: tester
+  BaseName: alpine:3.8
+  Commands:
+  - Labels:
+    - Key: Maintainer
+      Value: '"Nick Brassel <nick@tzarc.org>"'
+    - Key: Description
+      Value: '"Lightweight container for testing statically-linked ipecho-svc under
+        Alpine Linux."'
+    Name: label
+  - CmdLine:
+    - apk update     && apk --no-cache add valgrind
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/ipecho-svc.dbg
+    - /ipecho-svc.dbg
+  From:
+    Image: alpine:3.8
+  Name: tester
+  Platform: ""
+  SourceCode: FROM alpine:3.8 as tester
+- BaseName: scratch
+  Commands:
+  - Labels:
+    - Key: Maintainer
+      Value: '"Nick Brassel <nick@tzarc.org>"'
+    - Key: Description
+      Value: '"Lightweight container for echoing IP addresses of the requester."'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/ipecho-svc
+    - /ipecho-svc
+  - CmdLine:
+    - /ipecho-svc
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

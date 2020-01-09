@@ -1,0 +1,157 @@
+MetaArgs: null
+Stages:
+- As: runtime
+  BaseName: ruby:2.5.3-alpine3.8
+  Commands:
+  - Name: workdir
+    Path: /usr/src
+  - Env:
+    - Key: HOME
+      Value: /usr/src
+    - Key: PATH
+      Value: /usr/src/bin:$PATH
+    Name: env
+  - CmdLine:
+    - apk add --no-cache ca-certificates less libpq openssl tzdata
+    Name: run
+    PrependShell: true
+  From:
+    Image: ruby:2.5.3-alpine3.8
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM ruby:2.5.3-alpine3.8 AS runtime
+- As: development
+  BaseName: runtime
+  Commands:
+  - CmdLine:
+    - apk add --no-cache build-base postgresql-dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - Gemfile*
+    - /usr/src/
+  - CmdLine:
+    - bundle install --jobs=4 --retry=3
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rails
+    - server
+    - -b
+    - 0.0.0.0
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: runtime
+  Name: development
+  Platform: ""
+  SourceCode: FROM runtime AS development
+- As: builder
+  BaseName: development
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /usr/src
+  - CmdLine:
+    - bundle config without development:test  && bundle clean  && rm -rf tmp/*  &&
+      rm -rf /usr/local/bundle/cache/*.gem  && find /usr/local/bundle/gems/ -name
+      "*.c" -delete  && find /usr/local/bundle/gems/ -name "*.o" -delete
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: development
+  Name: builder
+  Platform: ""
+  SourceCode: FROM development AS builder
+- As: deployable
+  BaseName: runtime
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bundle
+    - /usr/local/bundle
+  - CmdLine:
+    - chown -R nobody:nobody /usr/src
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: nobody
+  - Chown: nobody:nobody
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src
+    - /usr/src
+  - CmdLine:
+    - mkdir -p /usr/src/tmp/cache  && mkdir -p /usr/src/tmp/pids  && mkdir -p /usr/src/tmp/sockets
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: RAILS_ENV
+      Value: production
+    - Key: RACK_ENV
+      Value: production
+    - Key: PORT
+      Value: "3000"
+    - Key: RAILS_LOG_TO_STDOUT
+      Value: "true"
+    Name: env
+  - CmdLine:
+    - export DATABASE_URL=postgres://postgres@example.com:5432/fakedb     AMQP_URL=amqp://guest:guest@amqp:5672     SECRET_KEY_BASE=10167c7f7654ed02b3557b05b88ece
+      &&     rails runner "puts 'Looks Good!'"
+    Name: run
+    PrependShell: true
+  - Key: SOURCE_BRANCH
+    Name: arg
+    Value: '"master"'
+  - Key: SOURCE_COMMIT
+    Name: arg
+    Value: '"000000"'
+  - Key: BUILD_DATE
+    Name: arg
+    Value: '"2017-09-26T16:13:26Z"'
+  - Key: IMAGE_NAME
+    Name: arg
+    Value: '"icalialabs/foresight-cthulhu:latest"'
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.name
+      Value: '"Icalia Foresight Cthulhu"'
+    - Key: org.label-schema.description
+      Value: '"Icalia Foresight integration with Github"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/IcaliaLabs/foresight.git"'
+    - Key: org.label-schema.vcs-ref
+      Value: $SOURCE_COMMIT
+    - Key: org.label-schema.schema-version
+      Value: '"1.0.0-rc1"'
+    Name: label
+  - CmdLine:
+    - sed -i "s|icalialabs/foresight-cthulhu:development|$IMAGE_NAME|" config/application.rb  &&
+      sed -i "s|UNKNOWN_BUILD_DATE|$BUILD_DATE|" config/application.rb  && sed -i
+      "s|UNKNOWN_COMMIT_SHA1|$SOURCE_COMMIT|" config/application.rb  && sed -i "s|UNKNOWN_COMMIT_BRANCH|$SOURCE_BRANCH|"
+      config/application.rb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - puma
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: runtime
+  Name: deployable
+  Platform: ""
+  SourceCode: FROM runtime AS deployable

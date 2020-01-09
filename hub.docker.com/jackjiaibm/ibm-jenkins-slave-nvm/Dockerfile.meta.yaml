@@ -1,0 +1,219 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8-jdk
+  Commands:
+  - Labels:
+    - Key: MAINTAINER
+      Value: '"Jack T. Jia <jack-tiefeng.jia@ibm.com>"'
+    Name: label
+  - Key: user
+    Name: arg
+    Value: jenkins
+  - Key: group
+    Name: arg
+    Value: jenkins
+  - Key: uid
+    Name: arg
+    Value: "1000"
+  - Key: gid
+    Name: arg
+    Value: "1000"
+  - Key: docker_gid
+    Name: arg
+    Value: "999"
+  - Key: JENKINS_AGENT_HOME
+    Name: arg
+    Value: /home/${user}
+  - Key: NODE_VERSION
+    Name: arg
+    Value: 8.11.4
+  - Key: FIREFOX_VERSION
+    Name: arg
+    Value: 61.0.2
+  - Key: FIREFOX_LANGUAGE
+    Name: arg
+    Value: en-US
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: JENKINS_AGENT_HOME
+      Value: ${JENKINS_AGENT_HOME}
+    Name: env
+  - Env:
+    - Key: NODE_VERSION
+      Value: ${NODE_VERSION}
+    Name: env
+  - Env:
+    - Key: NVM_VERSION
+      Value: 0.33.11
+    Name: env
+  - Env:
+    - Key: CHECKLINK_VERSION
+      Value: "4_81"
+    Name: env
+  - Env:
+    - Key: DOCKER_VERSION
+      Value: 18.09.0
+    Name: env
+  - Env:
+    - Key: DOCKER_CHANNEL
+      Value: stable
+    Name: env
+  - Env:
+    - Key: DOCKER_ARCH
+      Value: x86_64
+    Name: env
+  - Env:
+    - Key: DIND_COMMIT
+      Value: 52379fa76dee07ca038624d639d9e14f4fb719ff
+    Name: env
+  - CmdLine:
+    - groupadd -g ${gid} ${group}     && useradd -d "${JENKINS_AGENT_HOME}" -u "${uid}"
+      -g "${gid}" -m -s /bin/bash "${user}"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install --no-install-recommends -y     openssh-server     vim
+      curl wget rsync pax build-essential sshpass bzip2 jq locales     cpanminus libssl-dev     gnome-keyring
+      libsecret-1-dev dbus dbus-user-session dbus-x11     libdbus-glib-1-2     iptables    &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen     && /usr/sbin/locale-gen
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://archive.mozilla.org/pub/firefox/releases/${FIREFOX_VERSION}/KEY
+    - KEY
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://archive.mozilla.org/pub/firefox/releases/${FIREFOX_VERSION}/SHA512SUMS
+    - SHA512SUMS
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://archive.mozilla.org/pub/firefox/releases/${FIREFOX_VERSION}/SHA512SUMS.asc
+    - SHA512SUMS.asc
+  - CmdLine:
+    - gpg --no-tty --import KEY     && gpg --no-tty --verify SHA512SUMS.asc     &&
+      rm KEY     && rm SHA512SUMS.asc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget --no-verbose --show-progress --progress=dot:giga --directory-prefix linux-x86_64/${FIREFOX_LANGUAGE}
+      https://archive.mozilla.org/pub/firefox/releases/${FIREFOX_VERSION}/linux-x86_64/${FIREFOX_LANGUAGE}/firefox-${FIREFOX_VERSION}.tar.bz2     &&
+      grep linux-x86_64/${FIREFOX_LANGUAGE}/firefox-${FIREFOX_VERSION}.tar.bz2 SHA512SUMS
+      | sha512sum -c -     && rm SHA512SUMS     && tar --extract --bzip2 --file linux-x86_64/${FIREFOX_LANGUAGE}/firefox-${FIREFOX_VERSION}.tar.bz2
+      --directory /usr/lib/     && rm -fr linux-x86_64     && ln -fs /usr/lib/firefox/firefox
+      /usr/bin/firefox
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i /etc/ssh/sshd_config         -e 's/#PermitRootLogin.*/PermitRootLogin
+      no/'         -e 's/#RSAAuthentication.*/RSAAuthentication yes/'          -e
+      's/#PasswordAuthentication.*/PasswordAuthentication no/'         -e 's/#SyslogFacility.*/SyslogFacility
+      AUTH/'         -e 's/#LogLevel.*/LogLevel INFO/' &&     mkdir /var/run/sshd
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pam.config
+    - /tmp/pam.config
+  - CmdLine:
+    - cat /tmp/pam.config >> /etc/pam.d/sshd     && cat /tmp/pam.config >> /etc/pam.d/login     &&
+      rm /tmp/pam.config
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .bashrc_all
+    - /tmp/.bashrc_all
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .bashrc_ni
+    - /home/jenkins/.bashrc_ni
+  - CmdLine:
+    - sed -i -e "/# If not running interactively, don't do anything/r /tmp/.bashrc_all"
+      -e //N /home/jenkins/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x   && curl -sSL https://github.com/w3c/link-checker/archive/checklink-${CHECKLINK_VERSION}.tar.gz
+      -o /tmp/link-checker.tar.gz   && tar -xzf /tmp/link-checker.tar.gz -C /tmp   &&
+      rm /tmp/link-checker.tar.gz   && cd /tmp/link-checker-checklink-${CHECKLINK_VERSION}   &&
+      cpanm --installdeps .   && cpanm LWP::Protocol::https   && perl Makefile.PL   &&
+      make   && make test   && make install   && rm -rf /tmp/link-checker-checklink-${CHECKLINK_VERSION}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'set -eux;   groupadd -g ${docker_gid} docker;   useradd -g docker docker;   usermod
+      -aG docker ${user};   if ! wget -O docker.tgz "https://download.docker.com/linux/static/${DOCKER_CHANNEL}/${DOCKER_ARCH}/docker-${DOCKER_VERSION}.tgz";
+      then     echo >&2 "error: failed to download ''docker-${DOCKER_VERSION}'' from
+      ''${DOCKER_CHANNEL}'' for ''${DOCKER_ARCH}''";     exit 1;   fi;     tar --extract     --file
+      docker.tgz     --strip-components 1     --directory /usr/local/bin/   ;   rm
+      docker.tgz;     dockerd --version;   docker --version;   wget -O /usr/local/bin/dind
+      "https://raw.githubusercontent.com/docker/docker/${DIND_COMMIT}/hack/dind";   chmod
+      +x /usr/local/bin/dind'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: jenkins
+  - CmdLine:
+    - curl -o- https://raw.githubusercontent.com/creationix/nvm/v${NVM_VERSION}/install.sh
+      | bash
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NVM_DIR
+      Value: /home/jenkins/.nvm
+    Name: env
+  - CmdLine:
+    - /bin/bash -c "source ${NVM_DIR}/nvm.sh && nvm install $NODE_VERSION && nvm alias
+      default $NODE_VERSION && nvm use default && npm install -g npm && npm install
+      -g yarn && npm install -g jfrog-cli-go"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - '"${JENKINS_AGENT_HOME}"'
+    - '"/tmp"'
+    - '"/run"'
+    - '"/var/run"'
+  - Name: workdir
+    Path: '"${JENKINS_AGENT_HOME}"'
+  - Name: user
+    User: root
+  - Name: expose
+    Ports:
+    - "22"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - setup-entrypoint
+    - /usr/local/bin/setup-entrypoint
+  - CmdLine:
+    - chmod +x /usr/local/bin/setup-entrypoint
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/setup-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:8-jdk
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk

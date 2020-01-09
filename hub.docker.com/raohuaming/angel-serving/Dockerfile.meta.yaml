@@ -1,0 +1,112 @@
+MetaArgs: null
+Stages:
+- As: java_dev
+  BaseName: maven:3.6.1-jdk-8
+  Commands: null
+  From:
+    Image: maven:3.6.1-jdk-8
+  Name: java_dev
+  Platform: ""
+  SourceCode: FROM maven:3.6.1-jdk-8 as JAVA_DEV
+- As: java_builder
+  BaseName: JAVA_DEV
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./pom.xml
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./common/pom.xml
+    - /app/common/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./server/pom.xml
+    - /app/server/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./client/pom.xml
+    - /app/client/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./dist/pom.xml
+    - /app/dist/
+  - CmdLine:
+    - mvn -e -B dependency:resolve dependency:resolve-plugins
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app/
+  - CmdLine:
+    - mvn -e -B -Dmaven.test.skip=true package
+    Name: run
+    PrependShell: true
+  From:
+    Image: JAVA_DEV
+  Name: java_builder
+  Platform: ""
+  SourceCode: FROM JAVA_DEV as JAVA_BUILDER
+- As: runtime
+  BaseName: openjdk:8-jre
+  Commands:
+  - Env:
+    - Key: SERVING_HOME
+      Value: /usr/local/angel-serving
+    Name: env
+  - Chown: ""
+    From: JAVA_BUILDER
+    Name: copy
+    SourcesAndDest:
+    - /app/dist/target/serving-*-bin
+    - $SERVING_HOME
+  - Name: workdir
+    Path: $SERVING_HOME
+  - Env:
+    - Key: PATH
+      Value: '"$SERVING_HOME/bin:${PATH}"'
+    - Key: PORT
+      Value: "8500"
+    - Key: REST_API_PORT
+      Value: "8501"
+    - Key: MODEL_BASE_PATH
+      Value: /models
+    - Key: MODEL_NAME
+      Value: angel-model
+    - Key: MODEL_PLATFORM
+      Value: angel
+    - Key: ENABLE_METRIC_SUMMARY
+      Value: "true"
+    Name: env
+  - Name: expose
+    Ports:
+    - "8500"
+    - "8501"
+  - Name: volume
+    Volumes:
+    - /models
+  - CmdLine:
+    - /bin/sh
+    - ./bin/run_in_docker.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jre
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre as Runtime

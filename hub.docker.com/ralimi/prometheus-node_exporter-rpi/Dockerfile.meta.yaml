@@ -1,0 +1,79 @@
+MetaArgs: null
+Stages:
+- As: qemu
+  BaseName: multiarch/qemu-user-static:x86_64-arm
+  Commands:
+  - Maintainer: Richard Alimi <rich@velvetsea.net>
+    Name: maintainer
+  From:
+    Image: multiarch/qemu-user-static:x86_64-arm
+  Name: qemu
+  Platform: ""
+  SourceCode: FROM multiarch/qemu-user-static:x86_64-arm as qemu
+- As: qemu_extract
+  BaseName: alpine
+  Commands:
+  - Chown: ""
+    From: qemu
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin
+    - qemu_user_static.tgz
+  - CmdLine:
+    - tar -xzvf qemu_user_static.tgz
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: qemu_extract
+  Platform: ""
+  SourceCode: FROM alpine as qemu_extract
+- As: builder
+  BaseName: arm32v6/golang:alpine
+  Commands:
+  - Chown: ""
+    From: qemu_extract
+    Name: copy
+    SourcesAndDest:
+    - qemu-*
+    - /usr/bin
+  - CmdLine:
+    - apk add --no-cache gcc git make musl-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/prometheus/node_exporter
+  - CmdLine:
+    - git clone --branch=v0.16.0 --depth=1 https://github.com/prometheus/node_exporter.git
+      .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - GOOS=linux GOARCH=arm make build
+    Name: run
+    PrependShell: true
+  From:
+    Image: arm32v6/golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM arm32v6/golang:alpine as builder
+- BaseName: arm32v6/alpine
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/prometheus/node_exporter/node_exporter
+    - /
+  - Name: expose
+    Ports:
+    - 9100/tcp
+  - CmdLine:
+    - /node_exporter
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: arm32v6/alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM arm32v6/alpine

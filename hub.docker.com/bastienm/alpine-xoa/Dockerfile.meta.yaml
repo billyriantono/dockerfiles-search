@@ -1,0 +1,110 @@
+MetaArgs: null
+Stages:
+- As: server-builder
+  BaseName: node:6-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apk update &&     apk add git build-base git curl python libstdc++ make gcc
+      g++ libpng-dev &&     yarn global add node-gyp index-modules
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b stable https://github.com/vatesfr/xo-server &&     rm -rf xo-server/{.git,sample.config.yaml}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd xo-server && yarn
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:6-alpine
+  Name: server-builder
+  Platform: ""
+  SourceCode: FROM node:6-alpine as server-builder
+- As: web-builder
+  BaseName: node:6-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apk update &&     apk add git build-base git curl python libstdc++ make gcc
+      g++ libpng-dev &&     yarn global add node-gyp index-modules
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b stable https://github.com/vatesfr/xo-web &&     rm -rf xo-server/.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd xo-web && yarn
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:6-alpine
+  Name: web-builder
+  Platform: ""
+  SourceCode: FROM node:6-alpine as web-builder
+- BaseName: node:6-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Dominic Taylor <dominic@yobasystems.co.uk>"       architecture="AMD64/x86_64"'
+    Name: label
+  - Env:
+    - Key: USER
+      Value: xenorchestra
+    - Key: USER_HOME
+      Value: /app
+    Name: env
+  - CmdLine:
+    - echo $'@edge http://dl-cdn.alpinelinux.org/alpine/edge/main\n@edge http://dl-cdn.alpinelinux.org/alpine/edge/community\n@edge
+      http://dl-cdn.alpinelinux.org/alpine/edge/testing' >> /etc/apk/repositories
+      &&     apk update -U &&     apk add -U libstdc++ util-linux yarn@edge &&     rm
+      -rf /tmp/* /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: server-builder
+    Name: copy
+    SourcesAndDest:
+    - /app/xo-server
+    - /app/xo-server
+  - Chown: ""
+    From: web-builder
+    Name: copy
+    SourcesAndDest:
+    - /app/xo-web/dist
+    - /app/xo-web
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/config.yaml
+    - /etc/xo-server/config.yaml
+  - Name: volume
+    Volumes:
+    - /app/data
+  - CmdLine:
+    - addgroup -S $USER && adduser -S -g $USER $USER &&     mkdir -p /app/data &&     chown
+      -R $USER:$USER /app/data
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: user
+    User: xenorchestra
+  - Name: workdir
+    Path: /app/xo-server
+  - CmdLine:
+    - yarn
+    - start
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: node:6-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:6-alpine

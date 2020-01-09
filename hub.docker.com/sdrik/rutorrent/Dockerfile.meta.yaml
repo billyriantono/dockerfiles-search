@@ -1,0 +1,71 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: linuxserver/rutorrent
+  Commands:
+  - CmdLine:
+    - "apk add --no-cache alpine-sdk wget \t&& adduser -G abuild -D builder \t&& echo
+      \"builder ALL=(ALL) NOPASSWD:ALL\" >> /etc/sudoers"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/builder
+  - Name: user
+    User: builder
+  - Env:
+    - Key: HOME
+      Value: /home/builder
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - libtorrent_enable-aligned.diff
+    - /tmp/
+  - CmdLine:
+    - "alpine_version=$(cat /etc/apk/repositories | grep community | sed 's,.*/alpine/v,,;s,/.*,,')
+      \t&& wget -r -l 0 -np -nH --cut-dirs=3 \"https://git.alpinelinux.org/aports/plain/community/libtorrent/?h=${alpine_version}-stable\"
+      \t&& for f in $(find libtorrent -type f); do mv $f ${f%?h=${alpine_version}-stable};
+      done \t&& abuild-keygen -a -i \t&& (cd libtorrent && patch -p0 < /tmp/libtorrent_enable-aligned.diff)
+      \t&& abuild-apk update \t&& (cd libtorrent && abuild -r) \t&& source libtorrent/APKBUILD
+      \t&& cp packages/builder/`apk --print-arch`/$pkgname-$pkgver-r$pkgrel.apk /tmp/$pkgname.apk"
+    Name: run
+    PrependShell: true
+  From:
+    Image: linuxserver/rutorrent
+  Name: builder
+  Platform: ""
+  SourceCode: FROM linuxserver/rutorrent as builder
+- BaseName: linuxserver/rutorrent
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/builder/.abuild/*.rsa.pub
+    - /etc/apk/keys/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/libtorrent.apk
+    - /tmp/
+  - CmdLine:
+    - apk add /tmp/libtorrent.apk && rm -f /tmp/libtorrent.apk
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - chown_only_conf.diff
+    - /tmp/
+  - CmdLine:
+    - cd /etc/cont-init.d && patch -p0 < /tmp/chown_only_conf.diff && rm -f /tmp/chown_only_conf.diff
+    Name: run
+    PrependShell: true
+  From:
+    Image: linuxserver/rutorrent
+  Name: ""
+  Platform: ""
+  SourceCode: FROM linuxserver/rutorrent

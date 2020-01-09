@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- BaseName: ruby:2.4.3-alpine3.7
+  Commands:
+  - Key: GOLANG_VERSION
+    Name: arg
+    Value: '"1.9.2-r1"'
+  - Key: BUILD_DEPS
+    Name: arg
+    Value: '"go=$GOLANG_VERSION ruby-dev linux-headers curl curl-dev pcre-dev libexecinfo-dev@edge-main"'
+  - Key: RUNTIME_DEPS
+    Name: arg
+    Value: '"tini build-base pcre git libexecinfo@edge-main"'
+  - CmdLine:
+    - echo '@edge-main http://dl-cdn.alpinelinux.org/alpine/edge/main/' >> /etc/apk/repositories
+      &&     apk update &&     apk upgrade &&     apk add $BUILD_DEPS &&     apk add
+      $RUNTIME_DEPS &&     mkdir -p /opt
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PASSENGER_VERSION
+      Value: '"5.1.12"'
+    - Key: PATH
+      Value: '"/opt/passenger/bin:$PATH"'
+    Name: env
+  - CmdLine:
+    - curl -L "https://s3.amazonaws.com/phusion-passenger/releases/passenger-$PASSENGER_VERSION.tar.gz"
+      | tar -xzf - -C /opt &&     mv /opt/passenger-$PASSENGER_VERSION /opt/passenger
+      &&     passenger-config validate-install --auto &&     export EXTRA_PRE_CFLAGS='-O'
+      EXTRA_PRE_CXXFLAGS='-O' EXTRA_LDFLAGS='-lexecinfo' &&     passenger-config compile-agent
+      --optimize &&     passenger-config install-standalone-runtime &&     passenger-config
+      build-native-support
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOROOT
+      Value: '"/usr/lib/go"'
+    - Key: GOPATH
+      Value: '"/go"'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"$GOPATH/bin:$GOROOT/bin:$PATH"'
+    Name: env
+  - CmdLine:
+    - go get github.com/prometheus/promu
+    Name: run
+    PrependShell: true
+  - Key: SOURCE_PATH
+    Name: arg
+    Value: '"/go/src/github.com/Intellection/passenger-exporter"'
+  - CmdLine:
+    - mkdir -p ${SOURCE_PATH}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - ${SOURCE_PATH}/
+  - Name: workdir
+    Path: ${SOURCE_PATH}
+  - CmdLine:
+    - promu build &&     mv ${SOURCE_PATH}/passenger-exporter /usr/local/bin/passenger-exporter
+      &&     rm -rf ${SOURCE_PATH}/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk del $BUILD_PACKAGES &&     rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tini
+    - --
+    - passenger-exporter
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /bin/sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ruby:2.4.3-alpine3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ruby:2.4.3-alpine3.7

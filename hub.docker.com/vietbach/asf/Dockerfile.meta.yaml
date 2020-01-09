@@ -1,0 +1,105 @@
+MetaArgs: null
+Stages:
+- As: build-node
+  BaseName: node:lts
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ASF-ui
+    - .
+  - CmdLine:
+    - 'echo "node: $(node --version)" &&     echo "npm: $(npm --version)" &&     npm
+      ci &&     npm run-script deploy'
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:lts
+  Name: build-node
+  Platform: ""
+  SourceCode: FROM node:lts AS build-node
+- As: build-dotnet
+  BaseName: mcr.microsoft.com/dotnet/core/sdk:3.0
+  Commands:
+  - Env:
+    - Key: CONFIGURATION
+      Value: Release
+    Name: env
+  - Env:
+    - Key: NET_CORE_VERSION
+      Value: netcoreapp3.0
+    Name: env
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: build-node
+    Name: copy
+    SourcesAndDest:
+    - /app/dist
+    - ASF-ui/dist
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ArchiSteamFarm
+    - ArchiSteamFarm
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ArchiSteamFarm.Tests
+    - ArchiSteamFarm.Tests
+  - CmdLine:
+    - dotnet --info &&     if [ -f "ArchiSteamFarm/Localization/Strings.zh-CN.resx"
+      ]; then ln -s "Strings.zh-CN.resx" "ArchiSteamFarm/Localization/Strings.zh-Hans.resx";
+      fi &&     if [ -f "ArchiSteamFarm/Localization/Strings.zh-TW.resx" ]; then ln
+      -s "Strings.zh-TW.resx" "ArchiSteamFarm/Localization/Strings.zh-Hant.resx";
+      fi &&     dotnet build ArchiSteamFarm -c "$CONFIGURATION" -f "$NET_CORE_VERSION"
+      /nologo &&     dotnet test ArchiSteamFarm.Tests -c "$CONFIGURATION" -f "$NET_CORE_VERSION"
+      /nologo &&     dotnet publish ArchiSteamFarm -c "$CONFIGURATION" -f "$NET_CORE_VERSION"
+      -o 'out' /nologo /p:ASFVariant=docker /p:PublishTrimmed=false /p:UseAppHost=false
+      &&     cp "ArchiSteamFarm/overlay/generic/ArchiSteamFarm.sh" "out/ArchiSteamFarm.sh"
+    Name: run
+    PrependShell: true
+  From:
+    Image: mcr.microsoft.com/dotnet/core/sdk:3.0
+  Name: build-dotnet
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/sdk:3.0 AS build-dotnet
+- As: runtime
+  BaseName: mcr.microsoft.com/dotnet/core/aspnet:3.0-buster-slim
+  Commands:
+  - Env:
+    - Key: ASPNETCORE_URLS
+      Value: http://*:$PORT
+    Name: env
+  - Labels:
+    - Key: maintainer
+      Value: '"JustArchi <JustArchi@JustArchi.net>"'
+    Name: label
+  - Name: expose
+    Ports:
+    - "1242"
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: build-dotnet
+    Name: copy
+    SourcesAndDest:
+    - /app/out
+    - .
+  - CmdLine:
+    - ./ArchiSteamFarm.sh
+    - --no-restart
+    - --process-required
+    - --system-required
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: mcr.microsoft.com/dotnet/core/aspnet:3.0-buster-slim
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/aspnet:3.0-buster-slim AS runtime

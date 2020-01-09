@@ -1,0 +1,100 @@
+MetaArgs:
+- DefaultValue: alpine:3.11
+  Key: BASE_IMAGE
+  ProvidedValue: null
+  Value: alpine:3.11
+Stages:
+- BaseName: ${BASE_IMAGE}
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"andrewklaus@gmail.com"'
+    Name: label
+  - Env:
+    - Key: REFRESHED_AT
+      Value: "2019-12-28"
+    Name: env
+  - Key: ARCH
+    Name: arg
+    Value: amd64
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - VERSION
+    - /VERSION
+  - CmdLine:
+    - export VERSION=`cat /VERSION` && apk add --no-cache curl gnupg  && curl -sLO
+      https://github.com/syncthing/syncthing/releases/download/v${VERSION}/syncthing-linux-${ARCH}-v${VERSION}.tar.gz  &&
+      curl -sLO https://github.com/syncthing/syncthing/releases/download/v${VERSION}/sha256sum.txt.asc  &&
+      grep syncthing-linux-${ARCH} sha256sum.txt.asc | sha256sum  && mkdir ~/.gnupg  &&
+      printf '%%Assuan%%\nsocket=/dev/shm/S.gpg-agent\n' > ~/.gnupg/S.gpg-agent  &&
+      gpg --keyserver keyserver.ubuntu.com --recv-key D26E6ED000654A3E  && gpg --verify
+      sha256sum.txt.asc  && tar -zxf syncthing-linux-${ARCH}-v${VERSION}.tar.gz  &&
+      mv syncthing-linux-${ARCH}-v${VERSION}/syncthing /syncthing
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${BASE_IMAGE}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${BASE_IMAGE}
+- BaseName: ${BASE_IMAGE}
+  Commands:
+  - CmdLine:
+    - apk --no-cache add ca-certificates
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - mkdir -p /syncthing /data   && adduser -D -h /var/syncthing -s /nologin syncthing   &&
+      chown -R syncthing:syncthing /var/syncthing /data   && chown syncthing /syncthing
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /syncthing
+    - /syncthing/syncthing
+  - Name: expose
+    Ports:
+    - 21027/udp
+    - "22000"
+    - "8384"
+  - Name: user
+    User: syncthing
+  - Name: volume
+    Volumes:
+    - /var/syncthing
+    - /data
+  - Env:
+    - Key: STNODEFAULTFOLDER
+      Value: "1"
+    Name: env
+  - Health:
+      Interval: 300000000000
+      Test:
+      - CMD-SHELL
+      - nc -z localhost 22000 || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - /syncthing/syncthing
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -home
+    - /var/syncthing
+    - -gui-address
+    - 0.0.0.0:8384
+    - -no-browser
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ${BASE_IMAGE}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${BASE_IMAGE}

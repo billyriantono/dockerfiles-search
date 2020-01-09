@@ -1,0 +1,91 @@
+MetaArgs:
+- DefaultValue: "2.6"
+  Key: ruby_version
+  ProvidedValue: null
+  Value: "2.6"
+Stages:
+- As: builder
+  BaseName: ruby:$ruby_version-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache build-base git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - addgroup -S app && adduser -S -G app app
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  - Chown: app
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - CmdLine:
+    - gem install bundler:2.1.2 && bundle install -j "$(nproc)"
+    Name: run
+    PrependShell: true
+  From:
+    Image: ruby:$ruby_version-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ruby:$ruby_version-alpine AS builder
+- As: with-mysql-client
+  BaseName: builder
+  Commands:
+  - Name: user
+    User: root
+  - CmdLine:
+    - apk add --no-cache mysql-client
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  From:
+    Stage:
+      Index: 0
+      Named: builder
+  Name: with-mysql-client
+  Platform: ""
+  SourceCode: FROM builder AS with-mysql-client
+- BaseName: ruby:$ruby_version-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apk add --no-cache git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - addgroup -S app && adduser -S -G app app
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bundle/
+    - /usr/local/bundle/
+  - Chown: app
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - CmdLine:
+    - bundle
+    - exec
+    - exe/masking
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ruby:$ruby_version-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ruby:$ruby_version-alpine

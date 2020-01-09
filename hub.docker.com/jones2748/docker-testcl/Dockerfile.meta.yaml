@@ -1,0 +1,121 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: alpine:latest
+  Commands:
+  - Env:
+    - Key: JTCL_VERSION
+      Value: 2.8.0
+    Name: env
+  - Env:
+    - Key: TESTCL_VERSION
+      Value: 1.0.13
+    Name: env
+  - CmdLine:
+    - set -euxo pipefail ;    sed -i 's/http\:\/\/dl-cdn.alpinelinux.org/https\:\/\/alpine.global.ssl.fastly.net/g'
+      /etc/apk/repositories ;    apk add --no-cache --update unzip
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/jtcl-project/jtcl/releases/download/${JTCL_VERSION}-release/jtcl-${JTCL_VERSION}-bin.zip
+    - /tmp
+  - CmdLine:
+    - unzip /tmp/jtcl-${JTCL_VERSION}-bin.zip -d /opt/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://dl.bintray.com/landro/maven/com/testcl/jtcl-irule/0.9/jtcl-irule-0.9.jar
+    - /opt/jtcl-${JTCL_VERSION}
+  - CmdLine:
+    - sed -i -e 's/export CLASSPATH/export CLASSPATH=\$dir\/jtcl-irule-0.9.jar:\$CLASSPATH/g'
+      /opt/jtcl-${JTCL_VERSION}/jtcl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /opt/jtcl-${JTCL_VERSION}/ /opt/jtcl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/landro/TesTcl/archive/v${TESTCL_VERSION}.zip
+    - /tmp
+  - CmdLine:
+    - unzip /tmp/v${TESTCL_VERSION}.zip -d /opt/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /opt/TesTcl-${TESTCL_VERSION} /opt/TesTcl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./entrypoint.sh
+    - /opt
+  - CmdLine:
+    - chmod
+    - +x
+    - /opt/entrypoint.sh
+    Name: run
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./test/
+    - /opt/test
+  From:
+    Image: alpine:latest
+  Name: build
+  Platform: ""
+  SourceCode: FROM alpine:latest as build
+- BaseName: adoptopenjdk/openjdk11-openj9:alpine-slim
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Johannes Denninger"'
+    Name: label
+  - Env:
+    - Key: TCLLIBPATH
+      Value: /opt/TesTcl
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /opt/jtcl:/opt/test:/app:$PATH
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /opt/
+    - /opt/
+  - CmdLine:
+    - set -euxo pipefail ;    sed -i 's/http\:\/\/dl-cdn.alpinelinux.org/https\:\/\/alpine.global.ssl.fastly.net/g'
+      /etc/apk/repositories ;    apk add --no-cache --update dumb-init su-exec ;    mv
+      /opt/entrypoint.sh /usr/local/bin ;    adduser -s /bin/ash -u 1000 -D -h /app
+      testcl ;    chmod -R 755 /opt/TesTcl /opt/jtcl
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - /usr/bin/dumb-init
+    - --
+    - entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /bin/sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: adoptopenjdk/openjdk11-openj9:alpine-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM adoptopenjdk/openjdk11-openj9:alpine-slim

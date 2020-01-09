@@ -1,0 +1,139 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:latest
+  Commands:
+  - Env:
+    - Key: TINI_VERSION
+      Value: v0.18.0
+    Name: env
+  - Env:
+    - Key: TSDB_VERSION
+      Value: 2.3.1
+    Name: env
+  - Env:
+    - Key: HBASE_VERSION
+      Value: 1.4.4
+    Name: env
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/java-1.7-openjdk
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:/usr/lib/jvm/java-1.7-openjdk/bin/
+    Name: env
+  - Env:
+    - Key: ALPINE_PACKAGES
+      Value: '"rsyslog bash openjdk7 make wget gnuplot"'
+    Name: env
+  - Env:
+    - Key: BUILD_PACKAGES
+      Value: '"build-base autoconf automake git python"'
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-amd64
+    - /tini
+  - CmdLine:
+    - chmod +x /tini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - apk --update add apk-tools     && apk add ${ALPINE_PACKAGES}       --repository
+      http://dl-cdn.alpinelinux.org/alpine/v3.0/testing/     && mkdir -p /opt/opentsdb
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/opentsdb/
+  - CmdLine:
+    - 'apk add --virtual builddeps     ${BUILD_PACKAGES}   && : Install OpenTSDB and
+      scripts   && wget --no-check-certificate     -O v${TSDB_VERSION}.zip     https://github.com/OpenTSDB/opentsdb/archive/v${TSDB_VERSION}.zip   &&
+      unzip v${TSDB_VERSION}.zip   && rm v${TSDB_VERSION}.zip   && cd /opt/opentsdb/opentsdb-${TSDB_VERSION}   &&
+      echo "tsd.http.request.enable_chunked = true" >> src/opentsdb.conf   && echo
+      "tsd.http.request.max_chunk = 1000000" >> src/opentsdb.conf   && ./build.sh   &&
+      cp build-aux/install-sh build/build-aux   && cd build   && make install   &&
+      cd /   && rm -rf /opt/opentsdb/opentsdb-${TSDB_VERSION}   && apk del builddeps   &&
+      rm -rf /var/cache/apk/*'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /data/hbase /root/.profile.d /opt/downloads
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/downloads
+  - CmdLine:
+    - wget -O hbase-${HBASE_VERSION}.bin.tar.gz http://archive.apache.org/dist/hbase/${HBASE_VERSION}/hbase-${HBASE_VERSION}-bin.tar.gz
+      &&     tar xzvf hbase-${HBASE_VERSION}.bin.tar.gz &&     mv hbase-${HBASE_VERSION}
+      /opt/hbase &&     rm hbase-${HBASE_VERSION}.bin.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/local/share/opentsdb/etc/opentsdb /etc/opentsdb     && rm /etc/opentsdb/opentsdb.conf     &&
+      mkdir /opentsdb-plugins
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/opentsdb.conf
+    - /etc/opentsdb/opentsdb.conf.sample
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/hbase-site.xml
+    - /opt/hbase/conf/hbase-site.xml.sample
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/start_opentsdb.sh
+    - /opt/bin/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/create_tsdb_tables.sh
+    - /opt/bin/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/start_hbase.sh
+    - /opt/bin/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - for i in /opt/bin/start_hbase.sh /opt/bin/start_opentsdb.sh /opt/bin/create_tsdb_tables.sh;     do         sed
+      -i "s#::JAVA_HOME::#$JAVA_HOME#g; s#::PATH::#$PATH#g; s#::TSDB_VERSION::#$TSDB_VERSION#g;"
+      $i;     done
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "16010"
+    - "16070"
+    - "4242"
+    - "60000"
+    - "60010"
+    - "60030"
+  - Name: volume
+    Volumes:
+    - /data/hbase
+    - /tmp
+    - /opentsdb-plugins
+  - CmdLine:
+    - /entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

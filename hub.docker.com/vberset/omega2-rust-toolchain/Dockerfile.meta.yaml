@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- BaseName: rust:1.36
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install -y --no-install-recommends gawk &&     apt-get
+      clean &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TARGET
+      Value: mipsel-unknown-linux-musl
+    - Key: SDK
+      Value: openwrt-sdk-18.06.4-ramips-mt76x8_gcc-7.3.0_musl.Linux-x86_64
+    - Key: SDK_SHA256
+      Value: aeb55c36c19cc9d93279d7ca80afef6c63a45e749eb0332ac3aba5f466bb8a08
+    Name: env
+  - Env:
+    - Key: STAGING_DIR
+      Value: /opt/$SDK/staging_dir/toolchain-mipsel_24kc_gcc-7.3.0_musl
+    - Key: TARGET_USR
+      Value: /opt/$SDK/staging_dir/target-mipsel_24kc_musl/usr
+    Name: env
+  - CmdLine:
+    - rustup target add $TARGET
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://downloads.openwrt.org/releases/18.06.4/targets/ramips/mt76x8/$SDK.tar.xz
+    - .
+  - CmdLine:
+    - '[ "$SDK_SHA256  $SDK.tar.xz" = "$(sha256sum $SDK.tar.xz)" ]'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xf $SDK.tar.xz &&     rm $SDK.tar.xz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/$SDK
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./toolchain-config
+    - .config
+  - CmdLine:
+    - ./scripts/feeds update -a &&     ./scripts/feeds install openssl &&     make
+      package/openssl/compile
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: OPENSSL_DIR
+      Value: $STAGING_DIR/usr/
+    - Key: OPENSSL_INCLUDE_DIR
+      Value: $TARGET_USR/include/
+    - Key: DEP_OPENSSL_INCLUDE
+      Value: $TARGET_USR/include/
+    - Key: OPENSSL_LIB_DIR
+      Value: $TARGET_USR/lib/
+    - Key: OPENSSL_STATIC
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - echo "#! /bin/sh\n$STAGING_DIR/bin/mipsel-openwrt-linux-strip \$@" > /usr/local/bin/strip
+      &&     chmod +x /usr/local/bin/strip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd rust --user-group --create-home --shell /bin/bash
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./cargo-config.toml
+    - /home/rust/.cargo/config
+  - CmdLine:
+    - sed -ie "s#{{ target }}#${TARGET}#" /home/rust/.cargo/config &&     sed -ie
+      "s#{{ staging_dir }}#${STAGING_DIR}#" /home/rust/.cargo/config
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /home/rust/project
+  - Name: workdir
+    Path: /home/rust/project
+  - Name: user
+    User: rust
+  From:
+    Image: rust:1.36
+  Name: ""
+  Platform: ""
+  SourceCode: FROM rust:1.36

@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.13
+  Commands:
+  - CmdLine:
+    - git clone https://github.com/syncthing/syncthing.git /go/src/github.com/syncthing/syncthing
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/syncthing/syncthing
+  - CmdLine:
+    - git checkout tags/v1.3.2
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - Env:
+    - Key: BUILD_HOST
+      Value: syncthing.net
+    Name: env
+  - Env:
+    - Key: BUILD_USER
+      Value: docker
+    Name: env
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - CmdLine:
+    - go run build.go build stdiscosrv
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.13 AS builder
+- BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/syncthing/syncthing/stdiscosrv
+    - /bin/stdiscosrv
+  - CmdLine:
+    - echo 'syncthing:x:1000:1000::/var/syncthing:/sbin/nologin' >> /etc/passwd     &&
+      echo 'syncthing:!::0:::::' >> /etc/shadow     && mkdir /var/syncthing     &&
+      chown syncthing /var/syncthing
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/syncthing
+  - Name: user
+    User: syncthing
+  - Env:
+    - Key: STNOUPGRADE
+      Value: "1"
+    Name: env
+  - Name: expose
+    Ports:
+    - "8443"
+  - Health:
+      Interval: 60000000000
+      Test:
+      - CMD-SHELL
+      - nc -z localhost 8443 || exit 1
+      Timeout: 10000000000
+    Name: healthcheck
+  - CmdLine:
+    - /bin/stdiscosrv
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

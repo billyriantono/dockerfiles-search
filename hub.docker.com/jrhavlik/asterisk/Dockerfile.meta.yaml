@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: ubuntu:18.04
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: asterisk-16.3.0
+  - Labels:
+    - Key: name
+      Value: '"Asterisk Build"'
+    Name: label
+  - CmdLine:
+    - apt-get update     && DEBIAN_FRONTEND=noninteractive apt-get install -y     apt-utils     aptitude     aptitude-common     build-essential     g++     libcgi-fast-perl     libcgi-pm-perl     libclass-accessor-perl     libcwidget3v5     libencode-locale-perl     libfcgi-perl     libhtml-parser-perl     libhtml-tagset-perl     libhttp-date-perl     libhttp-message-perl     libio-html-perl     libio-string-perl     liblocale-gettext-perl     liblwp-mediatypes-perl     libparse-debianchangelog-perl     libsigc++-2.0-0v5     libsub-name-perl     libtimedate-perl     liburi-perl     libssl-dev     libncurses5-dev     libnewt-dev     libvpb1     libxml2-dev     linux-headers-generic     libsqlite3-dev     make     tzdata     uuid-dev     wget
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/
+  - CmdLine:
+    - wget http://downloads.asterisk.org/pub/telephony/asterisk/$VERSION.tar.gz     &&
+      mkdir -p /tmp/asterisk     && tar -xzvf $VERSION.tar.gz -C asterisk --strip-components=1
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/asterisk/
+  - CmdLine:
+    - mkdir -p /opt/asterisk     && ./contrib/scripts/install_prereq install     &&
+      sh contrib/scripts/get_mp3_source.sh     && LDFLAGS="-Wl,-rpath,/usr/lib64"        ./configure
+      --with-pjproject-bundled --prefix=/opt/asterisk --libdir=/usr/lib64     && ldconfig
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - menuselect.makeopts
+    - /tmp/asterisk/
+  - CmdLine:
+    - make menuselect.makeopts     && menuselect/menuselect --disable BUILD_NATIVE
+      menuselect.makeopts     && make     && make install     && make samples
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: build
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as build
+- As: final
+  BaseName: ubuntu:18.04
+  Commands:
+  - Labels:
+    - Key: name
+      Value: '"Asterisk Final"'
+    Name: label
+  - Env:
+    - Key: TZ
+      Value: America/Chicago
+    Name: env
+  - CmdLine:
+    - apt-get update     && DEBIAN_FRONTEND=noninteractive apt-get install -y     libavahi-client3     libbluetooth3     libcodec2-0.7     libcurl4     libgsm1     libjansson4     libneon27     liburiparser1     libedit2     libgmime-2.6-0     libical3     libjack0     liblua5.2-0     libmysqlclient20     libosptk4     libsrtp2-1     libradcli4     libresample1     libpq5     libiksemel3     libsnmp30     libsrtp0     libssl1.0.0     libsqlite3-0     libspandsp2     libspeex1     libspeexdsp1     libsybdb5     libunbound2     libvorbis0a     libvorbisenc2     libvorbisfile3     libxml2     libxslt1.1     tzdata     unixodbc     &&
+      mkdir -p /opt/asterisk
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /opt/asterisk
+    - /opt/asterisk
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib64
+    - /usr/lib64
+  - CmdLine:
+    - ln -s /opt/asterisk/sbin/asterisk /usr/sbin/asterisk  && ln -snf /usr/share/zoneinfo/$TZ
+      /etc/localtime  && echo $TZ > /etc/timezone
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - asterisk
+    - -f
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: final
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as final

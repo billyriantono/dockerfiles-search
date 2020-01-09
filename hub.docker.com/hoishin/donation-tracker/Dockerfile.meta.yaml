@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- As: downloader
+  BaseName: alpine/git
+  Commands:
+  - Env:
+    - Key: TRACKER_REPO
+      Value: GamesDoneQuick/donation-tracker-toplevel
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://api.github.com/repos/${TRACKER_REPO}/git/refs/heads/master
+    - /tmp/version.json
+  - CmdLine:
+    - git clone --recursive https://github.com/${TRACKER_REPO}.git /donations
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine/git
+  Name: downloader
+  Platform: ""
+  SourceCode: FROM alpine/git AS downloader
+- As: node-builder
+  BaseName: node:10
+  Commands:
+  - Chown: ""
+    From: downloader
+    Name: copy
+    SourcesAndDest:
+    - /donations
+    - /donations
+  - Name: workdir
+    Path: /donations/tracker
+  - CmdLine:
+    - yarn && yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10
+  Name: node-builder
+  Platform: ""
+  SourceCode: FROM node:10 AS node-builder
+- As: python-builder
+  BaseName: python:2.7-jessie
+  Commands:
+  - Chown: ""
+    From: downloader
+    Name: copy
+    SourcesAndDest:
+    - /donations
+    - /donations
+  - Chown: ""
+    From: node-builder
+    Name: copy
+    SourcesAndDest:
+    - /donations/tracker/static/gen
+    - /donations/tracker/static/gen
+  - Chown: ""
+    From: node-builder
+    Name: copy
+    SourcesAndDest:
+    - /donations/tracker/ui-tracker.manifest.json
+    - /donations/tracker/
+  - Name: workdir
+    Path: /donations
+  - CmdLine:
+    - apt-get update   && apt-get upgrade -y   && apt-get install -y gcc gettext sqlite3
+      locales-all --no-install-recommends   && sed -i '/^psycopg2/d' tracker/requirements.txt   &&
+      pip install -r requirements.txt   && pip install gunicorn   && mkdir db
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - local.py
+    - entrypoint.sh
+    - ./
+  - CmdLine:
+    - sh
+    - entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:2.7-jessie
+  Name: python-builder
+  Platform: ""
+  SourceCode: FROM python:2.7-jessie AS python-builder

@@ -1,0 +1,142 @@
+MetaArgs: null
+Stages:
+- As: buildenv
+  BaseName: node:carbon-stretch-slim
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Key: branch
+    Name: arg
+    Value: master
+  - CmdLine:
+    - useradd -d /app -r app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apt-get -qq update &&     apt-get -qq install --no-install-recommends ca-certificates
+      apt-transport-https     build-essential libpng-dev git python
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/vatesfr/xen-orchestra
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/xen-orchestra
+  - CmdLine:
+    - git checkout "$branch"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf .git packages/xo-server/sample.config.yaml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn run build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/xen-orchestra/packages/xo-server/node_modules
+  - CmdLine:
+    - ln -s ../../../packages/xo-server-* .
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:carbon-stretch-slim
+  Name: buildenv
+  Platform: ""
+  SourceCode: FROM node:carbon-stretch-slim AS buildenv
+- BaseName: node:carbon-stretch-slim
+  Commands:
+  - CmdLine:
+    - useradd -d /app -r app
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -r redis
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/lib/xo-server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/lib/xoa-backups
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R app /var/lib/xo-server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R app /var/lib/xoa-backups
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apt-get -qq update &&     apt-get -qq install --no-install-recommends ca-certificates
+      redis-server supervisor
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: buildenv
+    Name: copy
+    SourcesAndDest:
+    - /app/xen-orchestra
+    - /app/xen-orchestra
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - xo-server.yaml
+    - /app/xen-orchestra/packages/xo-server/.xo-server.yaml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/supervisor/supervisord.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - redis.conf
+    - /etc/redis/redis.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - xo-entry.sh
+    - /
+  - Name: expose
+    Ports:
+    - "8000"
+  - Name: volume
+    Volumes:
+    - /var/lib/redis
+    - /var/lib/xo-server
+    - /var/lib/xoa-backups
+  - CmdLine:
+    - /xo-entry.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/bin/supervisord
+    - -c
+    - /etc/supervisor/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: node:carbon-stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:carbon-stretch-slim

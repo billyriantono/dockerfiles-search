@@ -1,0 +1,73 @@
+MetaArgs: null
+Stages:
+- BaseName: ruby:2.4-alpine
+  Commands:
+  - Labels:
+    - Key: '"name"'
+      Value: '"ensemble"'
+    Name: label
+  - Labels:
+    - Key: '"version"'
+      Value: '"0.0.1"'
+    Name: label
+  - Maintainer: Hearst Automation Team
+    Name: maintainer
+  - Env:
+    - Key: APP_HOME
+      Value: /usr/src/rails
+    Name: env
+  - Key: BUILD_ENV
+    Name: arg
+    Value: prod
+  - Key: RAILS_ENV
+    Name: arg
+    Value: production
+  - Key: RACK_ENV
+    Name: arg
+    Value: production
+  - CmdLine:
+    - mkdir -p $APP_HOME
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $APP_HOME
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $APP_HOME
+  - CmdLine:
+    - echo "http://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories
+      &&    echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
+      &&    echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+      &&    apk update && apk add     bash     supervisor     git     nodejs     openssl-dev     libpq     postgresql-client     libxml2-dev     libxslt-dev     exim
+      &&    runDeps="$(         scanelf --needed --nobanner --recursive /usr/local             |
+      awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }'             | sort -u             |
+      xargs -r apk info --installed             | sort -u     )" &&    apk add --virtual
+      .ruby-builddeps $runDeps     build-base     ruby-dev     libc-dev     sqlite-libs     sqlite-dev     postgresql-dev     linux-headers
+      &&     gem install bundler &&    mkdir -p /var/log/exim &&    touch /var/log/exim/mainlog
+      &&    chmod 666 /var/log/exim/mainlog &&    if [ "${BUILD_ENV}" == 'dev' ];
+      then bundle install --with development --without test; fi &&    if [ "${BUILD_ENV}"
+      == 'prod' ]; then bundle install --without development --without test; fi &&    if
+      [ "${BUILD_ENV}" == 'test' ]; then bundle install --with test; fi &&    bundle
+      exec rake assets:precompile &&    bundle exec rake setup:docker_config["$BUILD_ENV"]
+      &&    apk del .ruby-builddeps &&    gem cleanup &&    rm -rf /var/cache/apk/*
+      &&    rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - supervisord
+    - -c
+    - /usr/src/rails/supervisord.conf
+    - -n
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ruby:2.4-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ruby:2.4-alpine

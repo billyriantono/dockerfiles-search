@@ -1,0 +1,107 @@
+MetaArgs: null
+Stages:
+- As: gpbackup-s3-plugin-builder
+  BaseName: golang
+  Commands:
+  - Env:
+    - Key: CHECKOUT
+      Value: tags/1.1.0
+    Name: env
+  - CmdLine:
+    - go get github.com/greenplum-db/gpbackup-s3-plugin;     cd /go/src/github.com/greenplum-db/gpbackup-s3-plugin
+      &&     git checkout ${CHECKOUT} &&     make depend build unit
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang
+  Name: gpbackup-s3-plugin-builder
+  Platform: ""
+  SourceCode: FROM golang as gpbackup-s3-plugin-builder
+- As: gpbackup-builder
+  BaseName: golang
+  Commands:
+  - Env:
+    - Key: CHECKOUT
+      Value: tags/1.9.0
+    Name: env
+  - CmdLine:
+    - go get github.com/greenplum-db/gpbackup;     cd /go/src/github.com/greenplum-db/gpbackup
+      &&     git checkout ${CHECKOUT} &&     make depend build unit
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang
+  Name: gpbackup-builder
+  Platform: ""
+  SourceCode: FROM golang as gpbackup-builder
+- BaseName: ubuntu:xenial
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - init.sh
+    - /root/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - start-singlenode.sh
+    - /gpdb/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - gpdb.bashrc
+    - /gpdb/.bashrc
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - gpdb.bash_profile
+    - /gpdb/.bash_profile
+  - CmdLine:
+    - apt update &&     apt install -y sudo software-properties-common gnupg locales
+      &&     add-apt-repository -y ppa:greenplum/db &&     apt update &&     apt dist-upgrade
+      -y &&     apt install -y greenplum-db-oss &&     apt remove --purge -y software-properties-common
+      &&     rm -rf /var/lib/apt/lists/* &&     groupadd -g 4321 gpdb &&     useradd
+      -g 4321 -u 4321 --shell /bin/bash -d /gpdb gpdb &&     chown -R gpdb /gpdb &&     locale-gen
+      en_US.UTF-8 &&     mkdir /gpmaster /gpdata0 &&     chown -R gpdb:gpdb /gpmaster
+      /gpdata0
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: gpbackup-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/gpbackup
+    - /opt/gpdb/bin/gpbackup
+  - Chown: ""
+    From: gpbackup-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/gpbackup_helper
+    - /opt/gpdb/bin/gpbackup_helper
+  - Chown: ""
+    From: gpbackup-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/gprestore
+    - /opt/gpdb/bin/gprestore
+  - Chown: ""
+    From: gpbackup-s3-plugin-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/gpbackup_s3_plugin
+    - /opt/gpdb/bin/gpbackup_s3_plugin
+  - Name: expose
+    Ports:
+    - "5432"
+  - Name: expose
+    Ports:
+    - "22"
+  - CmdLine:
+    - /root/init.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:xenial
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:xenial

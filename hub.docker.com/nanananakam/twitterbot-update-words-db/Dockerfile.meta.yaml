@@ -1,0 +1,70 @@
+MetaArgs: null
+Stages:
+- As: neologd-builder
+  BaseName: debian:9-slim
+  Commands:
+  - Env:
+    - Key: LC_ALL
+      Value: C.UTF-8
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - CmdLine:
+    - apt-get update &&  apt -y install mecab libmecab-dev mecab-ipadic-utf8 git make
+      curl xz-utils file  && git clone --depth 1 https://github.com/neologd/mecab-ipadic-neologd.git  &&
+      cd mecab-ipadic-neologd  && ./bin/install-mecab-ipadic-neologd -n -a -y -u  &&
+      mkdir /mecab-ipadic-neologd-dic  && mv `mecab-config --dicdir`/mecab-ipadic-neologd/*
+      /mecab-ipadic-neologd-dic
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:9-slim
+  Name: neologd-builder
+  Platform: ""
+  SourceCode: FROM debian:9-slim as neologd-builder
+- As: golang-builder
+  BaseName: golang:1.12
+  Commands:
+  - Env:
+    - Key: CGO_LDFLAGS
+      Value: '"-lmecab -lstdc++"'
+    Name: env
+  - Env:
+    - Key: LC_ALL
+      Value: C.UTF-8
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /
+  - Chown: ""
+    From: neologd-builder
+    Name: copy
+    SourcesAndDest:
+    - /mecab-ipadic-neologd-dic
+    - /mecab-ipadic-neologd-dic
+  - CmdLine:
+    - apt-get update && apt-get -y install mecab libmecab-dev mecab-ipadic-utf8 ca-certificates
+      xz-utils  && apt clean && rm -rf /var/lib/apt/lists/*  && go build -o /main
+      /main.go  && echo "dicdir = /mecab-ipadic-neologd-dic" > `mecab-config --sysconfdir`/mecabrc
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - /main
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: golang:1.12
+  Name: golang-builder
+  Platform: ""
+  SourceCode: FROM golang:1.12 as golang-builder

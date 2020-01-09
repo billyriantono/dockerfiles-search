@@ -1,0 +1,65 @@
+MetaArgs: null
+Stages:
+- As: md_builder
+  BaseName: node:8.16-stretch-slim
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install -y git &&     git clone https://github.com/WycliffeAssociates/badge-markdown-generator
+      /badge-markdown-generator
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /badge-markdown-generator
+  - CmdLine:
+    - npm install --production && npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8.16-stretch-slim
+  Name: md_builder
+  Platform: ""
+  SourceCode: FROM node:8.16-stretch-slim AS md_builder
+- BaseName: python:3.7-stretch
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /webhooks/
+  - Chown: ""
+    From: md_builder
+    Name: copy
+    SourcesAndDest:
+    - /badge-markdown-generator/build
+    - /webhooks/app/md
+  - CmdLine:
+    - apt-get update && apt-get install -y wget apt-transport-https &&     wget -qO-
+      https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.asc.gpg
+      &&     mv microsoft.asc.gpg /etc/apt/trusted.gpg.d/ &&     wget -q https://packages.microsoft.com/config/debian/9/prod.list
+      &&     mv prod.list /etc/apt/sources.list.d/microsoft-prod.list &&     chown
+      root:root /etc/apt/trusted.gpg.d/microsoft.asc.gpg &&     chown root:root /etc/apt/sources.list.d/microsoft-prod.list
+      &&     apt-get update &&     apt-get install -y build-essential aspnetcore-runtime-2.2
+      libssl-dev git libffi-dev python3-dev freetds-dev &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip3 install -r /webhooks/requirements.txt
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /webhooks/app/
+  - CmdLine:
+    - gunicorn
+    - --access-logfile
+    - '-'
+    - -b
+    - 0.0.0.0:80
+    - app
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3.7-stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.7-stretch

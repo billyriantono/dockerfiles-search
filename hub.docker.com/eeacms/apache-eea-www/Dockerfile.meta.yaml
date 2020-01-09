@@ -1,0 +1,169 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:stretch-slim
+  Commands:
+  - Env:
+    - Key: HTTPD_PREFIX
+      Value: /usr/local/apache2
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $HTTPD_PREFIX/bin:$PATH
+    Name: env
+  - CmdLine:
+    - "mkdir -p \"$HTTPD_PREFIX\" \t&& chown www-data:www-data \"$HTTPD_PREFIX\""
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $HTTPD_PREFIX
+  - CmdLine:
+    - "set -eux; \tapt-get update; \tapt-get install -y --no-install-recommends \t\tlibapr1-dev
+      \t\tlibaprutil1-dev \t\tlibaprutil1-ldap \t; \trm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HTTPD_VERSION
+      Value: 2.4.38
+    Name: env
+  - Env:
+    - Key: HTTPD_SHA256
+      Value: 7dc65857a994c98370dc4334b260101a7a04be60e6e74a5c57a6dee1bc8f394a
+    Name: env
+  - Env:
+    - Key: HTTPD_PATCHES
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: APACHE_DIST_URLS
+      Value: "https://www.apache.org/dyn/closer.cgi?action=download&filename= \thttps://www-us.apache.org/dist/
+        \thttps://www.apache.org/dist/ \thttps://archive.apache.org/dist/"
+    Name: env
+  - CmdLine:
+    - "set -eux; \t\tsavedAptMark=\"$(apt-mark showmanual)\"; \tapt-get update; \tapt-get
+      install -y --no-install-recommends \t\tbzip2 \t\tca-certificates \t\tdirmngr
+      \t\tdpkg-dev \t\tgcc \t\tgnupg2 \t\tliblua5.2-dev \t\tlibnghttp2-dev \t\tlibpcre3-dev
+      \t\tlibssl-dev \t\tlibxml2-dev \t\tmake \t\twget \t\tzlib1g-dev                 cmake
+      \                build-essential \t; \trm -r /var/lib/apt/lists/*; \t        mkdir
+      -p brotli;         wget https://github.com/google/brotli/archive/v1.0.6.tar.gz;
+      \        tar -xzf v1.0.6.tar.gz -C brotli  --strip-components=1;         rm
+      v1.0.6.tar.gz;         cd brotli;         mkdir out;         cd out;         ../configure-cmake
+      --disable-debug;         make;         make test;         make install;         cd
+      ../.. ;         rm -rf brotli;         \tddist() { \t\tlocal f=\"$1\"; shift;
+      \t\tlocal distFile=\"$1\"; shift; \t\tlocal success=; \t\tlocal distUrl=; \t\tfor
+      distUrl in $APACHE_DIST_URLS; do \t\t\tif wget -O \"$f\" \"$distUrl$distFile\"
+      && [ -s \"$f\" ]; then \t\t\t\tsuccess=1; \t\t\t\tbreak; \t\t\tfi; \t\tdone;
+      \t\t[ -n \"$success\" ]; \t}; \t\tddist 'httpd.tar.bz2' \"httpd/httpd-$HTTPD_VERSION.tar.bz2\";
+      \techo \"$HTTPD_SHA256 *httpd.tar.bz2\" | sha256sum -c -; \t\tddist 'httpd.tar.bz2.asc'
+      \"httpd/httpd-$HTTPD_VERSION.tar.bz2.asc\"; \texport GNUPGHOME=\"$(mktemp -d)\";
+      \tfor key in \t\tA93D62ECC3C8EA12DB220EC934EA76E6791485A8 \t\tB9E8213AEFB861AF35A41F2C995E35221AD84DFF
+      \t; do \t      \tfor keyserver in $(shuf -e \t\t\tha.pool.sks-keyservers.net
+      \t\t\thkp://p80.pool.sks-keyservers.net:80 \t\t\tkeyserver.ubuntu.com \t\t\thkp://keyserver.ubuntu.com:80
+      \t\t\tpgp.mit.edu) ; do   \t\t    gpg --batch --keyserver $keyserver --recv-keys
+      \"$key\" && break || true ;   \t         done ; \tdone; \tgpg --batch --verify
+      httpd.tar.bz2.asc httpd.tar.bz2; \tcommand -v gpgconf && gpgconf --kill all
+      || :; \trm -rf \"$GNUPGHOME\" httpd.tar.bz2.asc; \t\tmkdir -p src; \ttar -xf
+      httpd.tar.bz2 -C src --strip-components=1; \trm httpd.tar.bz2; \tcd src; \t\tpatches()
+      { \t\twhile [ \"$#\" -gt 0 ]; do \t\t\tlocal patchFile=\"$1\"; shift; \t\t\tlocal
+      patchSha256=\"$1\"; shift; \t\t\tddist \"$patchFile\" \"httpd/patches/apply_to_$HTTPD_VERSION/$patchFile\";
+      \t\t\techo \"$patchSha256 *$patchFile\" | sha256sum -c -; \t\t\tpatch -p0 <
+      \"$patchFile\"; \t\t\trm -f \"$patchFile\"; \t\tdone; \t}; \tpatches $HTTPD_PATCHES;
+      \t\tgnuArch=\"$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)\"; \t./configure
+      \t\t--build=\"$gnuArch\" \t\t--prefix=\"$HTTPD_PREFIX\" \t\t--enable-mods-shared=reallyall
+      \t\t--with-pcre=/usr/bin/pcre-config --enable-ssl --enable-so --enable-brotli
+      --with-brotli=/usr/local/brotli                 --enable-mpms-shared=all \t;
+      \tmake -j \"$(nproc)\"; \tmake install; \t\tcd ..; \trm -r src man manual; \t\tsed
+      -ri \t\t-e 's!^(\\s*CustomLog)\\s+\\S+!\\1 /proc/self/fd/1!g' \t\t-e 's!^(\\s*ErrorLog)\\s+\\S+!\\1
+      /proc/self/fd/2!g' \t\t-e 's!^(\\s*TransferLog)\\s+\\S+!\\1 /proc/self/fd/1!g'
+      \t\t\"$HTTPD_PREFIX/conf/httpd.conf\" \t\t\"$HTTPD_PREFIX/conf/extra/httpd-ssl.conf\"
+      \t; \t\tapt-mark auto '.*' > /dev/null; \t[ -z \"$savedAptMark\" ] || apt-mark
+      manual $savedAptMark; \tfind /usr/local -type f -executable -exec ldd '{}' ';'
+      \t\t| awk '/=>/ { print $(NF-1) }' \t\t| sort -u \t\t| xargs -r dpkg-query --search
+      \t\t| cut -d: -f1 \t\t| sort -u \t\t| xargs -r apt-mark manual \t; \tapt-get
+      purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false; \t        httpd
+      -v"
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim as builder
+- BaseName: eeacms/apache:2.4-2.4
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"European Environment Agency (EEA): IDM2 A-Team <eea-edw-a-team-alerts@googlegroups.com>"'
+    Name: label
+  - Env:
+    - Key: APACHE_MODULES
+      Value: '"http2_module mime_magic_module data_module unique_id_module remoteip_module
+        negotiation_module brotli_module"'
+    - Key: APACHE_INCLUDE
+      Value: '"conf/extra/httpd-languages.conf conf/extra/httpd-default.conf"'
+    - Key: APACHE_TIMEOUT
+      Value: '"120"'
+    - Key: APACHE_KEEPALIVE_TIMEOUT
+      Value: '"8"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/
+    - /tmp/
+  - CmdLine:
+    - runDeps=" curl libsys-syslog-perl apt-transport-https ca-certificates"  && apt-get
+      update  && apt-get install -y --no-install-recommends $runDeps  && mkdir -p
+      /usr/local/apache2/conf/extra/ /var/eea-buildout-plone4/etc/apache /var/eea-buildout-plone4/etc/scripts
+      /var/local/www-logs/eea /var/www/html /var/www-static-resources/ /var/www-static-templates  &&
+      sed -i 's|ServerName eeacms-apache.docker.com|ServerName www.eea.europa.eu|'
+      /usr/local/apache2/conf/httpd.conf  && sed -i 's|you@example.com|helpdesk@eea.europa.eu|'
+      /usr/local/apache2/conf/httpd.conf  && mv /tmp/apache_syslog /var/eea-buildout-plone4/etc/scripts/  &&
+      mv /tmp/vh-www-common.inc /var/eea-buildout-plone4/etc/apache/  && mv /tmp/vh-www-https.conf
+      /var/eea-buildout-plone4/etc/apache/  && mv /tmp/vh-wwwplone.conf /usr/local/apache2/conf/extra/  &&
+      mv /tmp/archive_old_logs.sh /archive_old_logs.sh  && mv /tmp/templates /var/www-static-templates/  &&
+      mv /docker-entrypoint.sh /apache-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/apache2/modules/mod_brotli.so
+    - /usr/local/apache2/modules/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/brotli
+    - /usr/local/bin/brotli
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/libbrotli*
+    - /usr/local/lib/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/include/brotli
+    - /usr/local/include/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/pkgconfig/libbrotli*
+    - /usr/local/lib/pkgconfig/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  From:
+    Image: eeacms/apache:2.4-2.4
+  Name: ""
+  Platform: ""
+  SourceCode: FROM eeacms/apache:2.4-2.4

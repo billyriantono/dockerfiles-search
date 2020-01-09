@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- As: mysql-client
+  BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - sed -i 's/# \(deb-src .*\)$/\1/' /etc/apt/sources.list &&     apt-get update
+      &&     apt-get build-dep -y mariadb-client &&     apt-get install -y         git         gnutls-dev         vim.tiny
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/kolbe/mariadb-server --depth=1 --branch=tidb-client
+      /client
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /client
+  - CmdLine:
+    - cmake . -DWITHOUT_SERVER=ON -DCPACK_STRIP_FILES=ON
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -j install
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: mysql-client
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 AS mysql-client
+- As: tidb-enterprise-tools
+  BaseName: pingcap/tidb-enterprise-tools
+  Commands:
+  - CmdLine:
+    - apk add binutils curl     && curl -sS -L http://download.pingcap.org/tidb-v3.0-linux-amd64.tar.gz
+      |          tar -C / --strip-components=2 -xvzf -              tidb-v3.0-linux-amd64/bin/tikv-ctl              tidb-v3.0-linux-amd64/bin/pd-ctl     &&
+      strip importer loader mydumper syncer tikv-ctl pd-ctl
+    Name: run
+    PrependShell: true
+  From:
+    Image: pingcap/tidb-enterprise-tools
+  Name: tidb-enterprise-tools
+  Platform: ""
+  SourceCode: FROM pingcap/tidb-enterprise-tools AS tidb-enterprise-tools
+- BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y     curl     less     libreadline5     vim     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: mysql-client
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/mysql/bin/mysql
+    - /usr/local/bin/
+  - Chown: ""
+    From: tidb-enterprise-tools
+    Name: copy
+    SourcesAndDest:
+    - /importer
+    - /loader
+    - /mydumper
+    - /syncer
+    - /tikv-ctl
+    - /pd-ctl
+    - /usr/local/bin/
+  - Name: workdir
+    Path: /root
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - README.container
+    - README
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - motd.bash
+    - .motd.bash
+  - CmdLine:
+    - echo source .motd.bash >> .bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/env
+    - bash
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

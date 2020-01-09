@@ -1,0 +1,133 @@
+MetaArgs: null
+Stages:
+- As: opencv
+  BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends             git
+      build-essential cmake pkg-config unzip libgtk2.0-dev             curl ca-certificates
+      libcurl4-openssl-dev libssl-dev             libavcodec-dev libavformat-dev libswscale-dev
+      libtbb2 libtbb-dev             libjpeg-dev libpng-dev libtiff-dev libdc1394-22-dev
+      &&             rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Key: OPENCV_VERSION
+    Name: arg
+    Value: '"3.4.1"'
+  - Env:
+    - Key: OPENCV_VERSION
+      Value: $OPENCV_VERSION
+    Name: env
+  - CmdLine:
+    - curl -Lo opencv.zip https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip
+      &&             unzip -q opencv.zip &&             curl -Lo opencv_contrib.zip
+      https://github.com/opencv/opencv_contrib/archive/${OPENCV_VERSION}.zip &&             unzip
+      -q opencv_contrib.zip &&             rm opencv.zip opencv_contrib.zip &&             cd
+      opencv-${OPENCV_VERSION} &&             mkdir build && cd build &&             cmake
+      -D CMAKE_BUILD_TYPE=RELEASE                   -D CMAKE_INSTALL_PREFIX=/usr/local                   -D
+      OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib-${OPENCV_VERSION}/modules                   -D
+      WITH_JASPER=OFF                   -D BUILD_DOCS=OFF                   -D BUILD_EXAMPLES=OFF                   -D
+      BUILD_TESTS=OFF                   -D BUILD_PERF_TESTS=OFF                   -D
+      BUILD_opencv_java=NO                   -D BUILD_opencv_python=NO                   -D
+      BUILD_opencv_python2=NO                   -D BUILD_opencv_python3=NO                   -D
+      OPENCV_GENERATE_PKGCONFIG=ON .. &&             make -j $(nproc --all) &&             make
+      preinstall && make install && ldconfig &&             cd / && rm -rf opencv*
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: opencv
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 AS opencv
+- As: gocv
+  BaseName: opencv
+  Commands:
+  - Key: GOVERSION
+    Name: arg
+    Value: '"1.11.2"'
+  - Env:
+    - Key: GOVERSION
+      Value: $GOVERSION
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends             git
+      software-properties-common &&             curl -Lo go${GOVERSION}.linux-amd64.tar.gz
+      https://dl.google.com/go/go${GOVERSION}.linux-amd64.tar.gz &&             tar
+      -C /usr/local -xzf go${GOVERSION}.linux-amd64.tar.gz &&             rm go${GOVERSION}.linux-amd64.tar.gz
+      &&             rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $GOPATH/bin:/usr/local/go/bin:$PATH
+    Name: env
+  - CmdLine:
+    - mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 777 "$GOPATH"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH
+  From:
+    Stage:
+      Index: 0
+      Named: opencv
+  Name: gocv
+  Platform: ""
+  SourceCode: FROM opencv AS gocv
+- As: adult-image-detector
+  BaseName: gocv
+  Commands:
+  - CmdLine:
+    - go get -u github.com/kardianos/govendor
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/pilu/fresh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/grinat/adult-image-detector --recursive "$GOPATH/src/adult-image-detector"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH/src/adult-image-detector
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - govendor sync
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod -R 777 "$GOPATH/src/adult-image-detector/uploads"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go test
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9191"
+  - CmdLine:
+    - /go/src/adult-image-detector/adult-image-detector
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: gocv
+  Name: adult-image-detector
+  Platform: ""
+  SourceCode: FROM gocv AS adult-image-detector

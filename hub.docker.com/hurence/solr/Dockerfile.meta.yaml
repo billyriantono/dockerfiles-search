@@ -1,0 +1,93 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8-jre-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"thomas.bailet@hurence.com"'
+    Name: label
+  - Key: SOLR_DOWNLOAD_SERVER
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk add --no-cache         lsof         gnupg         procps         tar         bash
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache ca-certificates wget &&         update-ca-certificates
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SOLR_USER
+      Value: '"solr"'
+    - Key: SOLR_UID
+      Value: '"8983"'
+    - Key: SOLR_GROUP
+      Value: '"solr"'
+    - Key: SOLR_GID
+      Value: '"8983"'
+    - Key: SOLR_VERSION
+      Value: '"5.5.4"'
+    - Key: SOLR_URL
+      Value: '"${SOLR_DOWNLOAD_SERVER:-https://archive.apache.org/dist/lucene/solr}/5.5.4/solr-5.5.4.tgz"'
+    - Key: PATH
+      Value: '"/opt/solr/bin:/opt/docker-solr/scripts:$PATH"'
+    Name: env
+  - CmdLine:
+    - addgroup -S -g $SOLR_GID $SOLR_GROUP &&     adduser -S -u $SOLR_UID -G $SOLR_GROUP
+      $SOLR_USER
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'set -e; for key in $SOLR_KEYS; do     found='''';     for server in       ha.pool.sks-keyservers.net       hkp://keyserver.ubuntu.com:80       hkp://p80.pool.sks-keyservers.net:80       pgp.mit.edu     ;
+      do       echo "  trying $server for $key";       gpg --keyserver "$server" --keyserver-options
+      timeout=10 --recv-keys "$key" && found=yes && break;     done;     test -z "$found"
+      && echo >&2 "error: failed to fetch $key from several disparate servers -- network
+      issues?" && exit 1;   done;   exit 0'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/solr &&   echo "downloading $SOLR_URL" &&   wget -q $SOLR_URL
+      -O /opt/solr.tgz &&   echo "downloading $SOLR_URL.asc" &&   wget -q $SOLR_URL.asc
+      -O /opt/solr.tgz.asc &&   (>&2 ls -l /opt/solr.tgz /opt/solr.tgz.asc) &&   tar
+      -C /opt/solr --extract --file /opt/solr.tgz --strip-components=1 &&   rm /opt/solr.tgz*
+      &&   rm -Rf /opt/solr/docs/ &&   mkdir -p /opt/solr/server/solr/lib /opt/solr/server/solr/mycores
+      /opt/solr/server/logs /docker-entrypoint-initdb.d /opt/docker-solr &&   sed
+      -i -e 's/"\$(whoami)" == "root"/$(id -u) == 0/' /opt/solr/bin/solr &&   sed
+      -i -e 's/lsof -PniTCP:/lsof -t -PniTCP:/' /opt/solr/bin/solr &&   sed -i -e
+      's/#SOLR_PORT=8983/SOLR_PORT=8983/' /opt/solr/bin/solr.in.sh &&   sed -i -e
+      '/-Dsolr.clustering.enabled=true/ a SOLR_OPTS="$SOLR_OPTS -Dsun.net.inetaddr.ttl=60
+      -Dsun.net.inetaddr.negative.ttl=60"' /opt/solr/bin/solr.in.sh &&   chown -R
+      $SOLR_USER:$SOLR_GROUP /opt/solr
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts
+    - /opt/docker-solr/scripts
+  - CmdLine:
+    - chown -R $SOLR_USER:$SOLR_GROUP /opt/docker-solr
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8983"
+  - Name: workdir
+    Path: /opt/solr
+  - Name: user
+    User: $SOLR_USER
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - solr-foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jre-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM    openjdk:8-jre-alpine

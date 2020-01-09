@@ -1,0 +1,170 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: node:11-alpine
+  Commands:
+  - Key: CACHE_PORT
+    Name: arg
+    Value: "8080"
+  - Key: PORT
+    Name: arg
+    Value: "8081"
+  - Key: HOST
+    Name: arg
+    Value: '''0.0.0.0'''
+  - Env:
+    - Key: HOST
+      Value: $HOST
+    - Key: PORT
+      Value: $PORT
+    - Key: CACHE_PORT
+      Value: $CACHE_PORT
+    - Key: TERM
+      Value: xterm
+    - Key: LANG
+      Value: en_US.UTF-8
+    - Key: TZ
+      Value: '''Europe/Moscow'''
+    - Key: NO_UPDATE_NOTIFIER
+      Value: "true"
+    - Key: NPM_CONFIG_USERCONFIG
+      Value: /tmp/.npmrc
+    - Key: NPM_CONFIG_CACHE
+      Value: /tmp/npm-cache
+    - Key: NPM_CONFIG_PREFIX
+      Value: /tmp/npm-global
+    Name: env
+  - CmdLine:
+    - "apk add --no-cache yarn \t&& mkdir -p /usr/share/app &&  chown 1001:0 /usr/share/app
+      \t&& mkdir -p /tmp/npm-cache \t&& mkdir -p /tmp/npm-global"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/share/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - .
+  - CmdLine:
+    - yarn --no-progress --silent
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Key: NODE_ENV
+    Name: arg
+    Value: production
+  - Env:
+    - Key: NODE_ENV
+      Value: $NODE_ENV
+    Name: env
+  - CmdLine:
+    - sh ./bin/build.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s/\${PORT}/\"$PORT\"/g" ./config/varnish.vcl
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:11-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:11-alpine as builder
+- As: runner
+  BaseName: node:11-alpine
+  Commands:
+  - Key: CACHE_PORT
+    Name: arg
+    Value: "8080"
+  - Key: PORT
+    Name: arg
+    Value: "8081"
+  - Key: HOST
+    Name: arg
+    Value: '''0.0.0.0'''
+  - Key: NODE_ENV
+    Name: arg
+    Value: production
+  - Env:
+    - Key: HOST
+      Value: $HOST
+    - Key: PORT
+      Value: $PORT
+    - Key: CACHE_PORT
+      Value: $CACHE_PORT
+    - Key: NODE_ENV
+      Value: $NODE_ENV
+    Name: env
+  - Name: workdir
+    Path: /usr/share/app
+  - CmdLine:
+    - "apk add --no-cache varnish=~6 \t&& mkdir -p ./varnish \t&& chown -R 1001:0
+      ."
+    Name: run
+    PrependShell: true
+  - Chown: "1001:0"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/app/bin
+    - ./bin
+  - Chown: "1001:0"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/app/config/varnish.vcl
+    - ./config/varnish.vcl
+  - Chown: "1001:0"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/app/dist
+    - ./dist
+  - Chown: "1001:0"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/app/static
+    - ./static
+  - Chown: "1001:0"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/app/node_modules/full-icu
+    - ./node_modules/full-icu
+  - Chown: "1001:0"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/app/node_modules/react-loadable
+    - ./node_modules/react-loadable
+  - Name: expose
+    Ports:
+    - $CACHE_PORT
+  - Health:
+      Interval: 30000000000
+      Retries: 3
+      StartPeriod: 5000000000
+      Test:
+      - CMD
+      - ./bin/healthcheck.sh
+      Timeout: 30000000000
+    Name: healthcheck
+  - Name: user
+    User: "1001"
+  - CmdLine:
+    - ./bin/start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: node:11-alpine
+  Name: runner
+  Platform: ""
+  SourceCode: FROM node:11-alpine as runner

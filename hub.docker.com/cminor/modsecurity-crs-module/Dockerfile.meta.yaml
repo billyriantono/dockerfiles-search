@@ -1,0 +1,171 @@
+MetaArgs:
+- DefaultValue: 1.15.12
+  Key: NGINX_VERSION
+  ProvidedValue: null
+  Value: 1.15.12
+- DefaultValue: v3-master-alpine
+  Key: LIB_TAG
+  ProvidedValue: null
+  Value: v3-master-alpine
+Stages:
+- As: build
+  BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - "apk add --no-cache \t\tpcre-dev \t\tlibxml2-dev \t\tgit \t\tlibtool \t\tautomake
+      \t\tautoconf \t\tg++ \t\tflex \t\tbison \t\tyajl-dev \t\tzlib-dev \t\tmake \t\tlibxslt-dev
+      \t\tlinux-headers"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache curl-dev geoip-dev libmaxminddb-dev lmdb-dev lmdb lua-dev
+      doxygen
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: build
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as build
+- As: nginx-src
+  BaseName: alpine:3.9
+  Commands:
+  - Key: NGINX_VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk add --no-cache gnupg1 curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 && curl -fSL https://nginx.org/download/nginx-$NGINX_VERSION.tar.gz
+      -o nginx.tar.gz \t&& curl -fSL https://nginx.org/download/nginx-$NGINX_VERSION.tar.gz.asc
+      \ -o nginx.tar.gz.asc \t&& export GNUPGHOME=\"$(mktemp -d)\" \t&& found='';
+      \tfor server in \t\tha.pool.sks-keyservers.net \t\thkp://keyserver.ubuntu.com:80
+      \t\thkp://p80.pool.sks-keyservers.net:80 \t\tpgp.mit.edu \t; do \t\techo \"Fetching
+      GPG key $GPG_KEYS from $server\"; \t\tgpg --keyserver \"$server\" --keyserver-options
+      timeout=10 --recv-keys \"$GPG_KEYS\" && found=yes && break; \tdone; \ttest -z
+      \"$found\" && echo >&2 \"error: failed to fetch GPG key $GPG_KEYS\" && exit
+      1; \tgpg --batch --verify nginx.tar.gz.asc nginx.tar.gz \t&& rm -rf \"$GNUPGHOME\"
+      nginx.tar.gz.asc \t&& mkdir -p /usr/src \t&& tar -zxC /usr/src -f nginx.tar.gz
+      \t&& rm nginx.tar.gz \t&& mv /usr/src/nginx-$NGINX_VERSION /usr/src/nginx"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: nginx-src
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as nginx-src
+- As: modsecurity-nginx-src
+  BaseName: build
+  Commands:
+  - Name: workdir
+    Path: /usr/src
+  - CmdLine:
+    - git clone --depth 1 https://github.com/SpiderLabs/ModSecurity-nginx.git
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build
+  Name: modsecurity-nginx-src
+  Platform: ""
+  SourceCode: FROM build as modsecurity-nginx-src
+- As: libmodsecurity
+  BaseName: cminor/libmodsecurity:${LIB_TAG}
+  Commands: null
+  From:
+    Image: cminor/libmodsecurity:${LIB_TAG}
+  Name: libmodsecurity
+  Platform: ""
+  SourceCode: FROM cminor/libmodsecurity:${LIB_TAG} as libmodsecurity
+- As: modsecurity-nginx-extension
+  BaseName: build
+  Commands:
+  - Chown: ""
+    From: libmodsecurity
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/modsecurity
+    - /etc/nginx/modsec/modsecurity
+  - Chown: ""
+    From: modsecurity-nginx-src
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/ModSecurity-nginx
+    - /usr/src/ModSecurity-nginx
+  - Chown: ""
+    From: nginx-src
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/nginx
+    - /usr/src/nginx
+  - Name: workdir
+    Path: /usr/src/nginx
+  - CmdLine:
+    - "export MODSECURITY_INC=\"/etc/nginx/modsec/modsecurity/include/\" && export
+      MODSECURITY_LIB=\"/etc/nginx/modsec/modsecurity/lib/\" && ./configure --with-compat
+      --add-dynamic-module=../ModSecurity-nginx \t&& make modules \t&& mv objs/ngx_http_modsecurity_module.so
+      /etc/nginx/modsec/ngx_http_modsecurity_module.so"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build
+  Name: modsecurity-nginx-extension
+  Platform: ""
+  SourceCode: FROM build as modsecurity-nginx-extension
+- As: owasp-crs
+  BaseName: alpine:3.9
+  Commands:
+  - Key: OWASP_CRS_VERSION
+    Name: arg
+    Value: 3.2.0
+  - CmdLine:
+    - apk add --no-cache curl
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src
+  - CmdLine:
+    - curl -fSL https://github.com/SpiderLabs/owasp-modsecurity-crs/archive/v${OWASP_CRS_VERSION}.tar.gz
+      -o owasp-crs.tar.gz     && tar -xzvf owasp-crs.tar.gz && mv /usr/src/owasp-modsecurity-crs-${OWASP_CRS_VERSION}
+      /usr/src/owasp-modsecurity-crs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /usr/src/owasp-modsecurity-crs/crs-setup.conf.example /usr/src/owasp-modsecurity-crs/crs-setup.conf
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: owasp-crs
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as owasp-crs
+- BaseName: alpine:3.9
+  Commands:
+  - Chown: ""
+    From: modsecurity-nginx-extension
+    Name: copy
+    SourcesAndDest:
+    - /etc/nginx/modsec/
+    - /etc/nginx/modsec
+  - Chown: ""
+    From: owasp-crs
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/owasp-modsecurity-crs
+    - /etc/nginx/modsec/owasp-modsecurity-crs
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - modsec/modsec.conf
+    - /etc/nginx/modsec/
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

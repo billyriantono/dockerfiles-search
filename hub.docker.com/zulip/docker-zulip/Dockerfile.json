@@ -1,0 +1,206 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "base",
+      "BaseName": "ubuntu:18.04",
+      "SourceCode": "FROM ubuntu:18.04 as base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Image": "ubuntu:18.04"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "LANG",
+              "Value": "\"C.UTF-8\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Key": "UBUNTU_MIRROR",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "CmdLine": [
+            "{ [ ! \"$UBUNTU_MIRROR\" ] || sed -i \"s|http://\\(\\w*\\.\\)*archive\\.ubuntu\\.com/ubuntu/\\? |$UBUNTU_MIRROR |\" /etc/apt/sources.list; } \u0026\u0026     apt-get -q update \u0026\u0026     apt-get -q dist-upgrade -y \u0026\u0026     DEBIAN_FRONTEND=noninteractive         apt-get -q install --no-install-recommends -y ca-certificates git locales lsb-release python3 sudo tzdata"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "build",
+      "BaseName": "base",
+      "SourceCode": "FROM base as build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "useradd -d /home/zulip -m zulip \u0026\u0026     echo 'zulip ALL=(ALL:ALL) NOPASSWD:ALL' \u003e\u003e /etc/sudoers"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "user",
+          "User": "zulip"
+        },
+        {
+          "Name": "workdir",
+          "Path": "/home/zulip"
+        },
+        {
+          "Key": "ZULIP_GIT_URL",
+          "Name": "arg",
+          "Value": "https://github.com/zulip/zulip.git"
+        },
+        {
+          "Key": "ZULIP_GIT_REF",
+          "Name": "arg",
+          "Value": "2.1.1"
+        },
+        {
+          "CmdLine": [
+            "git clone \"$ZULIP_GIT_URL\" \u0026\u0026     cd zulip \u0026\u0026     git checkout -b current \"$ZULIP_GIT_REF\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/home/zulip/zulip"
+        },
+        {
+          "Key": "CUSTOM_CA_CERTIFICATES",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "CmdLine": [
+            "./tools/provision --production-travis"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            ". /srv/zulip-py3-venv/bin/activate \u0026\u0026     ./tools/build-release-tarball docker \u0026\u0026     mv /tmp/tmp.*/zulip-server-docker.tar.gz /tmp/zulip-server-docker.tar.gz"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "base",
+      "SourceCode": "FROM base",
+      "Platform": "",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "DATA_DIR",
+              "Value": "\"/data\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/tmp/zulip-server-docker.tar.gz",
+            "/root/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "custom_zulip_files/",
+            "/root/custom_zulip"
+          ]
+        },
+        {
+          "Key": "CUSTOM_CA_CERTIFICATES",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "CmdLine": [
+            "dpkg-divert --add --rename /etc/init.d/nginx \u0026\u0026     ln -s /bin/true /etc/init.d/nginx \u0026\u0026     mkdir -p \"$DATA_DIR\" \u0026\u0026     cd /root \u0026\u0026     tar -xf zulip-server-docker.tar.gz \u0026\u0026     rm -f zulip-server-docker.tar.gz \u0026\u0026     mv zulip-server-docker zulip \u0026\u0026     cp -rf /root/custom_zulip/* /root/zulip \u0026\u0026     rm -rf /root/custom_zulip \u0026\u0026     export PUPPET_CLASSES=\"zulip::dockervoyager\"            DEPLOYMENT_TYPE=\"dockervoyager\"            ADDITIONAL_PACKAGES=\"expect\" \u0026\u0026     /root/zulip/scripts/setup/install --hostname=\"$(hostname)\" --email=\"docker-zulip\" --no-init-db \u0026\u0026     rm -f /etc/zulip/zulip-secrets.conf /etc/zulip/settings.py \u0026\u0026     apt-get -qq autoremove --purge -y \u0026\u0026     apt-get -qq clean \u0026\u0026     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "entrypoint.sh",
+            "/sbin/entrypoint.sh"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "certbot-deploy-hook",
+            "/sbin/certbot-deploy-hook"
+          ]
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "$DATA_DIR"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "443",
+            "80"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/sbin/entrypoint.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "CmdLine": [
+            "app:run"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

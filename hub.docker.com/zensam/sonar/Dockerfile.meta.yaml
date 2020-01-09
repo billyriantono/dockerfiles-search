@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8
+  Commands:
+  - Maintainer: Sergii Marynenko <marynenko@gmail.com>
+    Name: maintainer
+  - Labels:
+    - Key: version
+      Value: '"6.7.1"'
+    Name: label
+  - Env:
+    - Key: TERM
+      Value: xterm
+    - Key: SONARQUBE_USER
+      Value: sonarqube
+    - Key: SONARQUBE_VERSION
+      Value: 6.7.1
+    - Key: PG_VERSION
+      Value: "9.6"
+    - Key: SONARQUBE_HOME
+      Value: /opt/sonarqube
+    - Key: SQ_USER
+      Value: sonar
+    - Key: SQ_PW
+      Value: sonar
+    - Key: SQ_DB
+      Value: sonar
+    - Key: SQ_URL
+      Value: https://sonarsource.bintray.com/Distribution/sonarqube
+    - Key: SONARQUBE_JDBC_URL
+      Value: jdbc:postgresql://localhost/sonar
+    Name: env
+  - CmdLine:
+    - apt-get -q -y update     && apt-get -q -y upgrade     && apt-get -q -y install
+      apt-utils dnsutils gnupg sudo wget curl unzip vim postgresql     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "5432"
+    - "9000"
+  - CmdLine:
+    - groupadd -r $SONARQUBE_USER && useradd -r -g $SONARQUBE_USER $SONARQUBE_USER
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sonar*
+    - /tmp/
+  - CmdLine:
+    - set -x     && echo "host all  all    0.0.0.0/0  md5" >> /etc/postgresql/$PG_VERSION/main/pg_hba.conf     &&
+      echo "listen_addresses='*'" >> /etc/postgresql/$PG_VERSION/main/postgresql.conf     &&
+      /etc/init.d/postgresql restart     && sleep 20     && sudo -u postgres psql
+      -c "CREATE USER $SQ_USER WITH REPLICATION PASSWORD '$SQ_PW';"     && sudo -u
+      postgres createdb -O $SQ_USER -E UTF8 -T template0 $SQ_DB     && cd /tmp     &&
+      curl -fSL -O "https://archive.raspbian.org/raspbian/pool/main/c/ca-certificates/ca-certificates_20130119+deb7u2_all.deb"     &&
+      echo "03521f6c1ade5682c65c5502c126c686eeea918aaaacdf487a09960b827cbf23  ca-certificates_20130119+deb7u2_all.deb"
+      | sha256sum -c -     && dpkg -P --force-all ca-certificates     && dpkg -i ca-certificates_20130119+deb7u2_all.deb     &&
+      rm ca-certificates_20130119+deb7u2_all.deb     && gpg --keyserver ha.pool.sks-keyservers.net
+      --recv-keys F1182E81C792928921DBCAB4CFCA4A29D26468DE     && cd /opt     && curl
+      -k -o sonarqube.zip -fSL $SQ_URL/sonarqube-$SONARQUBE_VERSION.zip     && curl
+      -k -o sonarqube.zip.asc -fSL $SQ_URL/sonarqube-$SONARQUBE_VERSION.zip.asc     &&
+      gpg --batch --verify sonarqube.zip.asc sonarqube.zip     && unzip -q sonarqube.zip     &&
+      mv sonarqube-$SONARQUBE_VERSION sonarqube     && rm sonarqube.zip*     && sed
+      -i '/sonar.jdbc.username=/s/^#//' $SONARQUBE_HOME/conf/sonar.properties     &&
+      sed -i 's/sonar.jdbc.username=.*/sonar.jdbc.username='$SQ_USER'/g' $SONARQUBE_HOME/conf/sonar.properties     &&
+      sed -i '/sonar.jdbc.password=/s/^#//' $SONARQUBE_HOME/conf/sonar.properties     &&
+      sed -i 's/sonar.jdbc.password=.*/sonar.jdbc.password='$SQ_PW'/g' $SONARQUBE_HOME/conf/sonar.properties     &&
+      sed -i '/jdbc:postgresql/s/^#//' $SONARQUBE_HOME/conf/sonar.properties     &&
+      ln -s $SONARQUBE_HOME/bin/linux-x86-64/sonar.sh /usr/bin/sonar     && sed -i
+      '/RUN_AS_USER=/s/^#//' /usr/bin/sonar     && sed -i 's/^RUN_AS_USER=/RUN_AS_USER='$SONARQUBE_USER'/g'
+      /usr/bin/sonar     && mv /tmp/sonar /etc/init.d/sonar     && chmod 755 /etc/init.d/sonar     &&
+      update-rc.d sonar defaults     && service postgresql stop
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - $SONARQUBE_HOME/data
+    - $SONARQUBE_HOME/extensions
+  - CmdLine:
+    - service postgresql start && sleep 10 && service sonar start     && tail -F $SONARQUBE_HOME/logs/sonar.log
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: openjdk:8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8

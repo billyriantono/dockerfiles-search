@@ -1,0 +1,107 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: gradle:5.4.1-jdk8
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /home/gradle/project
+  - Name: workdir
+    Path: /home/gradle/project
+  - CmdLine:
+    - gradle jpi
+    Name: run
+    PrependShell: true
+  From:
+    Image: gradle:5.4.1-jdk8
+  Name: build
+  Platform: ""
+  SourceCode: FROM gradle:5.4.1-jdk8 AS build
+- As: prod
+  BaseName: jenkins/jenkins:2.176.1
+  Commands:
+  - Name: workdir
+    Path: /tmp
+  - Env:
+    - Key: JENKINS_FOLDER
+      Value: /usr/share/jenkins
+    Name: env
+  - Key: JENKINS_STAGING
+    Name: arg
+    Value: /usr/share/jenkins/ref/
+  - Env:
+    - Key: JENKINS_CSP_OPTS
+      Value: '"sandbox; default-src ''none''; img-src ''self''; style-src ''self'';"'
+    Name: env
+  - Name: user
+    User: root
+  - CmdLine:
+    - apt-get update && apt-get install -y nginx python zip jq gettext-base
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "deb http://ftp.debian.org/debian testing main" >> /etc/apt/sources.list   &&
+      apt-get update && apt-get -t testing install -y git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'networkaddress.cache.ttl=60' >> ${JAVA_HOME}/jre/lib/security/java.security
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p "$JENKINS_HOME" "${JENKINS_FOLDER}/war"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/log/nginx/jenkins
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dcos/conf/nginx/nginx.conf.template
+    - /etc/nginx/nginx.conf.template
+  - Env:
+    - Key: CASC_JENKINS_CONFIG
+      Value: /usr/local/jenkins/jenkins.yaml
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dcos/conf/jenkins/configuration.yaml
+    - '"${CASC_JENKINS_CONFIG}"'
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dcos/conf/plugins.conf
+    - /tmp/
+  - CmdLine:
+    - /usr/local/bin/install-plugins.sh < /tmp/plugins.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /home/gradle/project/build/libs/mesos.hpi
+    - '"${JENKINS_STAGING}/plugins/mesos.hpi"'
+  - CmdLine:
+    - echo 2.0 > /usr/share/jenkins/ref/jenkins.install.UpgradeWizard.state
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - envsubst '\$PORT0 \$PORT1 \$JENKINS_CONTEXT' < /etc/nginx/nginx.conf.template
+      > /etc/nginx/nginx.conf && nginx   && java ${JVM_OPTS}                                     -Dhudson.model.DirectoryBrowserSupport.CSP="${JENKINS_CSP_OPTS}"      -Dhudson.udp=-1                                      -Djava.awt.headless=true                             -Dhudson.DNSMultiCast.disabled=true                  -Djenkins.install.runSetupWizard=false               -jar
+      ${JENKINS_FOLDER}/jenkins.war                   ${JENKINS_OPTS}                                      --httpPort=${PORT1}                                  --webroot=${JENKINS_FOLDER}/war                      --ajp13Port=-1                                       --httpListenAddress=127.0.0.1                        --ajp13ListenAddress=127.0.0.1                       --prefix=${JENKINS_CONTEXT}
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: jenkins/jenkins:2.176.1
+  Name: prod
+  Platform: ""
+  SourceCode: FROM jenkins/jenkins:2.176.1 as prod

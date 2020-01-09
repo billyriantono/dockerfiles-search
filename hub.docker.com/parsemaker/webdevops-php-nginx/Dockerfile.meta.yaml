@@ -1,0 +1,57 @@
+MetaArgs: null
+Stages:
+- As: v8build
+  BaseName: alexmasterov/alpine-libv8:6.9
+  Commands:
+  - CmdLine:
+    - tar cvzf /tmp/libv8.tar.gz -C $V8_DIR .
+    Name: run
+    PrependShell: true
+  From:
+    Image: alexmasterov/alpine-libv8:6.9
+  Name: v8build
+  Platform: ""
+  SourceCode: FROM alexmasterov/alpine-libv8:6.9 as v8build
+- BaseName: webdevops/php-nginx:alpine-php7
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"hgati <cobays@gmail.com>"'
+    Name: label
+  - Key: PHALCON_VERSION
+    Name: arg
+    Value: 3.4.1
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files
+    - /
+  - Chown: ""
+    From: v8build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/libv8.tar.gz
+    - /tmp/libv8.tar.gz
+  - CmdLine:
+    - "cd /tmp \t&& apk-install nginx-mod-http-echo nginx-mod-http-geoip nginx-mod-http-lua
+      \t&& sed -i '1 i\\load_module \"modules/ndk_http_module.so\";' /etc/nginx/modules/http_lua.conf
+      \t&& chmod -R 755 /usr/local/bin \t&& geoip_database.sh \t&& apk add -u --no-cache
+      --virtual .build-deps $PHPIZE_DEPS zlib-dev g++ make php7-dev re2c \t&& export
+      V8_DIR=/usr/local/v8 \t&& mkdir -p $V8_DIR \t&& tar xzvf /tmp/libv8.tar.gz -C
+      $V8_DIR \t&& echo $V8_DIR | pecl install v8js \t&& echo \"extension=v8js.so\"
+      > /etc/php7/conf.d/v8js.ini \t&& git clone --depth=1 --branch=v$PHALCON_VERSION
+      \"git://github.com/phalcon/cphalcon.git\" \t&& cd cphalcon/build \t&& ./install
+      \t&& echo \"extension=phalcon.so\" > /etc/php7/conf.d/phalcon.ini \t&& pecl
+      install igbinary \t&& echo \"extension=igbinary.so\" > /etc/php7/conf.d/19_igbinary.ini
+      \t&& printf \"\\n\" | pecl install lzf \t&& echo \"extension=lzf.so\" > /etc/php7/conf.d/19_lzf.ini
+      \t&& pecl uninstall redis \t&& yes \"yes\" | pecl install redis \t&& echo \"extension=redis.so\"
+      > /etc/php7/conf.d/20_redis.ini     && sed -i '1 i\\include modules.conf;' /opt/docker/etc/nginx/nginx.conf
+      \t&& chmod -R 755 /usr/lib/php7/modules \t&& rm -rf /tmp/* \t&& apk del .build-deps"
+    Name: run
+    PrependShell: true
+  From:
+    Image: webdevops/php-nginx:alpine-php7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM webdevops/php-nginx:alpine-php7

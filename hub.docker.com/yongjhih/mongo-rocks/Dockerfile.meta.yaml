@@ -1,0 +1,87 @@
+MetaArgs: null
+Stages:
+- BaseName: buildpack-deps
+  Commands:
+  - CmdLine:
+    - groupadd -r mongodb && useradd -r -g mongodb mongodb
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - apt-key adv --keyserver keyserver.ubuntu.com --recv D68FA50FEA312927 &&     echo
+      "deb http://repo.mongodb.org/apt/debian jessie/mongodb-org/3.2 main" > /etc/apt/sources.list.d/mongodb-org.list
+      &&     apt-get update &&     apt-get install -y git zlib1g-dev libbz2-dev libsnappy-dev
+      scons numactl gnupg mongodb-org-tools &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOSU_VERSION
+      Value: "1.7"
+    Name: env
+  - CmdLine:
+    - set -x     && wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg
+      --print-architecture)"     && wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg
+      --print-architecture).asc"     && export GNUPGHOME="$(mktemp -d)"     && gpg
+      --keyserver ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4     &&
+      gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu     && rm -r
+      "$GNUPGHOME" /usr/local/bin/gosu.asc     && chmod +x /usr/local/bin/gosu     &&
+      gosu nobody true
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ROCKSDB_VERSION
+      Value: 4.11.2
+    Name: env
+  - CmdLine:
+    - wget -O rocksdb-v${ROCKSDB_VERSION}.tar.gz https://github.com/facebook/rocksdb/archive/v${ROCKSDB_VERSION}.tar.gz
+      &&     tar xvzf rocksdb-v${ROCKSDB_VERSION}.tar.gz &&     rm -f rocksdb-v${ROCKSDB_VERSION}.tar.gz
+      &&     cd rocksdb-${ROCKSDB_VERSION} &&     CXXFLAGS="-flto -Os -s" make -j$(nproc)
+      --max-load shared_lib &&     INSTALL_PATH=/usr make install &&     cd .. &&     rm
+      -fr rocksdb-${ROCKSDB_VERSION}
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MONGO_VERSION
+      Value: 3.2.0
+    Name: env
+  - CmdLine:
+    - wget -O mongo-rocks-r${MONGO_VERSION}.tar.gz https://github.com/mongodb-partners/mongo-rocks/archive/r${MONGO_VERSION}.tar.gz
+      &&     tar xvzf mongo-rocks-r${MONGO_VERSION}.tar.gz &&     rm -f mongo-rocks-r${MONGO_VERSION}.tar.gz
+      &&     git clone -b "r${MONGO_VERSION}" --single-branch --depth 1 https://github.com/mongodb/mongo.git
+      mongo-r${MONGO_VERSION} &&     mkdir -p mongo-r${MONGO_VERSION}/src/mongo/db/modules/
+      &&     ln -sf /src/mongo-rocks-r${MONGO_VERSION} mongo-r${MONGO_VERSION}/src/mongo/db/modules/rocks
+      &&     cd mongo-r${MONGO_VERSION} &&     CXXFLAGS="-flto -Os -s" scons         CPPPATH=/usr/local/include         LIBPATH=/usr/local/lib         -j$(nproc)         --release         --prefix=/usr         --opt         mongod         install
+      &&     cd .. &&     mkdir -p /data/db /data/configdb &&     chown -R mongodb:mongodb
+      /data/db /data/configdb &&     rm -fr mongo-rocks-r${MONGO_VERSION} mongo-r${MONGO_VERSION}
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data/db
+    - /data/configdb
+  - Env:
+    - Key: MONGO_DATABASE
+      Value: dev
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "27017"
+  - CmdLine:
+    - mongod
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: buildpack-deps
+  Name: ""
+  Platform: ""
+  SourceCode: FROM buildpack-deps

@@ -1,0 +1,114 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:buster
+  Commands:
+  - Name: workdir
+    Path: $GOPATH/src/image-server
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - $GOPATH/src/image-server
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Env:
+    - Key: GOPROXY
+      Value: https://goproxy.io
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get install -y wget build-essential pkg-config --no-install-recommends
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt install -y  -q libjpeg-dev libpng-dev libtiff-dev libwebp-dev libgif-dev
+      libx11-dev --no-install-recommends;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd &&     \twget http://www.imagemagick.org/download/ImageMagick.tar.gz &&
+      \    \ttar -xvf ImageMagick.tar.gz &&     \tcd ImageMagick* &&     \t./configure
+      --prefix=/usr     \t    --without-magick-plus-plus     \t    --without-perl
+      \    \t    --disable-openmp     \t    --with-gvc=no     \t    --disable-docs
+      &&     \tmake -j$(nproc) && make install &&     \tldconfig /usr/local/lib &&
+      \    export CGO_CFLAGS=\"-I`pkg-config --cflags MagickWand`\";     export CGO_LDFLAGS=\"-I`pkg-config
+      --libs MagickWand`\";     export CGO_CFLAGS_ALLOW='-Xpreprocessor';     rm -rf
+      $GOPATH/pkg/linux_amd64/gopkg.in/gographics/imagick.v3;     cd $GOPATH/src/image-server
+      && go install -tags no_pkgconfig -v gopkg.in/gographics/imagick.v3/imagick;
+      \    go build -o app;     mv app  /opt/app;"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:buster
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:buster as build
+- BaseName: debian:buster-slim
+  Commands:
+  - Maintainer: buzzxu <downloadxu@163.com>
+    Name: maintainer
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /opt/app
+    - /app
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - "apt-get update &&     apt-get upgrade -y &&     apt-get install -y wget build-essential
+      pkg-config fontconfig libjemalloc-dev     libjpeg-dev libpng-dev libtiff-dev
+      libwebp-dev     libgif-dev libx11-dev --no-install-recommends &&     cd  /tmp
+      && \twget http://www.imagemagick.org/download/ImageMagick.tar.gz && \ttar -xvf
+      ImageMagick.tar.gz && \tcd ImageMagick* && \t./configure --prefix=/usr \t    --without-magick-plus-plus
+      \t    --without-perl \t    --with-jemalloc \t    --disable-openmp \t    --with-gvc=no
+      \t    --disable-docs && \tmake -j$(nproc) && make install && \tldconfig /usr/local/lib
+      && \trm /etc/localtime &&     ln -sv /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+      &&     echo \"Asia/Shanghai\" > /etc/timezone &&     mkdir -p /data/images &&
+      \    apt-get remove --purge -y wget build-essential pkg-config &&     apt-get
+      clean &&     apt-get autoremove -y &&     apt-get autoclean &&     rm -rf /var/lib/apt/lists/*
+      &&     rm -rf /tmp/*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/conf.yml
+    - /app/conf.yml
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/run.sh
+    - /app/run.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/default.png
+    - /data/images
+  - Env:
+    - Key: TZ
+      Value: Asia/Shanghai
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - /bin/bash
+    - run.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:buster-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:buster-slim

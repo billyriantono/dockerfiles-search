@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:7
+  Commands:
+  - Maintainer: Fernando Paredes Garcia <fernando@develcuy.com>
+    Name: maintainer
+  - CmdLine:
+    - apt-get update && apt-get install -y --force-yes build-essential libboost-all-dev
+      git wget     && rm -rf /var/lib/apt/lists/*;
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SRC
+      Value: /usr/local/src
+    Name: env
+  - Env:
+    - Key: BDBVER
+      Value: db-4.8.30.NC
+    Name: env
+  - Name: workdir
+    Path: $SRC
+  - CmdLine:
+    - set -ex;         mkdir -p $SRC/db4_dest;         wget --quiet http://download.oracle.com/berkeley-db/$BDBVER.tar.gz;         echo
+      "12edc0df75bf9abd7f82f821795bcee50f42cb2e5f76a6a281b85732798364ef  $BDBVER.tar.gz"
+      | sha256sum -c - || exit 1;         tar -xzf $BDBVER.tar.gz;         cd $BDBVER/build_unix/;         sed
+      s/__atomic_compare_exchange/__atomic_compare_exchange_db/g -i ../dbinc/atomic.h;         ../dist/configure
+      --enable-cxx --disable-shared --with-pic --prefix=$SRC/db4_dest;         make
+      install;         cd $SRC;         rm -rf $BDBVER $BDBVER.tar.gz db4_dest/docs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth=1 https://github.com/devcoin/core.git $SRC/devcoin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex;         cd $SRC/devcoin/src;         make -j4 -f makefile.unix USE_UPNP=-
+      BDB_LIB_PATH=$SRC/db4_dest/lib/ BDB_INCLUDE_PATH=$SRC/db4_dest/include/;         strip
+      devcoind;         mv devcoind /usr/local/bin/;         make -f makefile.unix
+      clean
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:7
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:7 as builder
+- BaseName: debian:7
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/devcoind
+    - /usr/local/bin/devcoind
+  - CmdLine:
+    - apt-get update && apt-get install -y --force-yes         libboost-system1.49.0
+      libboost-filesystem1.49.0 libboost-program-options1.49.0 libboost-thread1.49.0         openssl
+      supervisor procps     && rm -rf /var/lib/apt/lists/*;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd devcoin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /home/devcoin/.devcoin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo '#Noob config file for devcoind, should be enough!\nserver=1\ndaemon=1\nrpcuser=devcoind\nrpcpassword=devcoin\nrpcsslciphers=TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH\nrpcsslcertificatechainfile=server.cert\nrpcsslprivatekeyfile=server.pem\nrpcport=52332\nrpcallowip=*\ngen=0\nallowreceivebyip=1\ntxindex=1\n'>
+      /home/devcoin/.devcoin/devcoin.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'chown devcoin: -R /home/devcoin'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo '[supervisord]\nnodaemon=true\n\n[program:devcoind]\ncommand=/usr/bin/pidproxy
+      /var/run/devcoind.pid /bin/su devcoin -c "/usr/local/bin/devcoind"\nredirect_stderr=true\n'>>
+      /etc/supervisor/conf.d/supervisord.conf
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "52332"
+  - CmdLine:
+    - /usr/bin/supervisord
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:7

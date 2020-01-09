@@ -1,0 +1,265 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "UBUNTU_RELEASE",
+      "DefaultValue": "\"bionic\"",
+      "ProvidedValue": null,
+      "Value": "\"bionic\""
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "lsiobase/ubuntu:$UBUNTU_RELEASE",
+      "SourceCode": "FROM lsiobase/ubuntu:$UBUNTU_RELEASE as builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "lsiobase/ubuntu:$UBUNTU_RELEASE"
+      },
+      "Commands": [
+        {
+          "Key": "APT_INSTALL_OPTIONS",
+          "Name": "arg",
+          "Value": "\"--no-install-recommends --yes\""
+        },
+        {
+          "Key": "PIP_INSTALL_OPTIONS",
+          "Name": "arg",
+          "Value": "\"--disable-pip-version-check --no-cache-dir --no-compile --upgrade\""
+        },
+        {
+          "Key": "APK_PACKAGES",
+          "Name": "arg",
+          "Value": "\"python3 openssl python3-distutils wget\""
+        },
+        {
+          "Key": "PIP_PACKAGES",
+          "Name": "arg",
+          "Value": "\"pip setuptools wheel\""
+        },
+        {
+          "CmdLine": [
+            "echo \"**** install Python ****\" \u0026\u0026 apt-get update \u0026\u0026 apt-get install $APT_INSTALL_OPTIONS $APK_PACKAGES \u0026\u0026 ln -sf python3 /usr/bin/python \u0026\u0026 echo \"**** install pip ****\" \u0026\u0026 wget -q -O - \"https://bootstrap.pypa.io/get-pip.py\" | python /dev/stdin $PIP_INSTALL_OPTIONS \u0026\u0026 ln -sf pip3 /usr/bin/pip"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "wheels_builder",
+      "BaseName": "builder",
+      "SourceCode": "FROM builder as wheels_builder",
+      "Platform": "",
+      "As": "wheels_builder",
+      "From": {
+        "Stage": {
+          "Named": "builder",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "setup.cfg",
+            "/source/setup.cfg"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/wheels"
+        },
+        {
+          "CmdLine": [
+            "echo \"**** build pyLoad dependencies ****\" \u0026\u0026 python -c \"import configparser as cp; c = cp.ConfigParser(); c.read('/source/setup.cfg'); print(c['options']['install_requires'] + c['options.extras_require']['extra'])\" | xargs pip wheel --wheel-dir=."
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "source_builder",
+      "BaseName": "builder",
+      "SourceCode": "FROM builder as source_builder",
+      "Platform": "",
+      "As": "source_builder",
+      "From": {
+        "Stage": {
+          "Named": "builder",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "/source"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/source"
+        },
+        {
+          "Key": "PIP_INSTALL_OPTIONS",
+          "Name": "arg",
+          "Value": "\"--disable-pip-version-check --no-cache-dir --no-compile --upgrade\""
+        },
+        {
+          "Key": "PIP_PACKAGES",
+          "Name": "arg",
+          "Value": "\"Babel Jinja2\""
+        },
+        {
+          "CmdLine": [
+            "echo \"**** build pyLoad locales ****\" \u0026\u0026 pip install $PIP_INSTALL_OPTIONS $PIP_PACKAGES \u0026\u0026 python setup.py build_locale"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "package_builder",
+      "BaseName": "builder",
+      "SourceCode": "FROM builder as package_builder",
+      "Platform": "",
+      "As": "package_builder",
+      "From": {
+        "Stage": {
+          "Named": "builder",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "wheels_builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/wheels",
+            "/wheels"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "source_builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/source",
+            "/source"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/package"
+        },
+        {
+          "Key": "PIP_INSTALL_OPTIONS",
+          "Name": "arg",
+          "Value": "\"--disable-pip-version-check --no-cache-dir --no-compile --upgrade\""
+        },
+        {
+          "CmdLine": [
+            "echo \"**** build pyLoad package ****\" \u0026\u0026 pip install $PIP_INSTALL_OPTIONS --find-links=/wheels --no-index --prefix=. /source[extra]"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "builder",
+      "SourceCode": "FROM builder",
+      "Platform": "",
+      "From": {
+        "Stage": {
+          "Named": "builder",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "version",
+              "Value": "\"1.0\""
+            },
+            {
+              "Key": "description",
+              "Value": "\"The free and open-source Download Manager written in pure Python\""
+            },
+            {
+              "Key": "maintainer",
+              "Value": "\"vuolter@gmail.com\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PYTHONUNBUFFERED",
+              "Value": "1"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Key": "APT_INSTALL_OPTIONS",
+          "Name": "arg",
+          "Value": "\"--no-install-recommends --yes\""
+        },
+        {
+          "Key": "APT_PACKAGES",
+          "Name": "arg",
+          "Value": "\"sqlite tesseract-ocr unrar\""
+        },
+        {
+          "Key": "TEMP_PATHS",
+          "Name": "arg",
+          "Value": "\"/root/.cache /tmp/* /var/lib/apt/lists/* /var/tmp/*\""
+        },
+        {
+          "CmdLine": [
+            "echo \"**** install binary packages ****\" \u0026\u0026 apt-get install $APT_INSTALL_OPTIONS $APT_PACKAGES \u0026\u0026 echo \"**** create s6 fix-attr script ****\" \u0026\u0026 echo -e \" /config true abc:abc 0644 0755 \\n /downloads false abc:abc 0644 0755 \\n \" \u003e /etc/fix-attrs.d/10-run \u0026\u0026 echo \"**** create s6 service script ****\" \u0026\u0026 mkdir -p /etc/services.d/pyload \u0026\u0026 echo -e \" umask 022 \\n exec s6-setuidgid abc pyload --userdir /config --storagedir /downloads \" \u003e /etc/services.d/pyload/run \u0026\u0026 echo \"**** cleanup ****\" \u0026\u0026 rm -rf $TEMP_PATHS \u0026\u0026 echo \"**** finalize pyLoad ****\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "package_builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/package",
+            "/usr/local"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "8001",
+            "9666"
+          ]
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/config",
+            "/downloads"
+          ]
+        }
+      ]
+    }
+  ]
+}

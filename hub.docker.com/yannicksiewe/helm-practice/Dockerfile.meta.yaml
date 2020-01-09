@@ -1,0 +1,108 @@
+MetaArgs: null
+Stages:
+- As: skopeo
+  BaseName: golang:1.12
+  Commands:
+  - Key: SKOPEO_VERSION
+    Name: arg
+    Value: v0.1.35
+  - CmdLine:
+    - apt-get update && apt-get install -y curl       libgpgme11-dev       libglib2.0-dev       libostree-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $GOPATH/src/github.com/containers/skopeo     && curl -LsSf https://github.com/containers/skopeo/archive/${SKOPEO_VERSION}.tar.gz
+      | tar xz --strip-components=1 -C $GOPATH/src/github.com/containers/skopeo     &&
+      cd $GOPATH/src/github.com/containers/skopeo && make binary-local DISABLE_CGO=1
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12
+  Name: skopeo
+  Platform: ""
+  SourceCode: FROM golang:1.12 as SKOPEO
+- BaseName: registry.access.redhat.com/ubi8/ubi-minimal
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Yannick Siewe"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-.license
+      Value: '"MIT"'
+    Name: label
+  - Env:
+    - Key: TERM
+      Value: xterm
+    - Key: HELM_HOME
+      Value: /var/local/lib/helm/
+    - Key: KUBECONFIG
+      Value: /var/local/lib/kube/config
+    - Key: HOME
+      Value: /tmp
+    Name: env
+  - Key: HELM_VERSION
+    Name: arg
+    Value: v2.14.2
+  - Key: HELM_DIFF_VERSION
+    Name: arg
+    Value: v2.11.0+5
+  - Key: HELM_PUSH_VERSION
+    Name: arg
+    Value: 0.7.1
+  - Key: HELM_SECRETS_VERSION
+    Name: arg
+    Value: 1.3.1
+  - Key: HELM_TILLER_VERSION
+    Name: arg
+    Value: 0.8.3
+  - Chown: ""
+    From: openshift/origin-cli:v3.11
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/oc
+    - /usr/local/bin/oc
+  - Chown: ""
+    From: SKOPEO
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/containers/skopeo/skopeo
+    - /usr/local/bin/skopeo
+  - Chown: ""
+    From: registry.access.redhat.com/ubi8/ubi
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/zoneinfo/UTC
+    - /usr/share/zoneinfo/UTC
+  - Chown: ""
+    From: registry.access.redhat.com/ubi8/ubi
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/zoneinfo/Europe/Berlin
+    - /usr/share/zoneinfo/Europe/Berlin
+  - CmdLine:
+    - set -euo pipefail     && mkdir -p "${HELM_HOME}" "$(dirname "$KUBECONFIG")"     &&
+      echo -e '[docker-ce-stable]\nname=Docker CE Stable - $basearch\nbaseurl=https://download.docker.com/linux/centos/7/$basearch/stable\nenabled=0\ngpgcheck=1\ngpgkey=https://download.docker.com/linux/centos/gpg'
+      > /etc/yum.repos.d/docker-ce.repo     && microdnf update -y     && microdnf
+      install -y --enablerepo=docker-ce-stable git docker-ce-cli python2-pip python2-pyyaml
+      gettext tar unzip procps-ng findutils     && microdnf clean all     && curl
+      -LsSf -O https://storage.googleapis.com/kubernetes-helm/helm-${HELM_VERSION}-linux-amd64.tar.gz     &&
+      tar -zxvf helm-${HELM_VERSION}-linux-amd64.tar.gz     && mv linux-amd64/helm
+      /usr/local/bin/helm     && rm -rf helm-${HELM_VERSION}-linux-amd64.tar.gz linux-amd64     &&
+      helm init --client-only     && helm repo remove local     && mkdir "$(helm home)/plugins/helm-push"     &&
+      curl -LsSf https://github.com/chartmuseum/helm-push/releases/download/v${HELM_PUSH_VERSION}/helm-push_${HELM_PUSH_VERSION}_linux_amd64.tar.gz
+      | tar -C "$(helm home)/plugins/helm-push" -zxf-     && curl -LsSf https://github.com/databus23/helm-diff/releases/download/${HELM_DIFF_VERSION}/helm-diff-linux.tgz
+      | tar -C "$(helm home)/plugins" --warning=no-unknown-keyword -zxf-     && curl
+      -LsSf https://github.com/rimusz/helm-tiller/archive/v${HELM_TILLER_VERSION}.tar.gz|
+      tar -C "$(helm home)/plugins" -xzf-     && curl -LsSf https://github.com/futuresimple/helm-secrets/archive/v${HELM_SECRETS_VERSION}.tar.gz
+      | tar -C "$(helm home)/plugins" -xzf-     && helm tiller install     && chmod
+      -R go+rw "$(helm home)" "$(dirname "$KUBECONFIG")"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: "1001"
+  From:
+    Image: registry.access.redhat.com/ubi8/ubi-minimal
+  Name: ""
+  Platform: ""
+  SourceCode: FROM registry.access.redhat.com/ubi8/ubi-minimal

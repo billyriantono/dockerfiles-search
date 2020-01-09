@@ -1,0 +1,355 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "build-docs",
+      "BaseName": "python:3-alpine",
+      "SourceCode": "FROM python:3-alpine AS build-docs",
+      "Platform": "",
+      "As": "build-docs",
+      "From": {
+        "Image": "python:3-alpine"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/mkdocs"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "ci/docs/mkdocs_requirements.txt",
+            "requirements.txt"
+          ]
+        },
+        {
+          "CmdLine": [
+            "pip install -r requirements.txt"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "docs/",
+            "docs/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "mkdocs build --config-file docs/mkdocs.yml --site-dir help/"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "build-env",
+      "BaseName": "maven:3.6-jdk-11-slim",
+      "SourceCode": "FROM maven:3.6-jdk-11-slim AS build-env",
+      "Platform": "",
+      "As": "build-env",
+      "From": {
+        "Image": "maven:3.6-jdk-11-slim"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/chaosengine"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "pom.xml",
+            "./"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "chaosengine-launcher/pom.xml",
+            "./chaosengine-launcher/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "chaosengine-test-utilities",
+            "./chaosengine-test-utilities/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "mvn -B -f ./chaosengine-test-utilities/pom.xml dependency:go-offline -Dsilent install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mvn -B -f ./chaosengine-launcher/pom.xml dependency:go-offline -Dsilent install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "chaosengine-core/pom.xml",
+            "./chaosengine-core/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "chaosengine-schedule",
+            "./chaosengine-schedule/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "chaosengine-notifications",
+            "./chaosengine-notifications/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "chaosengine-experiments",
+            "./chaosengine-experiments/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "chaosengine-launcher/src/",
+            "./chaosengine-launcher/src/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "chaosengine-core/src/",
+            "./chaosengine-core/src/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build-docs",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/mkdocs/docs/help",
+            "./chaosengine-launcher/src/main/resources/static/help/"
+          ]
+        },
+        {
+          "Key": "BUILD_VERSION",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "CmdLine": [
+            "if [ -n \"${BUILD_VERSION}\" ] ; then mvn -B versions:set -DnewVersion=${BUILD_VERSION} -DprocessAllModules ; fi"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mvn -B install \u0026\u0026 rm -rf chaosengine-test*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "develop",
+      "BaseName": "openjdk:11.0.4-jre-slim",
+      "SourceCode": "FROM openjdk:11.0.4-jre-slim AS develop",
+      "Platform": "",
+      "As": "develop",
+      "From": {
+        "Image": "openjdk:11.0.4-jre-slim"
+      },
+      "Commands": [
+        {
+          "Name": "expose",
+          "Ports": [
+            "8080"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/chaosengine"
+        },
+        {
+          "Chown": "",
+          "From": "build-env",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/chaosengine/*/target/*.jar",
+            "/chaosengine/*/*/target/*.jar",
+            "./lib/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build-env",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/chaosengine/*/target/*-assembler/*.jar",
+            "/chaosengine/*/*/target/*-assembler/*.jar",
+            "./lib/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build-env",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/chaosengine/*/target/entrypoint/*.jar",
+            "./chaosengine.jar"
+          ]
+        },
+        {
+          "CmdLine": [
+            "rm ./lib/chaosengine-launcher*.jar"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "DEPLOYMENT_ENVIRONMENT",
+              "Value": "DEVELOPMENT"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "SPRING_PROFILES_ACTIVE",
+              "Value": "DEVELOPMENT"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "com.datadoghq.ad.logs",
+              "Value": "'[ { \"source\":\"java\", \"service\": \"chaosengine\" } ]'"
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "CmdLine": [
+            "java",
+            "-Djava.security.egd=file:/dev/./urandom",
+            "-classpath",
+            ".:./lib/*",
+            "-Dloader.path=lib",
+            "-jar",
+            "chaosengine.jar"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    },
+    {
+      "Name": "debug",
+      "BaseName": "develop",
+      "SourceCode": "FROM develop AS debug",
+      "Platform": "",
+      "As": "debug",
+      "From": {
+        "Stage": {
+          "Named": "develop",
+          "Index": 2
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "java",
+            "-Djava.security.egd=file:/dev/./urandom",
+            "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005",
+            "-jar",
+            "/chaosengine.jar"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "5005"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "master",
+      "BaseName": "develop",
+      "SourceCode": "FROM develop AS master",
+      "Platform": "",
+      "As": "master",
+      "From": {
+        "Stage": {
+          "Named": "develop",
+          "Index": 2
+        }
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "DEPLOYMENT_ENVIRONMENT",
+              "Value": "PROD"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "SPRING_PROFILES_ACTIVE",
+              "Value": "PRODUCTION"
+            }
+          ],
+          "Name": "env"
+        }
+      ]
+    }
+  ]
+}

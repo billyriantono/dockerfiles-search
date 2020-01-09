@@ -1,0 +1,102 @@
+MetaArgs: null
+Stages:
+- BaseName: centos/postgresql-95-centos7@sha256:2868b2293d03b09f1a3e34caedee2472f760f2d9996c917626a15ab887255f53
+  Commands:
+  - Labels:
+    - Key: io.openshift.s2i.destination
+      Value: '"/opt/s2i/destination"'
+    - Key: maintainer
+      Value: '"Ampie Barnard <a.barnard@entando.com>"'
+    - Key: io.k8s.description
+      Value: '"Postgresql Database Image for building and running Entando applications"'
+    - Key: io.k8s.display-name
+      Value: '"Postgresql Database Image for Entando 5"'
+    Name: label
+  - Env:
+    - Key: MAVEN_VERSION
+      Value: '"3.5.2"'
+    - Key: JAVA_HOME
+      Value: '"/usr/lib/jvm/java-1.8.0"'
+    Name: env
+  - Name: user
+    User: root
+  - CmdLine:
+    - INSTALL_PKGS="tar curl java-1.8.0-openjdk java-1.8.0-openjdk-devel" &&   yum
+      install -y --enablerepo=centosplus $INSTALL_PKGS &&   rpm -V $INSTALL_PKGS &&   yum
+      clean all -y &&   (curl -v https://www.apache.org/dist/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz
+      | tar -zx -C /usr/local) &&   ln -sf /usr/local/apache-maven-$MAVEN_VERSION/bin/mvn
+      /usr/local/bin/mvn &&   mkdir -p $HOME/.m2 && chmod ug+rw $HOME/.m2 && chown
+      postgres:root $HOME/.m2
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pom.xml
+    - $HOME/pom.xml.bup
+  - CmdLine:
+    - chmod ug+rw $HOME/pom.xml.bup && chown postgres:root $HOME/pom.xml.bup
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - settings-entando.xml
+    - $HOME/.m2/settings.xml
+  - CmdLine:
+    - chmod ug+rw $HOME/.m2/settings.xml && chown postgres:root $HOME/.m2/settings.xml
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: "26"
+  - CmdLine:
+    - cd $HOME &&   mvn archetype:generate -DgroupId=org.sample -DartifactId=sample
+      -DinteractiveMode=false   -DarchetypeGroupId=org.entando.entando -DarchetypeArtifactId=entando-archetype-webapp-generic
+      -DarchetypeVersion=4.3.2 &&   mv pom.xml.bup sample/pom.xml -f
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'cd $HOME/sample &&   mvn jetty:run 2>&1 > db_creation.log & cd $HOME/sample
+      &&  jetty_pid=$! &&   echo "jetty: $jetty_pid" &&   for i in {1..150} ;        do
+      sleep 6 && tail db_creation.log -n 5;       if fgrep --quiet "Started Jetty
+      Server" db_creation.log;         then echo "Jetty started" &&  kill $jetty_pid
+      && break;       fi;   done;   cd $HOME && rm $HOME/sample -rf &&   chmod -Rf
+      ug+rw $HOME/.m2 && chown -Rf postgres:root $HOME/.m2'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./s2i/bin/
+    - $STI_SCRIPTS_PATH
+  - CmdLine:
+    - chmod -Rf ug+rw $STI_SCRIPTS_PATH && chown -Rf postgres:root $STI_SCRIPTS_PATH
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - settings-secure.xml
+    - $HOME/.m2/settings.xml
+  - CmdLine:
+    - chmod ug+rw $HOME/.m2/settings.xml && chown postgres:root $HOME/.m2/settings.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/s2i/destination && chmod -R ug+rw /opt/s2i/destination && chown
+      -R postgres:root /opt/s2i/destination
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: "26"
+  From:
+    Image: centos/postgresql-95-centos7@sha256:2868b2293d03b09f1a3e34caedee2472f760f2d9996c917626a15ab887255f53
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos/postgresql-95-centos7@sha256:2868b2293d03b09f1a3e34caedee2472f760f2d9996c917626a15ab887255f53

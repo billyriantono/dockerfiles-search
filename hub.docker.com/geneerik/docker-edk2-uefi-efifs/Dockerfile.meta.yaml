@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- BaseName: geneerik/docker-edk2-uefi:latest
+  Commands:
+  - Env:
+    - Key: EFIFS_BRANCH
+      Value: ${EFIFS_BRANCH:-master}
+    Name: env
+  - Env:
+    - Key: EFIFS_ARCH
+      Value: ${EFIFS_ARCH:-IA32}
+    Name: env
+  - Maintainer: geneerik@thisdomaindoesntexistyet.com
+    Name: maintainer
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive
+      apt-get upgrade  --yes --force-yes
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive apt-get install libc6-dev-i386 --yes --force-yes
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "( bash -c 'echo -e \"#!/bin/bash\\n\\n\" > /usr/local/bin/getefifs.sh' ) &&
+      ( echo 'mkdir -p /opt/src/ && \tcd /opt/src && \tgit clone https://github.com/pbatard/efifs
+      && \tcd efifs && \t( for branch in `git branch -a | grep remotes | grep -v HEAD
+      | grep -v master `; do git branch --track ${branch#remotes/origin/} $branch;
+      done ) && \tgit pull --tags && \tgit pull --all && \tgit checkout ${EFIFS_BRANCH}
+      && \tgit submodule init && \tgit submodule update && \tcd grub && \tgit config
+      user.email \"you@example.com\" && \tgit config user.name \"fakeroot\" && \tgit
+      am ../*.patch && \tcd /opt/src/edk2 && \tln -s ../efifs EfiFsPkg' >> /usr/local/bin/getefifs.sh
+      ) && \tchmod +x /usr/local/bin/getefifs.sh"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "( echo '#!/bin/bash' > /usr/local/bin/buildefifs.sh ) && \t( echo 'cd /opt/src/efifs
+      && ./set_grub_cpu.sh ${EFIFS_ARCH} && cd ../edk2 && ( build -a ${EFIFS_ARCH}
+      -p EfiFsPkg/EfiFsPkg.dsc 2>&1 | tee build_efifs.log )' >> /usr/local/bin/buildefifs.sh
+      ) && \tchmod +x /usr/local/bin/buildefifs.sh"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "#!/bin/bash\n\n" > /sbin/createsshuser.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "echo 'if [ -n \"${SSH_USERS}\" ]; then \tUSERS=$(echo $SSH_USERS | tr \",\"
+      \"\\n\"); \tfor U in $USERS; do \t\tIFS=\":\" read -ra UA <<< \"$U\"; \t\t_NAME=${UA[0]};
+      \        \t_UID=${UA[1]}; \t        _GID=${UA[2]}; \t        echo \">> Adding
+      user ${_NAME} with uid: ${_UID}, gid: ${_GID}.\";                 chown ${_UID}:${_GID}
+      /home/${_NAME};                 chown ${_UID}:${_GID} /home/${_NAME}/.ssh; \t\tif
+      [ ${_UID} = \"\" -o ${_UID} = \"0\" ]; then \t\t\taddgroup ${_NAME}; \t\telse
+      \                        addgroup --gid ${_GID} ${_NAME};                 fi;
+      \t\tif [ ${_UID} = \"\" -o ${_UID} = \"0\" ]; then \t\t\tadduser --ingroup ${_NAME}
+      --shell \"/bin/bash\" --home /home/${_NAME} --disabled-password --gecos \"\"
+      ${_NAME}; \t\telse \t\t\tadduser --uid ${_UID} --ingroup ${_NAME} --shell \"/bin/bash\"
+      --home /home/${_NAME} --disabled-password --gecos \"\" ${_NAME}; \t\tfi; \t\techo
+      \">> User create successfully; modifying user settings\"; \t\tNEWPASS=$(tr -cd
+      \"[:alnum:]\" < /dev/urandom | fold -w30 | head -n1); \t\techo \"${_NAME}:${NEWPASS}\"
+      | chpasswd; \t\techo \">> temporary password for user ${_NAME} is ${NEWPASS}\";
+      \t\tchage -d0 ${_NAME}; \t\tusermod -a -G sudo ${_NAME}; \t\tcp -r /etc/skel/.
+      /home/${_NAME}; \t\t( echo \"export EDK_BRANCH=\\\"${EDK_BRANCH}\\\"\" >> /home/${_NAME}/.bashrc
+      ); \t\t( echo \"export TARGET_ARCH=\\\"${TARGET_ARCH}\\\"\" >> /home/${_NAME}/.bashrc
+      ); \t\t( echo \"export MAX_CONCURRENT_THREAD_NUMBER=\\\"${MAX_CONCURRENT_THREAD_NUMBER}\\\"\"
+      >> /home/${_NAME}/.bashrc ); \t\t( echo \"\\nif [[ ! -e /opt/src/edk2 ]];then\\n
+      \ /usr/local/bin/getandmaketcbase.sh\\nfi\\ncd /opt/src/edk2 && . ./edksetup.sh
+      && /usr/local/bin/setedktargets.sh\" >> /home/${_NAME}/.bashrc ); \t\t( echo
+      \"export EFIFS_BRANCH=\\\"${EFIFS_BRANCH}\\\"\" >> /home/${_NAME}/.bashrc );
+      \t\t( echo \"export EFIFS_ARCH=\\\"${EFIFS_ARCH}\\\"\" >> /home/${_NAME}/.bashrc
+      ); \t\t( echo \"\\nif [[ ! -e /opt/src/efifs ]];then\\n  /usr/local/bin/getefifs.sh\\nfi\"
+      >> /home/${_NAME}/.bashrc ); \t\tchmod +x /home/${_NAME}/.bashrc; \t\tchown
+      -R ${_UID}:${_GID} /home/${_NAME}; \t\tif [ ! -e \"/home/${_NAME}/.ssh/authorized_keys\"
+      ]; then \t\t\techo \"WARNING: No SSH authorized_keys found for ${_NAME}!\";
+      \t\tfi; \tdone; fi' >> /sbin/createsshuser.sh"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bash -c 'if [[ ! -e /sbin/createsshuser.sh ]]; then echo "/sbin/createsshuser.sh
+      doesnt exists; cant go on"; exit 1; fi'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /sbin/createsshuser.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: geneerik/docker-edk2-uefi:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM geneerik/docker-edk2-uefi:latest

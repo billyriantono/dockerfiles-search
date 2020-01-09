@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.13.5-alpine3.10
+  Commands:
+  - Name: workdir
+    Path: /tmp/build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - resin-xbuild.go
+    - /tmp/build
+  - CmdLine:
+    - go build -ldflags "-w -s" resin-xbuild.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache curl
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: QEMU_RELEASE_TAG
+      Value: v2.9.0+resin1
+    Name: env
+  - Env:
+    - Key: QEMU_RELEASE_FILE
+      Value: qemu-2.9.0.resin1-arm.tar.gz
+    Name: env
+  - Env:
+    - Key: QEMU_RELEASE_SHA256
+      Value: b39d6a878c013abb24f4cccc7c3a79829546ae365069d5712142a4ad21bcb91b
+    Name: env
+  - CmdLine:
+    - QEMU_URL="https://github.com/resin-io/qemu/releases/download/${QEMU_RELEASE_TAG}/${QEMU_RELEASE_FILE}"
+      ;     curl -fsSL  ${QEMU_URL} -o ${QEMU_RELEASE_FILE}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "${QEMU_RELEASE_SHA256}  ${QEMU_RELEASE_FILE}" > ${QEMU_RELEASE_FILE}.sha256sum     sha256sum
+      -c ${QEMU_RELEASE_FILE}.sha256sum
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar --strip 1 -xzf ${QEMU_RELEASE_FILE}
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13.5-alpine3.10
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.13.5-alpine3.10 as build
+- BaseName: arm32v7/alpine:3.11.2
+  Commands:
+  - Env:
+    - Key: QEMU_EXECVE
+      Value: "1"
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/build/qemu-arm-static
+    - /usr/bin
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/build/resin-xbuild
+    - /usr/bin
+  - CmdLine:
+    - /usr/bin/qemu-arm-static
+    - /bin/sh
+    - -exc
+    - ln -s resin-xbuild /usr/bin/cross-build-start; ln -s resin-xbuild /usr/bin/cross-build-end;
+      ln /bin/sh /bin/sh.real
+    Name: run
+    PrependShell: false
+  From:
+    Image: arm32v7/alpine:3.11.2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM arm32v7/alpine:3.11.2

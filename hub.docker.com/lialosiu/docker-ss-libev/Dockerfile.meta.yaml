@@ -1,0 +1,144 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.6
+  Commands:
+  - Maintainer: Lialosiu <lialosiu@gmail.com>
+    Name: maintainer
+  - Name: workdir
+    Path: /
+  - Key: SS_VER
+    Name: arg
+    Value: 3.1.0
+  - Key: SS_URL
+    Name: arg
+    Value: https://github.com/shadowsocks/shadowsocks-libev/releases/download/v${SS_VER}/shadowsocks-libev-${SS_VER}.tar.gz
+  - Key: KCPTUN_VER
+    Name: arg
+    Value: "20170930"
+  - Key: KCPTUN_URL
+    Name: arg
+    Value: https://github.com/xtaci/kcptun/releases/download/v${KCPTUN_VER}/kcptun-linux-amd64-${KCPTUN_VER}.tar.gz
+  - Key: OBFS_VER
+    Name: arg
+    Value: 0.0.3
+  - Key: OBFS_URL
+    Name: arg
+    Value: https://github.com/shadowsocks/simple-obfs.git
+  - Key: TZ
+    Name: arg
+    Value: '''Asia/Shanghai'''
+  - Env:
+    - Key: SS_LISTEN
+      Value: 127.0.0.1
+    Name: env
+  - Env:
+    - Key: SS_PORT
+      Value: "8388"
+    Name: env
+  - Env:
+    - Key: SS_PASSWORD
+      Value: password
+    Name: env
+  - Env:
+    - Key: SS_METHOD
+      Value: chacha20-ietf-poly1305
+    Name: env
+  - Env:
+    - Key: SS_TIMEOUT
+      Value: "300"
+    Name: env
+  - Env:
+    - Key: SS_DNS_ADDR
+      Value: 8.8.8.8
+    Name: env
+  - Env:
+    - Key: SS_DNS_ADDR_2
+      Value: 8.8.4.4
+    Name: env
+  - Env:
+    - Key: KCPTUN_LISTEN
+      Value: 127.0.0.1
+    Name: env
+  - Env:
+    - Key: KCPTUN_PORT
+      Value: "8389"
+    Name: env
+  - Env:
+    - Key: KCPTUN_CRYPT
+      Value: none
+    Name: env
+  - Env:
+    - Key: KCPTUN_MTU
+      Value: "1200"
+    Name: env
+  - Env:
+    - Key: KCPTUN_MODE
+      Value: normal
+    Name: env
+  - Env:
+    - Key: KCPTUN_DSCP
+      Value: "46"
+    Name: env
+  - Env:
+    - Key: KCPTUN_DATASHARD
+      Value: "10"
+    Name: env
+  - Env:
+    - Key: KCPTUN_PARITYSHARD
+      Value: "3"
+    Name: env
+  - Env:
+    - Key: OBFS_LISTEN
+      Value: 127.0.0.1
+    Name: env
+  - Env:
+    - Key: OBFS_PORT
+      Value: "8390"
+    Name: env
+  - Env:
+    - Key: OBFS_TYPE
+      Value: http
+    Name: env
+  - Env:
+    - Key: OBFS_FAILOVER
+      Value: 127.0.0.1:80
+    Name: env
+  - CmdLine:
+    - set -ex &&     apk add --no-cache --virtual .build-deps                                 autoconf                                 automake                                 asciidoc                                 build-base                                 c-ares-dev                                 curl                                 libev-dev                                 libtool                                 linux-headers                                 xmlto                                 libsodium-dev                                 mbedtls-dev                                 pcre-dev                                 udns-dev                                 tar                                 git
+      &&     cd /tmp &&     curl -sSL $SS_URL | tar xz --strip 1 &&     ./configure
+      --prefix=/usr --disable-documentation &&     make install &&     rm -rf /tmp/*
+      &&     curl -sSL $KCPTUN_URL | tar xz &&     mv ./server_linux_amd64 /usr/bin/kcptunserver
+      &&     mv ./client_linux_amd64 /usr/bin/kcptunclient &&     rm -rf /tmp/* &&     git
+      clone $OBFS_URL &&     cd simple-obfs &&     git checkout v$OBFS_VER &&     git
+      submodule update --init --recursive &&     ./autogen.sh && ./configure &&     make
+      && make install &&     rm -rf /tmp/* &&     ln -sf /usr/share/zoneinfo/$TZ /etc/localtime
+      &&     echo $TZ > /etc/timezone &&     runDeps="$(         scanelf --needed
+      --nobanner /usr/bin/ss-* /usr/local/bin/obfs-*             | awk '{ gsub(/,/,
+      "\nso:", $2); print "so:" $2 }'             | xargs -r apk info --installed             |
+      sort -u     )" &&     apk add --no-cache --virtual .run-deps $runDeps &&     apk
+      del .build-deps &&     rm -rf /tmp/* /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: nobody
+  - Name: expose
+    Ports:
+    - $KCPTUN_PORT/udp
+    - $SS_PORT/tcp
+    - $SS_PORT/udp
+  - CmdLine:
+    - kcptunserver         -l $KCPTUN_LISTEN:$KCPTUN_PORT         -t $SS_LISTEN:$SS_PORT         --crypt
+      $KCPTUN_CRYPT         --mtu $KCPTUN_MTU         --mode $KCPTUN_MODE         --dscp
+      $KCPTUN_DSCP         --datashard $KCPTUN_DATASHARD         --parityshard $KCPTUN_PARITYSHARD         --nocomp
+      &     ss-server         -s $SS_LISTEN         -p $SS_PORT         -k $SS_PASSWORD         -m
+      $SS_METHOD         -t $SS_TIMEOUT         -d $SS_DNS_ADDR         -d $SS_DNS_ADDR_2         -u         -v         --fast-open
+      &     obfs-server         -s $OBFS_LISTEN         -p $OBFS_PORT         --obfs
+      $OBFS_TYPE         --failover $OBFS_FAILOVER         --fast-open         -r
+      $SS_LISTEN:$SS_PORT         -v
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:3.6
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.6

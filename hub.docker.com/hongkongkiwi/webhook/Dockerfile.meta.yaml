@@ -1,0 +1,55 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:alpine3.8
+  Commands:
+  - Maintainer: Almir Dzinovic <almir@dzinovic.net>
+    Name: maintainer
+  - Key: WEBHOOK_REPO
+    Name: arg
+    Value: '"adnanh/webhook"'
+  - Name: workdir
+    Path: '"/go/src/github.com/$WEBHOOK_REPO"'
+  - CmdLine:
+    - apk add --update -t build-deps curl libc-dev gcc libgcc && curl -L --silent
+      -o webhook.tar.gz https://github.com/adnanh/webhook/archive/$(curl -s "https://api.github.com/repos/$WEBHOOK_REPO/releases/latest"
+      | awk -F '"' '/tag_name/{print $4}').tar.gz && tar -xzf webhook.tar.gz --strip
+      1 && go get -d && go build -o /usr/local/bin/webhook && apk del --purge build-deps
+      && rm -rf /var/cache/apk/* && rm -rf /go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine3.8
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:alpine3.8 AS build
+- BaseName: docker:stable-dind
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/webhook
+    - /usr/local/bin/webhook
+  - Maintainer: Andy Savage <andy@savage.hk>
+    Name: maintainer
+  - CmdLine:
+    - "apk add --no-cache --update \t\t\t\t\t\t\tjq util-linux bash git \t\t\t\t\t\t\tcurl
+      wget coreutils &&             rm -rf /var/cache/apk/*"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /etc/webhook
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - /usr/local/bin/webhook
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: docker:stable-dind
+  Name: ""
+  Platform: ""
+  SourceCode: FROM docker:stable-dind

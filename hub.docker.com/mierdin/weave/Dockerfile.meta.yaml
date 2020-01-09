@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- BaseName: golang:1.10.1-stretch
+  Commands:
+  - Env:
+    - Key: GOARM
+      Value: "7"
+    Name: env
+  - Env:
+    - Key: DEB_CROSSPLATFORMS
+      Value: "armhf \tarm64 \tppc64el"
+    Name: env
+  - Env:
+    - Key: GO_CROSSPLATFORMS
+      Value: "linux/arm \tlinux/arm64 \tlinux/ppc64le"
+    Name: env
+  - Env:
+    - Key: GCC_CROSSCOMPILERS
+      Value: "arm-linux-gnueabihf \taarch64-linux-gnu \tpowerpc64le-linux-gnu"
+    Name: env
+  - CmdLine:
+    - echo "deb http://emdebian.org/tools/debian/ jessie main" > /etc/apt/sources.list.d/cgocrosscompiling.list   &&
+      curl http://emdebian.org/tools/debian/emdebian-toolchain-archive.key | apt-key
+      add -   && for platform in ${DEB_CROSSPLATFORMS}; do dpkg --add-architecture
+      $platform; done   && apt-get update   && apt-get install -y build-essential   &&
+      for platform in ${DEB_CROSSPLATFORMS}; do apt-get install -y crossbuild-essential-${platform};
+      done   && apt-get clean && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get update \t&& apt-get install -y \t\tlibpcap-dev \t\tpython-requests
+      \t\ttime \t\tfile \t\tflex \t\tbison"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "curl -fsSLo shfmt https://github.com/mvdan/sh/releases/download/v1.3.0/shfmt_v1.3.0_linux_amd64
+      && \techo \"b1925c2c405458811f0c227266402cf1868b4de529f114722c2e3a5af4ac7bb2
+      \ shfmt\" | sha256sum -c && \tchmod +x shfmt && \tmv shfmt /usr/bin"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "go get \tgithub.com/golang/lint/golint \tgithub.com/fzipp/gocyclo \tgithub.com/fatih/hclfmt
+      \tgithub.com/client9/misspell/cmd/misspell"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "go clean -i net \t&& go install -tags netgo std \t&& go install -race -tags
+      netgo std"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "for platform in ${GO_CROSSPLATFORMS}; do \t\tGOOS=${platform%/*} GOARCH=${platform##*/}
+      \t\t\tgo install -tags netgo std; done"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod -R a+w /usr/local/go
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LIBPCAP_CROSS_VERSION
+      Value: 1.6.2
+    Name: env
+  - CmdLine:
+    - "curl -sSL http://www.tcpdump.org/release/libpcap-${LIBPCAP_CROSS_VERSION}.tar.gz
+      | tar -xz \t&& cd libpcap-${LIBPCAP_CROSS_VERSION} \t&& for crosscompiler in
+      ${GCC_CROSSCOMPILERS}; do \t\tCC=${crosscompiler}-gcc ac_cv_linux_vers=2 ./configure
+      --host=${crosscompiler} --with-pcap=linux \t\t&& make \t\t&& export LIB_DIR=\"/usr/local/lib/${crosscompiler}-gcc\"
+      VER=\"$(cat ./VERSION)\" MAJOR_VER=\"$(sed 's/\\([0-9][0-9]*\\)\\..*/\\1/' ./VERSION)\"
+      \t\t&& mkdir -p ${LIB_DIR} \t\t&& cp -f libpcap.a libpcap.so.${VER} ${LIB_DIR}
+      \t\t&& ln -sf libpcap.so.${VER} /usr/local/lib/libpcap.so.${MAJOR_VER} \t\t&&
+      ln -sf libpcap.so.${MAJOR_VER} /usr/local/lib/libpcap.so \t\t&& make clean;
+      done"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build.sh
+    - /
+  - CmdLine:
+    - sh
+    - /build.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: golang:1.10.1-stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM golang:1.10.1-stretch

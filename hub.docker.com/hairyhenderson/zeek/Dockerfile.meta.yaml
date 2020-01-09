@@ -1,0 +1,125 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:stretch
+  Commands:
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends       build-essential       git       bison       flex       gawk       cmake       swig       libssl1.0-dev       libmaxminddb-dev       libpcap-dev       python-dev       libcurl4-openssl-dev       wget       libncurses5-dev       ca-certificates       zlib1g-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/
+  - Key: VER
+    Name: arg
+    Value: 2.6.1
+  - CmdLine:
+    - wget -q http://www.zeek.org/downloads/bro-${VER}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar zxf bro-${VER}.tar.gz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/bro-${VER}
+  - CmdLine:
+    - ./configure --prefix=/usr/local/zeek
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -j4 install
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:stretch as builder
+- As: geogetter
+  BaseName: debian:stretch
+  Commands:
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive apt-get -y install --no-install-recommends   wget   ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /usr/share/GeoIP/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar zxf GeoLite2-City.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q http://geolite.maxmind.com/download/geoip/database/GeoLite2-ASN.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar zxf GeoLite2-ASN.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv */*.mmdb /usr/share/GeoIP
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch
+  Name: geogetter
+  Platform: ""
+  SourceCode: FROM debian:stretch as geogetter
+- As: zeek
+  BaseName: debian:stretch
+  Commands:
+  - CmdLine:
+    - apt-get update     && apt-get -y install --no-install-recommends       libpcap0.8       libssl1.0.2       libmaxminddb0       python2.7-minimal     &&
+      apt-get clean     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/bin/python2.7 /usr/bin/python
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/zeek
+    - /usr/local/zeek
+  - Chown: ""
+    From: geogetter
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/GeoIP/*
+    - /usr/share/GeoIP/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./zeek_profile.sh
+    - /etc/profile.d/zeek.sh
+  - Env:
+    - Key: PATH
+      Value: /usr/local/zeek/bin/:$PATH
+    Name: env
+  - CmdLine:
+    - /bin/bash
+    - -l
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: zeek
+  Platform: ""
+  SourceCode: FROM debian:stretch AS zeek

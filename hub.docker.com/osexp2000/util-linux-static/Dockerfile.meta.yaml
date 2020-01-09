@@ -1,0 +1,74 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: osexp2000/gcc
+  Commands:
+  - Name: user
+    User: root
+  - CmdLine:
+    - apt-get update && apt-get -y install libncurses-dev libaudit-dev libselinux-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/sjitech/util-linux /util-linux-src
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /util-linux-src
+  - CmdLine:
+    - git checkout v2.32-fix-bug-of-exec_shell
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./autogen.sh && ./configure --with-audit --with-selinux
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - grep '^#define HAVE_LIB' config.h
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/-lselinux/-lselinux -lsepol -lpcre/g; s/-lselinux -lsepol -lpcre -lsepol/-lselinux/g'
+      Makefile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make LDFLAGS=-all-static CFLAGS="-pthread -DNDEBUG -v" install-strip DESTDIR=/util-linux-dist
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /util-linux-dist
+  - CmdLine:
+    - bash -c 'find . -type f -name *.static | while read f; do mv $f ${f%.static};
+      done'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s ../usr/local/bin/bash bin/
+    Name: run
+    PrependShell: true
+  From:
+    Image: osexp2000/gcc
+  Name: builder
+  Platform: ""
+  SourceCode: FROM osexp2000/gcc as builder
+- BaseName: bash
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /util-linux-dist
+    - /
+  - CmdLine: null
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: bash
+  Name: ""
+  Platform: ""
+  SourceCode: FROM bash

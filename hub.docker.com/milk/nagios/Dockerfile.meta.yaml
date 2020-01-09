@@ -1,0 +1,128 @@
+MetaArgs: null
+Stages:
+- BaseName: phusion/baseimage:latest
+  Commands:
+  - Maintainer: Emilien Kenler <hello@emilienkenler.com>
+    Name: maintainer
+  - CmdLine:
+    - /sbin/my_init
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - "sed -i 's/universe/universe multiverse/' /etc/apt/sources.list && \tapt-get
+      update -y && \tapt-get install -y build-essential libgd2-xpm-dev \t\tlibnet-snmp-perl
+      snmp snmp-mibs-downloader \t\tlibwww-perl libcrypt-ssleay-perl \t\tpython python-pip
+      \t\tssmtp mailutils \t\tiputils-ping \t\topenssl libssl-dev apache2 libapache2-mod-php
+      unzip && \tapt-get clean && \trm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd nagios
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd nagioscmd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -g nagios -G nagioscmd -d /opt/nagios nagios
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - usermod -G nagioscmd www-data
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/nagios /opt/nagios/etc /opt/nagios/var
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd /tmp && \tcurl -L -O https://github.com/NagiosEnterprises/nagioscore/releases/download/release-4.2.3/nagios-4.2.3.tar.gz
+      && \ttar xvf nagios-4.2.3.tar.gz && \trm /tmp/nagios-4.2.3.tar.gz && \tcurl
+      -L -O http://nagios-plugins.org/download/nagios-plugins-2.1.4.tar.gz && \ttar
+      xvf nagios-plugins-2.1.4.tar.gz && \trm /tmp/nagios-plugins-2.1.4.tar.gz &&
+      \tcurl -L -O https://github.com/NagiosEnterprises/nrpe/releases/download/3.0.1/nrpe-3.0.1.tar.gz
+      && \ttar xvf nrpe-3.0.1.tar.gz && \trm /tmp/nrpe-3.0.1.tar.gz"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod cgi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod rewrite
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd /tmp/nagios-4.2.3 && \t./configure \t\t--prefix=/opt/nagios \t\t--sysconfdir=/opt/nagios/etc
+      \t\t--localstatedir=/opt/nagios/var \t\t--libexecdir=/opt/nagios/plugins \t\t--with-nagios-group=nagios
+      \t\t--with-command-group=nagioscmd \t\t--with-mail=/usr/sbin/sendmail && \tmake
+      all && \tmake install && \tmake install-commandmode && \tcp sample-config/httpd.conf
+      /etc/apache2/conf-available/nagios.conf && \tln -s /etc/apache2/conf-available/nagios.conf
+      /etc/apache2/conf-enabled/nagios.conf"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd /tmp/nagios-plugins-2.1.4 && \t./configure \t\t--prefix=/opt/nagios \t\t--sysconfdir=/opt/nagios/etc
+      \t\t--localstatedir=/opt/nagios/var \t\t--libexecdir=/opt/nagios/plugins \t\t--with-nagios-user=nagios
+      \t\t--with-nagios-group=nagios \t\t--with-openssl && \tmake && \tmake install"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd /tmp/nrpe-3.0.1 && \t./configure \t\t--prefix=/opt/nagios \t\t--sysconfdir=/opt/nagios/etc
+      \t\t--localstatedir=/opt/nagios/var \t\t--libexecdir=/opt/nagios/plugins \t\t--with-nagios-user=nagios
+      \t\t--with-nagios-group=nagios \t\t--with-ssl=/usr/bin/openssl         --with-ssl-lib=/usr/lib/x86_64-linux-gnu
+      && \tmake check_nrpe\t&& \tmake install-plugin"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s,DocumentRoot.*,DocumentRoot /opt/nagios/share," /etc/apache2/sites-enabled/000-default.conf
+      &&     sed -i "s,</VirtualHost>,<IfDefine ENABLE_USR_LIB_CGI_BIN>\nScriptAlias
+      /cgi-bin/ /opt/nagios/sbin/\n</IfDefine>\n</VirtualHost>," /etc/apache2/sites-enabled/000-default.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - pagerduty_nagios.pl
+    - /usr/local/bin/pagerduty_nagios.pl
+  - CmdLine:
+    - chmod +x /usr/local/bin/pagerduty_nagios.pl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo '* * * * * /usr/local/bin/pagerduty_nagios.pl flush' >> /etc/crontab
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install hipsaint
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /etc/service/apache /etc/service/nagios
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - apache.init
+    - /etc/service/apache/run
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - nagios.init
+    - /etc/service/nagios/run
+  - CmdLine:
+    - chmod +x /etc/service/apache/run /etc/service/nagios/run
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: workdir
+    Path: /opt/nagios
+  From:
+    Image: phusion/baseimage:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM phusion/baseimage:latest

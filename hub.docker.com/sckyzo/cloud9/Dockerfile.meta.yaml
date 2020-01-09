@@ -1,0 +1,64 @@
+MetaArgs: null
+Stages:
+- As: buildstage
+  BaseName: lsiobase/ubuntu:bionic
+  Commands:
+  - Key: COMPOSE_VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - "echo \"**** install packages ****\" &&  apt-get update &&  apt-get install
+      -y \tgit \tlibffi-dev \tpython3         python3-dev \tpython3-pip \tzlib1g-dev
+      \tssh"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "echo \"**** build compose ****\" &&  cd /tmp &&  if [ -z ${COMPOSE_VERSION+x}
+      ]; then \tCOMPOSE_VERSION=$(curl -sX GET \"https://api.github.com/repos/docker/compose/releases/latest\"
+      \t| awk '/tag_name/{print $4;exit}' FS='[\"\"]');  fi &&  git clone https://github.com/docker/compose.git
+      &&  cd compose &&  git checkout ${COMPOSE_VERSION} &&  pip3 install \tpyinstaller
+      &&  pip3 install \t-r requirements.txt \t-r requirements-build.txt &&  ./script/build/write-git-sha
+      > compose/GITSHA &&  pyinstaller docker-compose.spec &&  mv dist/docker-compose
+      /"
+    Name: run
+    PrependShell: true
+  From:
+    Image: lsiobase/ubuntu:bionic
+  Name: buildstage
+  Platform: ""
+  SourceCode: FROM lsiobase/ubuntu:bionic as buildstage
+- BaseName: lsiobase/cloud9:latest
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: build_version
+      Value: '"0.1"'
+    Name: label
+  - Labels:
+    - Key: maintainer
+      Value: '"SckyzO"'
+    Name: label
+  - Chown: ""
+    From: buildstage
+    Name: copy
+    SourcesAndDest:
+    - /docker-compose
+    - /usr/local/bin/
+  - CmdLine:
+    - echo "**** install docker deps ****" &&  curl -s         https://download.docker.com/linux/debian/gpg
+      |         apt-key add - &&  echo 'deb [arch=amd64] https://download.docker.com/linux/ubuntu
+      bionic stable' >         /etc/apt/sources.list.d/docker-ce.list &&  apt-get
+      update &&  apt-get install -y --no-install-recommends         docker-ce ssh
+      &&  echo "**** Cleanup and user perms ****" &&  apt-get autoclean &&  rm -rf         /var/lib/apt/lists/*         /var/tmp/*         /tmp/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: lsiobase/cloud9:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM lsiobase/cloud9:latest

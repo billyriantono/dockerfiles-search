@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- As: go_builder
+  BaseName: golang:1.11
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/malice-plugins/sophos
+  - Name: workdir
+    Path: /go/src/github.com/malice-plugins/sophos
+  - CmdLine:
+    - go get -u github.com/golang/dep/cmd/dep && dep ensure
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -ldflags "-s -w -X main.Version=v$(cat VERSION) -X main.BuildTime=$(date
+      -u +%Y%m%d)" -o /bin/avscan
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11
+  Name: go_builder
+  Platform: ""
+  SourceCode: FROM golang:1.11 as go_builder
+- BaseName: ubuntu:bionic
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"https://github.com/blacktop"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.repository
+      Value: = "https://github.com/malice-plugins/sophos.git"
+    Name: label
+  - Labels:
+    - Key: malice.plugin.category
+      Value: '"av"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.mime
+      Value: '"*"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.docker.engine
+      Value: '"*"'
+    Name: label
+  - CmdLine:
+    - groupadd -r malice   && useradd --no-log-init -r -g malice malice   && mkdir
+      /malware   && chown -R malice:malice /malware
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - buildDeps='wget ca-certificates'   && DEBIAN_FRONTEND=noninteractive apt-get
+      update -qq   && apt-get install -yq $buildDeps   && echo "===> Install Sophos..."   &&
+      cd /tmp   && wget -q https://github.com/maliceio/malice-av/raw/master/sophos/sav-linux-free-9.tgz   &&
+      tar xzvf sav-linux-free-9.tgz   && ./sophos-av/install.sh /opt/sophos --update-free
+      --acceptlicence --autostart=False --enableOnBoot=False --automatic --ignore-existing-installation
+      --update-source-type=s   && echo "===> Update Sophos..."   && mkdir -p /opt/malice   &&
+      /opt/sophos/update/savupdate.sh   && /opt/sophos/bin/savconfig set DisableFeedback
+      true   && echo "===> Clean up unnecessary files..."   && apt-get purge -y --auto-remove
+      $buildDeps   && apt-get clean   && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+      /root/.gnupg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update -qq && apt-get install -yq --no-install-recommends ca-certificates   &&
+      rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: go_builder
+    Name: copy
+    SourcesAndDest:
+    - /bin/avscan
+    - /bin/avscan
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - http://www.eicar.org/download/eicar.com.txt
+    - /malware/EICAR
+  - Name: workdir
+    Path: /malware
+  - CmdLine:
+    - /bin/avscan
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:bionic
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic

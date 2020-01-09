@@ -1,0 +1,76 @@
+MetaArgs: null
+Stages:
+- As: protoc_builder
+  BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - apt update && apt install -y curl build-essential apt-utils autoconf libtool
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PROTOBUF_VERSION
+      Value: 3.9.1
+    - Key: OUTDIR
+      Value: /out
+    Name: env
+  - CmdLine:
+    - mkdir -p /protobuf &&         curl -L https://github.com/google/protobuf/archive/v${PROTOBUF_VERSION}.tar.gz
+      | tar xvz --strip-components=1 -C /protobuf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /protobuf &&         autoreconf -f -i -Wall,no-obsolete &&         ./configure
+      --prefix=/usr --enable-static=no &&         make -j2 && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /protobuf &&         make install DESTDIR=${OUTDIR}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find ${OUTDIR} -name "*.a" -delete -or -name "*.la" -delete
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: protoc_builder
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as protoc_builder
+- BaseName: node:10.16
+  Commands:
+  - CmdLine:
+    - npm install -g grpc_tools_node_protoc_ts@2.5.4 grpc-tools@1.8.0 --unsafe-perm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/local/lib/node_modules/grpc_tools_node_protoc_ts/bin /grpc_tools_node_protoc_ts
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PROTOC_GEN_TS_PATH
+      Value: /grpc_tools_node_protoc_ts/protoc-gen-ts
+    Name: env
+  - Env:
+    - Key: GRPC_TOOLS_NODE_PROTOC_PLUGIN_PATH
+      Value: /grpc_tools_node_protoc_ts/grpc_tools_node_protoc_plugin
+    Name: env
+  - CmdLine:
+    - curl -L https://github.com/grpc/grpc-web/releases/download/1.0.6/protoc-gen-grpc-web-1.0.6-linux-x86_64
+      --output /usr/local/bin/protoc-gen-grpc-web
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /usr/local/bin/protoc-gen-grpc-web
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: protoc_builder
+    Name: copy
+    SourcesAndDest:
+    - /out/
+    - /
+  From:
+    Image: node:10.16
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:10.16

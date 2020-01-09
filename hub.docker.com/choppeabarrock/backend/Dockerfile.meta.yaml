@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- As: ping
+  BaseName: openjdk:8-jdk-alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/ping
+    - ./
+  - CmdLine:
+    - javac Ping.java
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8-jdk-alpine
+  Name: ping
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-alpine as ping
+- As: builder
+  BaseName: maven
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - ./src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pom.xml
+    - ./
+  - CmdLine:
+    - mvn install
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven
+  Name: builder
+  Platform: ""
+  SourceCode: FROM maven as builder
+- BaseName: openjdk:8-jre-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache bash
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /tmp
+  - Key: JAR_FILE
+    Name: arg
+    Value: target/backend-0.0.1-SNAPSHOT.jar
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - ${JAR_FILE}
+    - app.jar
+  - Chown: ""
+    From: ping
+    Name: copy
+    SourcesAndDest:
+    - Ping.class
+    - ping/Ping.class
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/init_container.sh
+    - ./
+  - Health:
+      Interval: 10000000000
+      Test:
+      - CMD-SHELL
+      - java ping/Ping localhost 8080 || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - /bin/bash
+    - init_container.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:8-jre-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre-alpine

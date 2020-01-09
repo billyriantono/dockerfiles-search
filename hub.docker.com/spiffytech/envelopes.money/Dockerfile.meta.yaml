@@ -1,0 +1,184 @@
+MetaArgs: null
+Stages:
+- As: builder-server
+  BaseName: node:12
+  Commands:
+  - CmdLine:
+    - mkdir -p /workdir/server
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server/package*.json
+    - /workdir/server/
+  - Name: workdir
+    Path: /workdir/server
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - common/
+    - /workdir/common/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server/
+    - /workdir/server/
+  - Name: workdir
+    Path: /workdir/server
+  - CmdLine:
+    - ./node_modules/.bin/tsc
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-start.sh
+    - /workdir/server
+  From:
+    Image: node:12
+  Name: builder-server
+  Platform: ""
+  SourceCode: FROM node:12 AS builder-server
+- As: builder-client
+  BaseName: node:12
+  Commands:
+  - CmdLine:
+    - mkdir -p /workdir/client
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client/package*.json
+    - /workdir/client/
+  - Name: workdir
+    Path: /workdir/client
+  - CmdLine:
+    - npm install --no-optional
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client/
+    - /workdir/client/
+  - Name: workdir
+    Path: /workdir/client
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run tailwind
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12
+  Name: builder-client
+  Platform: ""
+  SourceCode: FROM node:12 as builder-client
+- As: dev
+  BaseName: node:12
+  Commands:
+  - Chown: ""
+    From: builder-server
+    Name: copy
+    SourcesAndDest:
+    - /workdir/server
+    - /workdir/server
+  - Chown: ""
+    From: builder-client
+    Name: copy
+    SourcesAndDest:
+    - /workdir/client
+    - /workdir/client
+  From:
+    Image: node:12
+  Name: dev
+  Platform: ""
+  SourceCode: FROM node:12 as dev
+- As: prod-intermediate
+  BaseName: node:12-alpine
+  Commands:
+  - Chown: ""
+    From: builder-server
+    Name: copy
+    SourcesAndDest:
+    - /workdir/server/node_modules/
+    - /root/node_modules
+  - CmdLine:
+    - npm prune --production
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12-alpine
+  Name: prod-intermediate
+  Platform: ""
+  SourceCode: FROM node:12-alpine as prod-intermediate
+- As: prod
+  BaseName: node:12-alpine
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - CmdLine:
+    - mkdir -p /workdir/server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /workdir/client
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-start.sh
+    - /workdir/server
+  - Chown: ""
+    From: builder-server
+    Name: copy
+    SourcesAndDest:
+    - /workdir/server/package*.json
+    - /workdir/server/
+  - Chown: ""
+    From: builder-server
+    Name: copy
+    SourcesAndDest:
+    - /workdir/server/dist
+    - /workdir/server/dist
+  - Chown: ""
+    From: builder-client
+    Name: copy
+    SourcesAndDest:
+    - /workdir/client/public
+    - /workdir/client/public
+  - Name: workdir
+    Path: /workdir/server
+  - Chown: ""
+    From: prod-intermediate
+    Name: copy
+    SourcesAndDest:
+    - /root/node_modules/
+    - /workdir/server/node_modules/
+  - CmdLine:
+    - sh /workdir/server/docker-start.sh
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: node:12-alpine
+  Name: prod
+  Platform: ""
+  SourceCode: FROM node:12-alpine AS prod

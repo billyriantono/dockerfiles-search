@@ -1,0 +1,121 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache make npm yarn
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/app
+  - CmdLine:
+    - mkdir -p ./src
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - yarn.lock
+    - ./
+  - CmdLine:
+    - cd /opt/app && yarn
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/client_templates
+    - ./src/client_templates
+  - CmdLine:
+    - mkdir -p ./src/static/templates     && cd ./src/client_templates     && make
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine as Builder
+- BaseName: python:3.7-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install --no-cache-dir pipenv
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Pipfile
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Pipfile.lock
+    - ./
+  - CmdLine:
+    - pipenv install --system --deploy
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - Chown: ""
+    From: Builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/app/node_modules
+    - ./node_modules
+  - Chown: ""
+    From: Builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/app/src/static/templates
+    - ./src/static/templates
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.default.cfg
+    - /etc/freitagsfoo-web.cfg
+  - Env:
+    - Key: CONFIG_FILE
+      Value: /etc/freitagsfoo-web.cfg
+    Name: env
+  - CmdLine:
+    - /usr/local/bin/gunicorn
+    - -w
+    - "2"
+    - -b
+    - 0.0.0.0:5000
+    - --chdir
+    - /opt/app/src
+    - app:app
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - 5000/tcp
+  From:
+    Image: python:3.7-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.7-alpine

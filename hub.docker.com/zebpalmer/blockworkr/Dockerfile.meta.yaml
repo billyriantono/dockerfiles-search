@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: python:3.7-slim-stretch
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - requirements.txt
+  - CmdLine:
+    - pip3 install --no-cache-dir -r requirements.txt && pip3 install gunicorn gevent
+      aiohttp
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.7-slim-stretch
+  Name: base
+  Platform: ""
+  SourceCode: FROM python:3.7-slim-stretch as base
+- As: build
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /code
+  - Name: workdir
+    Path: /code
+  - CmdLine:
+    - python setup.py build sdist
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: build
+  Platform: ""
+  SourceCode: FROM base as build
+- As: final
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /code/dist/blockworkr*.tar.gz
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - gunicorn.cfg
+    - /gunicorn.cfg
+  - CmdLine:
+    - python -m pip install --no-cache-dir /blockworkr*.tar.gz   && rm -rf /blockworkr*.tar.gz   &&
+      mkdir /etc/blockworkr
+    Name: run
+    PrependShell: true
+  - Health:
+      Interval: 15000000000
+      Test:
+      - CMD-SHELL
+      - curl -f http://localhost/healthz || exit 1
+      Timeout: 5000000000
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - gunicorn
+    - --config
+    - /gunicorn.cfg
+    - -b
+    - 0.0.0.0:80
+    - blockworkr.webservice:app
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: final
+  Platform: ""
+  SourceCode: FROM base as final

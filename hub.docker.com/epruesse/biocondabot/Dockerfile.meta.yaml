@@ -1,0 +1,78 @@
+MetaArgs: null
+Stages:
+- As: bioconda_base
+  BaseName: continuumio/miniconda3:4.5.11
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y gnupg
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./bioconda_utils/bioconda_utils-requirements.txt
+    - /tmp/requirements.txt
+  - CmdLine:
+    - conda config --add channels defaults &&     conda config --add channels bioconda
+      &&     conda config --add channels conda-forge &&     echo nomkl >> /tmp/requirements.txt
+      &&     echo binutils >> /tmp/requirements.txt &&     conda install -y --file
+      /tmp/requirements.txt &&     echo Cleaning out to minimize space ... &&     (find
+      /opt/conda -print0 | xargs -0 strip --strip-unneeded 2>/dev/null || true) &&     conda
+      remove binutils &&     conda clean -y --all &&     rm -rf /opt/conda/pkgs &&     rm
+      -rf /opt/conda/share/{man,doc} &&     ls -d /opt/conda/share/locale/* | grep
+      -v en_US | xargs rm -rf &&     find /opt/conda/ -name __pycache__ | xargs rm
+      -rf &&     find /opt/conda -name \*.a -delete
+    Name: run
+    PrependShell: true
+  From:
+    Image: continuumio/miniconda3:4.5.11
+  Name: bioconda_base
+  Platform: ""
+  SourceCode: FROM continuumio/miniconda3:4.5.11 as bioconda_base
+- As: builder
+  BaseName: bioconda_base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /tmp/repo
+  - Name: workdir
+    Path: /wheels
+  - CmdLine:
+    - pip wheel /tmp/repo
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: bioconda_base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM bioconda_base as builder
+- BaseName: bioconda_base
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /wheels
+    - /wheels
+  - CmdLine:
+    - pip install -f /wheels bioconda_utils
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - PYTHONUNBUFFERED=1 gunicorn bioconda_utils.bot.web:start_with_celery     --worker-class
+      aiohttp.worker.GunicornWebWorker --bind 0.0.0.0:$PORT
+    Name: cmd
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: bioconda_base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM bioconda_base

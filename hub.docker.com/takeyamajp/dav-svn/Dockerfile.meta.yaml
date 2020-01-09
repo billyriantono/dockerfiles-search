@@ -1,0 +1,127 @@
+MetaArgs: null
+Stages:
+- BaseName: centos:centos8
+  Commands:
+  - Maintainer: '"Hiroki Takeyama"'
+    Name: maintainer
+  - CmdLine:
+    - mkdir /cert;     dnf -y install openssl;     openssl genrsa -aes256 -passout
+      pass:dummy -out "/cert/key.pass.pem" 2048;     openssl rsa -passin pass:dummy
+      -in "/cert/key.pass.pem" -out "/cert/key.pem";     rm -f /cert/key.pass.pem;     dnf
+      clean all;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /svn;     dnf -y install subversion;     dnf clean all;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dnf -y install httpd mod_ssl mod_dav_svn;     sed -i 's/^#\(ServerName\) .*/\1
+      ${HOSTNAME}/' /etc/httpd/conf/httpd.conf;     sed -i 's/^\s*\(CustomLog\) .*/\1
+      \/dev\/stdout "%{X-Forwarded-For}i %h %l %u %t \\"%r\\" %>s %b \\"%{Referer}i\\"
+      \\"%{User-Agent}i\\" %I %O"/' /etc/httpd/conf/httpd.conf;     sed -i 's/^\(ErrorLog\)
+      .*/\1 \/dev\/stderr/' /etc/httpd/conf/httpd.conf;     sed -i 's/^\s*\(CustomLog\)
+      .*/\1 \/dev\/stdout "%{X-Forwarded-For}i %h %l %u %t \\"%r\\" %>s %b \\"%{Referer}i\\"
+      \\"%{User-Agent}i\\" %I %O"/' /etc/httpd/conf.d/ssl.conf;     sed -i 's/^\(ErrorLog\)
+      .*/\1 \/dev\/stderr/' /etc/httpd/conf.d/ssl.conf;     echo 'CustomLog /dev/stdout
+      "%{X-Forwarded-For}i %h %l %u %t %{SVN-ACTION}e %U" env=SVN-ACTION' >> /etc/httpd/conf/httpd.conf;     sed
+      -i 's/^\s*"%t %h %{SSL_PROTOCOL}x %{SSL_CIPHER}x \\"%r\\" %b"/CustomLog \/dev\/stdout
+      "%{X-Forwarded-For}i %h %l %u %t %{SVN-ACTION}e %U" env=SVN-ACTION/' /etc/httpd/conf.d/ssl.conf;     sed
+      -i 's/^\(LoadModule lbmethod_heartbeat_module .*\)/#\1/' /etc/httpd/conf.modules.d/00-proxy.conf;     rm
+      -f /usr/sbin/suexec;     {     echo '<Location />';     echo '  Dav svn';     echo
+      '  SVNParentPath /svn';     echo '  SVNListParentPath on';     echo '  AuthType
+      Basic';     echo '  AuthName "Basic Authentication"';     echo '  AuthUserFile
+      /svn/passwd';     echo '  Require valid-user';     echo '  AuthzSVNAccessFile
+      /svn/access';     echo '</Location>';     } >> /etc/httpd/conf/httpd.conf;     dnf
+      clean all;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '{     echo ''#!/bin/bash -eu'';     echo ''ln -fs /usr/share/zoneinfo/${TIMEZONE}
+      /etc/localtime'';     echo ''openssl req -new -sha384 -key "/cert/key.pem" -subj
+      "/CN=${HOSTNAME}" -out "/cert/csr.pem"'';     echo ''openssl x509 -req -days
+      36500 -in "/cert/csr.pem" -signkey "/cert/key.pem" -out "/cert/cert.pem" &>/dev/null'';     echo
+      ''sed -i "s/^\(SSLCertificateFile\) .*/\1 \/cert\/cert.pem/" /etc/httpd/conf.d/ssl.conf'';     echo
+      ''sed -i "s/^\(SSLCertificateKeyFile\) .*/\1 \/cert\/key.pem/" /etc/httpd/conf.d/ssl.conf'';     echo
+      ''if [ -e /svn/cert.pem ] && [ -e /svn/key.pem ]; then'';     echo ''  sed -i
+      "s/^\(SSLCertificateFile\) .*/\1 \/svn\/cert.pem/" /etc/httpd/conf.d/ssl.conf'';     echo
+      ''  sed -i "s/^\(SSLCertificateKeyFile\) .*/\1 \/svn\/key.pem/" /etc/httpd/conf.d/ssl.conf'';     echo
+      ''fi'';     echo ''sed -i "s/^\(LogLevel\) .*/\1 ${HTTPD_LOG_LEVEL}/" /etc/httpd/conf/httpd.conf'';     echo
+      ''sed -i "s/^\(LogLevel\) .*/\1 ${HTTPD_LOG_LEVEL}/" /etc/httpd/conf.d/ssl.conf'';     echo
+      ''sed -i "s/^\(CustomLog .*\)/#\1/" /etc/httpd/conf/httpd.conf'';     echo ''sed
+      -i "s/^\(ErrorLog .*\)/#\1/" /etc/httpd/conf/httpd.conf'';     echo ''sed -i
+      "s/^\(CustomLog .*\)/#\1/" /etc/httpd/conf.d/ssl.conf'';     echo ''sed -i "s/^\(ErrorLog
+      .*\)/#\1/" /etc/httpd/conf.d/ssl.conf'';     echo ''if [ ${HTTPD_LOG,,} = "true"
+      ]; then'';     echo ''  sed -i "s/^#\(CustomLog .*\)/\1/" /etc/httpd/conf/httpd.conf'';     echo
+      ''  sed -i "s/^#\(ErrorLog .*\)/\1/" /etc/httpd/conf/httpd.conf'';     echo
+      ''  sed -i "s/^#\(CustomLog .*\)/\1/" /etc/httpd/conf.d/ssl.conf'';     echo
+      ''  sed -i "s/^#\(ErrorLog .*\)/\1/" /etc/httpd/conf.d/ssl.conf'';     echo
+      ''fi'';     echo ''if [ -e /etc/httpd/conf.d/requireSsl.conf ]; then'';     echo
+      ''  rm -f /etc/httpd/conf.d/requireSsl.conf'';     echo ''fi'';     echo ''if
+      [ ${REQUIRE_SSL,,} = "true" ]; then'';     echo ''  {'';     echo ''  echo "<Location
+      />"'';     echo ''  echo "  SSLRequireSSL"'';     echo ''  echo "</Location>"'';     echo
+      ''  } > /etc/httpd/conf.d/requireSsl.conf'';     echo ''fi'';     echo ''if
+      [ ! -e /svn/${SVN_REPOSITORY} ]; then'';     echo ''  svnadmin create /svn/${SVN_REPOSITORY}'';     echo
+      ''fi'';     echo ''if [ -e /svn/passwd ]; then'';     echo ''  rm -f /svn/passwd'';     echo
+      ''fi'';     echo ''if [ -e /svn/access ]; then'';     echo ''  rm -f /svn/access'';     echo
+      ''fi'';     echo ''{'';     echo ''echo "[/]";'';     echo ''echo "* = r";'';     echo
+      ''} > /svn/access'';     echo ''ARRAY_USER=(`echo ${SVN_USER} | tr "," " "`)'';     echo
+      ''ARRAY_PASSWORD=(`echo ${SVN_PASSWORD} | tr "," " "`)'';     echo ''INDEX=0'';     echo
+      ''for e in ${ARRAY_USER[@]}; do'';     echo ''  htpasswd -bmn ${ARRAY_USER[${INDEX}]}
+      ${ARRAY_PASSWORD[${INDEX}]} | head -c -1 >> /svn/passwd'';     echo ''  echo
+      "${ARRAY_USER[${INDEX}]} = rw" >> /svn/access'';     echo ''  ((INDEX+=1))'';     echo
+      ''done'';     echo ''chown -R apache:apache /svn'';     echo ''exec "$@"'';     }
+      > /usr/local/bin/entrypoint.sh;     chmod +x /usr/local/bin/entrypoint.sh;'
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TIMEZONE
+      Value: Asia/Tokyo
+    Name: env
+  - Env:
+    - Key: REQUIRE_SSL
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: HTTPD_LOG
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: HTTPD_LOG_LEVEL
+      Value: warn
+    Name: env
+  - Env:
+    - Key: SVN_REPOSITORY
+      Value: dev
+    Name: env
+  - Env:
+    - Key: SVN_USER
+      Value: user1,user2
+    Name: env
+  - Env:
+    - Key: SVN_PASSWORD
+      Value: password1,password2
+    Name: env
+  - Name: volume
+    Volumes:
+    - /svn
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: expose
+    Ports:
+    - "443"
+  - CmdLine:
+    - entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - httpd
+    - -DFOREGROUND
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos:centos8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:centos8

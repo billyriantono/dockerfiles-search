@@ -1,0 +1,134 @@
+MetaArgs: null
+Stages:
+- As: build-c
+  BaseName: alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dump-parser
+    - /app
+  - CmdLine:
+    - set +xe     && apk add -u --no-cache --virtual .build-deps         gcc         musl-dev     &&
+      gcc -O2 -Wall -pedantic process-mysqldump.c -o process-mysqldump     && chmod
+      +x process-mysqldump     && apk del .build-deps
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: build-c
+  Platform: ""
+  SourceCode: FROM alpine as build-c
+- As: build-php
+  BaseName: composer
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /app/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - composer.json
+    - /app/composer.json
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - composer.lock
+    - /app/composer.lock
+  - CmdLine:
+    - composer install --no-ansi --no-dev --no-interaction --no-suggest --no-progress
+      --no-scripts --optimize-autoloader --prefer-dist
+    Name: run
+    PrependShell: true
+  From:
+    Image: composer
+  Name: build-php
+  Platform: ""
+  SourceCode: FROM composer AS build-php
+- As: run
+  BaseName: graze/php-alpine:7.3
+  Commands:
+  - CmdLine:
+    - set +xe     && apk add --no-cache         mariadb-client
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: build-php
+    Name: copy
+    SourcesAndDest:
+    - /app/src
+    - /app/src
+  - Chown: ""
+    From: build-php
+    Name: copy
+    SourcesAndDest:
+    - /app/vendor
+    - /app/vendor
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin
+    - /app/bin
+  - Chown: ""
+    From: build-c
+    Name: copy
+    SourcesAndDest:
+    - /app/process-mysqldump
+    - /bin/process-mysqldump
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.vendor
+      Value: '"graze"'
+    - Key: org.label-schema.name
+      Value: '"morphism"'
+    - Key: org.label-schema.description
+      Value: '"seed your databases"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/graze/sprout"'
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: maintainer
+      Value: '"developers@graze.com"'
+    - Key: license
+      Value: '"MIT"'
+    Name: label
+  - Name: volume
+    Volumes:
+    - /app/config
+    - /seed
+  - CmdLine:
+    - php
+    - /app/bin/sprout
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - list
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: graze/php-alpine:7.3
+  Name: run
+  Platform: ""
+  SourceCode: FROM graze/php-alpine:7.3 AS run

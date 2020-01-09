@@ -1,0 +1,121 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stretch-slim
+  Commands:
+  - CmdLine:
+    - "set -eux; \t{ \t\techo 'Package: php*'; \t\techo 'Pin: release *'; \t\techo
+      'Pin-Priority: -1'; \t} > /etc/apt/preferences.d/no-debian-php"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHPIZE_DEPS
+      Value: "autoconf \t\tdpkg-dev \t\tfile \t\tg++ \t\tgcc \t\tlibc-dev \t\tmake
+        \t\tpkg-config \t\tre2c"
+    Name: env
+  - CmdLine:
+    - "apt-get update && apt-get install -y \t\t$PHPIZE_DEPS \t\tca-certificates \t\tcurl
+      \t\tlibedit2 \t\tlibsqlite3-0 \t\tlibxml2 \t\txz-utils \t--no-install-recommends
+      && rm -r /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_INI_DIR
+      Value: /usr/local/etc/php
+    Name: env
+  - CmdLine:
+    - mkdir -p $PHP_INI_DIR/conf.d
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_CFLAGS
+      Value: '"-fstack-protector-strong -fpic -fpie -O2"'
+    Name: env
+  - Env:
+    - Key: PHP_CPPFLAGS
+      Value: '"$PHP_CFLAGS"'
+    Name: env
+  - Env:
+    - Key: PHP_LDFLAGS
+      Value: '"-Wl,-O1 -Wl,--hash-style=both -pie"'
+    Name: env
+  - Env:
+    - Key: GPG_KEYS
+      Value: A917B1ECDA84AEC2B568FED6F50ABC807BD5DCD0
+    Name: env
+  - Env:
+    - Key: PHP_VERSION
+      Value: 7.4.0-dev
+    Name: env
+  - Env:
+    - Key: PHP_URL
+      Value: '"https://github.com/zendtech/php-src/archive/jit-dynasm-7.4.tar.gz"'
+    Name: env
+  - CmdLine:
+    - "set -xe; \t\tfetchDeps=' \t\twget \t'; \tif ! command -v gpg > /dev/null; then
+      \t\tfetchDeps=\"$fetchDeps \t\t\tdirmngr \t\t\tgnupg \t\t\"; \tfi; \tapt-get
+      update; \tapt-get install -y --no-install-recommends $fetchDeps; \trm -rf /var/lib/apt/lists/*;
+      \t\tmkdir -p /usr/src; \tcd /usr/src; \t\twget -O php.tar.gz \"$PHP_URL\"; \t\tapt-get
+      purge -y --auto-remove $fetchDeps"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-source
+    - /usr/local/bin/
+  - CmdLine:
+    - "set -eux; \t\tsavedAptMark=\"$(apt-mark showmanual)\"; \tapt-get update; \tapt-get
+      install -y --no-install-recommends \t\tlibcurl4-openssl-dev \t\tlibedit-dev
+      \t\tlibsodium-dev \t\tlibsqlite3-dev \t\tlibssl-dev \t\tlibxml2-dev \t\tzlib1g-dev
+      \t\tlibwebp-dev \t\tbison \t\tlibonig-dev \t\t${PHP_EXTRA_BUILD_DEPS:-} \t;
+      \tsed -e 's/stretch/buster/g' /etc/apt/sources.list > /etc/apt/sources.list.d/buster.list;
+      \t{ \t\techo 'Package: *'; \t\techo 'Pin: release n=buster'; \t\techo 'Pin-Priority:
+      -10'; \t\techo; \t\techo 'Package: libargon2*'; \t\techo 'Pin: release n=buster';
+      \t\techo 'Pin-Priority: 990'; \t} > /etc/apt/preferences.d/argon2-buster; \tapt-get
+      update; \tapt-get install -y --no-install-recommends libargon2-dev; \trm -rf
+      /var/lib/apt/lists/*; \t\texport \t\tCFLAGS=\"$PHP_CFLAGS\" \t\tCPPFLAGS=\"$PHP_CPPFLAGS\"
+      \t\tLDFLAGS=\"$PHP_LDFLAGS\" \t; \tdocker-php-source extract; \tcd /usr/src/php;
+      \tgnuArch=\"$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)\"; \tdebMultiarch=\"$(dpkg-architecture
+      --query DEB_BUILD_MULTIARCH)\"; \tif [ ! -d /usr/include/curl ]; then \t\tln
+      -sT \"/usr/include/$debMultiarch/curl\" /usr/local/include/curl; \tfi;     sed
+      -i -e 's#^PEAR_INSTALLER_URL.*$#PEAR_INSTALLER_URL = https://github.com/pear/pearweb_phars/raw/v1.10.12/install-pear-nozlib.phar#'
+      ./pear/Makefile.frag; \t./buildconf --force; \t./configure \t\t--build=\"$gnuArch\"
+      \t\t--with-config-file-path=\"$PHP_INI_DIR\" \t\t--with-config-file-scan-dir=\"$PHP_INI_DIR/conf.d\"
+      \t\t\t\t--disable-cgi \t\t--enable-option-checking=fatal \t\t\t\t--with-mhash
+      \t\t\t\t--enable-ftp \t\t--enable-mbstring \t\t--enable-mysqlnd \t\t--with-password-argon2
+      \t\t--with-sodium=shared \t\t\t\t--with-curl \t\t--with-libedit \t\t--with-openssl
+      \t\t--with-zlib \t\t\t\t$(test \"$gnuArch\" = 's390x-linux-gnu' && echo '--without-pcre-jit')
+      \t\t--with-libdir=\"lib/$debMultiarch\" \t\t\t\t${PHP_EXTRA_CONFIGURE_ARGS:-}
+      \t; \tmake -j \"$(nproc)\"; \tmake install; \tfind /usr/local/bin /usr/local/sbin
+      -type f -executable -exec strip --strip-all '{}' + || true; \tmake clean; \t\tcp
+      -v php.ini-* \"$PHP_INI_DIR/\"; \t\tcd /; \tdocker-php-source delete; \t\tapt-mark
+      auto '.*' > /dev/null; \t[ -z \"$savedAptMark\" ] || apt-mark manual $savedAptMark;
+      \tfind /usr/local -type f -executable -exec ldd '{}' ';' \t\t| awk '/=>/ { print
+      $(NF-1) }' \t\t| sort -u \t\t| xargs -r dpkg-query --search \t\t| cut -d: -f1
+      \t\t| sort -u \t\t| xargs -r apt-mark manual \t; \tapt-get purge -y --auto-remove
+      -o APT::AutoRemove::RecommendsImportant=false; \t\tphp --version; \t\trm -rf
+      /tmp/pear ~/.pearrc"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-ext-*
+    - docker-php-entrypoint
+    - /usr/local/bin/
+  - CmdLine:
+    - docker-php-ext-enable sodium
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - php
+    - -a
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

@@ -1,0 +1,1 @@
+FROM gcr.io/knative-releases/github.com/knative/eventing/pkg/provisioners/inmemory/controller@sha256:3ef04add5f8286af6571161663129583ece32b7c457fbb2115e9e4c12001f980

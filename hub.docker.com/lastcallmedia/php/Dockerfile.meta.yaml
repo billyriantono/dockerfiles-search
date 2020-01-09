@@ -1,0 +1,115 @@
+MetaArgs: null
+Stages:
+- BaseName: php:7.2-apache
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: APACHE_DOCROOT
+      Value: /var/www/html
+    Name: env
+  - Env:
+    - Key: APACHE_RUN_USER
+      Value: www-data
+    Name: env
+  - Env:
+    - Key: APACHE_RUN_GROUP
+      Value: www-data
+    Name: env
+  - Env:
+    - Key: APACHE_REQUEST_WORKERS
+      Value: "150"
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /var/www/vendor/bin:$PATH
+    Name: env
+  - Env:
+    - Key: COMPOSER_MEMORY_LIMIT
+      Value: '"-1"'
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends       bzip2 libbz2-dev       libssl-dev       libfreetype6-dev
+      libjpeg62-turbo-dev libpng-dev       libicu-dev       libxml2-dev       libldap2-dev       mariadb-client       openssh-client       jpegoptim       optipng       pngquant       git       unzip     &&
+      apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/     &&
+      docker-php-ext-configure ldap --with-libdir=lib/x86_64-linux-gnu     && docker-php-ext-install
+      -j$(nproc)       bcmath       bz2       calendar       exif       ftp       gd       gettext       intl       ldap       mysqli       opcache       pcntl       pdo_mysql       shmop       soap       sockets       sysvmsg       sysvsem       sysvshm       zip     &&
+      pecl install redis apcu     && docker-php-ext-enable redis apcu     && printf
+      "upload_max_filesize = 128M\npost_max_size = 128M" > $PHP_INI_DIR/conf.d/00-max_filesize.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod rewrite headers expires   && sed -i "/User www-data/c\User \$\{APACHE_RUN_USER\}"
+      /etc/apache2/apache2.conf   && sed -i "/Group www-data/c\Group \$\{APACHE_RUN_GROUP\}"
+      /etc/apache2/apache2.conf   && sed -i "/DocumentRoot \/var\/www\/html/c\\\tDocumentRoot
+      \$\{APACHE_DOCROOT\}" /etc/apache2/sites-enabled/000-default.conf   && adduser
+      --uid 1000 --gecos 'My OSX User' --disabled-password osxuser
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sS https://getcomposer.org/installer | php && mv composer.phar /usr/bin/composer   &&
+      mkdir /usr/share/composer   && cd /usr/share/composer   && composer init --no-interaction
+      && composer config bin-dir /usr/local/bin   && composer require drush/drush
+      --prefer-dist   && rm -r /root/.composer/cache   && curl -L https://github.com/jwilder/dockerize/releases/download/v0.6.0/dockerize-linux-amd64-v0.6.0.tar.gz
+      | tar -C /usr/local/bin -xzv   && chmod +x /usr/local/bin/dockerize   && ssh-keyscan
+      github.com >> /etc/ssh/ssh_known_hosts
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - mpm_prefork.conf
+    - /etc/apache2/mods-enabled/mpm_prefork.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/*
+    - /usr/local/bin/
+  - CmdLine:
+    - apache2-foreground-enhanced
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - "pecl install xdebug   && docker-php-ext-enable xdebug   && echo \"xdebug.default_enable=0\\nxdebug.coverage_enable=0\"
+      > $PHP_INI_DIR/conf.d/xdebug.ini \t&& version=$(php -r \"echo PHP_MAJOR_VERSION.PHP_MINOR_VERSION;\")
+      \  && curl -A \"Docker\" -o /tmp/blackfire-probe.tar.gz -D - -L -s https://blackfire.io/api/v1/releases/probe/php/linux/amd64/$version
+      \  && tar zxpf /tmp/blackfire-probe.tar.gz -C /tmp   && mv /tmp/blackfire-*.so
+      $(php -r \"echo ini_get('extension_dir');\")/blackfire.so   && printf \"extension=blackfire.so\\nblackfire.agent_socket=tcp://blackfire:8707\\n\"
+      > $PHP_INI_DIR/conf.d/blackfire.ini   && mkdir -p /tmp/blackfire   && curl -A
+      \"Docker\" -L https://blackfire.io/api/v1/releases/client/linux_static/amd64
+      | tar zxp -C /tmp/blackfire   && mv /tmp/blackfire/blackfire /usr/bin/blackfire
+      \  && rm -Rf /tmp/blackfire   && mkdir /usr/share/terminus   && composer --working-dir=/usr/share/terminus
+      init -n && composer --working-dir=/usr/share/terminus config bin-dir /usr/local/bin
+      \  && composer --working-dir=/usr/share/terminus require pantheon-systems/terminus
+      --prefer-dist   && rm -r /root/.composer/cache   && apt-get clean && rm -rf
+      /var/lib/apt/lists/* /tmp/* /var/tmp/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update   && apt-get install -y apt-transport-https lsb-release gnupg
+      > /dev/null 2>&1   && curl -s https://deb.nodesource.com/gpgkey/nodesource.gpg.key
+      | apt-key add -   && echo 'deb https://deb.nodesource.com/node_10.x stretch
+      main' > /etc/apt/sources.list.d/nodesource.list   && echo 'deb-src https://deb.nodesource.com/node_10.x
+      stretch main' >> /etc/apt/sources.list.d/nodesource.list   && apt-get update   &&
+      apt-get install -y nodejs   && npm install -g yarn gulp   && npm cache clean
+      --force   && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*   &&
+      npm cache clean --force
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - test-dev.sh
+    - /test.sh
+  From:
+    Image: php:7.2-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.2-apache

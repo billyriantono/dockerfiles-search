@@ -1,0 +1,114 @@
+MetaArgs: null
+Stages:
+- BaseName: metabrainz/base-image
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: jeffsturgis@gmail.com
+    Name: label
+  - Env:
+    - Key: DOCKERIZE_VERSION
+      Value: v0.2.0
+    Name: env
+  - CmdLine:
+    - wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz     &&
+      tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&     apt-get install -y     git-core     postgresql     memcached     build-essential     libxml2-dev
+      libpq-dev     libexpat1-dev     libdb-dev     libicu-dev     liblocal-lib-perl     python-minimal     cpanminus
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --recursive https://github.com/metabrainz/musicbrainz-server.git musicbrainz-server
+      &&     cd musicbrainz-server &&     git checkout v-2018-06-30
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd musicbrainz-server &&     cp docker/yarn_pubkey.txt /tmp &&     cd /tmp &&     apt-key
+      add yarn_pubkey.txt &&     echo "deb https://dl.yarnpkg.com/debian/ stable main"
+      | tee /etc/apt/sources.list.d/yarn.list &&     apt-get update -o Dir::Etc::sourcelist="sources.list.d/yarn.list"
+      -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0" &&     curl -sLO
+      https://deb.nodesource.com/node_8.x/pool/main/n/nodejs/nodejs_8.11.3-1nodesource1_amd64.deb
+      &&     dpkg -i nodejs_8.11.3-1nodesource1_amd64.deb &&     apt remove -y cmdtest
+      &&     apt-get install -y yarn
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /musicbrainz-server/ && eval $( perl -Mlocal::lib) && cpanm --installdeps
+      --notest .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - eval $( perl -Mlocal::lib) && cpanm --notest Plack::Middleware::Debug::Base     Catalyst::Plugin::Cache::HTTP     Catalyst::Plugin::StackTrace     Cache::Memcached::Fast     JSON::Any     Cache::Memory     Digest::MD5::File     Term::Size::Any     LWP::Protocol::https     Starlet     Plack::Handler::Starlet     Starlet::Server     Server::Starter     TURNSTEP/DBD-Pg-3.5.9_1.tar.gz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - DBDefs.pm
+    - /musicbrainz-server/lib/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/start.sh
+    - /start.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/start_mb_renderer.pl
+    - /start_mb_renderer.pl
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/crons.conf
+    - /crons.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/replication.sh
+    - /replication.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/createdb.sh
+    - /createdb.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/recreatedb.sh
+    - /recreatedb.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/set-token.sh
+    - /set-token.sh
+  - CmdLine:
+    - cd /musicbrainz-server/ && yarn install --production     && eval $( perl -Mlocal::lib)
+      && /musicbrainz-server/script/compile_resources.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - crontab /crons.conf
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /media/dbdump
+  - Name: workdir
+    Path: /musicbrainz-server
+  - CmdLine:
+    - dockerize -wait tcp://db:5432 -timeout 60s     -wait tcp://redis:6379 -timeout
+      60s     /start.sh
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: metabrainz/base-image
+  Name: ""
+  Platform: ""
+  SourceCode: FROM metabrainz/base-image

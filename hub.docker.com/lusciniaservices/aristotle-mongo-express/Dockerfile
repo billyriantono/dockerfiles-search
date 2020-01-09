@@ -1,0 +1,6 @@
+FROM mongo-express:latest
+ENV ME_CONFIG_MONGODB_ADMINUSERNAME: mongodb
+ENV ME_CONFIG_MONGODB_ADMINPASSWORD: mongodb
+ENV ME_CONFIG_MONGODB_SERVER: aristotle-prod_aristotle-mongo
+ENV ME_CONFIG_SITE_BASEURL: /mongo-express/
+

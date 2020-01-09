@@ -1,0 +1,111 @@
+MetaArgs: null
+Stages:
+- As: dev
+  BaseName: node:8
+  Commands:
+  - Env:
+    - Key: GB_SRC
+      Value: '"/glowing-bear-src"'
+    Name: env
+  - Env:
+    - Key: NG_BIN
+      Value: '"$GB_SRC/node_modules/@angular/cli/bin/ng"'
+    Name: env
+  - Name: volume
+    Volumes:
+    - $GB_SRC
+  - Name: expose
+    Ports:
+    - "4200"
+  - Name: workdir
+    Path: $GB_SRC
+  - CmdLine:
+    - npm install && exec $NG_BIN serve --aot --port 4200 --host 0.0.0.0
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: node:8
+  Name: dev
+  Platform: ""
+  SourceCode: FROM node:8 as dev
+- As: build
+  BaseName: node:8
+  Commands:
+  - Env:
+    - Key: GB_SRC
+      Value: '"/glowing-bear-src"'
+    - Key: GB_DIST
+      Value: '"/glowing-bear-dist"'
+    Name: env
+  - Env:
+    - Key: NG_BIN
+      Value: '"$GB_SRC/node_modules/@angular/cli/bin/ng"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $GB_SRC
+  - CmdLine:
+    - cd $GB_SRC &&     npm install &&     $NG_BIN build --prod &&     mv $GB_SRC/dist
+      $GB_DIST
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8
+  Name: build
+  Platform: ""
+  SourceCode: FROM node:8 as build
+- As: release
+  BaseName: nginx:latest
+  Commands:
+  - Env:
+    - Key: GB_DIST
+      Value: '"/glowing-bear-dist"'
+    - Key: NGINX_ROOT
+      Value: '"/usr/share/nginx/html"'
+    Name: env
+  - Chown: www-data:www-data
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - $GB_DIST
+    - $NGINX_ROOT/glowing-bear
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - deployment/write-gb-config.sh
+    - /
+  - CmdLine:
+    - chmod +x /write-gb-config.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GB_API_URL
+      Value: '"http://localhost:8082/IRCT-CL/rest"'
+    - Key: GB_URL
+      Value: '"http://localhost:4200"'
+    - Key: GB_OIDC_URL
+      Value: '"http://localhost:8081/auth/realms/master/protocol/openid-connect"'
+    - Key: GB_OIDC_CLIENT_ID
+      Value: '"i2b2"'
+    - Key: GB_PICSURE_RES_NAME
+      Value: '"i2b2-medco"'
+    - Key: GB_COTHORITY_KEY_URL
+      Value: '"http://localhost/cothority-key.pub.toml"'
+    - Key: GB_GENOMIC_ANNOTATIONS_URL
+      Value: '"http://localhost/php"'
+    - Key: GB_MEDCO_RESULTS_RANDOMIZATION
+      Value: '"0"'
+    Name: env
+  - CmdLine:
+    - /bin/bash -c "/write-gb-config.sh && exec nginx -g 'daemon off;'"
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: nginx:latest
+  Name: release
+  Platform: ""
+  SourceCode: FROM nginx:latest as release

@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: gcc:7
+  Commands:
+  - Name: user
+    User: "0"
+  - CmdLine:
+    - apt-get -y update &&   apt-get -y install     clang     libc++-dev     libgflags-dev     libgtest-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b $(curl -L https://grpc.io/release)       https://github.com/grpc/grpc
+      /var/local/git/grpc &&     cd /var/local/git/grpc &&     git submodule update
+      --init &&     echo "--- installing protobuf ---" &&     cd third_party/protobuf
+      &&     ./autogen.sh && ./configure --enable-shared &&     make -j$(nproc) &&
+      make install && make clean && ldconfig &&     echo "--- installing grpc ---"
+      &&     cd /var/local/git/grpc &&     make -j$(nproc) && make install && make
+      clean && ldconfig &&     make -j$(nproc) grpc_cli
+    Name: run
+    PrependShell: true
+  From:
+    Image: gcc:7
+  Name: builder
+  Platform: ""
+  SourceCode: FROM gcc:7 as builder
+- BaseName: tafthorne/netcat-debian
+  Commands:
+  - Labels:
+    - Key: Description
+      Value: '"Basic Debian production environment with a number of libraries configured"'
+    - Key: MAINTAINER
+      Value: '"Thomas Thorne <TafThorne@GoogleMail.com>"'
+    Name: label
+  - Key: prefix
+    Name: arg
+    Value: /usr/local
+  - Key: binPath
+    Name: arg
+    Value: $prefix/bin
+  - Key: libPath
+    Name: arg
+    Value: $prefix/lib
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/libproto*
+    - $libPath/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/libaddress_sorting.so.6.0.0
+    - $libPath/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/libgpr*
+    - $libPath/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/libgrpc*
+    - $libPath/
+  - CmdLine:
+    - ldconfig
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /var/local/git/grpc/bins/opt/grpc_cli
+    - /usr/local/bin/
+  - CmdLine:
+    - apt-get -y update &&   apt-get -y install     libgflags-dev     libhdf5-dev     libssl1.1     uuid-dev;
+    Name: run
+    PrependShell: true
+  From:
+    Image: tafthorne/netcat-debian
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tafthorne/netcat-debian

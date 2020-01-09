@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- As: backend
+  BaseName: gradle:6.0.1-jdk13
+  Commands:
+  - Name: user
+    User: root
+  - Chown: gradle
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - settings.gradle.kts
+    - /home/gradle/
+  - Chown: gradle
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build.gradle.kts
+    - /home/gradle/
+  - Chown: gradle
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /backend/shared
+    - /home/gradle/backend/shared
+  - Chown: gradle
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /backend/monolith
+    - /home/gradle/backend/monolith
+  - Name: user
+    User: gradle
+  - Name: workdir
+    Path: /home/gradle
+  - CmdLine:
+    - gradle clean
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: gradle
+  - Name: workdir
+    Path: /home/gradle
+  - CmdLine:
+    - gradle war && unzip backend/monolith/build/libs/backend.war -d backend/monolith/build/libs/backend
+      && mv backend/monolith/build/libs/backend/WEB-INF/lib backend/monolith/build/libs/lib
+    Name: run
+    PrependShell: true
+  From:
+    Image: gradle:6.0.1-jdk13
+  Name: backend
+  Platform: ""
+  SourceCode: FROM gradle:6.0.1-jdk13 AS backend
+- BaseName: tomcat:9.0.29-jdk13-openjdk-oracle
+  Commands:
+  - CmdLine:
+    - rm -rf /usr/local/tomcat/webapps/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: backend
+    Name: copy
+    SourcesAndDest:
+    - /home/gradle/backend/monolith/build/libs/lib
+    - /usr/local/tomcat/webapps/ROOT/WEB-INF/lib
+  - Chown: ""
+    From: backend
+    Name: copy
+    SourcesAndDest:
+    - /home/gradle/backend/monolith/build/libs/backend
+    - /usr/local/tomcat/webapps/ROOT
+  - Env:
+    - Key: PORT
+      Value: "8080"
+    Name: env
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: workdir
+    Path: $CATALINA_HOME
+  - CmdLine:
+    - catalina.sh
+    - run
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 60000000000
+      Test:
+      - CMD-SHELL
+      - curl -f http://localhost:8080/bnet/verify || exit 1
+      Timeout: 30000000000
+    Name: healthcheck
+  From:
+    Image: tomcat:9.0.29-jdk13-openjdk-oracle
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tomcat:9.0.29-jdk13-openjdk-oracle

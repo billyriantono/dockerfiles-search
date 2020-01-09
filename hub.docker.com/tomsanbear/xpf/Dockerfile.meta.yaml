@@ -1,0 +1,72 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:latest
+  Commands:
+  - Name: workdir
+    Path: /go/src
+  - CmdLine:
+    - git clone https://github.com/coredns/coredns.git &&     cd coredns &&     git
+      checkout v1.5.1
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - plugin.cfg
+    - /go/src/coredns/plugin.cfg
+  - Name: workdir
+    Path: /go/src/coredns
+  - CmdLine:
+    - make gen && GOOS=linux make
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:latest as builder
+- As: certs
+  BaseName: debian:stable-slim
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get -uy upgrade
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y install ca-certificates && update-ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stable-slim
+  Name: certs
+  Platform: ""
+  SourceCode: FROM debian:stable-slim as certs
+- As: production
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: certs
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs
+    - /etc/ssl/certs
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/coredns/coredns
+    - /coredns
+  - Name: expose
+    Ports:
+    - "53"
+    - 53/udp
+  - CmdLine:
+    - /coredns
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: production
+  Platform: ""
+  SourceCode: FROM scratch as production

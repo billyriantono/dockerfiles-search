@@ -1,0 +1,56 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: redislabsmodules/rmbuilder:latest
+  Commands:
+  - Key: GIT_DESCRIBE_VERSION
+    Name: arg
+    Value: null
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /RSBUILD
+  - Name: workdir
+    Path: /RSBUILD
+  - CmdLine:
+    - set -ex;    rm -rf docker-build;     mkdir docker-build;     cd docker-build;     cmake
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo ../ -DGIT_DESCRIBE_VERSION="$GIT_DESCRIBE_VERSION";     make
+      -j4;     pip install git+https://github.com/RedisLabsModules/RLTest;     pip
+      install redis-py-cluster;     make test;
+    Name: run
+    PrependShell: true
+  From:
+    Image: redislabsmodules/rmbuilder:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM redislabsmodules/rmbuilder:latest as builder
+- BaseName: redis:latest
+  Commands:
+  - Env:
+    - Key: LIBDIR
+      Value: /usr/lib/redis/modules
+    Name: env
+  - Name: workdir
+    Path: /data
+  - CmdLine:
+    - set -ex;    mkdir -p "$LIBDIR";
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /RSBUILD/docker-build/redisearch.so
+    - '"$LIBDIR"'
+  - CmdLine:
+    - redis-server
+    - --loadmodule
+    - /usr/lib/redis/modules/redisearch.so
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: redis:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM redis:latest

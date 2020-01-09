@@ -1,0 +1,197 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk --update add     gcc tar libtool zlib jemalloc jemalloc-dev perl     ca-certificates
+      wget make musl-dev openssl-dev openssl pcre-dev g++ zlib-dev curl python     perl-test-longstring
+      perl-list-moreutils perl-http-message geoip-dev dumb-init jq     && update-ca-certificates     &&
+      rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: OPENRESTY_VERSION
+      Value: 1.13.6.2
+    - Key: PCRE_VERSION
+      Value: "8.37"
+    - Key: TEST_NGINX_VERSION
+      Value: "0.24"
+    - Key: OPM_VERSION
+      Value: 0.0.3
+    - Key: LUA_RESTY_HTTP_VERSION
+      Value: "0.10"
+    - Key: LUA_RESTY_IPUTILS_VERSION
+      Value: 0.2.1
+    - Key: LUA_RESTY_STRING_VERSION
+      Value: "0.09"
+    - Key: LUA_RESTY_LRUCACHE_VERSION
+      Value: "0.06"
+    - Key: LUA_RESTY_CJOSE_VERSION
+      Value: "0.4"
+    - Key: NETURL_LUA_VERSION
+      Value: 0.9-1
+    - Key: CJOSE_VERSION
+      Value: 0.5.1
+    - Key: LD_LIBRARY_PATH
+      Value: /usr/local/lib
+    - Key: _prefix
+      Value: /usr/local
+    - Key: _exec_prefix
+      Value: /usr/local
+    - Key: _localstatedir
+      Value: /var
+    - Key: _sysconfdir
+      Value: /etc
+    - Key: _sbindir
+      Value: /usr/local/sbin
+    Name: env
+  - CmdLine:
+    - "if [ x`uname -m` = xs390x ]; then          echo \"Building LuaJIT for s390x\"
+      \t && mkdir -p /tmp/luajit \t && cd /tmp/luajit \t && curl -k -L https://api.github.com/repos/linux-on-ibm-z/LuaJIT/tarball/v2.1
+      > luajit.tar.gz \t && tar -zxf luajit.tar.gz \t && cd linux-on-ibm-z-LuaJIT-*
+      \t && make install \t && cd /tmp \t && rm -rf /tmp/luajit      ; fi"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ x`uname -m` = xppc64le ]; then          echo "Building LuaJIT for ppc64le"          &&
+      mkdir /tmp/luajit           && cd /tmp/luajit          && curl -k -L https://api.github.com/repos/PPC64/LuaJIT/tarball
+      > luajit.tar.gz          && tar -zxf luajit.tar.gz          && cd PPC64-LuaJIT-*          &&
+      make && make install          && rm -rf /tmp/luajit      ; fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "echo \" ... adding Openresty, NGINX and PCRE\"      && mkdir -p /tmp/api-gateway
+      \     && readonly NPROC=$(grep -c ^processor /proc/cpuinfo 2>/dev/null || 1)
+      \     && echo \"using up to $NPROC threads\"      && cd /tmp/api-gateway/      &&
+      curl -k -L https://ftp.pcre.org/pub/pcre/pcre-${PCRE_VERSION}.tar.gz -o /tmp/api-gateway/pcre-${PCRE_VERSION}.tar.gz
+      \     && curl -k -L https://openresty.org/download/openresty-${OPENRESTY_VERSION}.tar.gz
+      -o /tmp/api-gateway/openresty-${OPENRESTY_VERSION}.tar.gz      && tar -zxf ./openresty-${OPENRESTY_VERSION}.tar.gz
+      \     && tar -zxf ./pcre-${PCRE_VERSION}.tar.gz      && cd /tmp/api-gateway/openresty-${OPENRESTY_VERSION}
+      \     && if [ x`uname -m` = xs390x ]; then           luajitdir=\"=/usr/local/\"
+      \t  pcrejit=\"\"         ; elif [ x`uname -m` = xppc64le ]; then           luajitdir=\"=/usr/local/\"
+      \          pcrejit=\"--with-pcre-jit\"         ; else \t  luajitdir=\"\" \t
+      \ pcrejit=\"--with-pcre-jit\" \t; fi      && echo \"        - building debugging
+      version of the api-gateway ... \"      && ./configure             --prefix=${_exec_prefix}/api-gateway
+      \            --sbin-path=${_sbindir}/api-gateway-debug             --conf-path=${_sysconfdir}/api-gateway/api-gateway.conf
+      \            --error-log-path=${_localstatedir}/log/api-gateway/error.log             --http-log-path=${_localstatedir}/log/api-gateway/access.log
+      \            --pid-path=${_localstatedir}/run/api-gateway.pid             --lock-path=${_localstatedir}/run/api-gateway.lock
+      \            --with-pcre=../pcre-${PCRE_VERSION}/ ${pcrejit}             --with-stream
+      \            --with-stream_ssl_module             --with-http_ssl_module             --with-http_stub_status_module
+      \            --with-http_realip_module             --with-http_addition_module
+      \            --with-http_sub_module             --with-http_dav_module             --with-http_geoip_module
+      \            --with-http_gunzip_module              --with-http_gzip_static_module
+      \            --with-http_auth_request_module             --with-http_random_index_module
+      \            --with-http_secure_link_module             --with-http_degradation_module
+      \            --with-http_auth_request_module              --with-http_v2_module
+      \            --with-luajit${luajitdir}             --without-http_ssi_module
+      \            --without-http_userid_module             --without-http_uwsgi_module
+      \            --without-http_scgi_module             --with-debug             -j${NPROC}
+      \    && make -j${NPROC}     && make install     && echo \"        - building
+      regular version of the api-gateway ... \"     && ./configure             --prefix=${_exec_prefix}/api-gateway
+      \            --sbin-path=${_sbindir}/api-gateway             --conf-path=${_sysconfdir}/api-gateway/api-gateway.conf
+      \            --error-log-path=${_localstatedir}/log/api-gateway/error.log             --http-log-path=${_localstatedir}/log/api-gateway/access.log
+      \            --pid-path=${_localstatedir}/run/api-gateway.pid             --lock-path=${_localstatedir}/run/api-gateway.lock
+      \            --with-pcre=../pcre-${PCRE_VERSION}/ ${pcrejit}             --with-stream
+      \            --with-stream_ssl_module             --with-http_ssl_module             --with-http_stub_status_module
+      \            --with-http_realip_module             --with-http_addition_module
+      \            --with-http_sub_module             --with-http_dav_module             --with-http_geoip_module
+      \            --with-http_gunzip_module              --with-http_gzip_static_module
+      \            --with-http_auth_request_module             --with-http_random_index_module
+      \            --with-http_secure_link_module             --with-http_degradation_module
+      \            --with-http_auth_request_module              --with-http_v2_module
+      \            --with-luajit${luajitdir}             --without-http_ssi_module
+      \            --without-http_userid_module             --without-http_uwsgi_module
+      \            --without-http_scgi_module             -j${NPROC}     && make -j${NPROC}
+      \    && make install     && echo \"        - adding Nginx Test support\"     &&
+      curl -k -L https://github.com/openresty/test-nginx/archive/v${TEST_NGINX_VERSION}.tar.gz
+      -o ${_prefix}/test-nginx-${TEST_NGINX_VERSION}.tar.gz     && cd ${_prefix}     &&
+      tar -xf ${_prefix}/test-nginx-${TEST_NGINX_VERSION}.tar.gz     && rm ${_prefix}/test-nginx-${TEST_NGINX_VERSION}.tar.gz
+      \    && cp -r ${_prefix}/test-nginx-0.24/inc/* /usr/local/share/perl5/site_perl/
+      \    && ln -s ${_sbindir}/api-gateway-debug ${_sbindir}/nginx     && cp /tmp/api-gateway/openresty-${OPENRESTY_VERSION}/build/install
+      ${_prefix}/api-gateway/bin/resty-install     && apk del g++ gcc make     &&
+      rm -rf /var/cache/apk/*     && rm -rf /tmp/api-gateway"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo " ... installing opm..."     && mkdir -p /tmp/api-gateway     && curl -k
+      -L https://github.com/openresty/opm/archive/v${OPM_VERSION}.tar.gz -o /tmp/api-gateway/opm-${OPM_VERSION}.tar.gz     &&
+      tar -xf /tmp/api-gateway/opm-${OPM_VERSION}.tar.gz -C /tmp/api-gateway     &&
+      cd /tmp/api-gateway/opm-${OPM_VERSION}     && cp bin/opm ${_prefix}/api-gateway/bin     &&
+      cd ${_prefix}/api-gateway     && mkdir -p site/manifest site/pod     && cd site     &&
+      ( [ -x ../lualib ] || ln -s ../lualib ./ )     && ln -s ${_prefix}/api-gateway/bin/opm
+      /usr/bin/opm     && ln -s ${_prefix}/api-gateway/bin/resty /usr/bin/resty     &&
+      rm -rf /tmp/api-gateway
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo " ... installing opm packages ... "     && opm get pintsized/lua-resty-http=${LUA_RESTY_HTTP_VERSION}                hamishforbes/lua-resty-iputils=${LUA_RESTY_IPUTILS_VERSION}                openresty/lua-resty-string=${LUA_RESTY_STRING_VERSION}                openresty/lua-resty-lrucache=${LUA_RESTY_LRUCACHE_VERSION}                taylorking/lua-resty-cjose=${LUA_RESTY_CJOSE_VERSION}                taylorking/lua-resty-rate-limit
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo " ... installing neturl.lua ... "     && mkdir -p /tmp/api-gateway     &&
+      curl -k -L https://github.com/golgote/neturl/archive/${NETURL_LUA_VERSION}.tar.gz
+      -o /tmp/api-gateway/neturl.lua-${NETURL_LUA_VERSION}.tar.gz     && tar -xf /tmp/api-gateway/neturl.lua-${NETURL_LUA_VERSION}.tar.gz
+      -C /tmp/api-gateway/     && export LUA_LIB_DIR=${_prefix}/api-gateway/lualib     &&
+      cd /tmp/api-gateway/neturl-${NETURL_LUA_VERSION}     && cp lib/net/url.lua ${LUA_LIB_DIR}     &&
+      rm -rf /tmp/api-gateway
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo " ... installing cjose ... "     && apk update && apk add automake autoconf
+      git gcc make jansson jansson-dev     && mkdir -p /tmp/api-gateway     && curl
+      -L -k https://github.com/cisco/cjose/archive/${CJOSE_VERSION}.tar.gz -o /tmp/api-gateway/cjose-${CJOSE_VERSION}.tar.gz     &&
+      tar -xf /tmp/api-gateway/cjose-${CJOSE_VERSION}.tar.gz -C /tmp/api-gateway/     &&
+      cd /tmp/api-gateway/cjose-${CJOSE_VERSION}     && sh configure     && make &&
+      make install     && rm -rf /tmp/api-gateway
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CONFIG_SUPERVISOR_VERSION
+      Value: 1.0.1-RC1
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build_config_supervisor.sh
+    - /tmp/build_config_supervisor.sh
+  - CmdLine:
+    - sh +x /tmp/build_config_supervisor.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - init.sh
+    - /etc/init-container.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /etc/api-gateway
+  - CmdLine:
+    - adduser -S nginx-api-gateway     && addgroup -S nginx-api-gateway
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+    - "8080"
+    - "8423"
+    - "9000"
+  - CmdLine:
+    - /usr/bin/dumb-init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /etc/init-container.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

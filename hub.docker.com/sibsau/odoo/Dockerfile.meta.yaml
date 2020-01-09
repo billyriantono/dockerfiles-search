@@ -1,0 +1,133 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stretch
+  Commands:
+  - Maintainer: Anton Goroshkin <neobht@sibsau.ru>
+    Name: maintainer
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - CmdLine:
+    - set -x;     apt-get update     && apt-get install -y --no-install-recommends     ca-certificates     curl     dirmngr     fonts-noto-cjk     gnupg     libssl1.0-dev     node-less     python3-pip     python3-pyldap     python3-qrcode     python3-renderpm     python3-setuptools     python3-vobject     python3-watchdog     xz-utils     &&
+      curl -o wkhtmltox.deb -sSL https://github.com/wkhtmltopdf/wkhtmltopdf/releases/download/0.12.5/wkhtmltox_0.12.5-1.stretch_amd64.deb     &&
+      echo '7e35a63f9db14f93ec7feeb0fce76b30c08f2057 wkhtmltox.deb' | sha1sum -c -     &&
+      dpkg --force-depends -i wkhtmltox.deb    && apt-get -y install -f --no-install-recommends     &&
+      rm -rf /var/lib/apt/lists/* wkhtmltox.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x;    echo "deb http://deb.nodesource.com/node_8.x stretch main" > /etc/apt/sources.list.d/nodesource.list     &&
+      export GNUPGHOME="$(mktemp -d)"     && repokey='9FD3B784BC1C6FC31A8A0A1C1655A0AB68576280'     &&
+      gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "${repokey}"     &&
+      gpg --armor --export "${repokey}" | apt-key add -     && gpgconf --kill all     &&
+      rm -rf "$GNUPGHOME"     && apt-get update     && apt-get install -y nodejs     &&
+      npm install -g rtlcss     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ODOO_VERSION
+      Value: "12.0"
+    Name: env
+  - Key: ODOO_RELEASE
+    Name: arg
+    Value: "20191229"
+  - Key: ODOO_SHA
+    Name: arg
+    Value: 62589a47f242bad40507611e4793169df40c5c3e
+  - CmdLine:
+    - set -x;     curl -o odoo.deb -SL http://nightly.odoo.com/${ODOO_VERSION}/nightly/deb/odoo_${ODOO_VERSION}.${ODOO_RELEASE}_all.deb     &&
+      echo "${ODOO_SHA} odoo.deb" | sha1sum -c -     && dpkg --force-depends -i odoo.deb     &&
+      apt-get update     && apt-get -y install -f --no-install-recommends     && rm
+      -rf /var/lib/apt/lists/* odoo.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex;     key='B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8';     export GNUPGHOME="$(mktemp
+      -d)";     gpg --keyserver ha.pool.sks-keyservers.net --recv-keys "$key";     gpg
+      --export "$key" > /etc/apt/trusted.gpg.d/postgres.gpg;     command -v gpgconf
+      > /dev/null && gpgconf --kill all;     rm -rf "$GNUPGHOME";     apt-key list
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PG_MAJOR
+      Value: "12"
+    Name: env
+  - Env:
+    - Key: PG_VERSION
+      Value: 12.1-1.pgdg90+1
+    Name: env
+  - CmdLine:
+    - echo 'deb http://apt.postgresql.org/pub/repos/apt/ stretch-pgdg main' $PG_MAJOR
+      > /etc/apt/sources.list.d/pgdg.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update     && apt-get install -y postgresql-common     && sed -ri 's/#(create_main_cluster)
+      .*$/\1 = false/' /etc/postgresql-common/createcluster.conf     && apt-get install
+      -y     postgresql-$PG_MAJOR=$PG_VERSION     rlwrap pg-activity     && rm -rf
+      /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip3 install     bs4 PyPDF2 transliterate xlrd xlwt odfpy openpyxl SQLAlchemy     config
+      caldav configs phonenumbers     cachetools>=2.0.1 cerberus pyquerystring parse-accept-language
+      jsondiff     ipdb     validate-email==1.3 py3DNS==3.2.0     odoo-client-lib     pymorphy2  pymorphy2-dicts-ru
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x;     apt-get update     && apt-get install -y --no-install-recommends     git
+      wget     && rm -rf /var/lib/apt/lists/*     && pip3 install     git+https://github.com/adhoc-dev/aeroolib@master-fix-ods     git+https://github.com/aeroo/currency2text.git     git+https://github.com/edgewall/genshi@stable/0.7.x
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip3 install num2words
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./odoo.conf
+    - /etc/odoo/
+  - CmdLine:
+    - chown odoo /etc/odoo/odoo.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /mnt/extra-addons     && chown -R odoo /mnt/extra-addons
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/lib/odoo
+    - /mnt/extra-addons
+  - Name: expose
+    Ports:
+    - "8069"
+    - "8071"
+  - Env:
+    - Key: ODOO_RC
+      Value: /etc/odoo/odoo.conf
+    Name: env
+  - Name: user
+    User: odoo
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - odoo
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch

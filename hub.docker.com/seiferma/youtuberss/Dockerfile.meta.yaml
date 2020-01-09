@@ -1,0 +1,92 @@
+MetaArgs: null
+Stages:
+- As: app-builder
+  BaseName: maven:latest
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pom.xml
+    - /tmp/pom.xml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /tmp/src
+  - CmdLine:
+    - mvn -f /tmp/pom.xml clean verify
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:latest
+  Name: app-builder
+  Platform: ""
+  SourceCode: FROM maven:latest AS app-builder
+- As: dependency-downloader
+  BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk --no-cache add wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://yt-dl.org/downloads/latest/youtube-dl -O /tmp/youtube-dl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /tmp/youtube-dl
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: dependency-downloader
+  Platform: ""
+  SourceCode: FROM alpine:latest AS dependency-downloader
+- BaseName: openjdk:11-jre-slim
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install -y python3 gosu &&     rm -rf /var/lib/apt/lists/*
+      &&     ln -s /usr/bin/python3 /usr/bin/python &&     gosu nobody true
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./entrypoint.sh
+    - ./entrypoint.sh
+  - Chown: ""
+    From: app-builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/target/youtube-rss-*.jar
+    - ./app.jar
+  - Chown: ""
+    From: dependency-downloader
+    Name: copy
+    SourcesAndDest:
+    - /tmp/youtube-dl
+    - /usr/local/bin/youtube-dl
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - ./entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - java
+    - -Dspring.profiles.active=docker
+    - -jar
+    - ./app.jar
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:11-jre-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:11-jre-slim

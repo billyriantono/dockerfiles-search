@@ -1,0 +1,222 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:14.04
+  Commands:
+  - Maintainer: Juan Luis Baptiste juan.baptiste@gmail.com
+    Name: maintainer
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: TERM
+      Value: linux
+    Name: env
+  - CmdLine:
+    - locale-gen en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: LANGUAGE
+      Value: en_US:en
+    Name: env
+  - Env:
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: MCONF_USER
+      Value: mconf
+    Name: env
+  - Env:
+    - Key: MCONF_GROUP
+      Value: www-data
+    Name: env
+  - Env:
+    - Key: MCONF_ROOT
+      Value: /var/www/mconf-web/
+    Name: env
+  - Env:
+    - Key: MCONF_DB_NAME
+      Value: mconf
+    Name: env
+  - Env:
+    - Key: MCONF_DATA_DIR
+      Value: '"/data"'
+    Name: env
+  - Env:
+    - Key: MCONF_BACKUP_DIR
+      Value: '"${MCONF_DATA_DIR}/backups"'
+    Name: env
+  - Env:
+    - Key: MCONF_VERSION
+      Value: v2.1.0
+    Name: env
+  - CmdLine:
+    - apt-get -y update &&     apt-get -y dist-upgrade &&     apt-get install -y curl
+      make git-core libruby aspell-es aspell-en     libxml2-dev libxslt1-dev libmagickcore-dev
+      libmagickwand-dev     imagemagick libmysqlclient-dev zlib1g-dev build-essential
+      nfs-common     libreadline-dev libffi-dev libcurl4-openssl-dev mysql-client     openjdk-7-jre
+      apache2 libapache2-mod-xsendfile     apache2-dev monit supervisor wget
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /etc/supervisor/conf.d/*.conf
+    - /etc/supervisor/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/apache2/apache2.conf
+    - /etc/apache2/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/apache2/sites-available/mconf-web.conf
+    - /etc/apache2/sites-available/
+  - CmdLine:
+    - a2enmod rewrite &&     a2enmod xsendfile &&     a2ensite mconf-web
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -ms /bin/bash ${MCONF_USER} &&     adduser ${MCONF_USER} $MCONF_GROUP
+      &&     chown -R ${MCONF_USER}:$MCONF_GROUP /var/www/ &&     mkdir -p /opt/mconf/{scripts,backups}/
+      &&     mkdir -p /opt/mconf/var/tmp &&     touch /opt/mconf/var/tmp/firsttime
+      &&     echo "${MCONF_USER} ALL=(ALL) NOPASSWD:ALL"  >> /etc/sudoers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -re 's/(daemon)\s+\w+/\1 60/gi' /etc/monit/monitrc &&     sed -i '/set
+      httpd port 2812/s/^#//g' /etc/monit/monitrc &&     sed -i '/use address localhost/s/^#//g'
+      /etc/monit/monitrc &&     sed -i '/allow localhost/s/^#//g' /etc/monit/monitrc
+      &&     wget https://raw.github.com/mconf/mconf-web/master/config/monit/resque_workers.monitrc
+      -O /etc/monit/conf.d/resque_workers.monitrc &&     sed -i -e "s/\/mconf-web\/current/\/mconf-web/g"
+      /etc/monit/conf.d/resque_workers.monitrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://raw.github.com/mconf/mconf-web/master/config/logrotate/mconf-web
+      -O /etc/logrotate.d/mconf-web &&     chown root:root /etc/logrotate.d/mconf-web
+      &&     chmod 644 /etc/logrotate.d/mconf-web &&     logrotate -s /var/lib/logrotate/status
+      /etc/logrotate.d/mconf-web
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${MCONF_USER}
+  - CmdLine:
+    - git clone git://github.com/rbenv/rbenv.git ~/.rbenv &&     echo 'export PATH="$HOME/.rbenv/bin:$PATH"'
+      >> ~/.bash_profile &&      echo 'eval "$(rbenv init -)"' >> ~/.bash_profile
+      &&     bash -l -c "source ~/.bash_profile"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone git://github.com/rbenv/ruby-build.git ~/.rbenv/plugins/ruby-build
+      &&     bash -l -c "rbenv install 2.2.0" &&     bash -l -c "rbenv rehash" &&     bash
+      -l -c "rbenv global 2.2.0" &&     bash -l -c "rbenv version" &&     bash -l
+      -c "gem install bundler -v '1.7.2'" &&     bash -l -c "rbenv rehash"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/www
+  - CmdLine:
+    - bash -l -c "git clone git://github.com/mconf/mconf-web.git" &&     chown -R
+      ${MCONF_USER}:$MCONF_GROUP ${MCONF_ROOT}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${MCONF_ROOT}
+  - CmdLine:
+    - bash -l -c "git checkout ${MCONF_VERSION}"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - gem install rubygems-update &&     update_rubygems
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: mconf
+  - CmdLine:
+    - bash -l -c "bundle install --path vendor/bundle --without=development test --clean"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - database.yml
+    - ${MCONF_ROOT}config/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - setup_conf.yml
+    - ${MCONF_ROOT}config/
+  - CmdLine:
+    - bash -l -c "gem install rack:1.5.5 passenger:4.0.59" &&     bash -l -c "rbenv
+      rehash" &&     bash -l -c "passenger-install-apache2-module -a" &&     bash
+      -l -c "passenger-install-apache2-module --snippet | sudo tee /etc/apache2/conf-available/mconf-passenger.conf"
+      &&     sudo a2enconf mconf-passenger
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - functions.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mconf_backup.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mconf_restore.sh
+    - /
+  - CmdLine:
+    - chmod 755 /*.sh &&     touch ${MCONF_ROOT}tmp/restart.txt &&     mkdir -p ${MCONF_BACKUP_DIR}
+      && chown -R ${MCONF_USER} ${MCONF_DATA_DIR}
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${MCONF_USER}
+  - CmdLine:
+    - bash -l -c "bundle clean"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: volume
+    Volumes:
+    - /data
+  - CmdLine:
+    - /run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:14.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:14.04

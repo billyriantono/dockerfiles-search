@@ -1,0 +1,117 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:3.10
+  Commands:
+  - CmdLine:
+    - "set -ex && apk add --update --no-cache \t\tautoconf \t\tautomake \t\tboost
+      \t\tboost-atomic \t\tboost-build \t\tboost-build-doc \t\tboost-chrono \t\tboost-container
+      \t\tboost-context \t\tboost-contract \t\tboost-coroutine \t\tboost-date_time
+      \t\tboost-dev \t\tboost-doc \t\tboost-fiber \t\tboost-filesystem \t\tboost-graph
+      \t\tboost-iostreams \t\tboost-libs \t\tboost-locale \t\tboost-log \t\tboost-log_setup
+      \t\tboost-math \t\tboost-prg_exec_monitor \t\tboost-program_options \t\tboost-python2
+      \t\tboost-python3 \t\tboost-random \t\tboost-regex \t\tboost-serialization \t\tboost-stacktrace_basic
+      \t\tboost-stacktrace_noop \t\tboost-static \t\tboost-system \t\tboost-thread
+      \t\tboost-timer \t\tboost-type_erasure \t\tboost-unit_test_framework \t\tboost-wave
+      \t\tboost-wserialization \t\tca-certificates \t\tcmake \t\tcurl \t\tdev86 \t\tdoxygen
+      \t\teudev-dev \t\tfile \t\tg++ \t\tgit \t\tgraphviz \t\tlibexecinfo-dev \t\tlibsodium-dev
+      \t\tlibtool \t\tlibusb-dev \t\tlinux-headers \t\tmake \t\tminiupnpc-dev \t\tncurses-dev
+      \t\topenssl-dev \t\tpcsc-lite-dev \t\tpkgconf \t\tprotobuf-dev \t\trapidjson-dev
+      \t\treadline-dev \t\tunbound-dev \t\tzeromq-dev"
+    Name: run
+    PrependShell: true
+  - Key: CPPZMQ_VERSION
+    Name: arg
+    Value: v4.4.1
+  - Key: CPPZMQ_HASH
+    Name: arg
+    Value: f5b36e563598d48fcc0d82e589d3596afef945ae
+  - CmdLine:
+    - "set -ex \t&& git clone --depth 1 -b ${CPPZMQ_VERSION} https://github.com/zeromq/cppzmq.git
+      \t&& cd cppzmq \t&& test `git rev-parse HEAD` = ${CPPZMQ_HASH} || exit 1 \t&&
+      mkdir /usr/local/include \t&& mv *.hpp /usr/local/include/"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/local
+  - Key: NPROC
+    Name: arg
+    Value: null
+  - Env:
+    - Key: CFLAGS
+      Value: '''-fPIC'''
+    Name: env
+  - Env:
+    - Key: CXXFLAGS
+      Value: '''-fPIC -DELPP_FEATURE_CRASH_LOG'''
+    Name: env
+  - Env:
+    - Key: MONERO_VERSION
+      Value: 0.15.0.1
+    Name: env
+  - Env:
+    - Key: MONERO_HASH
+      Value: 6def88ad405b39f632a91afa3aacbb92ecc63c1f
+    Name: env
+  - CmdLine:
+    - "set -ex \t&& git clone --recursive --depth 1 -b v${MONERO_VERSION} https://github.com/monero-project/monero.git
+      \t&& cd monero \t&& git submodule init \t&& git submodule update \t&& test `git
+      rev-parse HEAD` = ${MONERO_HASH} || exit 1 \t&& nice -n 19 ionice -c2 -n7 make
+      -j${NPROC:-1} release-static-linux-x86_64"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.10 as builder
+- BaseName: alpine:3.10
+  Commands:
+  - CmdLine:
+    - "set -ex && apk add --update --no-cache \t\tca-certificates \t\tlibexecinfo
+      \t\tlibsodium \t\tncurses-libs \t\tpcsc-lite-libs"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/monero/build/Linux/_no_branch_/release/bin/*
+    - /usr/local/bin/
+  - Env:
+    - Key: MONERO_HOME
+      Value: '"/root/.bitmonero"'
+    Name: env
+  - Name: volume
+    Volumes:
+    - $MONERO_HOME
+  - Name: workdir
+    Path: $MONERO_HOME
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - monerod
+    - --p2p-bind-ip=0.0.0.0
+    - --p2p-bind-port=18080
+    - --rpc-bind-ip=0.0.0.0
+    - --rpc-bind-port=18081
+    - --non-interactive
+    - --confirm-external-bind
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "18080"
+    - "18081"
+  From:
+    Image: alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10

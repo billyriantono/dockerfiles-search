@@ -1,0 +1,102 @@
+MetaArgs: null
+Stages:
+- As: build-frontend
+  BaseName: node
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /easybot
+  - Name: workdir
+    Path: /easybot/dashboard
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CI=false npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node
+  Name: build-frontend
+  Platform: ""
+  SourceCode: FROM node as build-frontend
+- As: build-env
+  BaseName: golang
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/easybot
+  - Chown: ""
+    From: build-frontend
+    Name: copy
+    SourcesAndDest:
+    - /easybot/dashboard/build
+    - /go/src/easybot/dashboard/build
+  - Name: workdir
+    Path: /go/src/easybot
+  - CmdLine:
+    - go get github.com/GeertJohan/go.rice/rice
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd server && rice embed-go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Building Version=`git describe --always`"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GO111MODULE=on go build -ldflags "-X main.version=`git describe
+      --always`" -o easybotsvc
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM golang AS build-env
+- BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk add tzdata
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sf /usr/share/zoneinfo/Asia/Taipei /etc/localtime
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Asia/Taipei" > /etc/timezone
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --no-cache add ca-certificates
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /easybot
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /go/src/easybot/easybotsvc
+    - /easybot/easybotsvc
+  - CmdLine:
+    - chmod 777 easybotsvc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./easybotsvc
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

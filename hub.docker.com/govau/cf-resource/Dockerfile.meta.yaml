@@ -1,0 +1,131 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache curl jq
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /assets
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /assets
+  - CmdLine:
+    - curl -L "https://cli.run.pivotal.io/stable?release=linux64-binary&source=github-rel"
+      | tar -xzf -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - url=$(curl -s "https://api.github.com/repos/contraband/autopilot/releases/latest"     |
+      jq -r '.assets[] | select(.name == "autopilot-linux") | .browser_download_url')
+      &&    curl -L "$url" -o /assets/autopilot
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/concourse/cf-resource
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - CmdLine:
+    - go build -o /assets/in github.com/concourse/cf-resource/in/cmd/in
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -o /assets/out github.com/concourse/cf-resource/out/cmd/out
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -o /assets/check github.com/concourse/cf-resource/check/cmd/check
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/concourse/cf-resource
+  - CmdLine:
+    - "set -e; for pkg in $(go list ./... | grep -v \"acceptance\"); do \t\tgo test
+      -o \"/tests/$(basename $pkg).test\" -c $pkg; \tdone"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- As: resource
+  BaseName: alpine:edge
+  Commands:
+  - CmdLine:
+    - apk add --no-cache bash tzdata ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - assets/
+    - /opt/resource/
+  - CmdLine:
+    - chmod +x /opt/resource/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /opt/resource/cf /usr/bin/cf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /opt/resource/autopilot /usr/bin/autopilot
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/cf install-plugin -f /usr/bin/autopilot
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: resource
+  Platform: ""
+  SourceCode: FROM alpine:edge AS resource
+- As: tests
+  BaseName: resource
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tests
+    - /go-tests
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - out/assets
+    - /go-tests/assets
+  - Name: workdir
+    Path: /go-tests
+  - CmdLine:
+    - "set -e; for test in /go-tests/*.test; do \t\t$test; \tdone"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: resource
+  Name: tests
+  Platform: ""
+  SourceCode: FROM resource AS tests
+- BaseName: resource
+  Commands: null
+  From:
+    Stage:
+      Index: 1
+      Named: resource
+  Name: ""
+  Platform: ""
+  SourceCode: FROM resource

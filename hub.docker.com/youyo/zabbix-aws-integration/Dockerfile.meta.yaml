@@ -1,0 +1,102 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: golang:1
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"youyo <1003ni2@gmail.com>"'
+    Name: label
+  - Env:
+    - Key: Owner
+      Value: youyo
+    Name: env
+  - Env:
+    - Key: Name
+      Value: zabbix-aws-integration
+    Name: env
+  - Env:
+    - Key: Repository
+      Value: github.com/${Owner}/${Name}
+    Name: env
+  - Env:
+    - Key: DIR
+      Value: /go/src/${Repository}
+    Name: env
+  - Name: workdir
+    Path: ${DIR}
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - ${DIR}
+  - CmdLine:
+    - go get -u -v github.com/golang/dep/cmd/dep github.com/mitchellh/gox
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dep ensure -v
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "Version=`git describe --tags --abbrev=0` \tCommitHash=`git rev-parse --verify
+      HEAD` \tBuildTime=`date '+%Y/%m/%d %H:%M:%S %Z'` \tGoVersion=`go version` \tgo
+      build \t\t-ldflags=\"\t\t\t-X \\\"${Repository}/cmd/${Name}/cmd.Name=${Name}\\\"
+      \t\t\t-X \\\"${Repository}/cmd/${Name}/cmd.Version=${Version}\\\" \t\t\t-X \\\"${Repository}/cmd/${Name}/cmd.CommitHash=${CommitHash}\\\"
+      \t\t\t-X \\\"${Repository}/cmd/${Name}/cmd.BuildTime=${BuildTime}\\\" \t\t\t-X
+      \\\"${Repository}/cmd/${Name}/cmd.GoVersion=${GoVersion}\\\"\t\t\" \t\t-o ./pkg/${Name}
+      \t\t./cmd/${Name}/"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM golang:1 AS build-env
+- BaseName: zabbix/zabbix-agent:centos-trunk
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"youyo <1003ni2@gmail.com>"'
+    Name: label
+  - Env:
+    - Key: Owner
+      Value: youyo
+    Name: env
+  - Env:
+    - Key: Name
+      Value: zabbix-aws-integration
+    Name: env
+  - Env:
+    - Key: Repository
+      Value: github.com/${Owner}/${Name}
+    Name: env
+  - Env:
+    - Key: DIR
+      Value: /go/src/${Repository}
+    Name: env
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - ${DIR}/pkg/${Name}
+    - /var/lib/zabbix/bin/${Name}
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - zabbix-aws-integration.conf
+    - /etc/zabbix/zabbix_agentd.d/
+  - Name: expose
+    Ports:
+    - 10050/TCP
+  - Name: workdir
+    Path: /var/lib/zabbix
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: zabbix/zabbix-agent:centos-trunk
+  Name: ""
+  Platform: ""
+  SourceCode: FROM zabbix/zabbix-agent:centos-trunk

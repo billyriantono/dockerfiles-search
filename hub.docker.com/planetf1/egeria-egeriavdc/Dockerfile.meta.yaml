@@ -1,0 +1,136 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: maven:3.6.0-jdk-8
+  Commands:
+  - Key: branch
+    Name: arg
+    Value: null
+  - Key: pr
+    Name: arg
+    Value: null
+  - Env:
+    - Key: branch
+      Value: ${branch:-master}
+    Name: env
+  - Name: workdir
+    Path: /opt
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://api.github.com/repos/odpi/egeria/git/refs/heads/$branch
+    - version.json
+  - CmdLine:
+    - set -e;     apt-get update &&     apt-get install -y git-extras &&     git clone
+      https://github.com/odpi/egeria.git -b ${branch}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/egeria
+  - CmdLine:
+    - if [ ! -z "$pr" ] ; then git pr $pr ; fi &&     mvn clean install -DskipTests
+      &&     git log > git.log && echo ${branch} > git.branch &&     git remote -v
+      >> git.remote &&     mkdir /opt/egeria/binaries &&     mv /opt/egeria/open-metadata-implementation/server-chassis/server-chassis-spring/target/server-chassis-spring-[1-9]\.[0-9]\-SNAPSHOT\.jar
+      /opt/egeria/binaries/ &&     mv /opt/egeria/open-metadata-implementation/user-interfaces/access-services-user-interface/target/access-services-user-interface-[1-9]\.[0-9]\-SNAPSHOT\.jar
+      /opt/egeria/binaries/
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.6.0-jdk-8
+  Name: build
+  Platform: ""
+  SourceCode: FROM maven:3.6.0-jdk-8 AS build
+- BaseName: openjdk:8-jre-alpine
+  Commands:
+  - Labels:
+    - Key: org.label-schema.schema-version
+      Value: = "1.0"
+    Name: label
+  - Labels:
+    - Key: org.label-schema.vendor
+      Value: = "ODPi"
+    Name: label
+  - Labels:
+    - Key: org.label-schema.name
+      Value: = "egeria"
+    Name: label
+  - Labels:
+    - Key: org.label-schema.description
+      Value: '= "Common image for core ODPi Egeria runtimes: OMAG Server Platform
+        (chassis) and UI."'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.url
+      Value: = "https://egeria.odpi.org/open-metadata-resources/open-metadata-deployment/"
+    Name: label
+  - Labels:
+    - Key: org.label-schema.vcs-url
+      Value: = "https://github.com/odpi/egeria/tree/master/open-metadata-resources/open-metadata-deployment/docker/egeria"
+    Name: label
+  - Labels:
+    - Key: org.label-schema.docker.cmd
+      Value: = "docker run -d -p 8080:8080 odpi/egeria"
+    Name: label
+  - Labels:
+    - Key: org.label-schema.docker.cmd.devel
+      Value: = "docker run -d -p 8080:8080 -p 5005:5005 -e JAVA_DEBUG=true odpi/egeria"
+    Name: label
+  - Labels:
+    - Key: org.label-schema.docker.debug
+      Value: = "docker exec -it $CONTAINER /bin/sh"
+    Name: label
+  - Labels:
+    - Key: org.label-schema.docker.params
+      Value: = "JAVA_DEBUG=set to true to enable JVM debugging"
+    Name: label
+  - CmdLine:
+    - apk --no-cache add bash shadow &&     apk --no-cache update &&     apk --no-cache
+      upgrade &&     groupadd -r egeria -g 8080 &&     useradd --no-log-init -r -g
+      egeria -u 8080 -d /opt/egeria egeria
+    Name: run
+    PrependShell: true
+  - Chown: egeria:egeria
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /opt/egeria/binaries/server-chassis-spring-*.jar
+    - /opt/egeria/server-chassis-spring.jar
+  - Chown: egeria:egeria
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /opt/egeria/binaries/access-services-user-interface-*.jar
+    - /opt/egeria/access-services-user-interface.jar
+  - Chown: egeria:egeria
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /opt/egeria/git.*
+    - /opt/egeria/details/
+  - Chown: egeria:egeria
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dist/entrypoint.sh
+    - /entrypoint.sh
+  - Name: expose
+    Ports:
+    - "5005"
+    - "8080"
+  - Name: workdir
+    Path: /opt/egeria
+  - Name: user
+    User: egeria:egeria
+  - CmdLine:
+    - java -jar /opt/egeria/server-chassis-spring.jar
+    Name: cmd
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:8-jre-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre-alpine

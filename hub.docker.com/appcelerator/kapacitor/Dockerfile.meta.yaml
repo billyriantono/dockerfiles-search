@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- BaseName: appcelerator/alpine:3.5.2
+  Commands:
+  - Env:
+    - Key: KAPACITOR_VERSION
+      Value: 1.2.0
+    Name: env
+  - Env:
+    - Key: GOLANG_VERSION
+      Value: "1.8"
+    Name: env
+  - Env:
+    - Key: GOLANG_SRC_URL
+      Value: https://golang.org/dl/go$GOLANG_VERSION.src.tar.gz
+    Name: env
+  - Env:
+    - Key: GOLANG_SRC_SHA256
+      Value: 406865f587b44be7092f206d73fc1de252600b79b3cacc587b74b5ef5c623596
+    Name: env
+  - CmdLine:
+    - apk update && apk upgrade &&     apk -v --virtual build-deps add --update go
+      openssl python git gcc musl-dev &&     export GOROOT_BOOTSTRAP="$(go env GOROOT)"
+      &&     wget -q "$GOLANG_SRC_URL" -O golang.tar.gz &&     echo "$GOLANG_SRC_SHA256  golang.tar.gz"
+      | sha256sum -c - &&     tar -C /usr/local -xzf golang.tar.gz &&     rm golang.tar.gz
+      &&     cd /usr/local/go/src &&     ./make.bash &&     export GOPATH=/go &&     export
+      PATH=/usr/local/go/bin:$PATH &&     go version &&     go get -v github.com/influxdata/kapacitor
+      &&     cd $GOPATH/src/github.com/influxdata/kapacitor &&     git checkout -q
+      --detach "v${KAPACITOR_VERSION}" &&     python ./build.py &&     mv ./build/kapacitor*
+      /bin/ &&     mkdir -p /var/lib/kapacitor &&     apk del build-deps && cd / &&
+      rm -rf /var/cache/apk/* $GOPATH /usr/local/go
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9092"
+  - Env:
+    - Key: INFLUXDB_URL
+      Value: http://localhost:8086
+    Name: env
+  - Env:
+    - Key: INFLUXDB_DB
+      Value: telegraf
+    Name: env
+  - Env:
+    - Key: INFLUXDB_RP
+      Value: default
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - run.sh
+    - /run.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - kapacitor.conf
+    - /etc/kapacitor/kapacitor.conf.tpl
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - e494ce6c-d063-46f8-9d71-9030a29eef4b.srpl
+    - /var/lib/kapacitor/replay/e494ce6c-d063-46f8-9d71-9030a29eef4b.srpl
+  - Name: volume
+    Volumes:
+    - /var/lib/kapacitor
+  - CmdLine:
+    - /bin/sh
+    - -c
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /run.sh
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 10000000000
+      Retries: 3
+      Test:
+      - CMD-SHELL
+      - curl -I 127.0.0.1:9092/kapacitor/v1/ping | grep -q "HTTP/1.1 204 No Content"
+      Timeout: 5000000000
+    Name: healthcheck
+  - Labels:
+    - Key: axway_image
+      Value: kapacitor
+    Name: label
+  - Labels:
+    - Key: commit
+      Value: ${GIT_COMMIT}
+    Name: label
+  - Labels:
+    - Key: branch
+      Value: ${GIT_BRANCH}
+    Name: label
+  From:
+    Image: appcelerator/alpine:3.5.2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM appcelerator/alpine:3.5.2

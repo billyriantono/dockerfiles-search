@@ -1,0 +1,133 @@
+MetaArgs: null
+Stages:
+- BaseName: java:openjdk-8-jre
+  Commands:
+  - Labels:
+    - Key: version
+      Value: '"2.0"'
+    Name: label
+  - Labels:
+    - Key: description
+      Value: '"solr-6.3 + sematext"'
+    Name: label
+  - Maintainer: Martijn Koster "mak-docker@greenhills.co.uk"
+    Name: maintainer
+  - Key: SOLR_DOWNLOAD_SERVER
+    Name: arg
+    Value: null
+  - Key: GPG_KEYSERVER
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apt-get update &&   apt-get -y install lsof &&   rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SOLR_USER
+      Value: solr
+    Name: env
+  - Env:
+    - Key: SOLR_UID
+      Value: "8983"
+    Name: env
+  - CmdLine:
+    - groupadd -r -g $SOLR_UID $SOLR_USER &&   useradd -r -u $SOLR_UID -g $SOLR_USER
+      $SOLR_USER
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SOLR_KEY
+      Value: 38D2EA16DDF5FC722EBC433FDC92616F177050F6
+    Name: env
+  - Env:
+    - Key: GPG_KEYSERVER
+      Value: ${GPG_KEYSERVER:-hkp://ha.pool.sks-keyservers.net}
+    Name: env
+  - CmdLine:
+    - gpg --keyserver "$GPG_KEYSERVER" --recv-keys "$SOLR_KEY"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SOLR_VERSION
+      Value: 6.3.0
+    Name: env
+  - Env:
+    - Key: SOLR_SHA256
+      Value: 07692257575fe54ddb8a8f64e96d3d352f2f533aa91b5752be1869d2acf2f544
+    Name: env
+  - Env:
+    - Key: SOLR_URL
+      Value: ${SOLR_DOWNLOAD_SERVER:-https://archive.apache.org/dist/lucene/solr}/$SOLR_VERSION/solr-$SOLR_VERSION.tgz
+    Name: env
+  - CmdLine:
+    - mkdir -p /opt/solr &&   wget -nv $SOLR_URL -O /opt/solr.tgz &&   wget -nv $SOLR_URL.asc
+      -O /opt/solr.tgz.asc &&   echo "$SOLR_SHA256 */opt/solr.tgz" | sha256sum -c
+      - &&   (>&2 ls -l /opt/solr.tgz /opt/solr.tgz.asc) &&   gpg --batch --verify
+      /opt/solr.tgz.asc /opt/solr.tgz &&   tar -C /opt/solr --extract --file /opt/solr.tgz
+      --strip-components=1 &&   rm /opt/solr.tgz* &&   rm -Rf /opt/solr/docs/ &&   mkdir
+      -p /opt/solr/server/solr/lib /opt/solr/server/solr/mycores &&   sed -i -e 's/#SOLR_PORT=8983/SOLR_PORT=8983/'
+      /opt/solr/bin/solr.in.sh &&   sed -i -e '/-Dsolr.clustering.enabled=true/ a
+      SOLR_OPTS="$SOLR_OPTS -Dsun.net.inetaddr.ttl=60 -Dsun.net.inetaddr.negative.ttl=60"'
+      /opt/solr/bin/solr.in.sh &&   chown -R $SOLR_USER:$SOLR_USER /opt/solr &&   mkdir
+      /docker-entrypoint-initdb.d /opt/docker-solr/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "deb http://pub-repo.sematext.com/debian sematext main" >>  /etc/apt/sources.list.d/sematext.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp &&   wget -O - https://pub-repo.sematext.com/debian/sematext.gpg.key
+      | apt-key add - &&   apt-get update &&   apt-get install spm-client bsd-mailx
+      exim4-daemon-light -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash /opt/spm/bin/spm-client-setup-conf.sh 80bdd908-be32-4c46-b942-18decf4642ee
+      solr javaagent
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'SOLR_OPTS="$SOLR_OPTS -XX:-UseSplitVerifier -Dcom.sun.management.jmxremote
+      -javaagent:/opt/spm/spm-monitor/lib/spm-monitor-solr.jar=80bdd908-be32-4c46-b942-18decf4642ee::default"'
+      >> /opt/solr/bin/solr.in.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts
+    - /opt/docker-solr/scripts
+  - CmdLine:
+    - chown -R $SOLR_USER:$SOLR_USER /opt/docker-solr
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 0755 -R /opt/docker-solr/scripts/
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /opt/solr/bin:/opt/docker-solr/scripts:$PATH
+    Name: env
+  - Name: expose
+    Ports:
+    - "8983"
+  - Name: workdir
+    Path: /opt/solr
+  - Name: user
+    User: $SOLR_USER
+  - CmdLine:
+    - /opt/docker-solr/scripts/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - solr-foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: java:openjdk-8-jre
+  Name: ""
+  Platform: ""
+  SourceCode: FROM    java:openjdk-8-jre

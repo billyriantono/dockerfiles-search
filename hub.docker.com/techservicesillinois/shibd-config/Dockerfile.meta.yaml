@@ -1,0 +1,156 @@
+MetaArgs:
+- DefaultValue: latest
+  Key: TAG
+  ProvidedValue: null
+  Value: latest
+Stages:
+- As: base
+  BaseName: techservicesillinois/shibd-base:$TAG
+  Commands: null
+  From:
+    Image: techservicesillinois/shibd-base:$TAG
+  Name: base
+  Platform: ""
+  SourceCode: FROM techservicesillinois/shibd-base:$TAG as base
+- As: builder
+  BaseName: techservicesillinois/shibd-builder:$TAG
+  Commands: null
+  From:
+    Image: techservicesillinois/shibd-builder:$TAG
+  Name: builder
+  Platform: ""
+  SourceCode: FROM techservicesillinois/shibd-builder:$TAG as builder
+- BaseName: alpine
+  Commands:
+  - Chown: ""
+    From: base
+    Name: copy
+    SourcesAndDest:
+    - /sha256sum.txt
+    - /tmp/sha256sum.base.txt
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /base/sha256sum.txt
+    - /tmp/sha256sum.builder.txt
+  - CmdLine:
+    - diff /tmp/sha256sum.base.txt /tmp/sha256sum.builder.txt
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine
+- As: golang
+  BaseName: golang:alpine
+  Commands:
+  - Env:
+    - Key: SRC
+      Value: get-shib-keys
+    Name: env
+  - CmdLine:
+    - apk update && apk add git make upx
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - $SRC/*.go
+    - $SRC/Makefile
+    - $GOPATH/src/
+  - Name: workdir
+    Path: $GOPATH/src
+  - CmdLine:
+    - make deps && make && make compress
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: golang
+  Platform: ""
+  SourceCode: FROM golang:alpine as golang
+- As: itrust
+  BaseName: alpine
+  Commands:
+  - Env:
+    - Key: DISCOVERY_SVC_URL
+      Value: https://discovery.itrust.illinois.edu
+    Name: env
+  - CmdLine:
+    - mkdir -p /tmp/shibboleth     && wget -qO /tmp/shibboleth/itrust.pem        "${DISCOVERY_SVC_URL}/itrust-certs/itrust.pem"     &&
+      wget -qO /tmp/shibboleth/itrust-metadata.xml        "${DISCOVERY_SVC_URL}/itrust-metadata/itrust-metadata.xml"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: itrust
+  Platform: ""
+  SourceCode: FROM alpine as itrust
+- BaseName: base
+  Commands:
+  - Key: TAG
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SHIBSP_CONFIG
+      Value: /etc/shibboleth/shibboleth2.xml
+    - Key: SHIBSP_CONFIG_TEMPLATE
+      Value: /etc/shibboleth/shibboleth2.template
+    - Key: SHIBD_LOG
+      Value: /etc/shibboleth/shibd.logger
+    - Key: MOD_SHIB_LOG
+      Value: /etc/shibboleth/native.logger
+    - Key: SHIBD_LOG_LEVEL
+      Value: INFO
+    - Key: MOD_SHIB_LOG_LEVEL
+      Value: INFO
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /shibd-config/
+    - /
+  - Chown: ""
+    From: golang
+    Name: copy
+    SourcesAndDest:
+    - /go/src/get-shib-keys
+    - /usr/local/bin/
+  - Chown: shibd:shibd
+    From: itrust
+    Name: copy
+    SourcesAndDest:
+    - /tmp/shibboleth/
+    - /etc/shibboleth/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /root/entrypoint.sh
+    - /
+  - Chown: shibd:shibd
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /root/etc/shibboleth/
+    - /etc/shibboleth/
+  - Name: user
+    User: shibd
+  - Name: volume
+    Volumes:
+    - /etc/shibboleth
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

@@ -1,0 +1,146 @@
+MetaArgs: null
+Stages:
+- As: development
+  BaseName: node:6-alpine
+  Commands:
+  - Name: workdir
+    Path: /usr/src
+  - Env:
+    - Key: HOME
+      Value: /usr/src
+    - Key: PATH
+      Value: /usr/src/bin:$PATH
+    Name: env
+  - CmdLine:
+    - apk add --no-cache ca-certificates jq openssl  && export PUP_VERSION=0.4.0  &&
+      export PUP_SHA256=ec3d29e9fb375b87ac492c8b546ad6be84b0c0b49dab7ff4c6b582eac71ba01c  &&
+      wget -O pup.zip "https://github.com/ericchiang/pup/releases/download/v${PUP_VERSION}/pup_v${PUP_VERSION}_linux_amd64.zip"  &&
+      echo "$PUP_SHA256 *pup.zip" | sha256sum -c -  && unzip pup.zip -d /usr/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache chromium git  && npm install -g ember-cli bower yarn check-dependencies
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache autoconf automake build-base curl linux-headers python-dev  &&
+      export WATCHMAN_VERSION=4.7.0  && curl -SL "https://github.com/facebook/watchman/archive/v${WATCHMAN_VERSION}.tar.gz"
+      | tar -xz -C /tmp/  && cd /tmp/watchman-${WATCHMAN_VERSION}  && ./autogen.sh  &&
+      ./configure  && make  && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ember
+    - server
+    - --live-reload-port
+    - "35730"
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: node:6-alpine
+  Name: development
+  Platform: ""
+  SourceCode: FROM node:6-alpine as development
+- As: builder
+  BaseName: node:6-alpine
+  Commands:
+  - Name: workdir
+    Path: /usr/src
+  - Env:
+    - Key: HOME
+      Value: /usr/src
+    - Key: PATH
+      Value: /usr/src/bin:$PATH
+    Name: env
+  - CmdLine:
+    - apk add --no-cache ca-certificates jq openssl  && export PUP_VERSION=0.4.0  &&
+      export PUP_SHA256=ec3d29e9fb375b87ac492c8b546ad6be84b0c0b49dab7ff4c6b582eac71ba01c  &&
+      wget -O pup.zip "https://github.com/ericchiang/pup/releases/download/v${PUP_VERSION}/pup_v${PUP_VERSION}_linux_amd64.zip"  &&
+      echo "$PUP_SHA256 *pup.zip" | sha256sum -c -  && unzip pup.zip -d /usr/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache chromium git  && npm install -g ember-cli bower yarn check-dependencies
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ARTANIS_URL
+      Value: https://artanis.icalialabs.com
+    - Key: VULCAN_URL
+      Value: https://vulcan.icalialabs.com
+    - Key: SIBYL_URL
+      Value: https://sibyl.icalialabs.com
+    - Key: CTHULHU_URL
+      Value: https://cthulhu.icalialabs.com
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - package.json
+    - yarn.lock
+    - bower.json
+    - /usr/src/
+  - CmdLine:
+    - set -ex && yarn install && bower install --allow-root
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /usr/src/
+  - CmdLine:
+    - ember build --environment="production"
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:6-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:6-alpine as builder
+- As: deployable
+  BaseName: icalialabs/mini-nginx:latest
+  Commands:
+  - CmdLine:
+    - apk add --no-cache ca-certificates jq openssl   && cd /tmp   && export PUP_VERSION=0.4.0   &&
+      export PUP_SHA256=ec3d29e9fb375b87ac492c8b546ad6be84b0c0b49dab7ff4c6b582eac71ba01c   &&
+      wget -O pup.zip "https://github.com/ericchiang/pup/releases/download/v${PUP_VERSION}/pup_v${PUP_VERSION}_linux_amd64.zip"   &&
+      echo "$PUP_SHA256 *pup.zip" | sha256sum -c -   && unzip pup.zip -d /usr/bin   &&
+      cd $HOME   && rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/dist
+    - /usr/share/nginx/html
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./config/nginx.conf
+    - /etc/nginx/example.conf
+  - CmdLine:
+    - set -ex   && mkdir -p /var/cache/nginx/client_temp && chmod a+w /var/cache/nginx/client_temp   &&
+      mkdir -p /var/cache/nginx/proxy_temp && chmod a+w /var/cache/nginx/proxy_temp   &&
+      mkdir -p /var/cache/nginx/fastcgi_temp && chmod a+w /var/cache/nginx/fastcgi_temp
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./bin/entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - start
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: icalialabs/mini-nginx:latest
+  Name: deployable
+  Platform: ""
+  SourceCode: FROM icalialabs/mini-nginx:latest AS deployable

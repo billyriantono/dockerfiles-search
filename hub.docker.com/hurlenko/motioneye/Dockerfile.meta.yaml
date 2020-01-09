@@ -1,0 +1,74 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: ubuntu:18.04
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"hurlenko"'
+    Name: label
+  - Key: MOTION_VERSION
+    Name: arg
+    Value: 4.1.1
+  - CmdLine:
+    - apt-get update -qqy     && apt-get install -qqy git wget lsb-release sudo     &&
+      wget https://raw.githubusercontent.com/Motion-Project/motion-packaging/master/builddeb.sh     &&
+      chmod +x ./builddeb.sh     && ./builddeb.sh hurlenko noname@unknown.com tags/release-$MOTION_VERSION
+      Y
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as builder
+- BaseName: ubuntu:18.04
+  Commands:
+  - Key: MOTIONEYE_VERSION
+    Name: arg
+    Value: 0.39.3
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - '*.deb'
+    - /tmp/motion.deb
+  - CmdLine:
+    - apt-get --quiet update     && apt-get --quiet upgrade --yes     && DEBIAN_FRONTEND="noninteractive"
+      apt-get --quiet --yes --option Dpkg::Options::="--force-confnew" --no-install-recommends
+      install     curl     ffmpeg     libmysqlclient20     libpq5     lsb-release     mosquitto-clients     python-jinja2     python-pil     python-pip     python-pycurl     python-setuptools     python-tornado     python-tz     python-wheel     tzdata     v4l-utils     git     zlib1g-dev     &&
+      dpkg -i /tmp/motion.deb     && rm /tmp/motion.deb     && git clone https://github.com/ccrisan/motioneye.git
+      /tmp/motioneye     && cd /tmp/motioneye     && git checkout tags/${MOTIONEYE_VERSION}     &&
+      pip install /tmp/motioneye     && cd     && rm -rf /tmp/motioneye     && apt-get
+      purge --yes     python-pip     python-setuptools     python-wheel     && apt-get
+      --quiet autoremove --yes     && apt-get --quiet --yes clean     && rm -rf /var/lib/apt/lists/*     &&
+      rm -f /var/cache/apt/*.bin
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /etc/motioneye
+  - Name: volume
+    Volumes:
+    - /var/run/motion
+  - Name: volume
+    Volumes:
+    - /var/lib/motioneye
+  - Name: expose
+    Ports:
+    - "8765"
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - motioneye.conf
+    - /usr/share/motioneye/extra/
+  - CmdLine:
+    - test -e /etc/motioneye/motioneye.conf ||     cp /usr/share/motioneye/extra/motioneye.conf
+      /etc/motioneye/motioneye.conf ;     /usr/local/bin/meyectl startserver -c /etc/motioneye/motioneye.conf
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

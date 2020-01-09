@@ -1,0 +1,107 @@
+MetaArgs: null
+Stages:
+- As: cdb
+  BaseName: cockroachdb/cockroach:v19.1.5
+  Commands:
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -o
+    - pipefail
+    - -c
+  - CmdLine:
+    - /cockroach/cockroach version | grep 'Tag' | cut -d 'v' -f 2 > /cockroach.version
+    Name: run
+    PrependShell: true
+  From:
+    Image: cockroachdb/cockroach:v19.1.5
+  Name: cdb
+  Platform: ""
+  SourceCode: FROM cockroachdb/cockroach:v19.1.5 AS cdb
+- As: builder
+  BaseName: alpine:3.10.1
+  Commands:
+  - Name: shell
+    Shell:
+    - /bin/sh
+    - -o
+    - pipefail
+    - -c
+  - Chown: ""
+    From: cdb
+    Name: copy
+    SourcesAndDest:
+    - /cockroach.version
+    - /
+  - CmdLine:
+    - "adduser -s /bin/true -u 1000 -D -h /app app \t&& sed -i -r \"/^(app|root)/!d\"
+      /etc/group /etc/passwd \t&& sed -i -r 's#^(.*):[^:]*$#\\1:/sbin/nologin#' /etc/passwd"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /tmp/c/cockroach/cockroach-data     && chmod -R 700 /tmp/c/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - export COCKROACH_VERSION && COCKROACH_VERSION="v$(cat /cockroach.version)"     &&
+      wget --quiet "https://binaries.cockroachdb.com/cockroach-${COCKROACH_VERSION}.linux-musl-amd64.tgz"
+      -O /tmp/cockroach.tgz     && tar xvzf /tmp/cockroach.tgz --strip 1
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10.1
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.10.1 AS builder
+- BaseName: scratch
+  Commands:
+  - Env:
+    - Key: COCKROACH_CHANNEL
+      Value: official-docker
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/passwd
+    - /etc/group
+    - /etc/shadow
+    - /etc/
+  - Chown: app
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/c/
+    - /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /cockroach
+    - /cockroach/cockroach
+  - Name: user
+    User: app
+  - Name: workdir
+    Path: /cockroach/
+  - Name: expose
+    Ports:
+    - "26257"
+    - "8080"
+  - Name: volume
+    Volumes:
+    - /cockroach/cockroach-data
+  - CmdLine:
+    - /cockroach/cockroach
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

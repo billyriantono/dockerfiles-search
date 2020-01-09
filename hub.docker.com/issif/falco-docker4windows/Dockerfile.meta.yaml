@@ -1,0 +1,74 @@
+MetaArgs: null
+Stages:
+- As: kernelsrc
+  BaseName: linuxkit/kernel:4.9.184
+  Commands: null
+  From:
+    Image: linuxkit/kernel:4.9.184
+  Name: kernelsrc
+  Platform: ""
+  SourceCode: FROM linuxkit/kernel:4.9.184 AS kernelsrc
+- As: modulesrc
+  BaseName: alpine:latest
+  Commands:
+  - Maintainer: Thomas Labarussias <issif+falco@gadz.org>
+    Name: maintainer
+  - Key: SYSDIGVER
+    Name: arg
+    Value: 0.26.4
+  - Key: FALCOVER
+    Name: arg
+    Value: 0.17.0
+  - Key: KERNELVER
+    Name: arg
+    Value: 4.9.184
+  - Chown: ""
+    From: kernelsrc
+    Name: copy
+    SourcesAndDest:
+    - /kernel-dev.tar
+    - /
+  - CmdLine:
+    - apk add --no-cache --update wget ca-certificates    build-base gcc abuild binutils    bc    cmake    git    autoconf
+      &&    export KERNELDIR=/usr/src/linux-headers-$KERNELVER-linuxkit/ &&    tar
+      xf /kernel-dev.tar &&    cd $KERNELDIR &&    find /proc -type f -name "config.gz"
+      -exec cp {} . \; &&    make olddefconfig &&    mkdir -p /falco/build &&    mkdir
+      /src &&    cd /src &&    wget https://github.com/falcosecurity/falco/archive/$FALCOVER.tar.gz
+      &&    tar zxf $FALCOVER.tar.gz &&    wget https://github.com/draios/sysdig/archive/$SYSDIGVER.tar.gz
+      &&    tar zxf $SYSDIGVER.tar.gz &&    mv sysdig-$SYSDIGVER sysdig &&    cd /falco/build
+      &&    cmake /src/falco-$FALCOVER &&    make driver &&    apk del wget ca-certificates    build-base
+      gcc abuild binutils    bc    cmake    git    autoconf
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: modulesrc
+  Platform: ""
+  SourceCode: FROM alpine:latest AS modulesrc
+- BaseName: falcosecurity/falco:0.17.0
+  Commands:
+  - Chown: ""
+    From: modulesrc
+    Name: copy
+    SourcesAndDest:
+    - /falco/build/driver/falco-probe.ko
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/bin/falco
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: falcosecurity/falco:0.17.0
+  Name: ""
+  Platform: ""
+  SourceCode: FROM falcosecurity/falco:0.17.0

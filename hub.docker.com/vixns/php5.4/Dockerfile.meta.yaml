@@ -1,0 +1,152 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - Env:
+    - Key: PHPIZE_DEPS
+      Value: "autoconf \t\tdpkg-dev \t\tfile \t\tg++ \t\tgcc \t\tlibc-dev \t\tlibpcre3-dev
+        \t\tmake \t\tpkg-config \t\tre2c"
+    Name: env
+  - CmdLine:
+    - "apt-get update && apt-get install -y \t\t$PHPIZE_DEPS \t\tca-certificates \t\tcurl
+      \t\tlibedit2 \t\tlibsqlite3-0 \t\tlibxml2 \t\txz-utils \t--no-install-recommends
+      && rm -r /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_INI_DIR
+      Value: /usr/local/etc/php
+    Name: env
+  - CmdLine:
+    - mkdir -p $PHP_INI_DIR/conf.d
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_EXTRA_CONFIGURE_ARGS
+      Value: --enable-fpm --with-fpm-user=www-data --with-fpm-group=www-data
+    Name: env
+  - Env:
+    - Key: PHP_CFLAGS
+      Value: '"-fstack-protector-strong -fpic -fpie -O2"'
+    Name: env
+  - Env:
+    - Key: PHP_CPPFLAGS
+      Value: '"$PHP_CFLAGS"'
+    Name: env
+  - Env:
+    - Key: PHP_LDFLAGS
+      Value: '"-Wl,-O1 -Wl,--hash-style=both -pie"'
+    Name: env
+  - Env:
+    - Key: GPG_KEYS
+      Value: F38252826ACD957EF380D39F2F7956BC5DA04B5D
+    Name: env
+  - Env:
+    - Key: PHP_VERSION
+      Value: 5.4.45
+    Name: env
+  - Env:
+    - Key: PHP_URL
+      Value: '"https://secure.php.net/get/php-5.4.45.tar.gz/from/this/mirror"'
+    - Key: PHP_ASC_URL
+      Value: '"https://secure.php.net/get/php-5.4.45.tar.gz.asc/from/this/mirror"'
+    Name: env
+  - Env:
+    - Key: PHP_SHA256
+      Value: '"25bc4723955f4e352935258002af14a14a9810b491a19400d76fcdfa9d04b28f"'
+    - Key: PHP_MD5
+      Value: '""'
+    Name: env
+  - CmdLine:
+    - "set -xe; \tfetchDeps=' \t\twget \t'; \tif ! command -v gpg > /dev/null; then
+      \t\tfetchDeps=\"$fetchDeps \t\t\tdirmngr \t\t\tgnupg2 \t\t\"; \tfi; \tapt-get
+      update; \tapt-get install -y --no-install-recommends $fetchDeps; \trm -rf /var/lib/apt/lists/*;
+      \tmkdir -p /usr/src; \tcd /usr/src; \twget -O php.tar.gz \"$PHP_URL\"; \tif
+      [ -n \"$PHP_SHA256\" ]; then \t\techo \"$PHP_SHA256 *php.tar.gz\" | sha256sum
+      -c -; \tfi; \tif [ -n \"$PHP_MD5\" ]; then \t\techo \"$PHP_MD5 *php.tar.gz\"
+      | md5sum -c -; \tfi; \tif [ -n \"$PHP_ASC_URL\" ]; then \t\twget -O php.tar.gz.asc
+      \"$PHP_ASC_URL\"; \t\texport GNUPGHOME=\"$(mktemp -d)\"; \t\tfor key in $GPG_KEYS;
+      do \t\t\tgpg --keyserver ha.pool.sks-keyservers.net --recv-keys \"$key\"; \t\tdone;
+      \t\tgpg --batch --verify php.tar.gz.asc php.tar.gz; \t\trm -rf \"$GNUPGHOME\";
+      \tfi; \tapt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
+      $fetchDeps"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-source
+    - /usr/local/bin/
+  - CmdLine:
+    - "set -xe \t&& buildDeps=\" $PHP_EXTRA_BUILD_DEPS \t\tlibcurl4-openssl-dev \t\tlibedit-dev
+      \t\tlibsqlite3-dev \t\tlibssl-dev \t\tlibxml2-dev \t\tzlib1g-dev \t\" \t&& apt-get
+      update && apt-get install -y $buildDeps --no-install-recommends && rm -rf /var/lib/apt/lists/*
+      \t&& export CFLAGS=\"$PHP_CFLAGS\" \t\tCPPFLAGS=\"$PHP_CPPFLAGS\" \t\tLDFLAGS=\"$PHP_LDFLAGS\"
+      \t&& docker-php-source extract \t&& cd /usr/src/php \t&& gnuArch=\"$(dpkg-architecture
+      --query DEB_BUILD_GNU_TYPE)\" \t&& debMultiarch=\"$(dpkg-architecture --query
+      DEB_BUILD_MULTIARCH)\" \t&& if [ ! -d /usr/include/curl ]; then \t\tln -sT \"/usr/include/$debMultiarch/curl\"
+      /usr/local/include/curl; \tfi \t&& ./configure \t\t--build=\"$gnuArch\" \t\t--with-config-file-path=\"$PHP_INI_DIR\"
+      \t\t--with-config-file-scan-dir=\"$PHP_INI_DIR/conf.d\" \t\t--disable-cgi \t\t--enable-ftp
+      \t\t--enable-mbstring \t\t--enable-mysqlnd \t\t--with-curl \t\t--with-libedit
+      \t\t--with-openssl \t\t--with-zlib \t\t--with-pcre-regex=/usr \t\t--with-libdir=\"lib/$debMultiarch\"
+      $PHP_EXTRA_CONFIGURE_ARGS \t&& make -j \"$(nproc)\" \t&& make install \t&& {
+      find /usr/local/bin /usr/local/sbin -type f -executable -exec strip --strip-all
+      '{}' + || true; } \t&& make clean \t&& cd / \t&& docker-php-source delete \t&&
+      apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
+      $buildDeps \t&& pecl update-channels \t&& rm -rf /tmp/pear ~/.pearrc"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-ext-*
+    - docker-php-entrypoint
+    - /usr/local/bin/
+  - CmdLine:
+    - docker-php-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - Name: workdir
+    Path: /var/www/html
+  - CmdLine:
+    - "set -ex \t&& cd /usr/local/etc \t&& if [ -d php-fpm.d ]; then \t\tsed 's!=NONE/!=!g'
+      php-fpm.conf.default | tee php-fpm.conf > /dev/null; \t\tcp php-fpm.d/www.conf.default
+      php-fpm.d/www.conf; \telse \t\tmkdir php-fpm.d; \t\tcp php-fpm.conf.default
+      php-fpm.d/www.conf; \t\t{ \t\t\techo '[global]'; \t\t\techo 'include=etc/php-fpm.d/*.conf';
+      \t\t} | tee php-fpm.conf; \tfi \t&& { \t\techo '[global]'; \t\techo 'error_log
+      = /proc/self/fd/2'; \t\techo; \t\techo '[www]'; \t\techo '; if we send this
+      to /proc/self/fd/1, it never appears'; \t\techo 'access.log = /proc/self/fd/2';
+      \t\techo; \t\techo 'clear_env = no'; \t\techo; \t\techo '; Ensure worker stdout
+      and stderr are sent to the main error log.'; \t\techo 'catch_workers_output
+      = yes'; \t} | tee php-fpm.d/docker.conf \t&& { \t\techo '[global]'; \t\techo
+      'daemonize = no'; \t\techo; \t\techo '[www]'; \t\techo 'listen = 0.0.0.0:9000';
+      \t} | tee php-fpm.d/zz-docker.conf"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends imagemagick ssmtp
+      libfreetype6-dev libjpeg62-turbo-dev libmcrypt-dev libpng12-dev libcurl4-openssl-dev
+      libc-client2007e-dev libicu-dev libsqlite3-dev libxml2-dev libkrb5-dev libmagickwand-dev
+      ghostscript && rm -rf /var/lib/apt/lists/* && docker-php-ext-install -j$(nproc)
+      bcmath curl exif fileinfo iconv intl json mcrypt mysql mysqli pdo pdo_mysql
+      pdo_sqlite soap xml zip && docker-php-ext-configure gd --with-freetype-dir=/usr/include/
+      --with-jpeg-dir=/usr/include/ && docker-php-ext-configure imap --with-kerberos
+      --with-imap-ssl && docker-php-ext-install -j$(nproc) gd imap && pecl install
+      imagick zendopcache && docker-php-ext-enable imagick opcache && echo "pdo_mysql.default_socket=/var/run/mysqld/mysqld.sock"
+      >> /usr/local/etc/php/conf.d/local.ini && echo "mysqli.default_socket=/var/run/mysqld/mysqld.sock"
+      >> /usr/local/etc/php/conf.d/local.ini && echo "mysql.default_socket=/var/run/mysqld/mysqld.sock"
+      >> /usr/local/etc/php/conf.d/local.ini  && echo "memory_limit=128M" >> /usr/local/etc/php/conf.d/local.ini
+      && echo "sendmail_path=\"/usr/sbin/sendmail -t\"" >> /usr/local/etc/php/conf.d/local.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - php-fpm
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

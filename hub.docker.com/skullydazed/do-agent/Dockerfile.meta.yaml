@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.12
+  Commands:
+  - Env:
+    - Key: DOCKER_BUILD
+      Value: "1"
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /home/do-agent
+  - Name: workdir
+    Path: /home/do-agent
+  - CmdLine:
+    - set -x &&         make clean build
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.12 as build
+- As: alpine
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - mkdir -p /host
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x &&         apk add --no-cache dumb-init
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: alpine
+  Platform: ""
+  SourceCode: FROM alpine as alpine
+- BaseName: gcr.io/distroless/base
+  Commands:
+  - Chown: ""
+    From: alpine
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/dumb-init
+    - /usr/bin/dumb-init
+  - Chown: ""
+    From: alpine
+    Name: copy
+    SourcesAndDest:
+    - /host
+    - /host
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /home/do-agent/target/do-agent-linux-amd64
+    - /bin/do-agent
+  - Name: volume
+    Volumes:
+    - /host/proc
+    - /host/sys
+  - CmdLine:
+    - /usr/bin/dumb-init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /bin/do-agent
+    - --path.procfs
+    - /host/proc
+    - --path.sysfs
+    - /host/sys
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: gcr.io/distroless/base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM gcr.io/distroless/base

@@ -1,0 +1,76 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - Maintainer: Datadog <package@datadoghq.com>
+    Name: maintainer
+  - Env:
+    - Key: DOCKER_DD_AGENT
+      Value: "yes"
+    - Key: AGENT_VERSION
+      Value: 1:5.11.2-1
+    Name: env
+  - CmdLine:
+    - echo "deb http://apt.datadoghq.com/ stable main" > /etc/apt/sources.list.d/datadog.list  &&
+      apt-key adv --keyserver keyserver.ubuntu.com --recv-keys C7A7DA52  && apt-get
+      update  && apt-get install --no-install-recommends -y datadog-agent="${AGENT_VERSION}"  &&
+      apt-get install --no-install-recommends -y ca-certificates  && apt-get clean  &&
+      rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'mv /etc/dd-agent/datadog.conf.example /etc/dd-agent/datadog.conf  && sed -i
+      -e"s/^.*non_local_traffic:.*$/non_local_traffic: yes/" /etc/dd-agent/datadog.conf  &&
+      sed -i -e"s/^.*log_to_syslog:.*$/log_to_syslog: no/" /etc/dd-agent/datadog.conf  &&
+      sed -i "/user=dd-agent/d" /etc/dd-agent/supervisor.conf  && sed -i ''s/AGENTUSER="dd-agent"/AGENTUSER="root"/g''
+      /etc/init.d/datadog-agent  && chmod +x /etc/init.d/datadog-agent  && rm /etc/dd-agent/conf.d/network.yaml.default'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf.d/docker_daemon.yaml
+    - /etc/dd-agent/conf.d/docker_daemon.yaml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /entrypoint.sh
+  - Name: volume
+    Volumes:
+    - /conf.d
+    - /checks.d
+  - Name: expose
+    Ports:
+    - 7777/tcp
+    - 8125/udp
+    - 8126/tcp
+    - 9001/tcp
+  - Health:
+      Interval: 300000000000
+      Retries: 1
+      Test:
+      - CMD-SHELL
+      - test $(/opt/datadog-agent/embedded/bin/python /opt/datadog-agent/bin/supervisorctl       -c
+        /etc/dd-agent/supervisor.conf status | awk '{print $2}' | egrep -v 'RUNNING|EXITED'
+        | wc -l)       -eq 0 || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - supervisord
+    - -n
+    - -c
+    - /etc/dd-agent/supervisor.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

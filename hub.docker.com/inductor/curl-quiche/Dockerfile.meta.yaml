@@ -1,0 +1,226 @@
+MetaArgs: null
+Stages:
+- As: base-fetch
+  BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y git
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: base-fetch
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as base-fetch
+- As: base-build
+  BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y build-essential pkg-config
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: base-build
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as base-build
+- As: fetch-quiche
+  BaseName: base-fetch
+  Commands:
+  - Name: workdir
+    Path: /root
+  - CmdLine:
+    - git clone --recursive --depth 1 https://github.com/cloudflare/quiche
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir quiche/deps/boringssl/build
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base-fetch
+  Name: fetch-quiche
+  Platform: ""
+  SourceCode: FROM base-fetch as fetch-quiche
+- As: prepare-quiche
+  BaseName: base-build
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y cmake golang-go
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: fetch-quiche
+    Name: copy
+    SourcesAndDest:
+    - /root/quiche
+    - /root/quiche
+  - Name: workdir
+    Path: /root/quiche/deps/boringssl/build
+  - CmdLine:
+    - cmake -DCMAKE_POSITION_INDEPENDENT_CODE=on ..
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -j`nproc`
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root/quiche/deps/boringssl
+  - CmdLine:
+    - mkdir .openssl/lib -p
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp build/crypto/libcrypto.a build/ssl/libssl.a .openssl/lib
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s $PWD/include .openssl
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: base-build
+  Name: prepare-quiche
+  Platform: ""
+  SourceCode: FROM base-build as prepare-quiche
+- As: build-quiche
+  BaseName: base-build
+  Commands:
+  - Name: workdir
+    Path: /root
+  - CmdLine:
+    - apt-get update && apt-get install -y wget ca-certificates &&         wget https://sh.rustup.rs
+      -O install.sh         && chmod +x install.sh         && ./install.sh -y         &&
+      rm -rf install.sh &&         apt-get purge -y --auto-remove wget
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: prepare-quiche
+    Name: copy
+    SourcesAndDest:
+    - /root/quiche
+    - /root/quiche
+  - Name: workdir
+    Path: /root/quiche/
+  - CmdLine:
+    - QUICHE_BSSL_PATH=$PWD/deps/boringssl         $HOME/.cargo/bin/cargo         build         --release         --features         pkg-config-meta
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: base-build
+  Name: build-quiche
+  Platform: ""
+  SourceCode: FROM base-build as build-quiche
+- As: fetch-curl
+  BaseName: base-fetch
+  Commands:
+  - Name: workdir
+    Path: /root
+  - CmdLine:
+    - git clone --depth 1 https://github.com/curl/curl
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base-fetch
+  Name: fetch-curl
+  Platform: ""
+  SourceCode: FROM base-fetch as fetch-curl
+- As: build-curl
+  BaseName: base-build
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y autoconf libtool
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: fetch-curl
+    Name: copy
+    SourcesAndDest:
+    - /root/curl
+    - /root/curl
+  - Name: workdir
+    Path: /root/curl
+  - CmdLine:
+    - ./buildconf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-quiche
+    Name: copy
+    SourcesAndDest:
+    - /root/quiche
+    - /root/quiche
+  - CmdLine:
+    - ./configure LDFLAGS="-Wl,-rpath,$PWD/../quiche/target/release"         --with-ssl=$PWD/../quiche/deps/boringssl/.openssl         --with-quiche=$PWD/../quiche/target/release
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -j`nproc`
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: base-build
+  Name: build-curl
+  Platform: ""
+  SourceCode: FROM base-build as build-curl
+- As: executor
+  BaseName: ubuntu:18.04
+  Commands:
+  - Chown: ""
+    From: build-curl
+    Name: copy
+    SourcesAndDest:
+    - /etc/ld.so.conf.d/libc.conf
+    - /etc/ld.so.conf.d/libcurl.conf
+  - Chown: ""
+    From: build-curl
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/libcurl.so.4
+    - /usr/local/lib/libcurl.so.4
+  - Chown: ""
+    From: build-curl
+    Name: copy
+    SourcesAndDest:
+    - /etc/ld.so.conf.d/libc.conf
+    - /etc/ld.so.conf.d/libquiche.conf
+  - Chown: ""
+    From: build-curl
+    Name: copy
+    SourcesAndDest:
+    - /root/quiche/target/release/libquiche.so
+    - /usr/local/lib/libquiche.so
+  - Chown: ""
+    From: build-curl
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/curl
+    - /usr/local/bin/curl
+  - CmdLine:
+    - ldconfig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: executor
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as executor

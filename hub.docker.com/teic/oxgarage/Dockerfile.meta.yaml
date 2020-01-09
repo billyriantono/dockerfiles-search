@@ -1,0 +1,132 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: maven:3-jdk-8
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Peter Stadler for the TEI Council"'
+    Name: label
+  - Env:
+    - Key: OXGARAGE_BUILD_HOME
+      Value: '"/opt/oxgarage-build"'
+    Name: env
+  - Key: SAXON_URL
+    Name: arg
+    Value: '"https://downloads.sourceforge.net/project/saxon/Saxon-HE/9.8/SaxonHE9-8-0-7J.zip"'
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ${SAXON_URL}
+    - /tmp/saxon.zip
+  - Name: workdir
+    Path: ${OXGARAGE_BUILD_HOME}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - unzip /tmp/saxon.zip -d ${OXGARAGE_BUILD_HOME}/saxon     && mv ${OXGARAGE_BUILD_HOME}/saxon/saxon9he.jar
+      ${OXGARAGE_BUILD_HOME}/saxon/jsaxon9he.jar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn install:install-file -DgroupId=jpf-tools -DartifactId=jpf-tools -Dversion=1.5.1
+      -Dpackaging=jar -Dfile=jpf-tools.jar     && mvn install:install-file -DgroupId=com.artofsolving
+      -DartifactId=jodconverter -Dversion=3.0-beta-4 -Dpackaging=jar -Dfile=jod-lib/jodconverter-core-3.0-beta-4.jar     &&
+      mvn install:install-file -DgroupId=com.sun.star -DartifactId=jurt  -Dversion=3.2.1
+      -Dpackaging=jar -Dfile=jod-lib/jurt-3.2.1.jar     && mvn install:install-file
+      -DgroupId=com.sun.star -DartifactId=juh   -Dversion=3.2.1 -Dpackaging=jar -Dfile=jod-lib/juh-3.2.1.jar     &&
+      mvn install:install-file -DgroupId=com.sun.star -DartifactId=unoil -Dversion=3.2.1
+      -Dpackaging=jar -Dfile=jod-lib/unoil-3.2.1.jar     && mvn install:install-file
+      -DgroupId=com.sun.star -DartifactId=ridl  -Dversion=3.2.1 -Dpackaging=jar -Dfile=jod-lib/ridl-3.2.1.jar     &&
+      mvn install:install-file -DgroupId=org.apache.commons.cli -DartifactId=commons-cli
+      -Dversion=1.1 -Dpackaging=jar -Dfile=jod-lib/commons-cli-1.1.jar     && mvn
+      install:install-file -DgroupId=net.sf.saxon -DartifactId=commons-cli -Dversion=9.8
+      -Dpackaging=jar -Dfile=${OXGARAGE_BUILD_HOME}/saxon/jsaxon9he.jar     && mvn
+      install
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3-jdk-8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM maven:3-jdk-8 as builder
+- BaseName: tomcat:7
+  Commands:
+  - Env:
+    - Key: CATALINA_WEBAPPS
+      Value: ${CATALINA_HOME}/webapps
+    Name: env
+  - Env:
+    - Key: OFFICE_HOME
+      Value: /usr/lib/libreoffice
+    Name: env
+  - Name: user
+    User: root:root
+  - CmdLine:
+    - apt-get update     && apt-get install -y --force-yes libreoffice     ttf-dejavu     fonts-arphic-ukai     fonts-arphic-uming     ttf-baekmuk     ttf-junicode     fonts-linuxlibertine     fonts-ipafont-gothic     fonts-ipafont-mincho     &&
+      ln -s ${OFFICE_HOME} /usr/lib/openoffice     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ege-webservice/src/main/webapp/WEB-INF/lib/oxgarage.properties
+    - /etc/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - log4j.xml
+    - /var/cache/oxgarage/log4j.xml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /my-docker-entrypoint.sh
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/oxgarage-build/ege-webclient/target/ege-webclient.war
+    - /tmp/ege-webclient.war
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/oxgarage-build/ege-webservice/target/ege-webservice.war
+    - /tmp/ege-webservice.war
+  - CmdLine:
+    - rm -Rf ${CATALINA_WEBAPPS}/ROOT     && unzip -q /tmp/ege-webclient.war -d ${CATALINA_WEBAPPS}/ROOT/     &&
+      unzip -q /tmp/ege-webservice.war -d ${CATALINA_WEBAPPS}/ege-webservice/     &&
+      rm /tmp/ege-webclient.war     && rm /tmp/ege-webservice.war     && chmod 755
+      /my-docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /usr/share/xml/tei/stylesheet
+    - /usr/share/xml/tei/odd
+  - Name: expose
+    Ports:
+    - "8080"
+    - "8081"
+  - CmdLine:
+    - /my-docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - catalina.sh
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: tomcat:7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tomcat:7

@@ -1,0 +1,68 @@
+MetaArgs: null
+Stages:
+- As: scratch
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /code/
+  From:
+    Scratch: true
+  Name: scratch
+  Platform: ""
+  SourceCode: FROM scratch as scratch
+- As: built
+  BaseName: openzipkin/zipkin-builder
+  Commands:
+  - Chown: ""
+    From: scratch
+    Name: copy
+    SourcesAndDest:
+    - /code
+    - /code
+  - Name: workdir
+    Path: /code
+  - CmdLine:
+    - mvn -B --no-transfer-progress package -DskipTests=true -pl module/storage-stackdriver
+      -am
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /zipkin-gcp
+  - CmdLine:
+    - cp /code/module/storage-stackdriver/target/zipkin-module-storage-stackdriver-*-module.jar
+      stackdriver.jar &&   echo > .stackdriver_profile &&   (mkdir stackdriver &&
+      cd stackdriver && jar -xf ../stackdriver.jar) &&   rm stackdriver.jar
+    Name: run
+    PrependShell: true
+  From:
+    Image: openzipkin/zipkin-builder
+  Name: built
+  Platform: ""
+  SourceCode: FROM openzipkin/zipkin-builder as built
+- BaseName: openzipkin/zipkin:master
+  Commands:
+  - Maintainer: Zipkin "https://zipkin.io/"
+    Name: maintainer
+  - Chown: ""
+    From: built
+    Name: copy
+    SourcesAndDest:
+    - /zipkin-gcp/
+    - /zipkin/
+  - Env:
+    - Key: QUERY_ENABLED
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: MODULE_OPTS
+      Value: '"-Dloader.path=stackdriver -Dspring.profiles.active=stackdriver"'
+    Name: env
+  From:
+    Image: openzipkin/zipkin:master
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openzipkin/zipkin:master

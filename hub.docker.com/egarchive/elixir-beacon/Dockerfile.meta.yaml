@@ -1,0 +1,101 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: maven:3.6-jdk-8-alpine
+  Commands:
+  - CmdLine:
+    - mkdir /beacon
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - elixir_core
+    - /beacon/elixir_core
+  - Name: workdir
+    Path: /beacon/elixir_core
+  - CmdLine:
+    - mvn clean compile jar:jar -Djar.finalName=elixir-core
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn install:install-file -Dfile=target/elixir-core.jar
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - elixir_beacon
+    - /beacon/elixir_beacon
+  - Name: workdir
+    Path: /beacon/elixir_beacon
+  - CmdLine:
+    - echo 'allowed.origins=*' > src/main/resources/META-INF/corsFilter.properties
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn clean compile package -Dspring.profiles.active="dev" -Dmaven.test.skip=true
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.6-jdk-8-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM maven:3.6-jdk-8-alpine as BUILD
+- BaseName: openjdk:8-jdk-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"CRG Developers"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.schema-version
+      Value: ${DOCKER_TAG}
+    Name: label
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    Name: label
+  - Labels:
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/ga4gh-beacon/beacon-elixir"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.vcs-ref
+      Value: $SOURCE_COMMIT
+    Name: label
+  - CmdLine:
+    - mkdir -p /beacon
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: BUILD
+    Name: copy
+    SourcesAndDest:
+    - /beacon/elixir_beacon/target/elixir-beacon.jar
+    - /beacon/beacon.jar
+  - Chown: ""
+    From: BUILD
+    Name: copy
+    SourcesAndDest:
+    - /beacon/elixir_beacon//src/main/resources/application-dev.properties
+    - /beacon/application-dev.properties
+  - Name: expose
+    Ports:
+    - "9075"
+  - Name: workdir
+    Path: /beacon
+  - CmdLine:
+    - java
+    - -jar
+    - beacon.jar
+    - --spring.profiles.active=dev
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jdk-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-alpine

@@ -1,0 +1,98 @@
+MetaArgs:
+- DefaultValue: openjdk
+  Key: BASEIMG
+  ProvidedValue: null
+  Value: openjdk
+- DefaultValue: 8-jre-slim@sha256:7c1b4041a0cdfe3ca48b22b3cef14fd83b2212eb5cb1718d5539ab6fcc61a3ac
+  Key: BASEVERS
+  ProvidedValue: null
+  Value: 8-jre-slim@sha256:7c1b4041a0cdfe3ca48b22b3cef14fd83b2212eb5cb1718d5539ab6fcc61a3ac
+Stages:
+- BaseName: ${BASEIMG}:${BASEVERS}
+  Commands:
+  - Key: ARCH
+    Name: arg
+    Value: amd64
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - Key: TINI_VERSION
+    Name: arg
+    Value: v0.18.0
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends         apt-transport-https         binutils         curl         dirmngr         gnupg         jsvc         mongodb-server         procps     &&
+      apt-get clean -qy     && rm -rf /var/lib/apt/lists/*     && curl -L https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-${ARCH}
+      -o /sbin/tini     && curl -L https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-${ARCH}.asc
+      -o /sbin/tini.asc     && gpg --batch --keyserver hkp://keyserver.ubuntu.com
+      --recv-keys 595E85A6B1B4779EA4DAAEC70B588DFF0527A9B7     && gpg --batch --verify
+      /sbin/tini.asc /sbin/tini     && rm -f /sbin/tini.asc     && chmod 0755 /sbin/tini     &&
+      apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 4A228B2D358A5094178285BE06E85760C0A52C50
+    Name: run
+    PrependShell: true
+  - Key: UNIFI_CHANNEL
+    Name: arg
+    Value: stable
+  - CmdLine:
+    - groupadd -g 750 -o unifi     && useradd -u 750 -o -g unifi -M unifi     && echo
+      "deb https://www.ubnt.com/downloads/unifi/debian ${UNIFI_CHANNEL} ubiquiti"
+      > /etc/apt/sources.list.d/ubiquiti-unifi.list     && apt-get update     && apt-get
+      install -y --no-install-recommends         unifi     && apt-get clean -qy     &&
+      rm -rf /var/lib/apt/lists/*     && find /usr/lib/unifi/dl/firmware -mindepth
+      1 \! -name bundles.json -delete
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - 10001/udp
+    - 3478/udp
+    - 6789/tcp
+    - 8080/tcp
+    - 8443/tcp
+    - 8843/tcp
+    - 8880/tcp
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - unifi.default
+    - /etc/default/unifi
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - unifi.init
+    - /usr/lib/unifi/bin/unifi.init
+  - CmdLine:
+    - mkdir -p -m 755 /var/lib/unifi /var/log/unifi /var/run/unifi /usr/lib/unifi/work     &&
+      ln -sf /var/lib/unifi /usr/lib/unifi/data     && ln -sf /var/log/unifi /usr/lib/unifi/logs     &&
+      ln -sf /var/run/unifi /usr/lib/unifi/run     && chown unifi:unifi /var/lib/unifi
+      /var/log/unifi /var/run/unifi /usr/lib/unifi/work     && chmod 755 /usr/lib/unifi/bin/unifi.init
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: unifi
+  - Health:
+      Interval: 30000000000
+      Retries: 5
+      StartPeriod: 30000000000
+      Test:
+      - CMD-SHELL
+      - curl --insecure -f https://localhost:8443/ || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - Name: volume
+    Volumes:
+    - /var/lib/unifi
+    - /var/log/unifi
+  - CmdLine:
+    - /sbin/tini
+    - -g
+    - --
+    - /usr/lib/unifi/bin/unifi.init
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ${BASEIMG}:${BASEVERS}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${BASEIMG}:${BASEVERS}

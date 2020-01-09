@@ -1,0 +1,241 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "BASE_IMAGE",
+      "DefaultValue": "python",
+      "ProvidedValue": null,
+      "Value": "python"
+    },
+    {
+      "Key": "BASE_IMAGE_VERSION",
+      "DefaultValue": "3.7-alpine",
+      "ProvidedValue": null,
+      "Value": "3.7-alpine"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "buildlayer",
+      "BaseName": "${BASE_IMAGE}:${BASE_IMAGE_VERSION}",
+      "SourceCode": "FROM ${BASE_IMAGE}:${BASE_IMAGE_VERSION} AS BUILDLAYER",
+      "Platform": "",
+      "As": "buildlayer",
+      "From": {
+        "Image": "${BASE_IMAGE}:${BASE_IMAGE_VERSION}"
+      },
+      "Commands": [
+        {
+          "Key": "PUID",
+          "Name": "arg",
+          "Value": "1000"
+        },
+        {
+          "Key": "PGID",
+          "Name": "arg",
+          "Value": "1000"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PUID",
+              "Value": "${PUID}"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PGID",
+              "Value": "${PGID}"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Key": "CONTAINER_USER",
+          "Name": "arg",
+          "Value": "builder"
+        },
+        {
+          "Env": [
+            {
+              "Key": "CONTAINER_USER",
+              "Value": "${CONTAINER_USER}"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "addgroup -g ${PGID} ${CONTAINER_USER} \u0026\u0026     adduser -D -u ${PUID} -G ${CONTAINER_USER} ${CONTAINER_USER}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Key": "TOX_VERSION",
+          "Name": "arg",
+          "Value": "3.8.2"
+        },
+        {
+          "CmdLine": [
+            "pip install tox==${TOX_VERSION}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "apk --no-cache add      tar     enchant     aspell-en     aspell"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "builder",
+      "BaseName": "BUILDLAYER",
+      "SourceCode": "FROM BUILDLAYER as BUILDER",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "BUILDLAYER"
+      },
+      "Commands": [
+        {
+          "Key": "APP_FOLDER",
+          "Name": "arg",
+          "Value": "/app"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "${APP_FOLDER}"
+          ]
+        },
+        {
+          "CmdLine": [
+            "mkdir -p ${APP_FOLDER} \u0026\u0026   chown -R ${CONTAINER_USER}:${CONTAINER_USER} ${APP_FOLDER}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "user",
+          "User": "${CONTAINER_USER}"
+        },
+        {
+          "Name": "workdir",
+          "Path": "${APP_FOLDER}"
+        },
+        {
+          "CmdLine": [
+            "tox -e py37,docs"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "executor",
+      "BaseName": "${BASE_IMAGE}:${BASE_IMAGE_VERSION}",
+      "SourceCode": "FROM ${BASE_IMAGE}:${BASE_IMAGE_VERSION} AS EXECUTOR",
+      "Platform": "",
+      "As": "executor",
+      "From": {
+        "Image": "${BASE_IMAGE}:${BASE_IMAGE_VERSION}"
+      },
+      "Commands": [
+        {
+          "Key": "APP_FOLDER",
+          "Name": "arg",
+          "Value": "/app"
+        },
+        {
+          "Key": "PUID",
+          "Name": "arg",
+          "Value": "1000"
+        },
+        {
+          "Key": "PGID",
+          "Name": "arg",
+          "Value": "1000"
+        },
+        {
+          "Key": "CONTAINER_USER",
+          "Name": "arg",
+          "Value": "builder"
+        },
+        {
+          "Chown": "",
+          "From": "BUILDER",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/.tox/dist/mcworldmanager-*.zip",
+            "/tmp/mcworldmanager.zip"
+          ]
+        },
+        {
+          "CmdLine": [
+            "pip install /tmp/mcworldmanager.zip"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "addgroup -g ${PGID} ${CONTAINER_USER} \u0026\u0026     adduser -D -u ${PUID} -G ${CONTAINER_USER} ${CONTAINER_USER} \u0026\u0026     mkdir -p ${APP_FOLDER} \u0026\u0026     chown -R ${CONTAINER_USER}:${CONTAINER_USER} ${APP_FOLDER}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "user",
+          "User": "${CONTAINER_USER}"
+        },
+        {
+          "Name": "workdir",
+          "Path": "${APP_FOLDER}"
+        },
+        {
+          "CmdLine": [
+            "mcworldmanager"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "CmdLine": [
+            "--help"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        },
+        {
+          "Key": "VCS_REF",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Labels": [
+            {
+              "Key": "org.label-schema.vcs-ref",
+              "Value": "$VCS_REF"
+            },
+            {
+              "Key": "org.label-schema.vcs-url",
+              "Value": "\"https://github.com/nolte/minecraft-world-manager\""
+            }
+          ],
+          "Name": "label"
+        }
+      ]
+    }
+  ]
+}

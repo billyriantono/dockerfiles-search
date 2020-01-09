@@ -1,0 +1,78 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.11-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache -t build-deps git gcc musl-dev go
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /tmp/go-neb
+  - Name: workdir
+    Path: /tmp/go-neb
+  - CmdLine:
+    - go get -u github.com/constabulary/gb/...     && go get github.com/golang/lint/golint     &&
+      go get github.com/fzipp/gocyclo     && gb vendor restore     && gb build -f
+      github.com/matrix-org/go-neb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /tmp/go-neb/hooks/pre-commit
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine as builder
+- BaseName: alpine:3.7
+  Commands:
+  - Env:
+    - Key: BIND_ADDRESS
+      Value: :4050
+    - Key: DATABASE_TYPE
+      Value: sqlite3
+    - Key: DATABASE_URL
+      Value: /data/go-neb.db?_busy_timeout=5000
+    - Key: UID
+      Value: "1337"
+    - Key: GID
+      Value: "1337"
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/go-neb/bin/go-neb
+    - /usr/local/bin/go-neb
+  - CmdLine:
+    - apk add --no-cache       ca-certificates       su-exec       s6
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: expose
+    Ports:
+    - "4050"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/root
+    - /
+  - CmdLine:
+    - /bin/s6-svscan
+    - /etc/s6.d/
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

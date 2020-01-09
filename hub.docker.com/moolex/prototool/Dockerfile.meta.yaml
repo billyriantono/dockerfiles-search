@@ -1,0 +1,68 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache add git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /source
+  - Name: workdir
+    Path: /source
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix nocgo -o /build/prototool
+      cmd/prototool/main.go
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PROTOC_VER
+      Value: 3.6.1
+    Name: env
+  - CmdLine:
+    - mkdir -p /assets/protoc && wget -qO- https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VER}/protoc-${PROTOC_VER}-linux-x86_64.zip
+      |     unzip -d /assets/protoc - &&     chmod a+x /assets/protoc/bin/protoc
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache add libc6-compat
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PROTOC_VER
+      Value: 3.6.1
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/prototool
+    - /usr/bin
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /assets/protoc
+    - /root/.cache/prototool/Linux/x86_64/protobuf/${PROTOC_VER}
+  - Name: workdir
+    Path: /protobufs
+  - CmdLine:
+    - /usr/bin/prototool
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

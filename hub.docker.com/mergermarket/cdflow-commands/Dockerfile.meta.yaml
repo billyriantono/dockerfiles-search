@@ -1,0 +1,145 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: python:3.7.4-alpine3.10
+  Commands:
+  - Env:
+    - Key: TERRAFORM_VERSION
+      Value: 0.11.14
+    Name: env
+  - Env:
+    - Key: TERRAFORM_PLUGIN_DIR
+      Value: /root/.terraform.d/plugins/
+    Name: env
+  - Env:
+    - Key: K8SVERSION
+      Value: 1.13.7
+    Name: env
+  - Env:
+    - Key: K8SVERSIONDATE
+      Value: "2019-06-11"
+    Name: env
+  - CmdLine:
+    - echo http://dl-cdn.alpinelinux.org/alpine/latest-stable/main >> /etc/apk/repositories
+      &&     apk update &&     apk --no-cache add curl git zip unzip wget bash
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DOCKER_CLI_VERSION
+      Value: '"18.06.1-ce"'
+    Name: env
+  - Env:
+    - Key: DOWNLOAD_URL
+      Value: '"https://download.docker.com/linux/static/stable/x86_64/docker-$DOCKER_CLI_VERSION.tgz"'
+    Name: env
+  - CmdLine:
+    - mkdir -p /tmp/download &&     curl -L $DOWNLOAD_URL | tar -xz -C /tmp/download
+      &&     mv /tmp/download/docker/docker /usr/local/bin/ &&     rm -rf /tmp/download
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp &&     curl -o kubectl https://amazon-eks.s3-us-west-2.amazonaws.com/${K8SVERSION}/${K8SVERSIONDATE}/bin/linux/amd64/kubectl
+      &&     chmod +x ./kubectl &&     mv ./kubectl /usr/local/bin/kubectl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp &&     curl -o aws-iam-authenticator https://amazon-eks.s3-us-west-2.amazonaws.com/${K8SVERSION}/${K8SVERSIONDATE}/bin/linux/amd64/aws-iam-authenticator
+      &&     chmod +x ./aws-iam-authenticator &&     mv ./aws-iam-authenticator /usr/local/bin/aws-iam-authenticator
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p "${TERRAFORM_PLUGIN_DIR}" && cd /tmp &&     curl -sSLO "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+      &&         unzip "terraform_${TERRAFORM_VERSION}_linux_amd64.zip" -d /usr/bin/
+      &&     rm -rf /tmp/* &&     rm -rf /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/cdflow-commands/cdflow_commands &&     pip install pipenv
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/cdflow-commands/
+  - Env:
+    - Key: PYTHONPATH
+      Value: /opt/cdflow-commands
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Pipfile
+    - Pipfile.lock
+    - ./
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps     gcc musl-dev libffi-dev openssl-dev
+      &&     pipenv install --deploy --system &&     apk del --no-cache .build-deps
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.7.4-alpine3.10
+  Name: base
+  Platform: ""
+  SourceCode: FROM python:3.7.4-alpine3.10 AS base
+- As: test
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: AWS_ACCESS_KEY_ID
+      Value: dummy
+    Name: env
+  - Env:
+    - Key: AWS_SECRET_ACCESS_KEY
+      Value: dummy
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Pipfile
+    - Pipfile.lock
+    - ./
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps     gcc musl-dev libffi-dev openssl-dev
+      &&     pipenv install --deploy --system --dev &&     apk del --no-cache .build-deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./cdflow_commands
+    - /opt/cdflow-commands/cdflow_commands/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./test
+    - /opt/cdflow-commands/test/
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: test
+  Platform: ""
+  SourceCode: FROM base AS test
+- BaseName: base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./cdflow_commands
+    - /opt/cdflow-commands/cdflow_commands/
+  - CmdLine:
+    - python
+    - -m
+    - cdflow_commands
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

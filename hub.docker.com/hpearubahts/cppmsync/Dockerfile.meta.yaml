@@ -1,0 +1,230 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: mcr.microsoft.com/dotnet/core/sdk:2.2
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apt-get update && apt-get install -y curl gnupg2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL https://deb.nodesource.com/setup_11.x  | bash -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y install nodejs
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.csproj'
+    - ./
+  - CmdLine:
+    - dotnet restore
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - CmdLine:
+    - dotnet publish -c Release -r ubuntu.16.10-x64 -o out
+    Name: run
+    PrependShell: true
+  From:
+    Image: mcr.microsoft.com/dotnet/core/sdk:2.2
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/sdk:2.2 AS build-env
+- BaseName: ubuntu:latest
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y curl gnupg2 supervisor
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "deb http://apt.postgresql.org/pub/repos/apt/ precise-pgdg main" > /etc/apt/sources.list.d/pgdg.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y software-properties-common postgresql-10
+      postgresql-client-10 postgresql-contrib-10 dos2unix
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL https://deb.nodesource.com/setup_11.x  | bash -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y install nodejs
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: postgres
+  - CmdLine:
+    - "/etc/init.d/postgresql start &&    psql --command \"CREATE USER cppmsync WITH
+      SUPERUSER PASSWORD 'cppmsync';\" &&    createdb -O cppmsync cppmsync && \t/etc/init.d/postgresql
+      stop"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "host all  all    0.0.0.0/0  md5" >> /etc/postgresql/10/main/pg_hba.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "listen_addresses='*'" >> /etc/postgresql/10/main/postgresql.conf
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - Name: workdir
+    Path: /CPPMSync
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /app/out
+    - .
+  - CmdLine:
+    - chmod
+    - +x
+    - /CPPMSync/CPPMSync
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - chmod
+    - +x
+    - /CPPMSync/startup.sh
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - rm
+    - -f
+    - /CPPMSync/appsettings.json
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - rm
+    - -f
+    - /CPPMSync/HTTPCertificate.pfx
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - dos2unix
+    - startup.sh
+    Name: run
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./ArubaHTS.pem
+    - /usr/local/share/ca-certificates/ArubaHTS.crt
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./ArubaHTS-Licensing.pem
+    - /usr/local/share/ca-certificates/ArubaHTS-Licensing.crt
+  - CmdLine:
+    - "chmod 644 /usr/local/share/ca-certificates/ArubaHTS.crt && \tchmod 644 /usr/local/share/ca-certificates/ArubaHTS-Licensing.crt
+      && \tupdate-ca-certificates"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/supervisor/conf.d/supervisord.conf
+  - CmdLine:
+    - "export ASPNETCORE_AppSettings__ClearPassApiUrl=$API_URL &&     echo ASPNETCORE_AppSettings__ClearPassApiUrl=$ASPNETCORE_AppSettings__ClearPassApiUrl
+      &&     export ASPNETCORE_AppSettings__ClearPassApiToken=$API_ACCESS_TOKEN &&
+      \    echo ASPNETCORE_AppSettings__ClearPassApiToken=$ASPNETCORE_AppSettings__ClearPassApiToken
+      &&     export ASPNETCORE_AppSettings__ClearPassHostFQDN=$EXTENSION_PLATFORM_FQDN
+      &&     echo ASPNETCORE_AppSettings__ClearPassHostFQDN=$ASPNETCORE_AppSettings__ClearPassHostFQDN
+      &&     export ASPNETCORE_AppSettings__ClearPassHostInstance=$EXTENSION_INSTANCE_ID
+      &&     echo ASPNETCORE_AppSettings__ClearPassHostInstance=$ASPNETCORE_AppSettings__ClearPassHostInstance
+      &&     export ASPNETCORE_AppSettings__ClearPassHostIP=$EXTENSION_HOST_IP &&
+      \    echo ASPNETCORE_AppSettings__ClearPassHostIP=$ASPNETCORE_AppSettings__ClearPassHostIP
+      && \t/CPPMSync/startup.sh"
+    Name: cmd
+    PrependShell: true
+  - Labels:
+    - Key: com.hpe.aruba.clearpass.extension.name
+      Value: '"CPPMSync"'
+    - Key: com.hpe.aruba.clearpass.extension.version
+      Value: '"0.10.2"'
+    - Key: com.hpe.aruba.clearpass.extension.icon.href
+      Value: '"https://hpearubahts.bitbucket.io/cppmsync-icon-256.png"'
+    - Key: com.hpe.aruba.clearpass.extension.description
+      Value: '"Multiple ClearPass Cluster Replication and Synchronization"'
+    - Key: com.hpe.aruba.clearpass.extension.singleton
+      Value: "true"
+    - Key: com.hpe.aruba.clearpass.extension.api.access
+      Value: "true"
+    - Key: com.hpe.aruba.clearpass.extension.restart
+      Value: '"unless-stopped"'
+    - Key: com.hpe.aruba.clearpass.extension.publish.ports
+      Value: '"yes"'
+    - Key: com.hpe.aruba.clearpass.extension.ports.tcp.4050
+      Value: '"4050"'
+    - Key: com.hpe.aruba.clearpass.extension.ports.tcp.4050.description
+      Value: '"CPPMSync Web UI (HTTP)"'
+    - Key: com.hpe.aruba.clearpass.extension.ports.tcp.4051
+      Value: '"4051"'
+    - Key: com.hpe.aruba.clearpass.extension.ports.tcp.4051.description
+      Value: '"CPPMSync Web UI (HTTPS)"'
+    - Key: com.hpe.aruba.clearpass.extension.ports.udp.8514
+      Value: '"8514"'
+    - Key: com.hpe.aruba.clearpass.extension.ports.udp.8514.description
+      Value: '"Syslog (UDP) Receiver for Event Processing"'
+    - Key: com.hpe.aruba.clearpass.extension.ports.tcp.8514
+      Value: '"8514"'
+    - Key: com.hpe.aruba.clearpass.extension.ports.tcp.8514.description
+      Value: '"Syslog (TCP) Receiver for Event Processing"'
+    - Key: com.hpe.aruba.clearpass.extension.logs
+      Value: '"/app/log"'
+    - Key: com.hpe.aruba.clearpass.extension.config.format
+      Value: '"json"'
+    - Key: com.hpe.aruba.clearpass.extension.config.file
+      Value: '"/CPPMSync/appsettings.json"'
+    - Key: com.hpe.aruba.clearpass.extension.files.License
+      Value: '"/CPPMSync/CustomerLicense.pem"'
+    - Key: com.hpe.aruba.clearpass.extension.files.HTTPSCert
+      Value: '"/CPPMSync/HTTPSCertificate.pem"'
+    - Key: com.hpe.aruba.clearpass.extension.files.HTTPSCertKey
+      Value: '"/CPPMSync/HTTPSCertificate.key"'
+    - Key: com.hpe.aruba.clearpass.extension.config.defaults
+      Value: '"{\"AppSettings\": {\"JwtLoginSecret\": \"YUVVYBREQZMDJIGJPWDANNFNDVDOFWDJBCYZIUGJOCXCNGNVVN\",\"PassEncryptionKey\":
+        \"~{A+r!PZ5TykWtUV\"},\"Logging\": {\"LogLevel\": {\"Default\": \"Information\"
+        }  }}"'
+    Name: label
+  - Name: expose
+    Ports:
+    - "4050"
+  - Name: expose
+    Ports:
+    - "4051"
+  - Name: expose
+    Ports:
+    - "8514"
+  - Env:
+    - Key: ASPNETCORE_URLS
+      Value: http://+:4050;https://+:4051
+    Name: env
+  From:
+    Image: ubuntu:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:latest

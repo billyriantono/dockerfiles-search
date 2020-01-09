@@ -1,0 +1,218 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: centos:centos7
+  Commands:
+  - Key: YUM_FLAGS_COMMON
+    Name: arg
+    Value: '"-y"'
+  - Key: YUM_FLAGS_DEV
+    Name: arg
+    Value: '"${YUM_FLAGS_COMMON}"'
+  - Key: MAJOR_VERSION
+    Name: arg
+    Value: "3.0"
+  - Key: ZBX_VERSION
+    Name: arg
+    Value: ${MAJOR_VERSION}.29
+  - Key: ZBX_SOURCES
+    Name: arg
+    Value: https://git.zabbix.com/scm/zbx/zabbix.git
+  - Env:
+    - Key: ZBX_VERSION
+      Value: ${ZBX_VERSION}
+    - Key: ZBX_SOURCES
+      Value: ${ZBX_SOURCES}
+    - Key: ZBX_TYPE
+      Value: server
+    - Key: ZBX_DB_TYPE
+      Value: mysql
+    - Key: ZBX_OPT_TYPE
+      Value: none
+    Name: env
+  - CmdLine:
+    - set -eux &&     yum --quiet makecache &&     yum ${YUM_FLAGS_DEV} install https://repo.zabbix.com/non-supported/rhel/7/x86_64/iksemel-devel-1.4-2.el7.centos.x86_64.rpm                                  https://repo.zabbix.com/non-supported/rhel/7/x86_64/iksemel-1.4-2.el7.centos.x86_64.rpm
+      &&     yum ${YUM_FLAGS_DEV} install             autoconf             automake             gcc             libcurl-devel             libssh2-devel             libxml2-devel             make             mariadb-devel             net-snmp-devel             OpenIPMI-devel             openldap-devel             git             unixODBC-devel
+      &&     cd /tmp/ &&     git clone ${ZBX_SOURCES} --branch ${ZBX_VERSION} --depth
+      1 --single-branch zabbix-${ZBX_VERSION} &&     cd /tmp/zabbix-${ZBX_VERSION}
+      &&     zabbix_revision=`git rev-parse --short HEAD` &&     sed -i "s/{ZABBIX_REVISION}/$zabbix_revision/g"
+      include/version.h &&     ./bootstrap.sh &&     export CFLAGS="-fPIC -pie -Wl,-z,relro
+      -Wl,-z,now" &&     ./configure             --datadir=/usr/lib             --libdir=/usr/lib/zabbix             --prefix=/usr             --sysconfdir=/etc/zabbix             --enable-agent             --enable-${ZBX_TYPE}             --with-${ZBX_DB_TYPE}             --with-jabber             --with-ldap             --with-libcurl             --with-libxml2             --with-net-snmp             --with-openipmi             --with-openssl             --with-ssh2             --with-unixodbc             --enable-ipv6             --silent
+      &&     make -j"$(nproc)" -s dbschema &&     make -j"$(nproc)" -s &&     cat
+      database/${ZBX_DB_TYPE}/schema.sql > database/${ZBX_DB_TYPE}/create.sql &&     cat
+      database/${ZBX_DB_TYPE}/images.sql >> database/${ZBX_DB_TYPE}/create.sql &&     cat
+      database/${ZBX_DB_TYPE}/data.sql >> database/${ZBX_DB_TYPE}/create.sql &&     gzip
+      database/${ZBX_DB_TYPE}/create.sql
+    Name: run
+    PrependShell: true
+  From:
+    Image: centos:centos7
+  Name: builder
+  Platform: ""
+  SourceCode: FROM centos:centos7 as builder
+- BaseName: centos:centos7
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Alexey Pustovalov <alexey.pustovalov@zabbix.com>"'
+    Name: label
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: YUM_FLAGS_COMMON
+    Name: arg
+    Value: '"-y"'
+  - Key: YUM_FLAGS_PERSISTENT
+    Name: arg
+    Value: '"${YUM_FLAGS_COMMON}"'
+  - Key: MAJOR_VERSION
+    Name: arg
+    Value: "3.0"
+  - Key: ZBX_VERSION
+    Name: arg
+    Value: ${MAJOR_VERSION}.29
+  - Key: ZBX_SOURCES
+    Name: arg
+    Value: https://git.zabbix.com/scm/zbx/zabbix.git
+  - Env:
+    - Key: ZBX_VERSION
+      Value: ${ZBX_VERSION}
+    - Key: ZBX_SOURCES
+      Value: ${ZBX_SOURCES}
+    - Key: TERM
+      Value: xterm
+    - Key: MIBDIRS
+      Value: /usr/share/snmp/mibs:/var/lib/zabbix/mibs
+    - Key: MIBS
+      Value: +ALL
+    - Key: ZBX_TYPE
+      Value: server
+    - Key: ZBX_DB_TYPE
+      Value: mysql
+    - Key: ZBX_OPT_TYPE
+      Value: none
+    Name: env
+  - Env:
+    - Key: TINI_VERSION
+      Value: v0.18.0
+    Name: env
+  - Labels:
+    - Key: org.label-schema.name
+      Value: '"zabbix-${ZBX_TYPE}-${ZBX_DB_TYPE}-centos"'
+    - Key: org.label-schema.vendor
+      Value: '"Zabbix LLC"'
+    - Key: org.label-schema.url
+      Value: '"https://zabbix.com/"'
+    - Key: org.label-schema.description
+      Value: '"Zabbix ${ZBX_TYPE} with MySQL database support"'
+    - Key: org.label-schema.vcs-ref
+      Value: '"${VCS_REF}"'
+    - Key: org.label-schema.build-date
+      Value: '"${BUILD_DATE}"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.license
+      Value: '"GPL v2.0"'
+    - Key: org.label-schema.usage
+      Value: '"https://www.zabbix.com/documentation/${MAJOR_VERSION}/manual/installation/containers"'
+    - Key: org.label-schema.version
+      Value: '"${ZBX_VERSION}"'
+    - Key: org.label-schema.vcs-url
+      Value: '"${ZBX_SOURCES}"'
+    - Key: org.label-schema.docker.cmd
+      Value: '"docker run --name zabbix-${ZBX_TYPE}-${ZBX_DB_TYPE} --link mysql-server:mysql
+        -p 10051:10051 -d zabbix-${ZBX_TYPE}-${ZBX_DB_TYPE}:centos-${ZBX_VERSION}"'
+    Name: label
+  - Name: stopsignal
+    Signal: SIGTERM
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/zabbix-${ZBX_VERSION}/src/zabbix_${ZBX_TYPE}/zabbix_${ZBX_TYPE}
+    - /usr/sbin/zabbix_${ZBX_TYPE}
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/zabbix-${ZBX_VERSION}/src/zabbix_get/zabbix_get
+    - /usr/bin/zabbix_get
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/zabbix-${ZBX_VERSION}/src/zabbix_sender/zabbix_sender
+    - /usr/bin/zabbix_sender
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/zabbix-${ZBX_VERSION}/conf/zabbix_${ZBX_TYPE}.conf
+    - /etc/zabbix/zabbix_${ZBX_TYPE}.conf
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/zabbix-${ZBX_VERSION}/database/${ZBX_DB_TYPE}/create.sql.gz
+    - /usr/share/doc/zabbix-${ZBX_TYPE}-${ZBX_DB_TYPE}/create.sql.gz
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini
+    - /sbin/tini
+  - CmdLine:
+    - set -eux &&     groupadd --system zabbix &&     adduser -r --shell /sbin/nologin             -g
+      zabbix -G dialout             -d /var/lib/zabbix/         zabbix &&     mkdir
+      -p /etc/zabbix &&     mkdir -p /var/lib/zabbix &&     mkdir -p /usr/lib/zabbix/alertscripts
+      &&     mkdir -p /var/lib/zabbix/enc &&     mkdir -p /usr/lib/zabbix/externalscripts
+      &&     mkdir -p /var/lib/zabbix/mibs &&     mkdir -p /var/lib/zabbix/modules
+      &&     mkdir -p /var/lib/zabbix/snmptraps &&     mkdir -p /var/lib/zabbix/ssh_keys
+      &&     mkdir -p /var/lib/zabbix/ssl &&     mkdir -p /var/lib/zabbix/ssl/certs
+      &&     mkdir -p /var/lib/zabbix/ssl/keys &&     mkdir -p /var/lib/zabbix/ssl/ssl_ca
+      &&     chown --quiet -R zabbix:root /var/lib/zabbix &&     mkdir -p /usr/share/doc/zabbix-${ZBX_TYPE}-${ZBX_DB_TYPE}
+      &&     yum ${YUM_FLAGS_COMMON} makecache &&     yum ${YUM_FLAGS_PERSISTENT}
+      install https://repo.zabbix.com/non-supported/rhel/7/x86_64/iksemel-1.4-2.el7.centos.x86_64.rpm                                         https://repo.zabbix.com/non-supported/rhel/7/x86_64/fping-3.10-1.el7.x86_64.rpm  &&     yum
+      ${YUM_FLAGS_PERSISTENT} install             iputils             traceroute             libcurl             libxml2             mariadb             net-snmp-libs             OpenIPMI-libs             openldap             openssl-libs             pcre             unixODBC
+      &&     yum ${YUM_FLAGS_PERSISTENT} clean all &&     rm -rf /var/cache/yum/ &&     chmod
+      +x /sbin/tini
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - 10051/TCP
+  - Name: workdir
+    Path: /var/lib/zabbix
+  - Name: volume
+    Volumes:
+    - /usr/lib/zabbix/alertscripts
+    - /usr/lib/zabbix/externalscripts
+    - /var/lib/zabbix/enc
+    - /var/lib/zabbix/mibs
+    - /var/lib/zabbix/modules
+  - Name: volume
+    Volumes:
+    - /var/lib/zabbix/snmptraps
+    - /var/lib/zabbix/ssh_keys
+    - /var/lib/zabbix/ssl/certs
+    - /var/lib/zabbix/ssl/keys
+    - /var/lib/zabbix/ssl/ssl_ca
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/bin/
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /usr/bin/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: centos:centos7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:centos7

@@ -1,0 +1,137 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "base",
+      "BaseName": "python:3.7-slim-stretch",
+      "SourceCode": "FROM python:3.7-slim-stretch as base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Image": "python:3.7-slim-stretch"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "requirements.txt",
+            "requirements.txt"
+          ]
+        },
+        {
+          "CmdLine": [
+            "pip3 install --no-cache-dir -r requirements.txt \u0026\u0026 pip3 install gunicorn gevent aiohttp"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "build",
+      "BaseName": "base",
+      "SourceCode": "FROM base as build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "/code"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/code"
+        },
+        {
+          "CmdLine": [
+            "python setup.py build sdist"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "final",
+      "BaseName": "base",
+      "SourceCode": "FROM base as final",
+      "Platform": "",
+      "As": "final",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/code/dist/blockworkr*.tar.gz",
+            "/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "gunicorn.cfg",
+            "/gunicorn.cfg"
+          ]
+        },
+        {
+          "CmdLine": [
+            "python -m pip install --no-cache-dir /blockworkr*.tar.gz   \u0026\u0026 rm -rf /blockworkr*.tar.gz   \u0026\u0026 mkdir /etc/blockworkr"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Health": {
+            "Interval": 15000000000,
+            "Test": [
+              "CMD-SHELL",
+              "curl -f http://localhost/healthz || exit 1"
+            ],
+            "Timeout": 5000000000
+          },
+          "Name": "healthcheck"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "80"
+          ]
+        },
+        {
+          "CmdLine": [
+            "gunicorn",
+            "--config",
+            "/gunicorn.cfg",
+            "-b",
+            "0.0.0.0:80",
+            "blockworkr.webservice:app"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

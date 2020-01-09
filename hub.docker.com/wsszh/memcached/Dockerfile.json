@@ -1,0 +1,365 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "memcached-builder",
+      "BaseName": "gcr.io/google-appengine/debian9",
+      "SourceCode": "FROM gcr.io/google-appengine/debian9 as memcached-builder",
+      "Platform": "",
+      "As": "memcached-builder",
+      "From": {
+        "Image": "gcr.io/google-appengine/debian9"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "MEMCACHED_VERSION",
+              "Value": "1.5.19"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "MEMCACHED_SHA1",
+              "Value": "14e6a02e743838696fcb620edf6a2fd7e60cabec"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "set -x     \u0026\u0026 buildDeps='         ca-certificates         dpkg-dev         gcc         libc6-dev         libevent-dev         libsasl2-dev         make         perl         wget     '     \u0026\u0026 apt-get update \u0026\u0026 apt-get install -y $buildDeps --no-install-recommends     \u0026\u0026 rm -rf /var/lib/apt/lists/*     \u0026\u0026 mkdir -p /usr/src/memcached_build     \u0026\u0026 mkdir -p /usr/src/memcached     \u0026\u0026 cd /usr/src/memcached     \u0026\u0026 wget -O memcached.tar.gz \"https://memcached.org/files/memcached-$MEMCACHED_VERSION.tar.gz\"     \u0026\u0026 echo \"$MEMCACHED_SHA1  memcached.tar.gz\" | sha1sum -c -     \u0026\u0026 tar -xzf memcached.tar.gz -C /usr/src/memcached_build --strip-components=1     \u0026\u0026 cd /usr/src/memcached_build     \u0026\u0026 ./configure         --build=\"$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)\"         --enable-sasl     \u0026\u0026 make -j \"$(nproc)\"     \u0026\u0026 make install     \u0026\u0026 apt-mark manual         libevent-2.0-5         libsasl2-2     \u0026\u0026 apt-get purge -y --auto-remove $buildDeps     \u0026\u0026 memcached -V"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "prometheus-builder",
+      "BaseName": "gcr.io/google-appengine/debian9",
+      "SourceCode": "FROM gcr.io/google-appengine/debian9 as prometheus-builder",
+      "Platform": "",
+      "As": "prometheus-builder",
+      "From": {
+        "Image": "gcr.io/google-appengine/debian9"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "groupadd -r memcache \u0026\u0026 useradd -r -g memcache memcache"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "memcached-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/bin/memcached",
+            "/usr/local/bin/memcached"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get install git gcc make curl wget tar libevent-2.0-5 libsasl2-2 -y"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "git clone https://github.com/prometheus/memcached_exporter --branch=v0.6.0 /memcached_exporter"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "wget https://dl.google.com/go/go1.12.linux-amd64.tar.gz \u0026\u0026       tar -C /usr/local -zxvf go1.12.linux-amd64.tar.gz"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd /memcached_exporter     \u0026\u0026 export PATH=$PATH:/usr/local/go/bin     \u0026\u0026 memcached -o modern -u memcache -d     \u0026\u0026 make precheck style check_license lint unused common-build"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd /memcached_exporter \u0026\u0026       wget -O LICENSE.protobuf.gogo https://raw.githubusercontent.com/gogo/protobuf/v1.1.1/LICENSE"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "gcr.io/google-appengine/debian9",
+      "SourceCode": "FROM gcr.io/google-appengine/debian9",
+      "Platform": "",
+      "From": {
+        "Image": "gcr.io/google-appengine/debian9"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "C2D_RELEASE",
+              "Value": "1.5.19"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "groupadd -r memcache \u0026\u0026 useradd -r -g memcache memcache"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "memcached-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/bin/memcached",
+            "/usr/local/bin/memcached"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "memcached-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/src/memcached_build/COPYING",
+            "/opt/memcached/COPYING"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "memcached-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/src/memcached_build/LICENSE.bipbuffer",
+            "/opt/memcached/LICENSE.bipbuffer"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "prometheus-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/memcached_exporter/memcached_exporter",
+            "/usr/local/bin/memcached_exporter"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "prometheus-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/memcached_exporter/LICENSE",
+            "/opt/memcached_exporter/LICENSE"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "prometheus-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/memcached_exporter/LICENSE.protobuf.gogo",
+            "/opt/memcached_exporter/LICENSE.protobuf.gogo"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "prometheus-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/memcached_exporter/vendor/github.com/konsorten/go-windows-terminal-sequences/LICENSE",
+            "/opt/memcached_exporter/LICENSE.go-windows-terminal-sequences.konsorten"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "prometheus-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/memcached_exporter/vendor/github.com/prometheus/client_golang/LICENSE",
+            "/opt/memcached_exporter/LICENSE.client_golang.prometheus"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "prometheus-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/memcached_exporter/vendor/github.com/prometheus/client_model/LICENSE",
+            "/opt/memcached_exporter/LICENSE.client_model.prometheus"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "prometheus-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/memcached_exporter/vendor/github.com/prometheus/common/LICENSE",
+            "/opt/memcached_exporter/LICENSE.common.prometheus"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "prometheus-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/memcached_exporter/vendor/github.com/prometheus/procfs/LICENSE",
+            "/opt/memcached_exporter/LICENSE.procfs.prometheus"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "prometheus-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/memcached_exporter/vendor/github.com/sirupsen/logrus/LICENSE",
+            "/opt/memcached_exporter/LICENSE.logrus.sirupsen"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "prometheus-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/memcached_exporter/vendor/github.com/alecthomas/template/LICENSE",
+            "/opt/memcached_exporter/LICENSE.template.alecthomas"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "prometheus-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/memcached_exporter/vendor/github.com/beorn7/perks/LICENSE",
+            "/opt/memcached_exporter/LICENSE.perks.beorn7"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "prometheus-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/memcached_exporter/vendor/github.com/grobie/gomemcache/LICENSE",
+            "/opt/memcached_exporter/LICENSE.gomemcache.grobie"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "prometheus-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/memcached_exporter/vendor/github.com/golang/protobuf/LICENSE",
+            "/opt/memcached_exporter/LICENSE.protobuf.golang"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "prometheus-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/memcached_exporter/vendor/github.com/matttproud/golang_protobuf_extensions/LICENSE",
+            "/opt/memcached_exporter/LICENSE.golang_protobuf_extensions.matttproud"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "prometheus-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/memcached_exporter/vendor/golang.org/x/sys/LICENSE",
+            "/opt/memcached_exporter/LICENSE.sys.x"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "prometheus-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/memcached_exporter/vendor/github.com/alecthomas/units/COPYING",
+            "/opt/memcached_exporter/COPYING.units.alecthomas"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "prometheus-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/memcached_exporter/vendor/gopkg.in/alecthomas/kingpin.v2/COPYING",
+            "/opt/memcached_exporter/COPYING.kingpin.v2.alecthomas"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get install wget -y"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd /usr/local/bin/ \u0026\u0026       wget https://raw.githubusercontent.com/wsszh/Docker-images/master/memcached/v1.5/docker-entrypoint.sh"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get install -y --no-install-recommends       libevent-2.0-5       libsasl2-2     \u0026\u0026 rm -rf /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "chmod 777 /usr/local/bin/docker-entrypoint.sh     \u0026\u0026 ln -s /usr/local/bin/docker-entrypoint.sh /entrypoint.sh # backwards compat"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "docker-entrypoint.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "Name": "user",
+          "User": "memcache"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "11211",
+            "9150"
+          ]
+        },
+        {
+          "CmdLine": [
+            "memcached"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

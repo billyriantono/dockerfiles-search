@@ -1,0 +1,109 @@
+MetaArgs: null
+Stages:
+- BaseName: opensuse:42.1
+  Commands:
+  - Maintainer: Yan Dongpeng <yandongpeng@qq.com>
+    Name: maintainer
+  - CmdLine:
+    - zypper -n update     && zypper -n install -y wget ca-certificates tar unzip    &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_VERSION
+      Value: 1.8.0_sr3fp12
+    Name: env
+  - CmdLine:
+    - ESUM="5248e1ece213033ffc3f80702736a1bb2ec2fcfc8e82f4c38322e8c5cf42bfe8"     &&
+      BASE_URL="https://public.dhe.ibm.com/ibmdl/export/pub/systems/cloud/runtimes/java/meta/"     &&
+      YML_FILE="jre/linux/x86_64/index.yml"     && wget -q -U UA_IBM_JAVA_Docker -O
+      /tmp/index.yml $BASE_URL/$YML_FILE     && JAVA_URL=$(cat /tmp/index.yml | sed
+      -n '/'$JAVA_VERSION'/{n;p}' | sed -n 's/\s*uri:\s//p' | tr -d '\r')     && wget
+      -q -U UA_IBM_JAVA_Docker -O /tmp/ibm-java.bin $JAVA_URL     && echo "$ESUM  /tmp/ibm-java.bin"
+      | sha256sum -c -     && echo "INSTALLER_UI=silent" > /tmp/response.properties     &&
+      echo "USER_INSTALL_DIR=/opt/ibm/java" >> /tmp/response.properties     && echo
+      "LICENSE_ACCEPTED=TRUE" >> /tmp/response.properties     && mkdir -p /opt/ibm     &&
+      chmod +x /tmp/ibm-java.bin     && /tmp/ibm-java.bin -i silent -f /tmp/response.properties     &&
+      rm -f /tmp/response.properties     && rm -f /tmp/index.yml     && rm -f /tmp/ibm-java.bin
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_HOME
+      Value: /opt/ibm/java/jre
+    - Key: PATH
+      Value: /opt/ibm/java/jre/bin:$PATH
+    Name: env
+  - Env:
+    - Key: LIBERTY_VERSION
+      Value: 16.0.0_03
+    Name: env
+  - Key: LIBERTY_URL
+    Name: arg
+    Value: null
+  - Key: DOWNLOAD_OPTIONS
+    Name: arg
+    Value: '""'
+  - CmdLine:
+    - LIBERTY_URL=${LIBERTY_URL:-$(wget -q -O - https://public.dhe.ibm.com/ibmdl/export/pub/software/websphere/wasdev/downloads/wlp/index.yml  |
+      grep $LIBERTY_VERSION -A 6 | sed -n 's/\s*kernel:\s//p' | tr -d '\r' )}      &&
+      wget $DOWNLOAD_OPTIONS $LIBERTY_URL -U UA-IBM-WebSphere-Liberty-Docker -O /tmp/wlp.zip     &&
+      unzip -q /tmp/wlp.zip -d /opt/ibm     && rm /tmp/wlp.zip
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /opt/ibm/wlp/bin:$PATH
+    Name: env
+  - Env:
+    - Key: LOG_DIR
+      Value: /logs
+    - Key: WLP_OUTPUT_DIR
+      Value: /opt/ibm/wlp/output
+    Name: env
+  - CmdLine:
+    - mkdir /logs     && ln -s $WLP_OUTPUT_DIR/defaultServer /output     && ln -s
+      /opt/ibm/wlp/usr/servers/defaultServer /config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /opt/ibm/wlp/bin/server create     && rm -rf $WLP_OUTPUT_DIR/.classCache /output/workarea
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-server
+    - /opt/ibm/docker/
+  - Name: expose
+    Ports:
+    - "9080"
+    - "9443"
+  - CmdLine:
+    - /opt/ibm/docker/docker-server
+    - run
+    - defaultServer
+    Name: cmd
+    PrependShell: false
+  - Key: REPOSITORIES_PROPERTIES
+    Name: arg
+    Value: '""'
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server.xml
+    - /config/
+  - CmdLine:
+    - if [ ! -z $REPOSITORIES_PROPERTIES ]; then mkdir /opt/ibm/wlp/etc/     && echo
+      $REPOSITORIES_PROPERTIES > /opt/ibm/wlp/etc/repositories.properties; fi     &&
+      installUtility install --acceptLicense webProfile-7.0     && if [ ! -z $REPOSITORIES_PROPERTIES
+      ]; then rm /opt/ibm/wlp/etc/repositories.properties; fi     && rm -rf /output/workarea
+      /output/logs
+    Name: run
+    PrependShell: true
+  From:
+    Image: opensuse:42.1
+  Name: ""
+  Platform: ""
+  SourceCode: FROM opensuse:42.1

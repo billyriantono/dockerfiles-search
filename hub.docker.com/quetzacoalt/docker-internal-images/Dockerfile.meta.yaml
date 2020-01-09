@@ -1,0 +1,180 @@
+MetaArgs: null
+Stages:
+- BaseName: prestashop/prestashop:nightly-7.2-apache
+  Commands:
+  - Maintainer: Thomas Nabord <thomas.nabord@prestashop.com>
+    Name: maintainer
+  - Env:
+    - Key: GET_USER
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: GET_FILE_MODULE
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: ID_MODULE
+      Value: "0"
+    Name: env
+  - Env:
+    - Key: PS_HANDLE_DYNAMIC_DOMAIN
+      Value: "0"
+    Name: env
+  - Env:
+    - Key: PS_INSTALL_AUTO
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: PS_DEV_MODE
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: PS_COUNTRY
+      Value: fr
+    Name: env
+  - Key: INSTALL_LANGUAGES
+    Name: arg
+    Value: "1"
+  - Env:
+    - Key: PS_ALL_LANGUAGES
+      Value: ${INSTALL_LANGUAGES}
+    Name: env
+  - Env:
+    - Key: PS_FOLDER_ADMIN
+      Value: admin-dev
+    Name: env
+  - Env:
+    - Key: PS_FOLDER_INSTALL
+      Value: install-dev
+    Name: env
+  - Env:
+    - Key: DB_SERVER
+      Value: localhost
+    Name: env
+  - Env:
+    - Key: DB_USER
+      Value: macfly
+    Name: env
+  - Env:
+    - Key: PS_ENABLE_SSL
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - echo mysql-server-5.6 mysql-server/root_password password $DB_PASSWD | debconf-set-selections
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo mysql-server-5.6 mysql-server/root_password_again password $DB_PASSWD |
+      debconf-set-selections
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt update   && apt install -y default-mysql-server   && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e"s/^bind-address\s*=\s*127.0.0.1/bind-address = 0.0.0.0/" /etc/mysql/mariadb.conf.d/50-server.cnf
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3306"
+  - CmdLine:
+    - a2enmod ssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s $APACHE_CONFDIR/sites-available/default-ssl.conf $APACHE_CONFDIR/sites-enabled/default-ssl.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt update   && apt install -y ssl-cert   && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "443"
+  - CmdLine:
+    - echo '[mysql.server]\nservice-startup-timeout = -1' >> /etc/mysql/conf.d/startup.cnf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "service mysql start && mysql -e \"CREATE USER '$DB_USER'@'localhost' IDENTIFIED
+      BY '$DB_PASSWD'; GRANT ALL PRIVILEGES ON *.* TO '$DB_USER'@'localhost'; FLUSH
+      PRIVILEGES;\" mysql \t&& mysqladmin -h $DB_SERVER -P $DB_PORT -u $DB_USER -p$DB_PASSWD
+      create $DB_NAME --force"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config_files/build/my-minimal.cnf
+    - /etc/mysql/conf.d/my-minimal.cnf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config_files/docker-customization_run.sh
+    - /tmp/docker-customization_run.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config_files/get-module.sh
+    - /tmp/get-module.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config_files/update-domain.php
+    - /tmp/update-domain.php
+  - CmdLine:
+    - chmod u+x /tmp/docker-customization_run.sh /tmp/get-module.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -ie "s/post_max_size\ =\ 20M/post_max_size\ =\ 40M/g" /usr/local/etc/php/php.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -ie "s/upload_max_filesize\ =\ 20M/upload_max_filesize\ =\ 40M/g" /usr/local/etc/php/php.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e"s/^exec\s*apache2-foreground/#exec apache2-foreground/" /tmp/docker_run.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - service mysql start && /tmp/docker_run.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e"s/^#exec\s*apache2-foreground/exec apache2-foreground/" /tmp/docker_run.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config_files/build/shop-build.php
+    - /tmp/build/shop-build.php
+  - CmdLine:
+    - service mysql start   && runuser -g www-data -u www-data -- php /tmp/build/shop-build.php   &&
+      runuser -g www-data -u www-data -- php -d memory_limit=-1 bin/console cache:warmup
+      --env=prod
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /tmp/docker-customization_run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: prestashop/prestashop:nightly-7.2-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM prestashop/prestashop:nightly-7.2-apache

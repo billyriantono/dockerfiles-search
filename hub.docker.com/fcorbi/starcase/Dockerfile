@@ -1,0 +1,41 @@
+FROM php:7.2-apache
+
+RUN apt-get update -y &&\
+    apt-get install -y libpng-dev libjpeg62-turbo-dev libfreetype6-dev libmcrypt-dev htop supervisor cron sudo mariadb-client libxml2-dev &&\
+    apt-get install -y --fix-missing zip unzip git nano redis-tools
+
+# Install node
+RUN apt-get install -y gnupg &&\
+    curl -sL https://deb.nodesource.com/setup_8.x| bash &&\
+    apt-get install -y nodejs
+
+RUN docker-php-ext-install zip &&\
+    docker-php-ext-install gd &&\
+    docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/ &&\
+    docker-php-ext-install -j$(nproc) gd &&\
+    docker-php-ext-install pdo_mysql &&\
+    docker-php-ext-install soap &&\
+    a2enmod rewrite
+
+# Install Selenium server
+RUN mkdir -p /usr/share/man/man1 &&\
+    apt-get install -y unzip xvfb libxi6 libgconf-2-4 default-jdk screen &&\
+    curl -sS -o - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add &&\
+    echo "deb [arch=amd64]  http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list &&\
+    apt-get -y update &&\
+    apt-get -y install google-chrome-stable &&\
+    wget https://chromedriver.storage.googleapis.com/78.0.3904.105/chromedriver_linux64.zip &&\
+    unzip chromedriver_linux64.zip &&\
+    mv chromedriver /usr/bin/chromedriver &&\
+    chown root:root /usr/bin/chromedriver &&\
+    chmod +x /usr/bin/chromedriver &&\
+    wget https://selenium-release.storage.googleapis.com/3.14/selenium-server-standalone-3.14.0.jar &&\
+    mv selenium-server-standalone-3.14.0.jar /usr/bin/selenium-server-standalone.jar
+
+# Install composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+EXPOSE 80 443
+
+# sudo apt-get install imagemagick libmagick++-dev
+# identify -verbose tornado_ok.jpg | grep Quality

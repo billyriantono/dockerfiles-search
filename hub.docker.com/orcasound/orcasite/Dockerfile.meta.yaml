@@ -1,0 +1,168 @@
+MetaArgs:
+- DefaultValue: 1.7.1
+  Key: ELIXIR_VERSION
+  ProvidedValue: null
+  Value: 1.7.1
+- DefaultValue: 10.4.0
+  Key: NODE_VERSION
+  ProvidedValue: null
+  Value: 10.4.0
+Stages:
+- As: node
+  BaseName: node:${NODE_VERSION}-alpine
+  Commands: null
+  From:
+    Image: node:${NODE_VERSION}-alpine
+  Name: node
+  Platform: ""
+  SourceCode: FROM node:${NODE_VERSION}-alpine as node
+- As: alpine-elixir-phoenix
+  BaseName: bitwalker/alpine-elixir:${ELIXIR_VERSION}
+  Commands:
+  - Env:
+    - Key: REFRESHED_AT
+      Value: "2019-05-30"
+    - Key: TERM
+      Value: xterm
+    Name: env
+  - CmdLine:
+    - mkdir -p /opt/app &&     chmod -R 777 /opt/app &&     apk update &&     apk
+      --no-cache --update add       git make g++ wget curl inotify-tools &&     apk
+      --no-cache --update add --virtual .build-deps rsync &&     update-ca-certificates
+      --fresh &&     rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: node
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /opt/node
+  - CmdLine:
+    - rsync -a /opt/node/ /usr/local   && apk del .build-deps   && rm -rf /opt/node   &&
+      rm -rf /root/.cache   && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: ./node_modules/.bin:$PATH
+    - Key: MIX_HOME
+      Value: /opt/mix
+    - Key: HEX_HOME
+      Value: /opt/hex
+    - Key: HOME
+      Value: /opt/app
+    Name: env
+  - CmdLine:
+    - mix local.hex --force &&     mix local.rebar --force
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/app
+  From:
+    Image: bitwalker/alpine-elixir:${ELIXIR_VERSION}
+  Name: alpine-elixir-phoenix
+  Platform: ""
+  SourceCode: FROM bitwalker/alpine-elixir:${ELIXIR_VERSION} as alpine-elixir-phoenix
+- As: phx-builder
+  BaseName: alpine-elixir-phoenix
+  Commands:
+  - Env:
+    - Key: MIX_ENV
+      Value: dev
+    Name: env
+  - CmdLine:
+    - apk --no-cache --update add       automake autoconf libtool nasm
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - mix.exs
+    - mix.lock
+    - ./
+  - CmdLine:
+    - mix do deps.get, deps.compile
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - assets/package.json
+    - assets/package-lock.json
+    - assets/
+  - CmdLine:
+    - cd assets &&     npm install --no-optional
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: alpine-elixir-phoenix
+  Name: phx-builder
+  Platform: ""
+  SourceCode: FROM alpine-elixir-phoenix as phx-builder
+- BaseName: alpine-elixir-phoenix
+  Commands:
+  - Name: expose
+    Ports:
+    - "4000"
+  - Name: expose
+    Ports:
+    - "8080"
+  - Env:
+    - Key: PORT
+      Value: "4000"
+    - Key: MIX_ENV
+      Value: dev
+    Name: env
+  - Chown: ""
+    From: phx-builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/app/assets/node_modules
+    - /opt/app/assets/node_modules
+  - Name: volume
+    Volumes:
+    - /opt/app/assets/node_modules
+  - Chown: ""
+    From: phx-builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/app/_build
+    - /opt/app/_build
+  - Chown: ""
+    From: phx-builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/app/deps
+    - /opt/app/deps
+  - Chown: ""
+    From: phx-builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/app/.mix
+    - /opt/app/.mix
+  - Chown: ""
+    From: phx-builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/app/mix.*
+    - /opt/app/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - mix
+    - phx.server
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: alpine-elixir-phoenix
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine-elixir-phoenix

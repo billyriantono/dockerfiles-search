@@ -1,0 +1,88 @@
+MetaArgs: null
+Stages:
+- BaseName: qnib/u-jdk7
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: CATALINA_HOME
+      Value: /usr/share/tomcat7
+    - Key: CATALINA_BASE
+      Value: /var/lib/tomcat7
+    - Key: REG_WEB_VER
+      Value: 0.0.4
+    - Key: CATALINA_OPTS
+      Value: '" -Djava.security.egd=file:/dev/./urandom"'
+    - Key: PATH
+      Value: $CATALINA_HOME/bin:$PATH
+    - Key: REGISTRY_HOST
+      Value: docker-registry.service.consul
+    - Key: REGISTRY_PORT
+      Value: "80"
+    Name: env
+  - CmdLine:
+    - echo 'APT::Install-Recommends "false";' > /etc/apt/apt.conf.d/docker-no-recommends  &&
+      echo 'APT::Install-Suggests "false";' >> /etc/apt/apt.conf.d/docker-no-recommends
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y tomcat7 jq  && rm -rf /var/lib/tomcat7/webapps/*  &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir $CATALINA_BASE/temp  && mkdir -p $CATALINA_HOME/common/classes  && mkdir
+      -p $CATALINA_HOME/server/classes  && mkdir -p $CATALINA_HOME/shared/classes
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update  && apt-get install -y wget unzip  && cd /opt/  && wget -q https://github.com/mkuchin/docker-registry-web/archive/v${REG_WEB_VER}.zip  &&
+      unzip -q v${REG_WEB_VER}.zip  && rm -f v${REG_WEB_VER}.zip  && apt-get purge
+      -y wget unzip
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/local/app
+  - CmdLine:
+    - cp -r /opt/docker-registry-web-${REG_WEB_VER}/grailsw           /opt/docker-registry-web-${REG_WEB_VER}/application.properties
+      .  && cp -r /opt/docker-registry-web-${REG_WEB_VER}/wrapper .  && mkdir -p ./grails-app/conf/  &&
+      cp -r /opt/docker-registry-web-${REG_WEB_VER}/grails-app/conf/BuildConfig.groovy
+      ./grails-app/conf/  && ./grailsw prod clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -r /opt/docker-registry-web-${REG_WEB_VER}/* .  && ./grailsw war ROOT.war  &&
+      cp ROOT.war $CATALINA_BASE/webapps/  && rm -rf /usr/local/app  && rm -rf /root/.grails  &&
+      rm -rf /root/.m2
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $CATALINA_BASE
+  - CmdLine:
+    - cp /opt/docker-registry-web-${REG_WEB_VER}/tomcat/server.xml $CATALINA_BASE/conf/  &&
+      rm -rf /opt/docker-registry-web-${REG_WEB_VER}/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - etc/supervisord.d/registry-web.ini
+    - /etc/supervisord.d/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - opt/qnib/registry-web/bin/start.sh
+    - /opt/qnib/registry-web/bin/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - etc/consul.d/registry-web.json
+    - /etc/consul.d/
+  - Name: expose
+    Ports:
+    - "8080"
+  From:
+    Image: qnib/u-jdk7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM qnib/u-jdk7

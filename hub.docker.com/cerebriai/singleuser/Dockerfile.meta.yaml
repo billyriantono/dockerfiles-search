@@ -1,0 +1,154 @@
+MetaArgs: null
+Stages:
+- As: openjdk
+  BaseName: adoptopenjdk/openjdk8:slim
+  Commands:
+  - CmdLine:
+    - echo "In stage openjdk"     && ls -la /opt/java/openjdk
+    Name: run
+    PrependShell: true
+  From:
+    Image: adoptopenjdk/openjdk8:slim
+  Name: openjdk
+  Platform: ""
+  SourceCode: FROM adoptopenjdk/openjdk8:slim as openjdk
+- As: spark
+  BaseName: cerebriai/spark
+  Commands:
+  - CmdLine:
+    - echo "In stage spark"     && ls -la /opt/spark
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HADOOP_VERSION
+      Value: 3.2.0
+    Name: env
+  From:
+    Image: cerebriai/spark
+  Name: spark
+  Platform: ""
+  SourceCode: FROM cerebriai/spark as spark
+- As: hadoop
+  BaseName: cerebriai/hadoop:3.2.0
+  Commands:
+  - CmdLine:
+    - echo "In stage hadoop"     && ls -la /opt/hadoop-$HADOOP_VERSION
+    Name: run
+    PrependShell: true
+  From:
+    Image: cerebriai/hadoop:3.2.0
+  Name: hadoop
+  Platform: ""
+  SourceCode: FROM cerebriai/hadoop:3.2.0 as hadoop
+- BaseName: jupyter/base-notebook
+  Commands:
+  - Maintainer: Nic Swart <nic@cerebriai.com>
+    Name: maintainer
+  - Chown: ""
+    From: openjdk
+    Name: copy
+    SourcesAndDest:
+    - /opt/java/openjdk
+    - /opt/java/openjdk
+  - Env:
+    - Key: JAVA_HOME
+      Value: /opt/java/openjdk
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:${JAVA_HOME}/bin
+    Name: env
+  - CmdLine:
+    - echo "In stage airflow"     && java -version
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: spark
+    Name: copy
+    SourcesAndDest:
+    - /opt/spark
+    - /opt/spark
+  - Chown: ""
+    From: spark
+    Name: copy
+    SourcesAndDest:
+    - /dependencies/
+    - /dependencies
+  - Env:
+    - Key: SPARK_HOME
+      Value: /opt/spark
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:${SPARK_HOME}/bin
+    Name: env
+  - CmdLine:
+    - echo "In stage singeluser jupyter"     && spark-submit --version     && echo
+      $SPARK_HOME     && echo $PATH
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HADOOP_VERSION
+      Value: 3.2.0
+    Name: env
+  - Chown: ""
+    From: hadoop
+    Name: copy
+    SourcesAndDest:
+    - /opt/hadoop-$HADOOP_VERSION
+    - /opt/hadoop-$HADOOP_VERSION
+  - Env:
+    - Key: HADOOP_HOME
+      Value: /opt/hadoop-$HADOOP_VERSION
+    Name: env
+  - Env:
+    - Key: HADOOP_PREFIX
+      Value: /opt/hadoop-$HADOOP_VERSION
+    Name: env
+  - Env:
+    - Key: HADOOP_CLASSPATH
+      Value: $HADOOP_CLASSPATH:/opt/hadoop-$HADOOP_VERSION/share/hadoop/tools/lib/*
+    Name: env
+  - Env:
+    - Key: HADOOP_CONF_DIR
+      Value: /etc/hadoop
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - core-site.xml
+    - /etc/hadoop/core-site.xml
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - hdfs-site.xml
+    - /etc/hadoop/hdfs-site.xml
+  - Env:
+    - Key: HADOOP_OPTIONAL_TOOLS
+      Value: hadoop-azure
+    Name: env
+  - Env:
+    - Key: MULTIHOMED_NETWORK
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:$HADOOP_PREFIX/bin
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - install_jupyterhub.py
+    - /tmp/install_jupyterhub.py
+  - Key: JUPYTERHUB_VERSION
+    Name: arg
+    Value: 1.0.0
+  - CmdLine:
+    - python3 /tmp/install_jupyterhub.py &&     python3 -m pip install notebook
+    Name: run
+    PrependShell: true
+  From:
+    Image: jupyter/base-notebook
+  Name: ""
+  Platform: ""
+  SourceCode: FROM jupyter/base-notebook

@@ -1,0 +1,132 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Name: workdir
+    Path: /go
+  - Env:
+    - Key: QEMU_DOWNLOAD_SHA256
+      Value: 47ae430b0e7c25e1bde290ac447a720e2ea6c6e78cd84e44847edda289e020a8
+    Name: env
+  - CmdLine:
+    - apk add curl --no-cache
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL -o qemu-3.0.0+resin-arm.tar.gz https://github.com/balena-io/qemu/releases/download/v3.0.0%2Bresin/qemu-3.0.0+resin-arm.tar.gz
+      && echo "$QEMU_DOWNLOAD_SHA256 *qemu-3.0.0+resin-arm.tar.gz" | sha256sum -c
+      - | tar zxvf qemu-3.0.0+resin-arm.tar.gz -C . && mv qemu-3.0.0+resin-arm/qemu-arm-static
+      .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine AS builder
+- BaseName: arm32v7/ruby:2.6-buster
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/qemu-arm-static
+    - /usr/bin/
+  - Labels:
+    - Key: maintainer
+      Value: '"Fluentd developers <fluentd@googlegroups.com>"'
+    Name: label
+  - Labels:
+    - Key: Description
+      Value: '"Fluentd docker image"'
+    - Key: Vendor
+      Value: '"Fluent Organization"'
+    - Key: Version
+      Value: '"1.8.1"'
+    Name: label
+  - Key: CROSS_BUILD_START
+    Name: arg
+    Value: '"cross-build-start"'
+  - Key: CROSS_BUILD_END
+    Name: arg
+    Value: '"cross-build-end"'
+  - CmdLine:
+    - '[ ${CROSS_BUILD_START} ]'
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TINI_VERSION
+      Value: 0.18.0
+    Name: env
+  - CmdLine:
+    - 'apt-get update  && apt-get install -y --no-install-recommends             ca-certificates  &&
+      buildDeps="       make gcc g++ libc-dev       wget bzip2 gnupg dirmngr     "  &&
+      apt-get install -y --no-install-recommends $buildDeps  && echo ''gem: --no-document''
+      >> /etc/gemrc  && gem install oj -v 3.8.1  && gem install json -v 2.2.0  &&
+      gem install async-http -v 0.49.1  && gem install fluentd -v 1.8.1  && dpkgArch="$(dpkg
+      --print-architecture | awk -F- ''{ print $NF }'')"  && wget -O /usr/local/bin/tini
+      "https://github.com/krallin/tini/releases/download/v$TINI_VERSION/tini-$dpkgArch"  &&
+      wget -O /usr/local/bin/tini.asc "https://github.com/krallin/tini/releases/download/v$TINI_VERSION/tini-$dpkgArch.asc"  &&
+      export GNUPGHOME="$(mktemp -d)"  && gpg --batch --keyserver hkp://p80.pool.sks-keyservers.net:80
+      --recv-keys 6380DC428747F6C393FEACA59A84159D7001A4E5  && gpg --batch --verify
+      /usr/local/bin/tini.asc /usr/local/bin/tini  && rm -r /usr/local/bin/tini.asc  &&
+      chmod +x /usr/local/bin/tini  && tini -h  && wget -O /tmp/jemalloc-4.5.0.tar.bz2
+      https://github.com/jemalloc/jemalloc/releases/download/4.5.0/jemalloc-4.5.0.tar.bz2  &&
+      cd /tmp && tar -xjf jemalloc-4.5.0.tar.bz2 && cd jemalloc-4.5.0/  && ./configure
+      && make  && mv lib/libjemalloc.so.2 /usr/lib  && apt-get purge -y --auto-remove                   -o
+      APT::AutoRemove::RecommendsImportant=false                   $buildDeps  &&
+      rm -rf /var/lib/apt/lists/*  && rm -rf /tmp/* /var/tmp/* /usr/lib/ruby/gems/*/cache/*.gem'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd -r fluent && useradd -r -g fluent fluent     && mkdir -p /fluentd/log     &&
+      mkdir -p /fluentd/etc /fluentd/plugins     && chown -R fluent /fluentd && chgrp
+      -R fluent /fluentd
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - fluent.conf
+    - /fluentd/etc/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /bin/
+  - Env:
+    - Key: FLUENTD_CONF
+      Value: '"fluent.conf"'
+    Name: env
+  - Env:
+    - Key: LD_PRELOAD
+      Value: '"/usr/lib/libjemalloc.so.2"'
+    Name: env
+  - Name: expose
+    Ports:
+    - "24224"
+    - "5140"
+  - Name: user
+    User: fluent
+  - CmdLine:
+    - tini
+    - --
+    - /bin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - fluentd
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - '[ ${CROSS_BUILD_END} ]'
+    Name: run
+    PrependShell: true
+  From:
+    Image: arm32v7/ruby:2.6-buster
+  Name: ""
+  Platform: ""
+  SourceCode: FROM arm32v7/ruby:2.6-buster

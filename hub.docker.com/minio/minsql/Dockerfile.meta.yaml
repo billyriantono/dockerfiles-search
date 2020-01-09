@@ -1,0 +1,103 @@
+MetaArgs: null
+Stages:
+- As: npm_builder
+  BaseName: node:11.1.0
+  Commands:
+  - CmdLine:
+    - /bin/bash
+    Name: entrypoint
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./webui/package.json
+    - /usr/src/app/package.json
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./webui/package-lock.json
+    - /usr/src/app/package-lock.json
+  - Name: workdir
+    Path: /usr/src/app
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:11.1.0
+  Name: npm_builder
+  Platform: ""
+  SourceCode: FROM node:11.1.0 as npm_builder
+- As: ui_builder
+  BaseName: npm_builder
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - webui
+    - /usr/src/app
+  - Env:
+    - Key: PATH
+      Value: /usr/src/app/node_modules/.bin:$PATH
+    Name: env
+  - Name: workdir
+    Path: /usr/src/app
+  - CmdLine:
+    - npm run build:prod
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: npm_builder
+  Name: ui_builder
+  Platform: ""
+  SourceCode: FROM npm_builder as ui_builder
+- As: rust_builder
+  BaseName: minio/minsql:deps
+  Commands:
+  - Name: workdir
+    Path: /usr/src/minsql
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - cargo install --path .
+    Name: run
+    PrependShell: true
+  From:
+    Image: minio/minsql:deps
+  Name: rust_builder
+  Platform: ""
+  SourceCode: FROM minio/minsql:deps as rust_builder
+- BaseName: alpine:3.9
+  Commands:
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: rust_builder
+    Name: copy
+    SourcesAndDest:
+    - /root/.cargo/bin/minsql
+    - /usr/bin/minsql
+  - Chown: ""
+    From: ui_builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/dist/minsql-ui
+    - /static/ui
+  - CmdLine:
+    - minsql
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

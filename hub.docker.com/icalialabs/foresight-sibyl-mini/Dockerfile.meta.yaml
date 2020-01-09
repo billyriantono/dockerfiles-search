@@ -1,0 +1,180 @@
+MetaArgs: null
+Stages:
+- As: development
+  BaseName: ruby:2.5.1-alpine3.7
+  Commands:
+  - Name: workdir
+    Path: /usr/src
+  - Env:
+    - Key: HOME
+      Value: /usr/src
+    - Key: PATH
+      Value: /usr/src/bin:$PATH
+    Name: env
+  - CmdLine:
+    - apk add --no-cache less ca-certificates icu-libs nodejs yarn openssl tzdata
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache build-base cmake icu-dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - Gemfile*
+    - /usr/src/
+  - CmdLine:
+    - bundle install --jobs=4 --retry=3
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rails
+    - server
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ruby:2.5.1-alpine3.7
+  Name: development
+  Platform: ""
+  SourceCode: FROM ruby:2.5.1-alpine3.7 AS development
+- As: builder
+  BaseName: ruby:2.5.1-alpine3.7
+  Commands:
+  - Name: workdir
+    Path: /usr/src
+  - Env:
+    - Key: HOME
+      Value: /usr/src
+    - Key: PATH
+      Value: /usr/src/bin:$PATH
+    Name: env
+  - CmdLine:
+    - apk add --no-cache less ca-certificates icu-libs nodejs yarn openssl tzdata
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache build-base cmake icu-dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - Gemfile*
+    - /usr/src/
+  - CmdLine:
+    - bundle install --jobs=4 --retry=3
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /usr/src
+  - CmdLine:
+    - export SECRET_KEY_BASE=10167c7f7654ed02b3557b05b88ece     RAILS_ENV=production
+      &&     rails assets:precompile &&     rails secret > /dev/null
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bundle config without development:test && bundle clean && rm -rf tmp/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: ruby:2.5.1-alpine3.7
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ruby:2.5.1-alpine3.7 AS builder
+- As: deployable
+  BaseName: ruby:2.5.1-alpine3.7
+  Commands:
+  - Name: workdir
+    Path: /usr/src
+  - Env:
+    - Key: HOME
+      Value: /usr/src
+    - Key: PATH
+      Value: /usr/src/bin:$PATH
+    Name: env
+  - CmdLine:
+    - apk add --no-cache less ca-certificates icu-libs nodejs yarn openssl tzdata
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /code
+    - /data
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bundle
+    - /usr/local/bundle
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src
+    - /usr/src
+  - Env:
+    - Key: RAILS_ENV
+      Value: production
+    - Key: RACK_ENV
+      Value: production
+    - Key: PORT
+      Value: "3000"
+    - Key: RAILS_SERVE_STATIC_FILES
+      Value: "true"
+    - Key: SECRET_KEY_BASE
+      Value: 0080596487c9bdf4358e75eie02c256fcc50a46b23e38ff27ecb985ff427
+    Name: env
+  - CmdLine:
+    - rails runner "puts 'Looks Good!'"
+    Name: run
+    PrependShell: true
+  - Key: SOURCE_BRANCH
+    Name: arg
+    Value: '"master"'
+  - Key: SOURCE_COMMIT
+    Name: arg
+    Value: '"000000"'
+  - Key: BUILD_DATE
+    Name: arg
+    Value: '"2017-09-26T16:13:26Z"'
+  - Key: IMAGE_NAME
+    Name: arg
+    Value: '"icalialabs/foresight-sibyl-mini:latest"'
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.name
+      Value: '"Icalia Foresight Sibyl Mini"'
+    - Key: org.label-schema.description
+      Value: '"Icalia Local Code Analysis Runner"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/IcaliaLabs/foresight.git"'
+    - Key: org.label-schema.vcs-ref
+      Value: $SOURCE_COMMIT
+    - Key: org.label-schema.schema-version
+      Value: '"1.0.0-rc1"'
+    Name: label
+  - CmdLine:
+    - set -ex && sed -i "s|icalialabs/foresight-sibyl-mini:development|$IMAGE_NAME|"
+      config/application.rb && sed -i "s|UNKNOWN_BUILD_DATE|$BUILD_DATE|" config/application.rb
+      && sed -i "s|UNKNOWN_COMMIT_SHA1|$SOURCE_COMMIT|" config/application.rb && sed
+      -i "s|UNKNOWN_COMMIT_BRANCH|$SOURCE_BRANCH|" config/application.rb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /usr/src/tmp/cache && mkdir -p /usr/src/tmp/pids && mkdir -p /usr/src/tmp/sockets
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - puma
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ruby:2.5.1-alpine3.7
+  Name: deployable
+  Platform: ""
+  SourceCode: FROM ruby:2.5.1-alpine3.7 AS deployable

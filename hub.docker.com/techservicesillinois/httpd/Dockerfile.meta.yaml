@@ -1,0 +1,156 @@
+MetaArgs:
+- DefaultValue: latest
+  Key: TAG
+  ProvidedValue: null
+  Value: latest
+- DefaultValue: latest
+  Key: HEALTHCHECK_TAG
+  ProvidedValue: null
+  Value: latest
+Stages:
+- As: common
+  BaseName: techservicesillinois/shibd-common:$TAG
+  Commands: null
+  From:
+    Image: techservicesillinois/shibd-common:$TAG
+  Name: common
+  Platform: ""
+  SourceCode: FROM techservicesillinois/shibd-common:$TAG as common
+- As: builder
+  BaseName: techservicesillinois/shibd-builder:$TAG
+  Commands: null
+  From:
+    Image: techservicesillinois/shibd-builder:$TAG
+  Name: builder
+  Platform: ""
+  SourceCode: FROM techservicesillinois/shibd-builder:$TAG as builder
+- As: healthcheck
+  BaseName: techservicesillinois/healthcheck:$HEALTHCHECK_TAG
+  Commands: null
+  From:
+    Image: techservicesillinois/healthcheck:$HEALTHCHECK_TAG
+  Name: healthcheck
+  Platform: ""
+  SourceCode: FROM techservicesillinois/healthcheck:$HEALTHCHECK_TAG as healthcheck
+- As: cgi-builder
+  BaseName: golang:1.11-alpine
+  Commands:
+  - Env:
+    - Key: PKG
+      Value: redis
+    Name: env
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - CmdLine:
+    - apk update && apk add git upx
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ${PKG}.go
+    - $GOPATH/src/$PKG/
+  - CmdLine:
+    - go get -d -v $PKG
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go install -ldflags "-w -s" -a -installsuffix cgo $PKG
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - upx -q --brute $GOPATH/bin/$PKG
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - upx -t $GOPATH/bin/$PKG
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-alpine
+  Name: cgi-builder
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine as cgi-builder
+- BaseName: alpine
+  Commands:
+  - Chown: ""
+    From: common
+    Name: copy
+    SourcesAndDest:
+    - /sha256sum.txt
+    - /tmp/sha256sum.common.txt
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /base/sha256sum.txt
+    - /tmp/sha256sum.builder.txt
+  - CmdLine:
+    - diff /tmp/sha256sum.common.txt /tmp/sha256sum.builder.txt
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine
+- BaseName: common
+  Commands:
+  - Key: TAG
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SHIBSP_CONFIG
+      Value: /etc/shibboleth/shibboleth2.xml
+    - Key: LOG_LEVEL
+      Value: info
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /httpd/
+    - /
+  - Chown: ""
+    From: healthcheck
+    Name: copy
+    SourcesAndDest:
+    - /healthcheck
+    - /
+  - Chown: apache:apache
+    From: cgi-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/redis
+    - /bin/
+  - Chown: apache:apache
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - root/
+    - /
+  - Name: user
+    User: apache
+  - Name: expose
+    Ports:
+    - "8080"
+  - Health:
+      Test:
+      - CMD-SHELL
+      - /healthcheck     -c 200 http://localhost:8080/auth/Shibboleth.sso/Metadata     -c
+        200 http://localhost:8080/auth/Shibboleth.sso/Status     -c 204 http://localhost:8080/auth/elmr/status
+    Name: healthcheck
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: common
+  Name: ""
+  Platform: ""
+  SourceCode: FROM common

@@ -1,0 +1,112 @@
+MetaArgs:
+- DefaultValue: andahme
+  Key: INPUT_DOCKER_REGISTRY
+  ProvidedValue: null
+  Value: andahme
+- DefaultValue: "8"
+  Key: INPUT_JAVA_MAJOR
+  ProvidedValue: null
+  Value: "8"
+- DefaultValue: 2.0.1
+  Key: INPUT_KAFKA_VERSION
+  ProvidedValue: null
+  Value: 2.0.1
+- DefaultValue: "2.11"
+  Key: INPUT_SCALA_VERSION
+  ProvidedValue: null
+  Value: "2.11"
+- DefaultValue: http://apache.osuosl.org/kafka/${INPUT_KAFKA_VERSION}/kafka_${INPUT_SCALA_VERSION}-${INPUT_KAFKA_VERSION}.tgz
+  Key: KAFKA_ARTIFACT
+  ProvidedValue: null
+  Value: http://apache.osuosl.org/kafka/${INPUT_KAFKA_VERSION}/kafka_${INPUT_SCALA_VERSION}-${INPUT_KAFKA_VERSION}.tgz
+Stages:
+- As: distribution
+  BaseName: ${INPUT_DOCKER_REGISTRY}/debian:testing
+  Commands:
+  - Key: KAFKA_ARTIFACT
+    Name: arg
+    Value: null
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ${KAFKA_ARTIFACT}
+    - /tmp/kafka.tar.gz
+  - CmdLine:
+    - tar -zxf /tmp/kafka.tar.gz -C /opt --strip-component=1     --exclude=site-docs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /opt/logs &&     chmod 777 /opt/config /opt/logs
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${INPUT_DOCKER_REGISTRY}/debian:testing
+  Name: distribution
+  Platform: ""
+  SourceCode: FROM ${INPUT_DOCKER_REGISTRY}/debian:testing AS distribution
+- As: kafka
+  BaseName: ${INPUT_DOCKER_REGISTRY}/openjdk-jre:${INPUT_JAVA_MAJOR}
+  Commands:
+  - Key: INPUT_KAFKA_VERSION
+    Name: arg
+    Value: null
+  - Name: expose
+    Ports:
+    - "9092"
+  - Env:
+    - Key: KAFKA_HOME
+      Value: /opt/kafka
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: ${KAFKA_HOME}/bin:${PATH}
+    Name: env
+  - Chown: ""
+    From: distribution
+    Name: copy
+    SourcesAndDest:
+    - /opt
+    - ${KAFKA_HOME}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /docker-entrypoint.sh
+  - CmdLine:
+    - useradd --comment "Kafka User" --create-home --uid 1011 kafka
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s/^\\(log.dirs=\\).*/\1\/var\/lib\/kafka/g" ${KAFKA_HOME}/config/server.properties
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - log4j.properties
+    - ${KAFKA_HOME}/config/log4j.properties
+  - CmdLine:
+    - mkdir /var/lib/kafka &&     chmod 777 /var/lib/kafka
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/lib/kafka
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - kafka-server-start.sh
+    - /opt/kafka/config/server.properties
+    Name: cmd
+    PrependShell: false
+  - Name: user
+    User: kafka
+  From:
+    Image: ${INPUT_DOCKER_REGISTRY}/openjdk-jre:${INPUT_JAVA_MAJOR}
+  Name: kafka
+  Platform: ""
+  SourceCode: FROM ${INPUT_DOCKER_REGISTRY}/openjdk-jre:${INPUT_JAVA_MAJOR} AS kafka

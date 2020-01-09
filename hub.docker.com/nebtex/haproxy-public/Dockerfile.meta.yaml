@@ -1,0 +1,199 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - CmdLine:
+    - echo "deb http://ftp.debian.org/debian jessie-backports main" > /etc/apt/sources.list.d/jessie.backports.list
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SUPERVISOR_VERSION
+      Value: 3.3.0
+    Name: env
+  - CmdLine:
+    - buildDeps='curl gcc libc6-dev libpcre3-dev libssl-dev make libreadline-dev'     &&
+      set -x     && apt-get update && apt-get install --no-install-recommends -yqq
+      $buildDeps     cron     wget     ca-certificates     curl     patch     unzip     iptables     python-setuptools     libssl1.0.0
+      libpcre3     && apt-get install --no-install-recommends -yqq certbot -t jessie-backports     &&
+      wget https://github.com/Supervisor/supervisor/archive/${SUPERVISOR_VERSION}.tar.gz     &&
+      tar -xvf ${SUPERVISOR_VERSION}.tar.gz     && cd supervisor-${SUPERVISOR_VERSION}
+      && python setup.py install     && apt-get clean autoclean && apt-get autoremove
+      -y     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CONSUL_TEMPLATE_VERSION
+      Value: 0.14.0
+    Name: env
+  - Env:
+    - Key: CONSUL_TEMPLATE
+      Value: /usr/local/bin/consul-template
+    Name: env
+  - Env:
+    - Key: CONSUL_CONFIG
+      Value: /consul-template/config.d
+    Name: env
+  - Env:
+    - Key: CONSUL_CONNECT
+      Value: consul.service.consul:8500
+    Name: env
+  - Env:
+    - Key: CONSUL_MINWAIT
+      Value: 2s
+    Name: env
+  - Env:
+    - Key: CONSUL_MAXWAIT
+      Value: 10s
+    Name: env
+  - Env:
+    - Key: CONSUL_LOGLEVEL
+      Value: info
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://releases.hashicorp.com/consul-template/${CONSUL_TEMPLATE_VERSION}/consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip
+    - /
+  - CmdLine:
+    - unzip /consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip  &&     mv
+      /consul-template /usr/local/bin/consul-template &&     rm -rf /consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /consul-template/config.d /consul-template/template.d
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - config/
+    - /consul-template/config.d/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - template/
+    - /consul-template/template.d/
+  - Env:
+    - Key: LUA_VERSION
+      Value: 5.3.0
+    Name: env
+  - Env:
+    - Key: LUA_VERSION_SHORT
+      Value: "53"
+    Name: env
+  - CmdLine:
+    - cd /usr/src     && curl -R -O http://www.lua.org/ftp/lua-${LUA_VERSION}.tar.gz     &&
+      tar zxf lua-${LUA_VERSION}.tar.gz     && rm lua-${LUA_VERSION}.tar.gz     &&
+      cd lua-${LUA_VERSION}     && make linux     && make INSTALL_TOP=/opt/lua${LUA_VERSION_SHORT}
+      install
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HAPROXY_MAJOR
+      Value: "1.6"
+    Name: env
+  - Env:
+    - Key: HAPROXY_VERSION
+      Value: 1.6.5
+    Name: env
+  - Env:
+    - Key: HAPROXY_MD5
+      Value: 5290f278c04e682e42ab71fed26fc082
+    Name: env
+  - CmdLine:
+    - "cd / && curl -SL \"http://www.haproxy.org/download/${HAPROXY_MAJOR}/src/haproxy-${HAPROXY_VERSION}.tar.gz\"
+      -o haproxy.tar.gz \t&& echo \"${HAPROXY_MD5}  haproxy.tar.gz\" | md5sum -c \t&&
+      mkdir -p /usr/src/haproxy \t&& tar -xzf haproxy.tar.gz -C /usr/src/haproxy --strip-components=1
+      \t&& rm haproxy.tar.gz \t&& make -C /usr/src/haproxy \t\tTARGET=linux2628 \t\tUSE_PCRE=1
+      PCREDIR= \t\tUSE_OPENSSL=1 \t\tUSE_ZLIB=1 \t\tUSE_LUA=yes LUA_LIB=/opt/lua53/lib/
+      \        LUA_INC=/opt/lua53/include/ LDFLAGS=-ldl \t\tall \t\tinstall-bin \t&&
+      mkdir -p /usr/local/etc/haproxy \t&& cp -R /usr/src/haproxy/examples/errorfiles
+      /usr/local/etc/haproxy/errors \t&& rm -rf /usr/src/haproxy"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run_consul_template.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - reload.sh
+    - /
+  - CmdLine:
+    - chmod +x reload.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x run_consul_template.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - haproxy-acme-validation-plugin/acme-http01-webroot.lua
+    - /usr/local/etc/haproxy/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - haproxy-acme-validation-plugin/cert-renewal-haproxy.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - crontab.txt
+    - /var/crontab.txt
+  - CmdLine:
+    - crontab /var/crontab.txt && chmod 600 /etc/crontab
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - certs.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bootstrap.sh
+    - /
+  - CmdLine:
+    - mkdir /jail
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "1936"
+    - "443"
+    - "80"
+  - Name: volume
+    Volumes:
+    - /etc/letsencrypt
+  - CmdLine:
+    - /bootstrap.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- BaseName: supinf/redash:core-8.0
+  Commands:
+  - Env:
+    - Key: REDASH_DATABASE_URL
+      Value: postgresql://postgres@localhost:5432/postgres
+    - Key: REDASH_REDIS_URL
+      Value: redis://localhost:6379/0
+    - Key: REDIS_VERSION
+      Value: 5.0.3
+    - Key: S6_VERSION
+      Value: v1.21.7.0
+    - Key: S6_LOGGING
+      Value: "1"
+    Name: env
+  - Name: user
+    User: root
+  - CmdLine:
+    - mkdir -p /var/cache/apt     && apt-get update     && apt-get install -y gnupg2
+      curl     && s6_dl=https://github.com/just-containers/s6-overlay/releases/download     &&
+      s6_tar=s6-overlay-amd64.tar.gz     && curl --location --silent --show-error
+      -O "${s6_dl}/${S6_VERSION}/${s6_tar}"     && curl --location --silent --show-error
+      -O "${s6_dl}/${S6_VERSION}/${s6_tar}.sig"     && curl --location --silent --show-error
+      https://keybase.io/justcontainers/key.asc | gpg --import     && gpg --verify
+      ${s6_tar}.sig ${s6_tar}     && tar xzf ${s6_tar} -C /     && apt-get remove
+      --purge -y gnupg2 curl     && apt autoremove -y     && rm -rf ${s6_tar} ${s6_tar}.sig
+      /var/cache
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/cache/apt     && apt-get install -y postgresql postgresql-contrib     &&
+      echo "host  all  postgres  0.0.0.0/0  trust" > /etc/postgresql/9.5/main/pg_hba.conf     &&
+      echo "host  all  redash    0.0.0.0/0  trust" >> /etc/postgresql/9.5/main/pg_hba.conf     &&
+      echo "listen_addresses='*'" >> /etc/postgresql/9.5/main/postgresql.conf     &&
+      echo "stats_temp_directory='/tmp'" >> /etc/postgresql/9.5/main/postgresql.conf     &&
+      rm -rf /var/cache
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/cache/apt     && apt-get install -y build-essential curl tcl     &&
+      cd /tmp     && curl --location --silent --show-error -O        "http://download.redis.io/releases/redis-${REDIS_VERSION}.tar.gz"     &&
+      tar xzf "redis-${REDIS_VERSION}.tar.gz"     && cd "redis-${REDIS_VERSION}"     &&
+      make && make install     && mkdir /etc/redis     && cp "/tmp/redis-${REDIS_VERSION}/redis.conf"
+      /etc/redis     && adduser --system --group --no-create-home redis     && mkdir
+      -p /var/lib/redis     && chown redis:redis /var/lib/redis     && chmod 770 /var/lib/redis     &&
+      apt-get remove --purge -y build-essential curl tcl     && apt autoremove -y     &&
+      cd /     && rm -rf /var/cache /tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /etc/services.d/postgres     && echo "#!/usr/bin/with-contenv sh\ns6-setuidgid
+      postgres /usr/lib/postgresql/9.5/bin/postgres -D /var/lib/postgresql/9.5/main
+      -c config_file=/etc/postgresql/9.5/main/postgresql.conf"       > /etc/services.d/postgres/run
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /etc/services.d/redis     && echo "#!/usr/bin/with-contenv sh\n/usr/local/bin/redis-server
+      /etc/redis/redis.conf"       > /etc/services.d/redis/run
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /etc/services.d/celery-worker     && echo "#!/usr/bin/with-contenv
+      sh\nsleep 3\ncd /app\ns6-setuidgid postgres /app/bin/docker-entrypoint create_db\ns6-setuidgid
+      redash /app/bin/docker-entrypoint scheduler"       > /etc/services.d/celery-worker/run
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "5432"
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - s6-setuidgid
+    - redash
+    - /app/bin/docker-entrypoint
+    - server
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: supinf/redash:core-8.0
+  Name: ""
+  Platform: ""
+  SourceCode: FROM supinf/redash:core-8.0

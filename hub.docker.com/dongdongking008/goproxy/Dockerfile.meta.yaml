@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: go-builder
+  BaseName: golang:1.11-alpine3.8
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - go/src/cmd/go/internal/modload/load.go
+    - /usr/local/go/src/cmd/go/internal/modload/
+  - CmdLine:
+    - "apk add --no-cache --virtual .build-deps \t\tbash \t\tgcc \t\tmusl-dev \t\topenssl
+      \t\tgo \t; \texport \t\tGOROOT_BOOTSTRAP=\"/usr/lib/go/\" \t\tGOOS=\"$(go env
+      GOOS)\" \t\tGOARCH=\"$(go env GOARCH)\" \t\tGOHOSTOS=\"$(go env GOHOSTOS)\"
+      \t\tGOHOSTARCH=\"$(go env GOHOSTARCH)\" \t; \tapkArch=\"$(apk --print-arch)\";
+      \tcase \"$apkArch\" in \t\tarmhf) export GOARM='6' ;; \t\tx86) export GO386='387'
+      ;; \tesac; \t\tcd /usr/local/go/src; \t./make.bash; \t\trm -rf \t\t/usr/local/go/pkg/bootstrap
+      \t\t/usr/local/go/pkg/obj \t; \tapk del .build-deps;"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-alpine3.8
+  Name: go-builder
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine3.8 as go-builder
+- As: builder
+  BaseName: golang:1.11-alpine3.8
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/goproxy
+  - CmdLine:
+    - cd /go/src/goproxy &&    CGO_ENABLED=0 GO111MODULE=on go build -o /app/goproxy
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - /app
+  From:
+    Image: golang:1.11-alpine3.8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine3.8 as builder
+- BaseName: golang:1.11-alpine3.8
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"dongdongking008 <dongdongking008@gmail.com>"'
+    Name: label
+  - CmdLine:
+    - apk --update add openssh-client git &&     rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: go-builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/go/bin
+    - /usr/local/go/bin
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /app
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - /app/goproxy
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: golang:1.11-alpine3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine3.8

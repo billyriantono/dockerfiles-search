@@ -1,0 +1,57 @@
+MetaArgs: null
+Stages:
+- As: build_image
+  BaseName: golang:1.13.0-alpine3.10
+  Commands:
+  - CmdLine:
+    - apk update && apk upgrade &&     apk add --no-cache bash git gcc libc-dev make
+      zip &&     mkdir -p /go/src/github.com/fstab/grok_exporter
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/fstab/grok_exporter
+  - CmdLine:
+    - wget https://github.com/kkos/oniguruma/releases/download/v6.7.0/onig-6.7.0.tar.gz
+      &&     tar xfz onig-6.7.0.tar.gz &&     cd onig-6.7.0 && ./configure && make
+      && make install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/fstab/grok_exporter
+  - CmdLine:
+    - /go/src/github.com/fstab/grok_exporter/release.sh dockerhub-linux-amd64
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13.0-alpine3.10
+  Name: build_image
+  Platform: ""
+  SourceCode: FROM golang:1.13.0-alpine3.10 AS build_image
+- As: prod_image
+  BaseName: alpine:3.7
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./logstash-patterns-core
+    - /patterns
+  - Chown: ""
+    From: build_image
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/fstab/grok_exporter/dist/grok_exporter
+    - /
+  - CmdLine:
+    - /grok_exporter -config /config.yml
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: prod_image
+  Platform: ""
+  SourceCode: FROM alpine:3.7 as prod_image

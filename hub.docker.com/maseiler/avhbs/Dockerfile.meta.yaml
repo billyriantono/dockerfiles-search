@@ -1,0 +1,124 @@
+MetaArgs: null
+Stages:
+- As: build-npm
+  BaseName: node:lts-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./client
+    - .
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:lts-alpine
+  Name: build-npm
+  Platform: ""
+  SourceCode: FROM node:lts-alpine as build-npm
+- As: build-go
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache add git build-base
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH/src/github.com/maseiler/avh-booking-system/server
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server
+    - ./
+  - CmdLine:
+    - go get github.com/go-sql-driver/mysql
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/gorilla/mux
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo "Go path: $GOPATH"'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - env GOOS=linux GOARCH=386 go build -o /avh_bs_main main.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /avh_bs_main
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: build-go
+  Platform: ""
+  SourceCode: FROM golang:alpine as build-go
+- BaseName: alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: build-npm
+    Name: copy
+    SourcesAndDest:
+    - /app/dist
+    - /app/dist
+  - Chown: ""
+    From: build-go
+    Name: copy
+    SourcesAndDest:
+    - /avh_bs_main
+    - /app/avh_bs_main
+  - Name: expose
+    Ports:
+    - "8081"
+  - Env:
+    - Key: AVHBS_DB_USER
+      Value: db_user
+    Name: env
+  - Env:
+    - Key: AVHBS_DB_PASS
+      Value: db_pass
+    Name: env
+  - Env:
+    - Key: AVHBS_DB_NAME
+      Value: avhbs_db
+    Name: env
+  - Env:
+    - Key: AVHBS_DB_IP
+      Value: db
+    Name: env
+  - Env:
+    - Key: AVHBS_DB_PORT
+      Value: "3306"
+    Name: env
+  - Env:
+    - Key: AVHBS_FRONTEND_PATH
+      Value: /app/dist/
+    Name: env
+  - CmdLine:
+    - echo -e '#!/bin/sh\necho "Sleeping..."\nsleep 45\necho "Starting app"!\n/app/avh_bs_main\n'
+      > /start.sh && chmod +x /start.sh && cat /start.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sh
+    - /start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

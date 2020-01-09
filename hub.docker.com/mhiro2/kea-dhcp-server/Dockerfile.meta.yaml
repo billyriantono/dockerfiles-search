@@ -1,0 +1,56 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:latest
+  Commands:
+  - Key: KEA_DHCP_VERSION
+    Name: arg
+    Value: 1.3.0
+  - Key: LOG4_CPLUS_VERSION
+    Name: arg
+    Value: 1.2.1
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps         alpine-sdk         bash         boost-dev         bzip2-dev         file         libressl-dev         mariadb-dev         zlib-dev
+      &&     curl -sL https://sourceforge.net/projects/log4cplus/files/log4cplus-stable/${LOG4_CPLUS_VERSION}/log4cplus-${LOG4_CPLUS_VERSION}.tar.gz
+      | tar -zx -C /tmp &&     cd /tmp/log4cplus-${LOG4_CPLUS_VERSION} &&     ./configure
+      &&     make -s -j$(nproc) &&     make install &&     curl -sL https://ftp.isc.org/isc/kea/${KEA_DHCP_VERSION}/kea-${KEA_DHCP_VERSION}.tar.gz
+      | tar -zx -C /tmp &&     cd /tmp/kea-${KEA_DHCP_VERSION} &&     ./configure         --enable-shell         --with-dhcp-mysql=/usr/bin/mysql_config
+      &&     make -s -j$(nproc) &&     make install-strip &&     apk del --purge .build-deps
+      &&     rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:latest as builder
+- BaseName: alpine:latest
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"mhiro2 <hirotsu.masaaki@gmail.com>"'
+    Name: label
+  - CmdLine:
+    - apk --no-cache add         bash         boost         bzip2         libressl         mariadb-client-libs         zlib
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /usr/local/
+  - CmdLine:
+    - /usr/local/sbin/kea-dhcp4
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -c
+    - /usr/local/etc/kea/kea-dhcp4.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

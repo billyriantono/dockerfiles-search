@@ -1,0 +1,265 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "build",
+      "BaseName": "centos:7",
+      "SourceCode": "FROM centos:7 AS build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Image": "centos:7"
+      },
+      "Commands": [
+        {
+          "Key": "CEPH_CODENAME",
+          "Name": "arg",
+          "Value": "\"mimic\""
+        },
+        {
+          "Key": "CEPH_DISTRO",
+          "Name": "arg",
+          "Value": "\"el7\""
+        },
+        {
+          "Key": "CEPH_VERSION",
+          "Name": "arg",
+          "Value": "\"13.2.4\""
+        },
+        {
+          "Env": [
+            {
+              "Key": "VENV_DIR",
+              "Value": "/benji"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "images/benji/ceph.repo",
+            "/etc/yum.repos.d/ceph.repo"
+          ]
+        },
+        {
+          "CmdLine": [
+            "sed -i -e \"s/{ceph-release}/$CEPH_CODENAME/\" -e \"s/{distro}/$CEPH_DISTRO/\" /etc/yum.repos.d/ceph.repo"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "rpm --import 'https://download.ceph.com/keys/release.asc' \u0026\u0026 \tyum install -y deltarpm tzdata epel-release https://centos7.iuscommunity.org/ius-release.rpm \u0026\u0026 \tyum update -y \u0026\u0026 \tyum install -y git gcc                    python36u-devel python36u-pip python36u-libs python36u-setuptools                    librados-devel librbd-devel"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "python3.6 -m venv $VENV_DIR \u0026\u0026 \tln -s /usr/bin/python3.6-config $VENV_DIR/bin/python-config \u0026\u0026 \tln -s /usr/bin/python3.6m-x86_64-config $VENV_DIR/bin/python3.6m-x86_64-config \u0026\u0026 \t. $VENV_DIR/bin/activate \u0026\u0026 \tpip install --upgrade 'pip==10.0.*' \u0026\u0026 \tsed -i \"s|self.run_command(\\['clone', '-q', url, dest\\])|self.run_command(['clone', '--depth=1', '--branch', rev if rev else 'master', '-q', url, dest])|\" $(python -c 'import site; print(site.getsitepackages()[0])')/pip/_internal/vcs/git.py"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            ". $VENV_DIR/bin/activate \u0026\u0026 \tpip install cython \u0026\u0026 \tpip install \"git+https://github.com/ceph/ceph@v$CEPH_VERSION#subdirectory=src/pybind/rados\" \u0026\u0026 \tpip install \"git+https://github.com/ceph/ceph@v$CEPH_VERSION#subdirectory=src/pybind/rbd\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            ".",
+            "/benji-source/"
+          ]
+        },
+        {
+          "CmdLine": [
+            ". $VENV_DIR/bin/activate \u0026\u0026 \tpip install '/benji-source/[compression,s3,readcache,b2]'"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "runtime",
+      "BaseName": "centos:7",
+      "SourceCode": "FROM centos:7 AS runtime",
+      "Platform": "",
+      "As": "runtime",
+      "From": {
+        "Image": "centos:7"
+      },
+      "Commands": [
+        {
+          "Key": "VCS_REF",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "VCS_URL",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "VERSION",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Env": [
+            {
+              "Key": "IMAGE_VERSION",
+              "Value": "$VERSION"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Key": "BUILD_DATE",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Env": [
+            {
+              "Key": "VENV_DIR",
+              "Value": "/benji"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PATH",
+              "Value": "$VENV_DIR/scripts:$VENV_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/bin"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "org.label-schema.schema-version",
+              "Value": "\"1.0\""
+            },
+            {
+              "Key": "org.label-schema.vcs-ref",
+              "Value": "\"$VCS_REF\""
+            },
+            {
+              "Key": "org.label-schema.vcs-url",
+              "Value": "\"$VCS_URL\""
+            },
+            {
+              "Key": "org.label-schema.build-date",
+              "Value": "\"$BUILD_DATE\""
+            },
+            {
+              "Key": "org.label-schema.version",
+              "Value": "\"$VERSION\""
+            },
+            {
+              "Key": "org.label-schema.url",
+              "Value": "\"https://benji-backup.me/\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/etc/yum.repos.d/ceph.repo",
+            "/etc/yum.repos.d/ceph.repo"
+          ]
+        },
+        {
+          "CmdLine": [
+            "rpm --import 'https://download.ceph.com/keys/release.asc' \u0026\u0026 \tyum install -y deltarpm tzdata epel-release https://centos7.iuscommunity.org/ius-release.rpm \u0026\u0026 \tyum update -y \u0026\u0026 \tyum install -y python36u-devel python36u-pip python36u-libs python36u-setuptools \u0026\u0026 \tyum install -y librados2 librbd1 ceph-base \u0026\u0026 \tyum install -y bash-completion joe jq \u0026\u0026 \tyum clean all"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir /etc/benji \u0026\u0026     ln -s $VENV_DIR/etc/benji.yaml /etc/benji/benji.yaml \u0026\u0026     echo \"PATH=$PATH\" \u003e\u003e/etc/environment"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "$VENV_DIR/",
+            "$VENV_DIR/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "scripts/",
+            "$VENV_DIR/scripts/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "etc/benji-minimal.yaml",
+            "$VENV_DIR/etc/benji.yaml"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "images/benji/bashrc",
+            "/root/.bashrc"
+          ]
+        },
+        {
+          "CmdLine": [
+            "chmod -R a+x $VENV_DIR/scripts/"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "$VENV_DIR"
+        },
+        {
+          "CmdLine": [
+            "/bin/bash"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "CmdLine": [
+            "-il"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

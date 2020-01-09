@@ -1,0 +1,156 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: python:3.6.9-slim-buster
+  Commands:
+  - Key: UID
+    Name: arg
+    Value: "1000"
+  - Key: GID
+    Name: arg
+    Value: "1000"
+  - Env:
+    - Key: HOME
+      Value: /home/forseti
+    - Key: WORK_DIR
+      Value: /home/forseti/forseti-security
+    - Key: PATH
+      Value: /home/forseti/.local/bin:$PATH
+    Name: env
+  - CmdLine:
+    - groupadd -g $GID forseti &&     useradd -d ${HOME} -u $UID -g forseti forseti
+      &&     mkdir -p ${HOME}/forseti-security &&     chown -R forseti:forseti ${HOME}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${WORK_DIR}
+  - Name: user
+    User: forseti
+  From:
+    Image: python:3.6.9-slim-buster
+  Name: base
+  Platform: ""
+  SourceCode: FROM python:3.6.9-slim-buster as base
+- As: pre-build
+  BaseName: base
+  Commands:
+  - Name: user
+    User: root
+  - CmdLine:
+    - apt-get update  &&     apt-get install -y build-essential                        libffi-dev                        libssl-dev                        libgmp-dev                        default-libmysqlclient-dev
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: forseti
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: pre-build
+  Platform: ""
+  SourceCode: FROM base AS pre-build
+- As: build
+  BaseName: pre-build
+  Commands:
+  - Chown: forseti:forseti
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ${WORK_DIR}
+  - CmdLine:
+    - pip install --no-cache-dir --upgrade -r requirements.txt --user
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install --no-cache-dir --upgrade google-cloud-profiler --user
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python setup.py install --user
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: pre-build
+  Name: build
+  Platform: ""
+  SourceCode: FROM pre-build AS build
+- As: runtime
+  BaseName: base
+  Commands:
+  - Name: user
+    User: forseti
+  - Env:
+    - Key: PORT
+      Value: "50051"
+    Name: env
+  - Chown: forseti:forseti
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /home/forseti/.local
+    - /home/forseti/.local
+  - Chown: forseti:forseti
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /home/forseti/forseti-security/.eggs
+    - /home/forseti/forseti-security/.eggs
+  - Chown: forseti:forseti
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /home/forseti/forseti-security/install/scripts/docker_entrypoint.sh
+    - /home/forseti/.local/bin/
+  - CmdLine:
+    - chmod u+x /home/forseti/.local/bin/docker_entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker_entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM base AS runtime
+- As: forseti-server
+  BaseName: runtime
+  Commands:
+  - Env:
+    - Key: SERVER_HOST
+      Value: 0.0.0.0
+    Name: env
+  - Env:
+    - Key: SERVICES
+      Value: '"scanner model inventory explain notifier"'
+    Name: env
+  - Env:
+    - Key: CONFIG_FILE_PATH
+      Value: /forseti-security/forseti_conf_server.yaml
+    Name: env
+  - Env:
+    - Key: LOG_LEVEL
+      Value: info
+    Name: env
+  - Name: expose
+    Ports:
+    - $PORT
+  - CmdLine:
+    - forseti_server            --endpoint $SERVER_HOST:$PORT            --forseti_db
+      $SQL_DB_CONNECTION_STRING            --services $SERVICES            --config_file_path
+      $CONFIG_FILE_PATH            --log_level=$LOG_LEVEL            --enable_console_log
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Stage:
+      Index: 3
+      Named: runtime
+  Name: forseti-server
+  Platform: ""
+  SourceCode: FROM runtime AS forseti-server

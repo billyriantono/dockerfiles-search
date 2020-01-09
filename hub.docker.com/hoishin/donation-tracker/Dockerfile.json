@@ -1,0 +1,141 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "downloader",
+      "BaseName": "alpine/git",
+      "SourceCode": "FROM alpine/git AS downloader",
+      "Platform": "",
+      "As": "downloader",
+      "From": {
+        "Image": "alpine/git"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "TRACKER_REPO",
+              "Value": "GamesDoneQuick/donation-tracker-toplevel"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "https://api.github.com/repos/${TRACKER_REPO}/git/refs/heads/master",
+            "/tmp/version.json"
+          ]
+        },
+        {
+          "CmdLine": [
+            "git clone --recursive https://github.com/${TRACKER_REPO}.git /donations"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "node-builder",
+      "BaseName": "node:10",
+      "SourceCode": "FROM node:10 AS node-builder",
+      "Platform": "",
+      "As": "node-builder",
+      "From": {
+        "Image": "node:10"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "downloader",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/donations",
+            "/donations"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/donations/tracker"
+        },
+        {
+          "CmdLine": [
+            "yarn \u0026\u0026 yarn build"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "python-builder",
+      "BaseName": "python:2.7-jessie",
+      "SourceCode": "FROM python:2.7-jessie AS python-builder",
+      "Platform": "",
+      "As": "python-builder",
+      "From": {
+        "Image": "python:2.7-jessie"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "downloader",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/donations",
+            "/donations"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "node-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/donations/tracker/static/gen",
+            "/donations/tracker/static/gen"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "node-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/donations/tracker/ui-tracker.manifest.json",
+            "/donations/tracker/"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/donations"
+        },
+        {
+          "CmdLine": [
+            "apt-get update   \u0026\u0026 apt-get upgrade -y   \u0026\u0026 apt-get install -y gcc gettext sqlite3 locales-all --no-install-recommends   \u0026\u0026 sed -i '/^psycopg2/d' tracker/requirements.txt   \u0026\u0026 pip install -r requirements.txt   \u0026\u0026 pip install gunicorn   \u0026\u0026 mkdir db"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "local.py",
+            "entrypoint.sh",
+            "./"
+          ]
+        },
+        {
+          "CmdLine": [
+            "sh",
+            "entrypoint.sh"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

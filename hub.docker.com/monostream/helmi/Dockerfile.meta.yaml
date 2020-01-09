@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12-alpine
+  Commands:
+  - Env:
+    - Key: HELM_VERSION
+      Value: '"v2.13.1"'
+    Name: env
+  - CmdLine:
+    - apk add --update --no-cache ca-certificates tar wget
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/monostream/helmi/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - go build -ldflags "-s -w" -o helmi .
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/
+  - CmdLine:
+    - cp /go/src/github.com/monostream/helmi/helmi .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -r /go/src/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -nv -O- https://storage.googleapis.com/kubernetes-helm/helm-${HELM_VERSION}-linux-amd64.tar.gz
+      | tar --strip-components=1 -zxf -
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12-alpine as builder
+- BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache ca-certificates dumb-init
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/
+    - .
+  - Env:
+    - Key: PATH
+      Value: '"/app:${PATH}"'
+    Name: env
+  - CmdLine:
+    - addgroup -S helmi &&     adduser -S -G helmi helmi &&     chown -R helmi:helmi
+      /app
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: helmi
+  - CmdLine:
+    - mkdir -p ~/.helm/repository/cache &&     mkdir -p ~/.helm/repository/local &&     mkdir
+      -p ~/.helm/cache/archive &&     mkdir -p ~/.helm/plugins &&     mkdir -p ~/.helm/starters
+    Name: run
+    PrependShell: true
+  - Chown: helmi:helmi
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - repositories.yaml
+    - /home/helmi/.helm/repository/repositories.yaml
+  - CmdLine:
+    - dumb-init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - helmi
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

@@ -1,0 +1,210 @@
+MetaArgs: null
+Stages:
+- BaseName: agileops/centos-javapython:latest
+  Commands:
+  - Env:
+    - Key: HADOOP_VERSION
+      Value: 2.7.6
+    - Key: HADOOP_HOME
+      Value: /opt/hadoop
+    - Key: SPARK_VERSION
+      Value: 2.3.0
+    - Key: SPARK_HOME
+      Value: /opt/spark
+    - Key: PYTHON_VERSION
+      Value: "3.6"
+    - Key: PYSPARK_PYTHON
+      Value: python${PYTHON_VERSION}
+    - Key: BIND_ADDRESS
+      Value: '"127.0.0.1"'
+    - Key: PYSPARK_DRIVER_PYTHON
+      Value: jupyter
+    - Key: PYSPARK_DRIVER_PYTHON_OPTS
+      Value: '"notebook --port=8888 --no-browser --ip=*"'
+    Name: env
+  - CmdLine:
+    - yum install -y which &&     yum clean all && rm -rf /var/cache/yum &&     curl
+      http://apache.mirror.iweb.ca/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz
+      > /opt/hadoop-${HADOOP_VERSION}.tar.gz &&     mkdir ${HADOOP_HOME} &&     tar
+      xvfp /opt/hadoop-${HADOOP_VERSION}.tar.gz -C ${HADOOP_HOME} --strip-components=1
+      &&     rm -fr /opt/hadoop/share/doc/ &&     rm /opt/hadoop-${HADOOP_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum install -y rsync openssh-server openssh-clients  &&     yum clean all &&
+      rm -rf /var/cache/yum
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - http://central.maven.org/maven2/org/apache/hadoop/hadoop-streaming/${HADOOP_VERSION}/hadoop-streaming-${HADOOP_VERSION}.jar
+    - ${HADOOP_HOME}/hadoop-streaming.jar
+  - CmdLine:
+    - curl https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-without-hadoop.tgz
+      > /opt/spark-$SPARK_VERSION-bin-without-hadoop.tgz &&     mkdir ${SPARK_HOME}
+      &&     tar xvfp ${SPARK_HOME}-${SPARK_VERSION}-bin-without-hadoop.tgz -C ${SPARK_HOME}
+      --strip-components=1 &&     rm /opt/spark-$SPARK_VERSION-bin-without-hadoop.tgz
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: ${SPARK_HOME}/bin:${PATH}
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: ${HADOOP_HOME}/bin:${PATH}
+    Name: env
+  - CmdLine:
+    - echo 'export SPARK_DIST_CLASSPATH=$(hadoop classpath)' >> ${SPARK_HOME}/conf/spark-env.sh
+      && chmod +x ${SPARK_HOME}/conf/spark-env.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd $SPARK_HOME/python &&  python setup.py install
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JUPYTER_DATA_DIR
+      Value: /usr/local/share/jupyter
+    Name: env
+  - CmdLine:
+    - yum install -y --setopt=tsflags=nodocs blas atlas gcc-gfortran swig gcc-c++
+      mercurial &&     yum clean all && rm -rf /var/cache/yum
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - /opt/spark/
+  - CmdLine:
+    - pip install --no-cache-dir -r ${SPARK_HOME}/requirements.txt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - jupyter nbextension enable --py widgetsnbextension --sys-prefix
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'mkdir -p $HOME/.config/matplotlib && echo ''backend      : Agg'' >>  $HOME/.config/matplotlib/matplotlibrc'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python3 -m ipykernel install &&     jupyter toree install --spark_home=${SPARK_HOME}
+      --interpreters=Scala,SQL --python="ipython3"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /work-dir /work-dir/hadoop /work-dir/spark
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /work-dir
+  - CmdLine:
+    - cd /work-dir && hg clone https://fraka6@bitbucket.org/fraka6/mlboost
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /work-dir/mlboost/mlboost/util:${PATH}
+    - Key: PYTHONPATH
+      Value: /work-dir/mlboost:${PYTHONPATH}
+    Name: env
+  - Name: volume
+    Volumes:
+    - /work-dir/hadoop/dfs.name
+  - Name: volume
+    Volumes:
+    - /work-dir/hadoop/dfs.data
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./etc/hadoop/*
+    - /opt/hadoop/etc/hadoop/
+  - Env:
+    - Key: NAMENODE_DATA
+      Value: /work-dir/hadoop/dfs.name
+    - Key: DFS_DATA
+      Value: /work-dir/hadoop/dfs.data
+    Name: env
+  - Env:
+    - Key: HADOOP_OPTS
+      Value: '"-Ddfs.name.dir=${NAMENODE_DATA} -Ddfs.data.dir=${DFS_DATA}"'
+    Name: env
+  - Env:
+    - Key: YARN_CONF_DIR
+      Value: ${HADOOP_HOME}/conf/etc
+    Name: env
+  - CmdLine:
+    - cd /tmp/ &&     curl http://apache.forsale.plus/hbase/2.0.0/hbase-2.0.0-src.tar.gz
+      > hbase-2.0.0-src.tar.gz &&     mkdir /tmp/hbase &&      tar xvfp hbase-2.0.0-src.tar.gz
+      --strip-components=1 -C /tmp/hbase  &&     curl http://apache.mirror.globo.tech/thrift/0.11.0/thrift-0.11.0.tar.gz
+      > thrift-0.11.0.tar.gz &&     mkdir /tmp/thrift &&     tar xvfp thrift-0.11.0.tar.gz
+      --strip-components=1 -C /tmp/thrift &&     yum install -y make &&     cd /tmp/thrift
+      &&     ./configure && make install &&     cd lib/py && python3 setup.py install
+      &&     mkdir /opt/hbase-python &&     cd /tmp/hbase &&     thrift --out /opt/hbase-python
+      --gen py ./hbase-thrift/src/main/resources/org/apache/hadoop/hbase/thrift2/hbase.thrift
+      &&     rm -R /tmp/hbase /tmp/thrift &&     rm /tmp/hbase-2.0.0-src.tar.gz /tmp/thrift-0.11.0.tar.gz
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PYTHONPATH
+      Value: /opt/hbase-python:$PYTHONPATH
+    Name: env
+  - CmdLine:
+    - pip install happybase==1.1.* phoenixdb==0.7.*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /opt/rh/rh-python36/root/usr/bin/python3.6 /opt/rh/rh-python36/root/usr/bin/python36
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./bin/*
+    - /usr/bin/
+  - Name: expose
+    Ports:
+    - "50010"
+    - "50020"
+    - "50070"
+    - "50075"
+    - "50090"
+    - "8020"
+    - "9000"
+  - Name: expose
+    Ports:
+    - "10020"
+    - "19888"
+  - Name: expose
+    Ports:
+    - "8030"
+    - "8031"
+    - "8032"
+    - "8033"
+    - "8040"
+    - "8042"
+    - "8088"
+  - Name: expose
+    Ports:
+    - "8888"
+  - CmdLine:
+    - /usr/bin/tini
+    - -g
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - jupyter notebook --port=8888 --no-browser --ip=0.0.0.0
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: agileops/centos-javapython:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM agileops/centos-javapython:latest

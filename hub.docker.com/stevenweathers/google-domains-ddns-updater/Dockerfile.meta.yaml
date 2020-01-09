@@ -1,0 +1,179 @@
+MetaArgs: null
+Stages:
+- As: buildernode
+  BaseName: node:10.14.1-alpine
+  Commands:
+  - CmdLine:
+    - mkdir /vueapp
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./public
+    - /vueapp/public
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src
+    - /vueapp/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./package.json
+    - /vueapp
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./package-lock.json
+    - /vueapp
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./babel.config.js
+    - /vueapp
+  - Name: workdir
+    Path: /vueapp
+  - CmdLine:
+    - npm set progress=false
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.14.1-alpine
+  Name: buildernode
+  Platform: ""
+  SourceCode: FROM node:10.14.1-alpine as builderNode
+- As: buildergo
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk add --no-cache git ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -D -g '' appuser
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /data
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./types.go
+    - $GOPATH/src/mypackage/myapp/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./datasrc.go
+    - $GOPATH/src/mypackage/myapp/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./handlers.go
+    - $GOPATH/src/mypackage/myapp/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./gddu.go
+    - $GOPATH/src/mypackage/myapp/
+  - Chown: ""
+    From: builderNode
+    Name: copy
+    SourcesAndDest:
+    - /vueapp/dist
+    - $GOPATH/src/mypackage/myapp/public
+  - Name: workdir
+    Path: $GOPATH/src/mypackage/myapp/
+  - CmdLine:
+    - go get github.com/rakyll/statik
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $GOPATH/src/mypackage/myapp/vendor/gddu
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - statik -src=$GOPATH/src/mypackage/myapp/public -dest=$GOPATH/src/mypackage/myapp/vendor/gddu
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -d -v
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w
+      -s" -o /go/bin/gddu
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: buildergo
+  Platform: ""
+  SourceCode: FROM golang:alpine as builderGo
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builderGo
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: builderGo
+    Name: copy
+    SourcesAndDest:
+    - /etc/passwd
+    - /etc/passwd
+  - Chown: ""
+    From: builderGo
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/gddu
+    - /go/bin/gddu
+  - Chown: ""
+    From: builderGo
+    Name: copy
+    SourcesAndDest:
+    - /data
+    - /data
+  - Name: user
+    User: appuser
+  - Env:
+    - Key: CADENCE
+      Value: '"@hourly"'
+    Name: env
+  - Env:
+    - Key: JSONPATH
+      Value: '"/data/hostnames.json"'
+    Name: env
+  - Name: volume
+    Volumes:
+    - /data
+  - CmdLine:
+    - /go/bin/gddu
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

@@ -1,0 +1,1 @@
+FROM gcr.io/google_containers/galera-install:0.1

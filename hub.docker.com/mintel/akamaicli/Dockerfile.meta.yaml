@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:3.10
+  Commands:
+  - CmdLine:
+    - apk -U add build-base curl
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - Env:
+    - Key: JSONNET_VERSION
+      Value: 0.12.1
+    - Key: JSONNET_SHA256
+      Value: 257c6de988f746cc90486d9d0fbd49826832b7a2f0dbdb60a515cc8a2596c950
+    Name: env
+  - CmdLine:
+    - curl -L https://github.com/google/jsonnet/archive/v${JSONNET_VERSION}.tar.gz
+      -o /tmp/jsonnet.tar.gz &&     echo "$JSONNET_SHA256  jsonnet.tar.gz" | sha256sum
+      -c &&     tar zxvf /tmp/jsonnet.tar.gz  -C /tmp &&     cd /tmp/jsonnet-$JSONNET_VERSION
+      && make && mv jsonnet /usr/local/bin && chmod a+x /usr/local/bin/jsonnet &&
+      cd - &&     rm -rf /tmp/jsonnet.tar.gz /tmp/jsonnet-$JSONNET_VERSION
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.10 AS builder
+- BaseName: alpine:3.10
+  Commands:
+  - Env:
+    - Key: AKAMAI_CLI_HOME
+      Value: /cli
+    - Key: PATH
+      Value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/gopath/bin
+    - Key: AKAMAICLI_VERSION
+      Value: 1.1.4
+    - Key: AKAMAICLI_SHA256
+      Value: bd7b6d150c62432398df4f20bfd3032cf701d2b16444309eaa830a1c1823d28b
+    Name: env
+  - CmdLine:
+    - mkdir /cli &&     apk add --no-cache bash git python2 python2-dev py2-pip python3
+      python3-dev wget jq openssl openssl-dev  curl nodejs build-base libffi libffi-dev
+      go npm make openssh &&     pip2 install --upgrade pip &&     pip3 install --upgrade
+      pip &&     curl -Lo /usr/local/bin/akamaicli https://github.com/akamai/cli/releases/download/${AKAMAICLI_VERSION}/akamai-${AKAMAICLI_VERSION}-linuxamd64
+      &&     cd /usr/local/bin &&     chmod +x /usr/local/bin/akamaicli &&     echo
+      "$AKAMAICLI_SHA256  akamaicli" | sha256sum -c &&     mkdir -p /cli/.akamai-cli
+      &&     akamaicli install --force adaptive-acceleration appsec auth cps dns firewall
+      image-manager netstorage property property-manager purge visitor-prioritization
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "[cli]" > /cli/.akamai-cli/config &&     echo "cache-path            =
+      /cli/.akamai-cli/cache" >> /cli/.akamai-cli/config &&     echo "config-version        =
+      1" >> /cli/.akamai-cli/config &&     echo "enable-cli-statistics = false" >>
+      /cli/.akamai-cli/config &&     echo "last-ping             = 2018-04-27T18:16:12Z"
+      >> /cli/.akamai-cli/config &&     echo "client-id             =" >> /cli/.akamai-cli/config
+      &&     echo "install-in-path       =" >> /cli/.akamai-cli/config &&     echo
+      "last-upgrade-check    = ignore" >> /cli/.akamai-cli/config
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/jsonnet
+    - /usr/local/bin/jsonnet
+  - CmdLine:
+    - addgroup -S mintel -g 1000 && adduser -S mintel -G mintel -h /home/mintel -u
+      1000 -s /bin/bash &&     chown -R 1000:1000 /cli
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: mintel
+  - Name: workdir
+    Path: /home/mintel
+  - CmdLine:
+    - /usr/bin/env
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10

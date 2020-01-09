@@ -1,0 +1,104 @@
+MetaArgs: null
+Stages:
+- As: build_deb
+  BaseName: debian:8.11-slim
+  Commands:
+  - Env:
+    - Key: CONSUL_TEMPLATE_VERSION
+      Value: 0.19.4
+    - Key: CONSUL_TEMPLATE_SHA256
+      Value: 5f70a7fb626ea8c332487c491924e0a2d594637de709e5b430ecffc83088abc0
+    - Key: GOSU_VERSION
+      Value: "1.10"
+    - Key: GOSU_SHA256
+      Value: 5b3b03713a888cee84ecbf4582b21ac9fd46c3d935ff2d7ea25dd5055d302d3c
+    Name: env
+  - CmdLine:
+    - apt-get update     && apt-get install --no-install-recommends --no-install-suggests
+      -y     ca-certificates     curl     unzip     && cd /usr/local/bin   && curl
+      -L https://releases.hashicorp.com/consul-template/${CONSUL_TEMPLATE_VERSION}/consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip
+      -o consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip   && echo -n "$CONSUL_TEMPLATE_SHA256  consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip"
+      | sha256sum -c -   && unzip consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip   &&
+      rm consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip     && dpkgArch="$(dpkg
+      --print-architecture | awk -F- '{ print $NF }')"   && curl -L "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch"
+      -o /usr/local/bin/gosu   && echo -n "$GOSU_SHA256  /usr/local/bin/gosu" | sha256sum
+      -c -   && chmod +x /usr/local/bin/gosu
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:8.11-slim
+  Name: build_deb
+  Platform: ""
+  SourceCode: FROM debian:8.11-slim AS build_deb
+- BaseName: debian:8.11-slim
+  Commands:
+  - CmdLine:
+    - apt-get update     && apt-get install --no-install-recommends --no-install-suggests
+      -y     build-essential     mini-dinstall     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: VAULT_ADDR
+      Value: ""
+    - Key: VAULT_TOKEN
+      Value: ""
+    - Key: USER_UID
+      Value: "1000"
+    - Key: USER_GID
+      Value: "1000"
+    - Key: IN_PATH
+      Value: /alloc/data/essi
+    - Key: OUT_PATH
+      Value: /alloc/data/deb
+    Name: env
+  - Chown: ""
+    From: build_deb
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/gosu
+    - /usr/local/bin/gosu
+  - Chown: ""
+    From: build_deb
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/consul-template
+    - /usr/local/bin/consul-template
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - /usr/local/bin/start.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/local/bin/entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates
+    - /root/templates
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - check
+    - /bin/check
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sign-release.sh
+    - /usr/local/bin/sign-release.sh
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:8.11-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:8.11-slim

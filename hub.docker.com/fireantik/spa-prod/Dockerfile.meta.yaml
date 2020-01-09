@@ -1,0 +1,107 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: node:10.13-alpine
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - Name: workdir
+    Path: /spa-prod
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./package.json
+    - /spa-prod/package.json
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./yarn.lock
+    - /spa-prod/yarn.lock
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./tsconfig.build.json
+    - /spa-prod/tsconfig.build.json
+  - CmdLine:
+    - yarn install --pure-lockfile --production=false
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src
+    - /spa-prod/src
+  - CmdLine:
+    - yarn build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn install --pure-lockfile --production=true
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.13-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM node:10.13-alpine as build
+- As: runtime
+  BaseName: node:10.13-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Name: expose
+    Ports:
+    - "8080"
+  - Health:
+      Interval: 5000000000
+      Retries: 3
+      Test:
+      - CMD-SHELL
+      - curl --fail http://localhost:8080/healthz || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - /usr/local/bin/node /spa-prod/dist/cli.js
+    Name: cmd
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache curl
+    Name: run
+    PrependShell: true
+  - Chown: node:node
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /spa-prod/package.json
+    - /spa-prod/package.json
+  - Chown: node:node
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /spa-prod/yarn.lock
+    - /spa-prod/yarn.lock
+  - Chown: node:node
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /spa-prod/dist
+    - /spa-prod/dist
+  - Chown: node:node
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /spa-prod/node_modules
+    - /spa-prod/node_modules
+  - Name: user
+    User: node
+  From:
+    Image: node:10.13-alpine
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM node:10.13-alpine as runtime

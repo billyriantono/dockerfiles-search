@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8u171-jdk
+  Commands:
+  - Name: expose
+    Ports:
+    - "4848"
+    - "8080"
+    - "8181"
+    - "9009"
+  - Env:
+    - Key: HOME_DIR
+      Value: /opt/payara
+    - Key: PAYARA_DIR
+      Value: /opt/payara/appserver
+    - Key: SCRIPT_DIR
+      Value: /opt/payara/scripts
+    - Key: CONFIG_DIR
+      Value: /opt/payara/config
+    - Key: DEPLOY_DIR
+      Value: /opt/payara/deployments
+    - Key: PASSWORD_FILE
+      Value: /opt/payara/passwordFile
+    - Key: PAYARA_VERSION
+      Value: "5.183"
+    - Key: DOMAIN_NAME
+      Value: production
+    - Key: ADMIN_USER
+      Value: admin
+    - Key: ADMIN_PASSWORD
+      Value: admin
+    - Key: JVM_ARGS
+      Value: ""
+    - Key: DEPLOY_PROPS
+      Value: ""
+    - Key: POSTBOOT_COMMANDS
+      Value: /opt/payara/config/post-boot-commands.asadmin
+    - Key: PREBOOT_COMMANDS
+      Value: /opt/payara/config/pre-boot-commands.asadmin
+    Name: env
+  - CmdLine:
+    - groupadd payara &&     useradd -b ${HOME_DIR} -M -s /bin/bash -d ${HOME_DIR}
+      payara -g payara &&     echo payara:payara | chpasswd &&     mkdir -p ${DEPLOY_DIR}
+      &&     mkdir -p ${CONFIG_DIR} &&     mkdir -p ${SCRIPT_DIR} &&     chown -R
+      payara:payara ${HOME_DIR}
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: payara
+  - Name: workdir
+    Path: ${HOME_DIR}
+  - CmdLine:
+    - wget --no-verbose -O payara.zip https://s3-eu-west-1.amazonaws.com/payara.fish/payara-prerelease.zip
+      &&     chown payara:payara payara.zip &&     unzip -qq payara.zip -d ./ &&     mv
+      payara*/ appserver &&     echo "AS_ADMIN_PASSWORD=\nAS_ADMIN_NEWPASSWORD=${ADMIN_PASSWORD}"
+      > /tmp/tmpfile &&     echo "AS_ADMIN_PASSWORD=${ADMIN_PASSWORD}" >> ${PASSWORD_FILE}
+      &&     ${PAYARA_DIR}/bin/asadmin --user ${ADMIN_USER} --passwordfile=/tmp/tmpfile
+      change-admin-password --domain_name=${DOMAIN_NAME} &&     ${PAYARA_DIR}/bin/asadmin
+      --user=${ADMIN_USER} --passwordfile=${PASSWORD_FILE} start-domain ${DOMAIN_NAME}
+      &&     ${PAYARA_DIR}/bin/asadmin --user=${ADMIN_USER} --passwordfile=${PASSWORD_FILE}
+      enable-secure-admin &&     for MEMORY_JVM_OPTION in $(${PAYARA_DIR}/bin/asadmin
+      --user=${ADMIN_USER} --passwordfile=${PASSWORD_FILE} list-jvm-options | grep
+      "Xm[sx]"); do        ${PAYARA_DIR}/bin/asadmin --user=${ADMIN_USER} --passwordfile=${PASSWORD_FILE}
+      delete-jvm-options $MEMORY_JVM_OPTION;    done &&     ${PAYARA_DIR}/bin/asadmin
+      --user=${ADMIN_USER} --passwordfile=${PASSWORD_FILE} create-jvm-options '-XX\:+UnlockExperimentalVMOptions:-XX\:+UseCGroupMemoryLimitForHeap'
+      &&     ${PAYARA_DIR}/bin/asadmin --user=${ADMIN_USER} --passwordfile=${PASSWORD_FILE}
+      set-log-attributes com.sun.enterprise.server.logging.GFFileHandler.logtoFile=false
+      &&     ${PAYARA_DIR}/bin/asadmin --user=${ADMIN_USER} --passwordfile=${PASSWORD_FILE}
+      stop-domain ${DOMAIN_NAME} &&     rm -rf         /tmp/tmpFile         payara.zip         ${PAYARA_DIR}/glassfish/domains/${DOMAIN_NAME}/osgi-cache         ${PAYARA_DIR}/glassfish/domains/${DOMAIN_NAME}/logs         ${PAYARA_DIR}/glassfish/domains/domain1
+    Name: run
+    PrependShell: true
+  - Chown: payara:payara
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/*.sh
+    - ${SCRIPT_DIR}/
+  - CmdLine:
+    - chmod +x ${SCRIPT_DIR}/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ${SCRIPT_DIR}/generate_deploy_commands.sh && exec ${SCRIPT_DIR}/startInForeground.sh
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: openjdk:8u171-jdk
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8u171-jdk

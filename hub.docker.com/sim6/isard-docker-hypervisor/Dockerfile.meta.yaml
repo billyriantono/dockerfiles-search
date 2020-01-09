@@ -1,0 +1,206 @@
+MetaArgs: null
+Stages:
+- BaseName: fedora:25
+  Commands:
+  - Env:
+    - Key: container
+      Value: docker
+    Name: env
+  - CmdLine:
+    - dnf -y update && dnf clean all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dnf -y install systemd && dnf clean all && (cd /lib/systemd/system/sysinit.target.wants/
+      && for i in *; do [ $i == systemd-tmpfiles-setup.service ] || rm -f $i; done)
+      && rm -f /lib/systemd/system/multi-user.target.wants/* && rm -f /etc/systemd/system/*.wants/*
+      && rm -f /lib/systemd/system/local-fs.target.wants/* && rm -f /lib/systemd/system/sockets.target.wants/*udev*
+      && rm -f /lib/systemd/system/sockets.target.wants/*initctl* && rm -f /lib/systemd/system/basic.target.wants/*
+      && rm -f /lib/systemd/system/anaconda.target.wants/*
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - '['
+    - “/sys/fs/cgroup”
+    - ']'
+  - CmdLine:
+    - dnf -y install libvirt-daemon-driver-* libvirt-daemon libvirt-daemon-kvm qemu-kvm
+      libvirt-client libguestfs-tools python3-pip virt-install && dnf clean all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/bin/qemu-kvm /usr/libexec/qemu-kvm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - systemctl enable libvirtd; systemctl enable virtlockd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dnf install -y openssh-server && dnf clean all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "root:isard" |chpasswd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - systemctl enable sshd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's|[#]*PermitRootLogin no|PermitRootLogin yes|g' /etc/ssh/sshd_config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's|[#]*PasswordAuthentication no|PasswordAuthentication yes|g' /etc/ssh/sshd_config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's|[#]*ChallengeResponseAuthentication no|ChallengeResponseAuthentication
+      yes|g' /etc/ssh/sshd_config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's|UsePAM no|UsePAM yes|g' /etc/ssh/sshd_config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/www/html
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - html5/html
+    - /var/www/html
+  - CmdLine:
+    - dnf install nginx -y && dnf clean all
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - html5/nginx.conf
+    - /etc/nginx/
+  - CmdLine:
+    - systemctl enable nginx;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - html5/requirements.pip3
+    - /
+  - CmdLine:
+    - pip3 install -r requirements.pip3
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - html5/start_proxy.py
+    - /
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - html5/html5proxy.service
+    - /etc/systemd/system/
+  - CmdLine:
+    - systemctl enable html5proxy;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "listen_tls = 0" >> /etc/libvirt/libvirtd.conf;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'listen_tcp = 1' >> /etc/libvirt/libvirtd.conf;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'spice_listen = "0.0.0.0"' >> /etc/libvirt/qemu.conf && echo 'spice_tls
+      = 1' >> /etc/libvirt/qemu.conf && echo 'spice_tls_x509_cert_dir = "/etc/pki/libvirt-spice"'
+      >> /etc/libvirt/qemu.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /etc/pki/libvirt-spice
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - generate-certs.service
+    - /usr/lib/systemd/system/generate-certs.service
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - auto-generate-certs.sh
+    - /
+  - CmdLine:
+    - chmod a+x /auto-generate-certs.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - systemctl enable generate-certs
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - customlibvirtpost.service
+    - /usr/lib/systemd/system/customlibvirtpost.service
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - customlibvirtpost.sh
+    - /customlibvirtpost.sh
+  - CmdLine:
+    - chmod a+x /customlibvirtpost.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - network.xml
+    - /network.xml
+  - CmdLine:
+    - systemctl enable customlibvirtpost
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /root/.ssh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - export LIBGUESTFS_BACKEND=direct
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "22"
+  - Name: expose
+    Ports:
+    - "16509"
+  - Name: expose
+    Ports:
+    - 5900-5950
+  - Name: expose
+    Ports:
+    - 55900-55900
+  - Name: volume
+    Volumes:
+    - /sys/fs/cgroup
+    - /isard
+  - CmdLine:
+    - /usr/sbin/init
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: fedora:25
+  Name: ""
+  Platform: ""
+  SourceCode: FROM fedora:25

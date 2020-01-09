@@ -1,0 +1,221 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:14.04
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: NAGIOS_HOME
+      Value: /usr/local/nagios
+    - Key: NAGIOS_USER
+      Value: nagios
+    - Key: NAGIOS_GROUP
+      Value: nagios
+    - Key: NAGIOS_CMDUSER
+      Value: nagios
+    - Key: NAGIOS_CMDGROUP
+      Value: nagios
+    Name: env
+  - Env:
+    - Key: NAGIOSGRAPH_HOME
+      Value: /usr/local/nagiosgraph
+    - Key: NAGIOSADMIN_USER
+      Value: nagiosadmin
+    - Key: NAGIOSADMIN_PASS
+      Value: nagios
+    Name: env
+  - Env:
+    - Key: APACHE_RUN_USER
+      Value: www-data
+    - Key: APACHE_RUN_GROUP
+      Value: www-dataA
+    Name: env
+  - Env:
+    - Key: NAGIOS_TIMEZONE
+      Value: UTC
+    Name: env
+  - Env:
+    - Key: NAGIOS_VER
+      Value: nagios-4.1.1
+    Name: env
+  - Env:
+    - Key: NAGIOS_PLUG_VER
+      Value: nagios-plugins-2.1.1
+    Name: env
+  - Env:
+    - Key: DOWNURLNAGIOS
+      Value: https://sourceforge.net/projects/nagios/files/nagios-4.x/nagios-4.1.1/${NAGIOS_VER}.tar.gz/download
+    Name: env
+  - Env:
+    - Key: DOWNURLPLUG
+      Value: http://nagios-plugins.org/download/${NAGIOS_PLUG_VER}.tar.gz
+    Name: env
+  - Env:
+    - Key: DOWNNRPE
+      Value: https://sourceforge.net/projects/nagios/files/nrpe-2.x/nrpe-2.15/nrpe-2.15.tar.gz/download
+    Name: env
+  - Env:
+    - Key: DOWNNRDP
+      Value: https://assets.nagios.com/downloads/nrdp/nrdp.zip
+    Name: env
+  - Env:
+    - Key: DOWNGRAPH
+      Value: http://downloads.sourceforge.net/project/nagiosgraph/nagiosgraph/1.5.2/nagiosgraph-1.5.2.tar.gz
+    Name: env
+  - CmdLine:
+    - sed -i 's/universe/universe multiverse/' /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y iputils-ping netcat snmp snmpd snmp-mibs-downloader
+      php5-cli apache2 apache2-utils libapache2-mod-php5 runit bc postfix bsd-mailx
+      openssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y libgd-tools php5-gd php5-rrd librrds-perl libgd-perl libnagios-object-perl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y build-essential unzip libssl-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ( egrep -i  "^${NAGIOS_GROUP}" /etc/group || groupadd $NAGIOS_GROUP ) && ( egrep
+      -i "^${NAGIOS_CMDGROUP}" /etc/group || groupadd $NAGIOS_CMDGROUP )
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ( id -u $NAGIOS_USER || useradd --system $NAGIOS_USER -g $NAGIOS_GROUP -d $NAGIOS_HOME
+      ) && ( id -u $NAGIOS_CMDUSER || useradd --system -d $NAGIOS_HOME -g $NAGIOS_CMDGROUP
+      $NAGIOS_CMDUSER ) && ( usermod -a -G $NAGIOS_GROUP $APACHE_RUN_USER )
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - $DOWNURLNAGIOS
+    - /tmp/nagios.tar.gz
+  - CmdLine:
+    - cd /tmp && tar -zxvf nagios.tar.gz && cd ${NAGIOS_VER}  && ./configure --prefix=${NAGIOS_HOME}
+      --exec-prefix=${NAGIOS_HOME} --enable-event-broker --with-nagios-command-user=${NAGIOS_CMDUSER}
+      --with-command-group=${NAGIOS_CMDGROUP} --with-nagios-user=${NAGIOS_USER} --with-nagios-group=${NAGIOS_GROUP}
+      && make all && make install && make install-config && make install-commandmode
+      && cp daemon-init /etc/init.d/nagios && chmod +x /etc/init.d/nagios
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp/${NAGIOS_VER} && cp sample-config/httpd.conf /etc/apache2/conf-available/nagios.conf
+      && cd /etc/apache2/conf-enabled && ln -s /etc/apache2/conf-available/nagios.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - $DOWNURLPLUG
+    - /tmp/nagios-plugins-2.1.1.tar.gz
+  - CmdLine:
+    - cd /tmp && tar -zxvf nagios-plugins-2.1.1.tar.gz && cd nagios-plugins-2.1.1
+      && ./configure --prefix=${NAGIOS_HOME} && make && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i.bak 's/.*\=www\-data//g' /etc/apache2/envvars && echo "export APACHE_RUN_USER=www-data"
+      >> /etc/apache2/envvars &&     echo "export APACHE_RUN_GROUP=www-data" >> /etc/apache2/envvars
+      && sed -i 's/^ULIMIT_MAX_FILES/#ULIMIT_MAX_FILES/g' /usr/sbin/apache2ctl &&     cd
+      /etc/apache2/mods-enabled && ln -s ../mods-available/cgi.load
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - export DOC_ROOT="DocumentRoot $(echo $NAGIOS_HOME/share)"; sed -i "s,DocumentRoot.*,$DOC_ROOT,"
+      /etc/apache2/sites-available/000-default.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "use_timezone=$NAGIOS_TIMEZONE" >> ${NAGIOS_HOME}/etc/nagios.cfg && echo
+      "SetEnv TZ \"${NAGIOS_TIMEZONE}\"" >> /etc/apache2/conf-available/nagios.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's,/bin/mail,/usr/bin/mail,' ${NAGIOS_HOME}/etc/objects/commands.cfg
+      &&     sed -i 's,/usr/usr,/usr,' ${NAGIOS_HOME}/etc/objects/commands.cfg &&     cp
+      /etc/services /var/spool/postfix/etc/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - $DOWNNRPE
+    - /tmp/nrpe.tar.gz
+  - CmdLine:
+    - cd /tmp && tar -zxvf nrpe.tar.gz && cd nrpe-2.15 && ./configure --with-ssl=/usr/bin/openssl
+      --with-ssl-lib=/usr/lib/x86_64-linux-gnu --prefix=${NAGIOS_HOME} && make &&
+      make install
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NRDP_TOKEN
+      Value: '"token1","token2"'
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - nrdp.zip
+    - /tmp/
+  - CmdLine:
+    - cd /tmp && unzip nrdp.zip && mkdir /usr/local/nrdp/ && cd /usr/local/nrdp/ &&
+      cp -r /tmp/nrdp/* . && chown -R www-data.www-data /usr/local/nrdp &&     cp
+      /tmp/nrdp/nrdp.conf /etc/apache2/sites-available/ && cd /etc/apache2/conf-enabled
+      && ln -s /etc/apache2/sites-available/nrdp.conf &&     sed -i '/ Order allow,deny/d'
+      /etc/apache2/conf-enabled/nrdp.conf &&     sed -i 's/ Allow from all/Require
+      all granted/g' /etc/apache2/conf-enabled/nrdp.conf &&     sed -i 's/\/\/\"mysecrettoken\b.*$/${NRDP_TOKEN}/'
+      /usr/local/nrdp/server/config.inc.php
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - $DOWNGRAPH
+    - /tmp/nagiosgraph.tar.gz
+  - CmdLine:
+    - cd /tmp && tar -zxvf nagiosgraph.tar.gz && cd /tmp/nagiosgraph-1.5.2 &&     export
+      NG_PREFIX=${NAGIOSGRAPH_HOME} && export NG_NAGIOS_PERFDATA_FILE=${NAGIOS_HOME}/var/service-perfdata.out
+      && ./install.pl --install &&     cd /etc/apache2/conf-enabled && ln -s /usr/local/nagiosgraph/etc/nagiosgraph-apache.conf
+      &&     sed -i '/ Order allow,deny/d' /etc/apache2/conf-enabled/nagiosgraph-apache.conf
+      &&     sed -i 's/ Allow from all/Require all granted/g' /etc/apache2/conf-enabled/nagiosgraph-apache.conf
+      &&     sed -i 's/\/tmp\/perfdata.log/\/usr\/local\/nagios\/var\/service-perfdata.out/g'
+      ${NAGIOSGRAPH_HOME}/etc/nagiosgraph.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - start_nagios.sh
+    - /usr/local/bin/start_nagios
+  - CmdLine:
+    - chmod +x /usr/local/bin/start_nagios
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: volume
+    Volumes:
+    - ${NAGIOS_HOME}/etc
+  - Name: volume
+    Volumes:
+    - /var/log/apache2
+  - Name: volume
+    Volumes:
+    - ${NAGIOSGRAPH_HOME}/var/rrd/
+  - CmdLine:
+    - /usr/local/bin/start_nagios
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:14.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:14.04

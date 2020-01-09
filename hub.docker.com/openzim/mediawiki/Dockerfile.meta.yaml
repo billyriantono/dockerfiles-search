@@ -1,0 +1,285 @@
+MetaArgs: null
+Stages:
+- BaseName: nginx
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"kiwix"'
+    Name: label
+  - Env:
+    - Key: DATABASE_NAME
+      Value: my_wiki
+    Name: env
+  - Env:
+    - Key: DATABASE_TYPE
+      Value: sqlite
+    Name: env
+  - Env:
+    - Key: HTML_DIR
+      Value: /var/www/html
+    Name: env
+  - Env:
+    - Key: DATA_DIR
+      Value: /var/www/data
+    Name: env
+  - Env:
+    - Key: WIKI_DIR
+      Value: ${HTML_DIR}/w
+    Name: env
+  - Env:
+    - Key: MEDIAWIKI_CONFIG_FILE_CUSTOM
+      Value: ./config/mediawiki/LocalSettings.custom.php
+    Name: env
+  - Env:
+    - Key: MEDIAWIKI_CONFIG_FILE_BASE
+      Value: ./config/mediawiki/LocalSettings.php
+    Name: env
+  - Env:
+    - Key: MEDIAWIKI_CONFIG_FILE_COMPOSER
+      Value: ./config/mediawiki/composer.json
+    Name: env
+  - Env:
+    - Key: PARSOID_CONFIG_FILE
+      Value: ./config/parsoid/config.yaml
+    Name: env
+  - Env:
+    - Key: NGINX_CONFIG_FILE_BASE
+      Value: ./config/nginx/nginx.conf
+    Name: env
+  - Env:
+    - Key: NGINX_CONFIG_FILE_CUSTOM
+      Value: ./config/nginx/default.conf
+    Name: env
+  - Env:
+    - Key: MEDIAWIKI_ADMIN_PASSWORD
+      Value: wikiadmin
+    Name: env
+  - Env:
+    - Key: MEDIAWIKI_MAJOR_VERSION
+      Value: "1.31"
+    Name: env
+  - Env:
+    - Key: MEDIAWIKI_VERSION
+      Value: 1.31.0
+    Name: env
+  - Env:
+    - Key: MEDIAWIKI_RC
+      Value: rc.0
+    Name: env
+  - Env:
+    - Key: MEDIAWIKI_EXT_VERSION
+      Value: REL1_31
+    Name: env
+  - Env:
+    - Key: PARSOID_VERSION
+      Value: v0.9.0
+    Name: env
+  - CmdLine:
+    - mkdir -p ${WIKI_DIR} && mkdir -p ${DATA_DIR}
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - ${DATA_DIR}
+  - Name: workdir
+    Path: ${WIKI_DIR}
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends     gnupg curl
+      ca-certificates     && curl -sL https://deb.nodesource.com/setup_10.x | bash
+      -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y   git   vim   unzip   imagemagick   libicu-dev   libav-tools   librsvg2-bin   poppler-utils   memcached   sqlite3   mysql-client   mysql-server   cron   php7.0-fpm   php7.0-sqlite3   php7.0-gd   php7.0-mysql   php7.0-intl   php7.0-mbstring   php7.0-xml   php7.0-curl   texlive   texlive-fonts-recommended   texlive-lang-greek   texlive-latex-recommended   texlive-latex-extra   build-essential   dvipng
+      ocaml   cjk-latex   redis-server   nodejs   lua5.1   python3   locales   --no-install-recommends
+      && rm -r /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/^# *\(en_US.UTF-8\)/\1/' /etc/locale.gen && locale-gen
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "curl -fSL \"https://releases.wikimedia.org/mediawiki/${MEDIAWIKI_MAJOR_VERSION}/mediawiki-${MEDIAWIKI_VERSION}-${MEDIAWIKI_RC}.tar.gz\"
+      -o mediawiki.tar.gz \t&& tar -xz --strip-components=1 -f mediawiki.tar.gz \t&&
+      rm mediawiki.tar.gz \t&& chown -R www-data:www-data skins cache"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --quiet --depth=1 --branch ${PARSOID_VERSION} https://gerrit.wikimedia.org/r/p/mediawiki/services/parsoid   &&
+      cd parsoid   && npm install   && cd ..   && npm cache clean -f   && npm install
+      -g n   && n stable
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./add_mw_extension.py
+    - /usr/local/bin/add_mw_extension
+  - CmdLine:
+    - chmod a+x /usr/local/bin/add_mw_extension
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - add_mw_extension ${MEDIAWIKI_EXT_VERSION} ${WIKI_DIR} Nuke Scribunto   UploadWizard
+      TitleKey TitleBlacklist TimedMediaHandler wikihiero Math   timeline Echo MobileFrontend
+      Thanks VisualEditor EventLogging GuidedTour   GeoData RSS TorBlock ConfirmEdit
+      Babel cldr CleanChanges LocalisationUpdate   Translate UniversalLanguageSelector
+      Mailgun Widgets
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ${MEDIAWIKI_CONFIG_FILE_COMPOSER}
+    - ./
+  - CmdLine:
+    - curl -fSL https://getcomposer.org/composer.phar -o composer.phar  && php composer.phar
+      update --no-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fSL https://github.com/kolzchut/mediawiki-extensions-MetaDescriptionTag/archive/master.zip  -o
+      MetaDescriptionTag.zip  && unzip MetaDescriptionTag.zip -d extensions/  && mv
+      extensions/mediawiki-extensions-MetaDescriptionTag-master extensions/MetaDescriptionTag  &&
+      rm -f MetaDescriptionTag.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fSL https://gerrit.wikimedia.org/r/plugins/gitiles/mediawiki/extensions/MwEmbedSupport/+archive/${MEDIAWIKI_EXT_VERSION}.tar.gz  -o
+      MwEmbedSupport.tgz    && mkdir -p extensions/MwEmbedSupport   && tar -xzf MwEmbedSupport.tgz
+      -C extensions/MwEmbedSupport   && rm -f MwEmbedSupport.tgz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fSL https://codeload.github.com/miraheze/MatomoAnalytics/zip/447580be1d29159c53b4646b420cb804d1bcc62a  -o
+      master.zip    && unzip master.zip -d extensions/    && mv extensions/MatomoAnalytics-447580be1d29159c53b4646b420cb804d1bcc62a
+      extensions/MatomoAnalytics   && rm -f master.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fSL https://downloads.wordpress.org/plugin/bad-behavior.2.2.22.zip  -o
+      bad-behavior.zip   && unzip bad-behavior.zip -d extensions/   && mv extensions/bad-behavior
+      extensions/BadBehaviour   && rm -f bad-behavior.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/"latex /"\/usr\/bin\/latex /'     /var/www/html/w/extensions/Math/math/render.ml  &&
+      sed -i 's/"dvips /"\/usr\/bin\/dvips /'     /var/www/html/w/extensions/Math/math/render.ml  &&
+      sed -i 's/"convert /"\/usr\/bin\/convert /' /var/www/html/w/extensions/Math/math/render.ml  &&
+      sed -i 's/"dvipng /"\/usr\/bin\/dvipng /'   /var/www/html/w/extensions/Math/math/render.ml  &&
+      make -C extensions/Math/math clean all  && make -C extensions/Math/texvccheck
+      clean all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd extensions/Mailgun && php ../../composer.phar update && cd ../..
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R www-data:www-data extensions
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/nginx/nginx.conf
+    - /etc/nginx/nginx.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/nginx/default.conf
+    - /etc/nginx/conf.d/default.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/php-fpm/*.conf
+    - /etc/php/7.0/fpm/pool.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/php-fpm/*.ini
+    - /etc/php/7.0/fpm/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ${MEDIAWIKI_CONFIG_FILE_BASE}
+    - ./LocalSettings.php
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ${MEDIAWIKI_CONFIG_FILE_CUSTOM}
+    - ./LocalSettings.custom.php
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ${PARSOID_CONFIG_FILE}
+    - ./parsoid/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./data/my_wiki.sqlite
+    - /tmp/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./assets/images/*
+    - ${HTML_DIR}/
+  - CmdLine:
+    - mv ./images ./images.origin && ln -s /var/www/data/images ./images
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./export_data.php
+    - ../
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./start.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./mediawiki-init.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./dump_for_mysql.py
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./start-services.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - chmod a+x /usr/local/bin/*.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '"start.sh"'
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: nginx
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx

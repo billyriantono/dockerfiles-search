@@ -1,0 +1,14 @@
+FROM ubuntu:artful
+
+COPY ["setup.sh", "configure.sh", "/opt/bin/"]
+COPY ["sources.list", "/etc/apt/sources.list"]
+
+RUN apt-get -y update && apt-get install -y locales 
+
+
+RUN /bin/bash /opt/bin/setup.sh
+RUN /bin/bash /opt/bin/configure.sh
+
+COPY ["bin/*", "/usr/local/bin/"]
+
+RUN chmod +x /usr/local/bin/*

@@ -1,0 +1,182 @@
+MetaArgs: null
+Stages:
+- BaseName: nginx:1.11.8-alpine
+  Commands:
+  - Maintainer: ngineered <support@ngineered.co.uk>
+    Name: maintainer
+  - Env:
+    - Key: php_conf
+      Value: /etc/php5/php.ini
+    Name: env
+  - Env:
+    - Key: fpm_conf
+      Value: /etc/php5/php-fpm.conf
+    Name: env
+  - Env:
+    - Key: php_vars
+      Value: /etc/php5/conf.d/docker-vars.ini
+    Name: env
+  - Env:
+    - Key: composer_hash
+      Value: 544e09ee996cdf60ece3804abc52599c22b1f40f4323403c44d44fdfdd586475ca9813a858088ffbc1f233e9b180f061
+    Name: env
+  - CmdLine:
+    - echo @testing http://nl.alpinelinux.org/alpine/edge/testing >> /etc/apk/repositories
+      &&     echo /etc/apk/respositories &&     apk update &&     apk add --no-cache
+      bash     openssh-client     wget     supervisor     curl     git     php5-fpm     php5-pdo     php5-pdo_mysql     php5-mysql     php5-mysqli     php5-mcrypt     php5-ctype     php5-zlib     php5-gd     php5-exif     php5-intl     php5-memcache     php5-sqlite3     php5-pgsql     php5-xml     php5-xsl     php5-curl     php5-openssl     php5-iconv     php5-json     php5-phar     php5-soap     php5-dom     php5-zip     python     python-dev     py-pip     augeas-dev     openssl-dev     ca-certificates     dialog     gcc     musl-dev     linux-headers     libffi-dev
+      &&    mkdir -p /etc/nginx &&     mkdir -p /var/www/app &&     mkdir -p /run/nginx
+      &&     mkdir -p /var/log/supervisor &&    php -r "copy('https://getcomposer.org/installer',
+      'composer-setup.php');" &&     php -r "if (hash_file('SHA384', 'composer-setup.php')
+      === '${composer_hash}') { echo 'Installer verified'; } else { echo 'Installer
+      corrupt'; unlink('composer-setup.php'); } echo PHP_EOL;" &&     php composer-setup.php
+      --install-dir=/usr/bin --filename=composer &&     php -r "unlink('composer-setup.php');"
+      &&     pip install -U pip &&     pip install -U certbot &&     mkdir -p /etc/letsencrypt/webrootauth
+      &&     apk del gcc musl-dev linux-headers libffi-dev augeas-dev python-dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - conf/supervisord.conf
+    - /etc/supervisord.conf
+  - CmdLine:
+    - rm -Rf /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - conf/nginx.conf
+    - /etc/nginx/nginx.conf
+  - CmdLine:
+    - mkdir -p /etc/nginx/sites-available/ && mkdir -p /etc/nginx/sites-enabled/ &&
+      mkdir -p /etc/nginx/ssl/ && rm -Rf /var/www/* && mkdir /var/www/html/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - conf/nginx-site.conf
+    - /etc/nginx/sites-available/default.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - conf/nginx-site-ssl.conf
+    - /etc/nginx/sites-available/default-ssl.conf
+  - CmdLine:
+    - ln -s /etc/nginx/sites-available/default.conf /etc/nginx/sites-enabled/default.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i         -e "s/;cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/g"         -e "s/upload_max_filesize\s*=\s*2M/upload_max_filesize
+      = 100M/g"         -e "s/post_max_size\s*=\s*8M/post_max_size = 100M/g"         -e
+      "s/variables_order = \"GPCS\"/variables_order = \"EGPCS\"/g"         ${php_conf}
+      &&     sed -i         -e "s/;daemonize\s*=\s*yes/daemonize = no/g"         -e
+      "s/;catch_workers_output\s*=\s*yes/catch_workers_output = yes/g"         -e
+      "s/pm.max_children = 5/pm.max_children = 100/g"         -e "s/pm.start_servers
+      = 2/pm.start_servers = 10/g"         -e "s/pm.min_spare_servers = 1/pm.min_spare_servers
+      = 10/g"         -e "s/pm.max_spare_servers = 3/pm.max_spare_servers = 30/g"         -e
+      "s/pm.max_requests = 500/pm.max_requests = 200/g"         -e "s/user = nobody/user
+      = nginx/g"         -e "s/group = nobody/group = nginx/g"         -e "s/;listen.mode
+      = 0660/listen.mode = 0666/g"         -e "s/;listen.owner = nobody/listen.owner
+      = nginx/g"         -e "s/;listen.group = nobody/listen.group = nginx/g"         -e
+      "s/listen = 127.0.0.1:9000/listen = \/var\/run\/php-fpm.sock/g"         -e "s/^;clear_env
+      = no$/clear_env = no/"         ${fpm_conf} &&     ln -s /etc/php5/php.ini /etc/php5/conf.d/php.ini
+      &&     find /etc/php5/conf.d/ -name "*.ini" -exec sed -i -re 's/^(\s*)#(.*)/\1;\2/g'
+      {} \;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/start.sh
+    - /start.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/pull
+    - /usr/bin/pull
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/push
+    - /usr/bin/push
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/letsencrypt-setup
+    - /usr/bin/letsencrypt-setup
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/letsencrypt-renew
+    - /usr/bin/letsencrypt-renew
+  - CmdLine:
+    - chmod 755 /usr/bin/pull && chmod 755 /usr/bin/push && chmod 755 /usr/bin/letsencrypt-setup
+      && chmod 755 /usr/bin/letsencrypt-renew && chmod 755 /start.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/
+    - /var/www/html/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - errors/
+    - /var/www/errors/
+  - CmdLine:
+    - apk add tzdata   && ls /usr/share/zoneinfo   && cp /usr/share/zoneinfo/Asia/Shanghai
+      /etc/localtime   && echo "Asia/Shanghai" >  /etc/timezone   && echo "date.timezone
+      = Asia/Shanghai" >> ${php_vars}   && date
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - conf/cacert.pem
+    - /cacert.pem
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - conf/cacert.pem
+    - /etc/ssl/cert.pem
+  - CmdLine:
+    - echo "curl.cainfo=/cacert.pem" >> ${php_vars}
+    Name: run
+    PrependShell: true
+  - Key: NODE_VERSION
+    Name: arg
+    Value: 6.3.0
+  - Name: workdir
+    Path: /
+  - Env:
+    - Key: GPG_KEYS
+      Value: 9554F04D7259F04124DE6B476D5A82AC7E37093B   94AE36675C464D64BAFA68DD7434390BDBE9B9C5   0034A06D9D9B0064CE8ADF6BF1747F4AD2306D93   FD3A5288F042B6850C66B31F09FE44734EB7990E   71DCFD284A79C3B38668286BC97EC7A07EDE3FC1   DD8F2338BAE7501E3DD5AC78C273792F7D83545D   B9AE9905FFD7803F25714661B63B535A4C206CA9   C4F0DFFF4E8C1A8236409D08E73BC641CC11F4C8
+    Name: env
+  - Env:
+    - Key: BUILD_PKGS
+      Value: '"git curl make gcc g++ python linux-headers libgcc libstdc++ binutils-gold
+        xz gnupg"'
+    Name: env
+  - CmdLine:
+    - apk --no-cache add ${BUILD_PKGS}      && curl -SLO https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}.tar.xz    &&
+      tar -xJf "node-v$NODE_VERSION.tar.xz"     && cd /node-v${NODE_VERSION}     &&
+      ./configure --prefix=/usr --without-snapshot --fully-static     && make -j $(getconf
+      _NPROCESSORS_ONLN)     && make install
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - CmdLine:
+    - /start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginx:1.11.8-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx:1.11.8-alpine

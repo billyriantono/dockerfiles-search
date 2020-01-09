@@ -1,0 +1,145 @@
+MetaArgs:
+- DefaultValue: zokradonh
+  Key: docker_repo
+  ProvidedValue: null
+  Value: zokradonh
+Stages:
+- BaseName: ${docker_repo}/kopano_base
+  Commands:
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: ADDITIONAL_KOPANO_PACKAGES
+    Name: arg
+    Value: '""'
+  - Key: DOWNLOAD_COMMUNITY_PACKAGES
+    Name: arg
+    Value: "1"
+  - Key: KOPANO_REPOSITORY_FLAGS
+    Name: arg
+    Value: '"trusted=yes"'
+  - Key: RELEASE_KEY_DOWNLOAD
+    Name: arg
+    Value: "0"
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - Key: KOPANO_CORE_REPOSITORY_URL
+    Name: arg
+    Value: '"file:/kopano/repo/core"'
+  - Key: KOPANO_CORE_VERSION
+    Name: arg
+    Value: newest
+  - Key: KOPANO_ZPUSH_REPOSITORY_URL
+    Name: arg
+    Value: '"http://repo.z-hub.io/z-push:/final/Debian_9.0/"'
+  - Key: KOPANO_ZPUSH_VERSION
+    Name: arg
+    Value: newest
+  - Env:
+    - Key: ADDITIONAL_KOPANO_PACKAGES
+      Value: $ADDITIONAL_KOPANO_PACKAGES
+    - Key: DOWNLOAD_COMMUNITY_PACKAGES
+      Value: $DOWNLOAD_COMMUNITY_PACKAGES
+    - Key: KOPANO_CORE_REPOSITORY_URL
+      Value: $KOPANO_CORE_REPOSITORY_URL
+    - Key: KOPANO_CORE_VERSION
+      Value: $KOPANO_CORE_VERSION
+    - Key: KOPANO_REPOSITORY_FLAGS
+      Value: $KOPANO_REPOSITORY_FLAGS
+    - Key: RELEASE_KEY_DOWNLOAD
+      Value: $RELEASE_KEY_DOWNLOAD
+    - Key: KOPANO_ZPUSH_REPOSITORY_URL
+      Value: $KOPANO_ZPUSH_REPOSITORY_URL
+    - Key: KOPANO_ZPUSH_VERSION
+      Value: $KOPANO_ZPUSH_VERSION
+    Name: env
+  - Labels:
+    - Key: maintainer
+      Value: az@zok.xyz
+    - Key: org.label-schema.name
+      Value: '"Kopano Z-Push container"'
+    - Key: org.label-schema.description
+      Value: '"Container for running Z-Push with Kopano Groupware Core"'
+    - Key: org.label-schema.url
+      Value: '"https://kopano.io"'
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/zokradonh/kopano-docker"'
+    - Key: org.label-schema.version
+      Value: $KOPANO_ZPUSH_VERSION
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -o
+    - pipefail
+    - -c
+  - CmdLine:
+    - . /kopano/helper/create-kopano-repo.sh &&     if [ ${DOWNLOAD_COMMUNITY_PACKAGES}
+      -eq 1 ]; then         dl_and_package_community "core";     fi;     echo "deb
+      [${KOPANO_REPOSITORY_FLAGS}] ${KOPANO_CORE_REPOSITORY_URL} ./" > /etc/apt/sources.list.d/kopano.list;     echo
+      "deb ${KOPANO_ZPUSH_REPOSITORY_URL} /" > /etc/apt/sources.list.d/zpush.list
+      &&     curl -s -S -o - "${KOPANO_ZPUSH_REPOSITORY_URL}/Release.key" | apt-key
+      add - &&     set -x &&     apt-get update && apt-get install -y --no-install-recommends         apache2         libapache2-mod-php7.0         crudini         z-push-kopano         z-push-config-apache         z-push-kopano-gabsync         z-push-autodiscover         z-push-config-apache-autodiscover         ca-certificates         ${ADDITIONAL_KOPANO_PACKAGES}     &&
+      rm -rf /var/cache/apt /var/lib/apt/lists
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - apache2-kopano.conf
+    - /etc/apache2/sites-available/kopano.conf
+  - CmdLine:
+    - rm /etc/apache2/sites-enabled/* &&     sed -e 's,^ErrorLog.*,ErrorLog "|/bin/cat",'
+      -i /etc/apache2/apache2.conf &&     sed -e "s,MaxSpareServers[^:].*,MaxSpareServers
+      5," -i /etc/apache2/mods-available/mpm_prefork.conf &&     a2disconf other-vhosts-access-log
+      &&     a2ensite kopano &&     echo "Listen 80" > /etc/apache2/ports.conf &&     a2enmod
+      rewrite &&     crudini --set /etc/php/7.0/apache2/php.ini PHP upload_max_filesize
+      500M &&     crudini --set /etc/php/7.0/apache2/php.ini PHP post_max_size 500M
+      &&     crudini --set /etc/php/7.0/apache2/php.ini PHP max_input_vars 1800 &&     crudini
+      --set /etc/php/7.0/apache2/php.ini Session session.save_path /run/sessions &&     mkdir
+      -p /var/lib/z-push /var/log/z-push &&     chown www-data:www-data /var/lib/z-push
+      /var/log/z-push
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e "s/set_include_path(get_include_path() . PATH_SEPARATOR . BASE_PATH_CLI);/define('PATH_TO_ZPUSH',
+      '..\/..\/backend\/kopano\/');\n    set_include_path(get_include_path() . PATH_SEPARATOR
+      . BASE_PATH_CLI . PATH_SEPARATOR . BASE_PATH_CLI . PATH_TO_ZPUSH);/" /usr/share/z-push/tools/gab-sync/gab-sync.php
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/lib/z-push/
+  - Name: expose
+    Ports:
+    - 80/tcp
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - /kopano/start.sh
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - CmdLine:
+    - /usr/bin/dumb-init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /kopano/start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ${docker_repo}/kopano_base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${docker_repo}/kopano_base

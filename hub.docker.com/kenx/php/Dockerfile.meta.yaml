@@ -1,0 +1,67 @@
+MetaArgs: null
+Stages:
+- BaseName: php:7.2-fpm
+  Commands:
+  - Key: SOURCE
+    Name: arg
+    Value: ""
+  - Key: COMPOSER
+    Name: arg
+    Value: https://getcomposer.org/installer
+  - Key: COMPOSER_MIRROR
+    Name: arg
+    Value: ""
+  - Key: XDEBUG
+    Name: arg
+    Value: ""
+  - Key: SWOOLE
+    Name: arg
+    Value: 4.2.13
+  - Name: workdir
+    Path: /var/php
+  - CmdLine:
+    - "if [ ${SOURCE} ]; then \t\tsed -i \"s#http://deb.debian.org/#${SOURCE}#g\"
+      /etc/apt/sources.list; \t\tsed -i \"s#http://security.debian.org/#${SOURCE}#g\"
+      /etc/apt/sources.list; \t\tsed -i \"s#http://deb.debian.org/#${SOURCE}#g\" /etc/apt/sources.list.d/buster.list;
+      \t\tsed -i \"s#http://security.debian.org/#${SOURCE}#g\" /etc/apt/sources.list.d/buster.list;
+      \t\tcat /etc/apt/sources.list; \tfi; \t\tif [ ${COMPOSER} ]; then \t\tmkdir
+      /var/php/.composer -p; \t\tchown www-data:www-data /var/php/.composer; \t\tcurl
+      -sS ${COMPOSER} | php; \t\tmv composer.phar /usr/local/bin/composer; \t\tchmod
+      +x /usr/local/bin/composer; \t\tcomposer -V; \t\tif [ ${COMPOSER_MIRROR} ];
+      then \t\t\tcomposer config -g repo.packagist composer ${COMPOSER_MIRROR}; \t\tfi;
+      \tfi"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -ex; \t\tsavedAptMark=\"$(apt-mark showmanual)\"; \t\tapt-get update; \tapt-get
+      install -y \t\tzlib1g-dev \t\tlibmemcached-dev         libfreetype6-dev         libjpeg62-turbo-dev
+      \        libpng-dev         libmcrypt-dev; \t    docker-php-ext-install -j$(nproc)
+      pdo_mysql sockets mysqli zip pcntl;     docker-php-ext-configure gd --with-freetype-dir=/usr/include/
+      --with-jpeg-dir=/usr/include/;     docker-php-ext-install -j$(nproc) gd; \t\tpecl
+      install mongodb redis; \tdocker-php-ext-enable mongodb redis; \tif [ ${XDEBUG}
+      ]; then \t\tpecl install xdebug-${XDEBUG}; \t\tdocker-php-ext-enable xdebug;
+      \tfi; \tif [ ${SWOOLE} ]; then \t\tpecl install swoole-${SWOOLE}; \t\tdocker-php-ext-enable
+      swoole; \tfi; \t\tpecl install igbinary msgpack \t&& docker-php-ext-enable igbinary
+      msgpack \t&& MEMCACHED=3.1.3 \t&& pecl download memcached-${MEMCACHED} \t&&
+      tar xf memcached-${MEMCACHED}.tgz \t&& rm memcached-${MEMCACHED}.tgz \t&& (
+      \t\tcd memcached-${MEMCACHED} \t\t&& phpize \t\t&& ./configure --enable-memcached-igbinary
+      --enable-memcached-msgpack \t\t&& make -j$(nproc) \t\t&& make install \t) \t&&
+      rm -r memcached-${MEMCACHED} \t&& docker-php-ext-enable memcached; \t\tapt-mark
+      auto '.*' > /dev/null; \tapt-mark manual $savedAptMark; \tldd \"$(php -r 'echo
+      ini_get(\"extension_dir\");')\"/*.so \t\t| awk '/=>/ { print $3 }' \t\t| sort
+      -u \t\t| xargs -r dpkg-query -S \t\t| cut -d: -f1 \t\t| sort -u \t\t| xargs
+      -rt apt-mark manual; \t\tapt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false;
+      \trm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "{ \t\techo 'opcache.memory_consumption=128'; \t\techo 'opcache.interned_strings_buffer=8';
+      \t\techo 'opcache.max_accelerated_files=4000'; \t\techo 'opcache.revalidate_freq=2';
+      \t\techo 'opcache.fast_shutdown=1'; \t\techo 'opcache.enable_cli=1'; \t} > /usr/local/etc/php/conf.d/opcache-recommended.ini"
+    Name: run
+    PrependShell: true
+  From:
+    Image: php:7.2-fpm
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.2-fpm

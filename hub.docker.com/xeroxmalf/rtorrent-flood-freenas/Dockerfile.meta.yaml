@@ -1,0 +1,169 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:edge
+  Commands:
+  - Key: RTORRENT_VER
+    Name: arg
+    Value: 0.9.6
+  - Key: LIBTORRENT_VER
+    Name: arg
+    Value: 0.13.6
+  - Key: MEDIAINFO_VER
+    Name: arg
+    Value: 0.7.93
+  - Key: FILEBOT_VER
+    Name: arg
+    Value: 4.7.8
+  - Key: BUILD_CORES
+    Name: arg
+    Value: null
+  - Env:
+    - Key: UID
+      Value: "1000"
+    - Key: GID
+      Value: "1000"
+    - Key: FLOOD_SECRET
+      Value: mysupersecretkey
+    - Key: CONTEXT_PATH
+      Value: /
+    - Key: RTORRENT_SCGI
+      Value: "0"
+    - Key: PKG_CONFIG_PATH
+      Value: /usr/local/lib/pkgconfig
+    Name: env
+  - CmdLine:
+    - NB_CORES=${BUILD_CORES-`getconf _NPROCESSORS_CONF`}  && BUILD_DEPS="     build-base     git     libtool     automake     autoconf     wget     tar     xz     zlib-dev     cppunit-dev     libressl-dev     ncurses-dev     curl-dev     binutils"  &&
+      apk -U upgrade && apk add     ${BUILD_DEPS}     ca-certificates     curl     ncurses     libressl     gzip     zip     zlib     unrar     s6     su-exec     python     nodejs     nodejs-npm  &&
+      apk add -X http://dl-cdn.alpinelinux.org/alpine/v3.4/community -U openjdk8-jre==8.111.14-r0
+      openjdk8-jre-base==8.111.14-r0 openjdk8-jre-lib==8.111.14-r0  && cd /tmp &&
+      mkdir libtorrent rtorrent  && cd libtorrent && wget -qO- https://github.com/rakshasa/libtorrent/archive/${LIBTORRENT_VER}.tar.gz
+      | tar xz --strip 1  && cd ../rtorrent && wget -qO- https://github.com/rakshasa/rtorrent/archive/${RTORRENT_VER}.tar.gz
+      | tar xz --strip 1  && cd /tmp  && git clone https://github.com/mirror/xmlrpc-c.git  &&
+      git clone https://github.com/Rudde/mktorrent.git  && cd /tmp/mktorrent && make
+      -j ${NB_CORES} && make install  && cd /tmp/xmlrpc-c/stable && ./configure &&
+      make -j ${NB_CORES} && make install  && cd /tmp/libtorrent && ./autogen.sh &&
+      ./configure && make -j ${NB_CORES} && make install  && cd /tmp/rtorrent && ./autogen.sh
+      && ./configure --with-xmlrpc-c && make -j ${NB_CORES} && make install  && cd
+      /tmp  && wget -q http://mediaarea.net/download/binary/mediainfo/${MEDIAINFO_VER}/MediaInfo_CLI_${MEDIAINFO_VER}_GNU_FromSource.tar.gz  &&
+      wget -q http://mediaarea.net/download/binary/libmediainfo0/${MEDIAINFO_VER}/MediaInfo_DLL_${MEDIAINFO_VER}_GNU_FromSource.tar.gz  &&
+      tar xzf MediaInfo_DLL_${MEDIAINFO_VER}_GNU_FromSource.tar.gz  && tar xzf MediaInfo_CLI_${MEDIAINFO_VER}_GNU_FromSource.tar.gz  &&
+      cd /tmp/MediaInfo_DLL_GNU_FromSource && ./SO_Compile.sh  && cd /tmp/MediaInfo_DLL_GNU_FromSource/ZenLib/Project/GNU/Library
+      && make install  && cd /tmp/MediaInfo_DLL_GNU_FromSource/MediaInfoLib/Project/GNU/Library
+      && make install  && cd /tmp/MediaInfo_CLI_GNU_FromSource && ./CLI_Compile.sh  &&
+      cd /tmp/MediaInfo_CLI_GNU_FromSource/MediaInfo/Project/GNU/CLI && make install  &&
+      strip -s /usr/local/bin/rtorrent  && strip -s /usr/local/bin/mktorrent  && strip
+      -s /usr/local/bin/mediainfo  && mkdir /filebot && cd /filebot  && wget -q https://netcologne.dl.sourceforge.net/project/filebot/filebot/FileBot_${FILEBOT_VER}/FileBot_${FILEBOT_VER}-portable.tar.xz  &&
+      tar xJf FileBot_${FILEBOT_VER}-portable.tar.xz && rm FileBot_${FILEBOT_VER}-portable.tar.xz  &&
+      cd /usr && git clone https://github.com/jfurrow/flood && cd flood  && npm install
+      --production  && apk del ${BUILD_DEPS}  && rm -rf /var/cache/apk/* /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.js
+    - /usr/flood/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - s6.d
+    - /etc/s6.d
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - /usr/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - postdl
+    - /usr/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - postrm
+    - /usr/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.js
+    - /usr/flood/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rtorrent.rc
+    - /home/torrent/.rtorrent.rc
+  - CmdLine:
+    - chmod +x /usr/bin/* /etc/s6.d/*/* /etc/s6.d/.s6-svscan/*
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+    - /flood-db
+  - Name: expose
+    Ports:
+    - "3000"
+    - "49184"
+    - 49184/udp
+  - Labels:
+    - Key: description
+      Value: '"BitTorrent client with WebUI front-end"'
+    - Key: rtorrent
+      Value: '"rTorrent BiTorrent client v$RTORRENT_VER"'
+    - Key: libtorrent
+      Value: '"libtorrent v$LIBTORRENT_VER"'
+    - Key: filebot
+      Value: '"Filebot v$FILEBOT_VER"'
+    - Key: maintainer
+      Value: '"Wonderfall <wonderfall@targaryen.house>"'
+    - Key: org.freenas.interactive
+      Value: '"false"'
+    - Key: org.freenas.version
+      Value: '"1"'
+    - Key: org.freenas.upgradeable
+      Value: '"true"'
+    - Key: org.freenas.expose-ports-at-host
+      Value: '"true"'
+    - Key: org.freenas.autostart
+      Value: '"true"'
+    - Key: org.freenas.web-ui-protocol
+      Value: '"http"'
+    - Key: org.freenas.web-ui-port
+      Value: '"3000"'
+    - Key: org.freenas.web-ui-path
+      Value: '""'
+    - Key: org.freenas.port-mappings
+      Value: '"3000:3000/tcp,49184:49184/tcp,49184:49184/udp"'
+    - Key: org.freenas.volumes
+      Value: "\"[\t\t\t\t\t\t          {\t\t\t\t\t\t\t              \\\"name\\\":
+        \\\"/data\\\",\t\t\t\t\t              \\\"descr\\\": \\\"Your downloaded torrents,
+        session files, symlinks\\\"\t\t\t\t          },\t\t\t\t\t\t\t          {\t\t\t\t\t\t\t
+        \             \\\"name\\\": \\\"/flood-db\\\",\t\t\t\t\t              \\\"descr\\\":
+        \\\"Flood databases\\\"\t\t\t\t          }\t\t\t\t\t\t\t      ]\""
+    - Key: org.freenas.settings
+      Value: "\"[ \t\t\t\t\t          {\t\t\t\t\t\t\t              \\\"env\\\": \\\"FLOOD_SECRET\\\",\t\t\t\t\t
+        \             \\\"descr\\\": \\\"flood secret key (defaut : mysupersecretkey)
+        (CHANGE IT)\\\",\t\t\t              \\\"optional\\\": true\t\t\t\t\t          },\t\t\t\t\t\t\t
+        \         {\t\t\t\t\t\t\t              \\\"env\\\": \\\"GID\\\",\t\t\t\t\t
+        \             \\\"descr\\\": \\\"GroupID\\\",\t\t\t\t\t              \\\"optional\\\":
+        true\t\t\t\t\t          },\t\t\t\t\t\t\t          {\t\t\t\t\t\t\t              \\\"env\\\":
+        \\\"UID\\\",\t\t\t\t\t              \\\"descr\\\": \\\"UserID\\\",\t\t\t\t\t
+        \             \\\"optional\\\": true\t\t\t\t\t         }\t\t\t\t\t\t\t      ]\""
+    Name: label
+  - CmdLine:
+    - run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:edge
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:edge

@@ -1,0 +1,164 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: python:3.7-slim
+  Commands:
+  - Name: workdir
+    Path: /app_build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - ./utils/generate_wheel.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.7-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM python:3.7-slim as builder
+- As: installer
+  BaseName: python:3.7-slim
+  Commands:
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "true"
+    Name: env
+  - CmdLine:
+    - apt-get update;    apt-get install -y --no-install-recommends         gcc         python3-dev         default-libmysqlclient-dev     &&
+      apt-get clean all     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Key: WM_USER
+    Name: arg
+    Value: null
+  - Key: WM_GID
+    Name: arg
+    Value: null
+  - Key: WM_UID
+    Name: arg
+    Value: null
+  - Env:
+    - Key: WM_USER
+      Value: ${WM_USER:-"wirepas"}
+    Name: env
+  - Env:
+    - Key: WM_HOME
+      Value: '"/home/${WM_USER}"'
+    Name: env
+  - Env:
+    - Key: WM_GID
+      Value: ${WM_GID:-1000}
+    Name: env
+  - Env:
+    - Key: WM_UID
+      Value: ${WM_UID:-1000}
+    Name: env
+  - CmdLine:
+    - addgroup --gid "${WM_GID}" "${WM_USER}"     && adduser     --disabled-password     --gecos
+      ""     --home "/home/${WM_USER}"     --ingroup "${WM_USER}"     --no-create-home     --uid
+      "${WM_UID}"     "${WM_USER}"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${WM_HOME}/backend-client
+  - CmdLine:
+    - chown "${WM_USER}:${WM_USER}" -R ${WM_HOME}
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: '"${WM_USER}"'
+  - Env:
+    - Key: PATH
+      Value: ${PATH}:${WM_HOME}/.local/bin
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app_build/requirements.txt
+    - .
+  - CmdLine:
+    - pip install --user --no-cache-dir -r requirements.txt
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.7-slim
+  Name: installer
+  Platform: ""
+  SourceCode: FROM python:3.7-slim as installer
+- BaseName: installer
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app_build/dist/wirepas_backend_client*.whl
+    - .
+  - CmdLine:
+    - pip install --user --no-cache-dir wirepas_backend_client*.whl
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SETTINGS_PATH
+      Value: ${SETTINGS_PATH:-"${WM_HOME}/vars"}
+    Name: env
+  - CmdLine:
+    - mkdir -p ${SETTINGS_PATH}     && rm wirepas_backend_client*.whl     && rm requirements.txt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wm-gw-cli --settings ${SETTINGS_PATH}
+    Name: cmd
+    PrependShell: true
+  - Key: VERSION
+    Name: arg
+    Value: edge
+  - Key: IMAGE_NAME
+    Name: arg
+    Value: '"wirepas/backend-client:${VERSION}"'
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.opencontainers.image.created
+      Value: '"${BUILD_DATE}"'
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.licenses
+      Value: '"Apache-2.0"'
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.ref.name
+      Value: '"wirepas/backend-client:${VERSION}"'
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.schema-version
+      Value: '"1.0"'
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.title
+      Value: '"Wirepas backend client"'
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.url
+      Value: '"https://github.com/wirepas/backend-client"'
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.vendor
+      Value: '"Wirepas Ltd"'
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.version
+      Value: '"${VERSION}"'
+    Name: label
+  From:
+    Stage:
+      Index: 1
+      Named: installer
+  Name: ""
+  Platform: ""
+  SourceCode: FROM installer

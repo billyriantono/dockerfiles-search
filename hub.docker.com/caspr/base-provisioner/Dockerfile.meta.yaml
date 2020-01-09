@@ -1,0 +1,101 @@
+MetaArgs: null
+Stages:
+- As: module_base
+  BaseName: golang:1.13-alpine
+  Commands:
+  - Name: workdir
+    Path: /go/src/caspr-result
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.sum
+    - .
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-alpine
+  Name: module_base
+  Platform: ""
+  SourceCode: FROM golang:1.13-alpine as module_base
+- As: builder
+  BaseName: module_base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - go build -o caspr-result ./main.go
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: module_base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM module_base as builder
+- BaseName: alpine:3.10
+  Commands:
+  - CmdLine:
+    - apk add --no-cache curl git ca-certificates jq
+    Name: run
+    PrependShell: true
+  - Key: YQ_VERSION
+    Name: arg
+    Value: 2.4.1
+  - CmdLine:
+    - curl -LO https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64
+      &&   mv yq_linux_amd64 /usr/bin/yq &&   chmod +x /usr/bin/yq
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/caspr-result/caspr-result
+    - /usr/bin
+  - CmdLine:
+    - addgroup -S caspr &&   adduser -S caspr -G caspr --home /caspr
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /caspr
+  - Name: user
+    User: caspr
+  - Env:
+    - Key: NATS_URL
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: STAN_CLUSTER_ID
+      Value: '"streaming-stan"'
+    Name: env
+  - Env:
+    - Key: STAN_CLIENT_ID
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: STAN_QUEUE_GROUP
+      Value: '"provisioner"'
+    Name: env
+  From:
+    Image: alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10

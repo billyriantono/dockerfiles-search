@@ -1,0 +1,204 @@
+MetaArgs: null
+Stages:
+- BaseName: debian
+  Commands:
+  - Maintainer: Francesco Pompo'
+    Name: maintainer
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: MASTER_PASSWORD
+      Value: changemeplease
+    Name: env
+  - CmdLine:
+    - apt-get -y update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y upgrade
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y install nano patch rsyslog mysql-server postfix dovecot-core dovecot-mysql
+      dovecot-imapd dovecot-lmtpd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd -g 5000 vmail
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -u 5000 -g vmail -s /usr/bin/nologin -d /home/vmail -m vmail
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - service mysql start && mysql -e "CREATE DATABASE postfix_db;"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - service mysql start && mysql -e "GRANT ALL ON postfix_db.* TO 'postfix_user'@'localhost'
+      IDENTIFIED BY '${MASTER_PASSWORD}';"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y install apache2 php5 php5-imap
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - service mysql start && apt-get -y install postfixadmin
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./config.inc.php.patch
+    - /etc/postfixadmin/config.inc.php.patch
+  - CmdLine:
+    - patch /etc/postfixadmin/config.inc.php /etc/postfixadmin/config.inc.php.patch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /etc/postfixadmin/config.inc.php.patch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s/\\$\\dbuser.*/\\$\\dbuser='postfix_user';/g" /etc/postfixadmin/dbconfig.inc.php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s/\\$\\dbpass.*/\\$\\dbpass='${MASTER_PASSWORD}';/g" /etc/postfixadmin/dbconfig.inc.php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s/\\$\\dbname.*/\\$\\dbname='postfix_db';/g" /etc/postfixadmin/dbconfig.inc.php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'cd /etc/ssl/private/ && openssl req -new -x509 -nodes -newkey rsa:4096 -subj
+      "/" -keyout vmail.key -out vmail.crt -days 1460 #days are optional'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /etc/ssl/private/ && chmod 400 vmail.key && chmod 444 vmail.crt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./master.cf.patch
+    - /etc/postfix/master.cf.patch
+  - CmdLine:
+    - patch /etc/postfix/master.cf /etc/postfix/master.cf.patch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /etc/postfix/master.cf.patch
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./main.cf.append
+    - /etc/postfix/main.cf.append
+  - CmdLine:
+    - cat /etc/postfix/main.cf.append >> /etc/postfix/main.cf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /etc/postfix/main.cf.append
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "user = postfix_user\npassword = ${MASTER_PASSWORD}\nhosts = localhost\ndbname
+      = postfix_db\ntable = alias\nselect_field = goto\nwhere_field = address" > /etc/postfix/virtual_alias_maps.cf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "user = postfix_user\npassword = ${MASTER_PASSWORD}\nhosts = localhost\ndbname
+      = postfix_db\ntable = domain\nselect_field = domain\nwhere_field = domain" >
+      /etc/postfix/virtual_mailbox_domains.cf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "user = postfix_user\npassword = ${MASTER_PASSWORD}\nhosts = localhost\ndbname
+      = postfix_db\ntable = mailbox\nselect_field = maildir\nwhere_field = username"
+      > /etc/postfix/virtual_mailbox_maps.cf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch /etc/postfix/transport
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - postmap /etc/postfix/transport
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /etc/dovecot/dovecot.conf /etc/dovecot/dovecot.conf.orig
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./dovecot.conf
+    - /etc/dovecot/dovecot.conf
+  - CmdLine:
+    - echo "driver = mysql\nconnect = host=localhost dbname=postfix_db user=postfix_user
+      password=${MASTER_PASSWORD}\ndefault_pass_scheme = SHA512\nuser_query = SELECT
+      '/home/vmail/%d/%n' as home, 'maildir:/home/vmail/%d/%n' as mail, 5000 AS uid,
+      5000 AS gid, concat('dirsize:storage=',  quota) AS quota FROM mailbox WHERE
+      username = '%u' AND active = '1'\npassword_query = SELECT username as user,
+      password, '/home/vmail/%d/%n' as userdb_home, 'maildir:/home/vmail/%d/%n' as
+      userdb_mail, 5000 as  userdb_uid, 5000 as userdb_gid FROM mailbox WHERE username
+      = '%u' AND active = '1'" > /etc/dovecot/dovecot-sql.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./10-master.conf.patch
+    - /etc/dovecot/conf.d/10-master.conf.patch
+  - CmdLine:
+    - patch /etc/dovecot/conf.d/10-master.conf /etc/dovecot/conf.d/10-master.conf.patch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /etc/dovecot/conf.d/10-master.conf.patch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "export TERM=xterm" >> /root/.bashrc
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./start.sh
+    - /start.sh
+  - CmdLine:
+    - chmod +x /start.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "25"
+    - "587"
+    - "993"
+  - Name: volume
+    Volumes:
+    - /var/log
+    - /var/lib/mysql
+    - /etc/postfixadmin
+    - /home/vmail
+  - CmdLine:
+    - /bin/bash
+    - /start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian

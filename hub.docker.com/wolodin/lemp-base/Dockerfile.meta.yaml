@@ -1,0 +1,152 @@
+MetaArgs:
+- DefaultValue: '"18.04"'
+  Key: BASEIMAGE_VERION
+  ProvidedValue: null
+  Value: '"18.04"'
+Stages:
+- As: lemp-base
+  BaseName: ubuntu:${BASEIMAGE_VERION}
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Volodin Vasiliy <wolodin@vvp24.ru>"'
+    - Key: version
+      Value: '"1.2.7"'
+    - Key: name
+      Value: '"lemp-base"'
+    Name: label
+  - Key: DOCKER_USERNAME_ARG
+    Name: arg
+    Value: '"web"'
+  - Key: LOCALE_CHARSET_ARG
+    Name: arg
+    Value: '"UTF-8"'
+  - Key: LOCALE_LANGUAGE_ARG
+    Name: arg
+    Value: '"ru_RU"'
+  - Key: TZ_ARG
+    Name: arg
+    Value: '"Europe/Moscow"'
+  - Env:
+    - Key: TZ_ENV
+      Value: ${TZ_ARG}
+    Name: env
+  - Env:
+    - Key: LOCALE_CHARSET_ENV
+      Value: ${LOCALE_CHARSET_ARG}
+    Name: env
+  - Env:
+    - Key: LOCALE_LANGUAGE_ENV
+      Value: ${LOCALE_LANGUAGE_ARG}
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: C.${LOCALE_CHARSET_ENV}
+    - Key: LC_ALL
+      Value: C.${LOCALE_CHARSET_ENV}
+    Name: env
+  - Env:
+    - Key: DOCKER_USERNAME_ENV
+      Value: ${DOCKER_USERNAME_ARG}
+    Name: env
+  - Env:
+    - Key: ROOT_USERNAME_ENV
+      Value: '"root"'
+    Name: env
+  - Env:
+    - Key: DOCKER_WORKDIR_ENV
+      Value: /home/${DOCKER_USERNAME_ENV}
+    Name: env
+  - Env:
+    - Key: UNIX_RUN_DIR_ENV
+      Value: /run/${DOCKER_USERNAME_ENV}-process-run
+    Name: env
+  - Name: user
+    User: ${ROOT_USERNAME_ENV}:${ROOT_USERNAME_ENV}
+  - CmdLine:
+    - groupadd --gid 1000 ${DOCKER_USERNAME_ENV} &&     adduser --uid 1000 --home
+      /home/${DOCKER_USERNAME_ENV} --shell /bin/bash --ingroup ${DOCKER_USERNAME_ENV}
+      --disabled-password --gecos "" ${DOCKER_USERNAME_ENV}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - APT_INSTALL="apt-get install -qq --no-install-recommends" &&     apt-get update
+      --fix-missing -qq && apt-get upgrade -qq &&         DEBIAN_FRONTEND=noninteractive
+      $APT_INSTALL             locales             apt-utils             &&         DEBIAN_FRONTEND=noninteractive
+      $APT_INSTALL             procps tmux man htop mc             ca-certificates             git
+      mercurial subversion             nano sed             libssl1.0.0 libssl-dev             supervisor
+      supervisor-doc             curl wget             grep dpkg             inetutils-ping             tar
+      gzip bzip2 zip unzip rar unrar             libglib2.0-0             &&         localedef
+      -i ${LOCALE_LANGUAGE_ENV} -c -f ${LOCALE_CHARSET_ENV} -A /usr/share/locale/locale.alias
+      ${LOCALE_LANGUAGE_ENV}.${LOCALE_CHARSET_ENV}             &&         ldconfig
+      &&         apt-get clean -qq &&         apt-get autoremove -qq &&         rm
+      -rf /var/lib/apt/lists/* /tmp/* ~/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: ${LOCALE_LANGUAGE_ENV}.${LOCALE_CHARSET_ENV}
+    - Key: LC_ALL
+      Value: ${LOCALE_LANGUAGE_ENV}.${LOCALE_CHARSET_ENV}
+    Name: env
+  - CmdLine:
+    - ln -snf /usr/share/zoneinfo/${TZ_ENV} /etc/localtime && echo ${TZ_ENV} > /etc/timezone
+    Name: run
+    PrependShell: true
+  - Name: stopsignal
+    Signal: SIGTERM
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./fixuid/fixuid
+    - /usr/local/bin/
+  - CmdLine:
+    - 'chown ${ROOT_USERNAME_ENV}:${ROOT_USERNAME_ENV} /usr/local/bin/fixuid &&     chmod
+      4755 /usr/local/bin/fixuid &&     mkdir -p /etc/fixuid &&     printf "user:
+      ${DOCKER_USERNAME_ENV}\ngroup: ${DOCKER_USERNAME_ENV}\n" > /etc/fixuid/config.yml'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/fixuid
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - mkdir -p ${UNIX_RUN_DIR_ENV} &&     chown -hR ${DOCKER_USERNAME_ENV}:${DOCKER_USERNAME_ENV}
+      ${UNIX_RUN_DIR_ENV}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./supervisord/supervisord.conf
+    - /etc/supervisor/
+  - CmdLine:
+    - SUPERVISORD_CONFIG=/etc/supervisor/supervisord.conf &&     sed -i -e "s@%LOG_DIR%@/home/${DOCKER_USERNAME_ENV}/logs@g"
+      $SUPERVISORD_CONFIG &&     sed -i -e "s@%USERNAME%@${DOCKER_USERNAME_ENV}@g"
+      $SUPERVISORD_CONFIG &&     sed -i -e "s@%UNIX_RUN_DIR%@${UNIX_RUN_DIR_ENV}@g"
+      $SUPERVISORD_CONFIG
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${DOCKER_USERNAME_ENV}:${DOCKER_USERNAME_ENV}
+  - Name: workdir
+    Path: ${DOCKER_WORKDIR_ENV}
+  - CmdLine:
+    - mkdir -p ${UNIX_RUN_DIR_ENV}/supervisor/ &&     mkdir -p logs/ &&     mkdir
+      -p logs/supervisor/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/supervisord
+    - -n
+    - -c
+    - /etc/supervisor/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:${BASEIMAGE_VERION}
+  Name: lemp-base
+  Platform: ""
+  SourceCode: FROM ubuntu:${BASEIMAGE_VERION} as lemp-base

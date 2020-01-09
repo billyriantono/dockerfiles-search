@@ -1,0 +1,109 @@
+MetaArgs: null
+Stages:
+- As: signalbuild
+  BaseName: alpine:3.8
+  Commands:
+  - Env:
+    - Key: JAVA_HOME
+      Value: /opt/jdk
+    - Key: PATH
+      Value: ${PATH}:/opt/jdk/bin
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - CmdLine:
+    - set -ex &&     apk add --no-cache bash &&     wget https://download.java.net/java/early_access/alpine/22/binaries/openjdk-11-ea+22_linux-x64-musl_bin.tar.gz
+      -O jdk.tar.gz &&     mkdir -p /opt/jdk &&     tar zxvf jdk.tar.gz -C /opt/jdk
+      --strip-components=1 &&     rm jdk.tar.gz &&     rm /opt/jdk/lib/src.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /usr/src/mods/jars
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /usr/src/mods/compiled
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /usr/src
+  - Name: workdir
+    Path: /usr/src
+  - CmdLine:
+    - javac -Xlint:unchecked -d /usr/src/mods/compiled --module-source-path /usr/src/src
+      $(find src -name "*.java")
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - jar --create --file /usr/src/mods/jars/joostvdg.demo.signal.jar --module-version
+      1.0  -e com.github.joostvdg.demo.signal.SignalApp    -C /usr/src/mods/compiled/joostvdg.demo.signal
+      .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /usr/bin/signal-image
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - jlink     --verbose     --compress 2     --no-header-files     --no-man-pages     --strip-debug     --limit-modules
+      java.base     --launcher signal=joostvdg.demo.signal     --module-path /usr/src/mods/jars/:$JAVA_HOME/jmods     --add-modules
+      joostvdg.demo.signal      --output /usr/bin/signal-image
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/signal-image/bin/java --list-modules
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.8
+  Name: signalbuild
+  Platform: ""
+  SourceCode: FROM alpine:3.8 AS signalbuild
+- BaseName: panga/alpine:3.8-glibc2.27
+  Commands:
+  - Labels:
+    - Key: authors
+      Value: '"Joost van der Griendt <joostvdg@gmail.com>"'
+    Name: label
+  - Labels:
+    - Key: version
+      Value: '"0.1.0"'
+    Name: label
+  - Labels:
+    - Key: description
+      Value: '"Docker image for playing with java applications for graceful shutdown
+        with Docker & Kubernetes."'
+    Name: label
+  - Env:
+    - Key: DATE_CHANGED
+      Value: '"20180728-2355"'
+    Name: env
+  - CmdLine:
+    - apk add --no-cache tini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /sbin/tini
+    - -vv
+    - -g
+    - --
+    - /usr/bin/signal/bin/signal
+    - -XX:+UseCGroupMemoryLimitForHeap
+    - -XX:+UnlockExperimentalVMOptions
+    Name: entrypoint
+    PrependShell: false
+  - Chown: ""
+    From: signalbuild
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/signal-image/
+    - /usr/bin/signal
+  From:
+    Image: panga/alpine:3.8-glibc2.27
+  Name: ""
+  Platform: ""
+  SourceCode: FROM panga/alpine:3.8-glibc2.27

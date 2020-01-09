@@ -1,0 +1,155 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: ubuntu
+  Commands:
+  - Env:
+    - Key: SEQSERVER_USER
+      Value: seqserver
+    - Key: SEQSERVER_GROUP
+      Value: seqserver_group
+    - Key: SEQSERVER_BASE_PATH
+      Value: /var/www/sequenceserver
+    - Key: SEQSERVER_APP_PATH
+      Value: /var/www/sequenceserver/app
+    - Key: SEQSERVER_JOB_PATH
+      Value: /var/www/sequenceserver/.sequenceserver
+    - Key: SEQSERVER_CONFIG_FILE
+      Value: /var/www/sequenceserver/.sequenceserver.conf
+    - Key: SEQSERVER_DB_PATH
+      Value: /var/www/sequenceserver/db
+    Name: env
+  - CmdLine:
+    - apt-get -qq -y update     && apt-get -qq -y install dirmngr gnupg     && apt-key
+      adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 561F9B9CAC40B2F7 |
+      grep -q -     && apt-get -qq -y install apt-transport-https ca-certificates     &&
+      sh -c 'echo deb https://oss-binaries.phusionpassenger.com/apt/passenger bionic
+      main > /etc/apt/sources.list.d/passenger.list'     && apt-get -qq -y update     &&
+      apt-get -qq -y install build-essential ruby ruby-dev zlib1g-dev curl wget git     &&
+      gem install bundler
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root
+  - CmdLine:
+    - git clone https://github.com/zhxu73/sequenceserver-scale.git     && cd sequenceserver-scale     &&
+      bundle install --path vendor/bundle --without development test     && cd /root     &&
+      wget https://github.com/zhxu73/sequenceserver-scale-docker/releases/download/ncbi-blast-2.9.0%2B/ncbi-blast-2.9.0+-x64-linux.tar.gz     &&
+      tar -xvf ncbi-blast-2.9.0+-x64-linux.tar.gz     && wget http://ccl.cse.nd.edu/software/files/cctools-7.0.21-source.tar.gz     &&
+      tar -xvf cctools-7.0.21-source.tar.gz     && cd cctools-release-7.0.21     &&
+      ./configure --prefix $HOME/cctools     && make     && make install     && cd
+      /root     && git clone https://github.com/zhxu73/blast-workqueue.git     &&
+      cd blast-workqueue/src     && make     && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p to_final_image/bin     && cp ncbi-blast-2.9.0+/bin/* to_final_image/bin/     &&
+      cp cctools/bin/* to_final_image/bin/     && cp /usr/bin/blast_workqueue to_final_image/bin/     &&
+      cp /usr/bin/blast_workqueue-backend to_final_image/bin/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker_entry.sh
+    - sequenceserver-scale/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .sequenceserver.conf
+    - to_final_image/
+  From:
+    Image: ubuntu
+  Name: build
+  Platform: ""
+  SourceCode: FROM ubuntu AS build
+- BaseName: ubuntu
+  Commands:
+  - Labels:
+    - Key: Description
+      Value: '"Scalable intuitive local web frontend for the BLAST bioinformatics
+        tool"'
+    Name: label
+  - Labels:
+    - Key: Version
+      Value: '"0.1"'
+    Name: label
+  - Env:
+    - Key: PROJECT_NAME
+      Value: ""
+    - Key: WORKQUEUE_PASSWORD
+      Value: VERY_STRONG_PASSWORD
+    - Key: BLAST_NUM_THREADS
+      Value: "4"
+    - Key: SEQSERVER_USER
+      Value: seqserver
+    - Key: SEQSERVER_GROUP
+      Value: seqserver_group
+    - Key: SEQSERVER_BASE_PATH
+      Value: /var/www/sequenceserver
+    - Key: SEQSERVER_APP_PATH
+      Value: /var/www/sequenceserver/app
+    - Key: SEQSERVER_JOB_PATH
+      Value: /var/www/sequenceserver/.sequenceserver
+    - Key: SEQSERVER_CONFIG_FILE
+      Value: /var/www/sequenceserver/.sequenceserver.conf
+    - Key: SEQSERVER_DB_PATH
+      Value: /var/www/sequenceserver/db
+    Name: env
+  - CmdLine:
+    - apt-get -qq -y update     && apt-get -qq -y install dirmngr gnupg     && apt-key
+      adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 561F9B9CAC40B2F7 |
+      grep -q -     && apt-get -qq -y install apt-transport-https ca-certificates     &&
+      sh -c 'echo deb https://oss-binaries.phusionpassenger.com/apt/passenger bionic
+      main > /etc/apt/sources.list.d/passenger.list'     && apt-get -qq -y update     &&
+      apt-get -qq -y install passenger ruby ruby-dev zlib1g-dev redis-server wget
+      git     && gem install bundler
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/www/sequenceserver/db
+  - Name: expose
+    Ports:
+    - "3000"
+    - "9123"
+  - CmdLine:
+    - addgroup ${SEQSERVER_GROUP} && adduser --quiet --disabled-login --gecos 'SequenceServer'
+      ${SEQSERVER_USER} && adduser ${SEQSERVER_USER} ${SEQSERVER_GROUP}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/$SEQSERVER_USER
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /root/sequenceserver-scale
+    - ${SEQSERVER_APP_PATH}
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /root/to_final_image
+    - from_build_image
+  - CmdLine:
+    - cp from_build_image/bin/* /usr/bin     && mkdir -p ${SEQSERVER_JOB_PATH}     &&
+      cp from_build_image/.sequenceserver.conf $SEQSERVER_CONFIG_FILE     && echo
+      ${WORKQUEUE_PASSWORD} > $SEQSERVER_BASE_PATH/wq_password.txt     && chown -R
+      ${SEQSERVER_USER}:${SEQSERVER_GROUP} ${SEQSERVER_BASE_PATH}
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: seqserver
+  - Name: workdir
+    Path: ${SEQSERVER_APP_PATH}
+  - CmdLine:
+    - /bin/bash
+    - docker_entry.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu

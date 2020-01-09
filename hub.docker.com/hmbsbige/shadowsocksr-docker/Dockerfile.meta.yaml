@@ -1,0 +1,59 @@
+MetaArgs: null
+Stages:
+- As: golang
+  BaseName: golang:alpine
+  Commands:
+  - Env:
+    - Key: V2RAY_PLUGIN_VERSION
+      Value: v1.2.0
+    Name: env
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - CmdLine:
+    - apk add --no-cache git build-base     && mkdir -p /go/src/github.com/shadowsocks     &&
+      cd /go/src/github.com/shadowsocks     && git clone https://github.com/shadowsocks/v2ray-plugin.git     &&
+      cd v2ray-plugin     && git checkout "$V2RAY_PLUGIN_VERSION"     && go get -d     &&
+      go build
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: golang
+  Platform: ""
+  SourceCode: FROM golang:alpine AS golang
+- BaseName: alpine
+  Commands:
+  - Env:
+    - Key: SHADOWSOCKS_LIBEV_VERSION
+      Value: v3.3.3
+    Name: env
+  - CmdLine:
+    - set -ex     && apk add --no-cache --virtual .build-deps                autoconf                automake                build-base                libev-dev                libtool                linux-headers                udns-dev                libsodium-dev                mbedtls-dev                pcre-dev                tar                udns-dev                c-ares-dev                git     &&
+      mkdir -p /tmp/build-shadowsocks-libev     && cd /tmp/build-shadowsocks-libev     &&
+      git clone https://github.com/shadowsocks/shadowsocks-libev.git     && cd shadowsocks-libev     &&
+      git checkout "$SHADOWSOCKS_LIBEV_VERSION"     && git submodule update --init
+      --recursive     && ./autogen.sh     && ./configure --disable-documentation     &&
+      make install     && ssRunDeps="$(         scanelf --needed --nobanner /usr/local/bin/ss-server             |
+      awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }'             | xargs -r apk
+      info --installed             | sort -u     )"     && apk add --no-cache --virtual
+      .ss-rundeps $ssRunDeps     && cd /     && rm -rf /tmp/build-shadowsocks-libev     &&
+      apk del .build-deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: golang
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/shadowsocks/v2ray-plugin/v2ray-plugin
+    - /usr/local/bin
+  - CmdLine:
+    - ss-manager
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

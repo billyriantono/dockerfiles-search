@@ -1,0 +1,133 @@
+MetaArgs: null
+Stages:
+- BaseName: python:3.6.9-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: paul.traylor@linecorp.com
+    Name: label
+  - Env:
+    - Key: PROMETHEUS_VERSION
+      Value: 2.11.1
+    Name: env
+  - Env:
+    - Key: PROMETHEUS_DOWNLOAD_URL
+      Value: https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz
+    Name: env
+  - Env:
+    - Key: PYTHONDONTWRITEBYTECODE
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: PIP_NO_CACHE_DIR
+      Value: "off"
+    Name: env
+  - Env:
+    - Key: PROMGEN_CONFIG_DIR
+      Value: /etc/promgen
+    Name: env
+  - CmdLine:
+    - adduser -D -u 1000 promgen promgen
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install --no-cache-dir -U pip==19.2.2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex     && apk add --no-cache mariadb-dev     && apk add --no-cache --virtual
+      build-deps build-base     && pip --no-cache-dir install mysqlclient     && apk
+      del build-deps
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex     && apk add --no-cache postgresql-dev     && apk add --no-cache --virtual
+      build-deps build-base     && pip install --no-cache-dir psycopg2-binary     &&
+      apk del build-deps
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex     && apk add --no-cache --virtual build-deps curl tar     && curl
+      -L -s $PROMETHEUS_DOWNLOAD_URL     | tar -xz -C /usr/local/bin --strip-components=1
+      prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool     && apk del build-deps
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /etc/prometheus;     mkdir -p /etc/promgen;     mkdir -p /usr/src/app;     chown
+      promgen /etc/prometheus
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/requirements.txt
+    - /tmp/requirements.txt
+  - CmdLine:
+    - pip install --no-cache-dir -r /tmp/requirements.txt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/docker-entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - setup.py
+    - /usr/src/app/setup.py
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - promgen
+    - /usr/src/app/promgen
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - promgen/tests/examples/promgen.yml
+    - /etc/promgen/promgen.yml
+  - Name: workdir
+    Path: /usr/src/app
+  - CmdLine:
+    - pip install --no-cache-dir -e .
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: promgen
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - SECRET_KEY=1 promgen collectstatic --noinput
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /etc/promgen
+    - /etc/prometheus
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - web
+    - --bind
+    - 0.0.0.0:8000
+    - --workers
+    - "4"
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3.6.9-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.6.9-alpine

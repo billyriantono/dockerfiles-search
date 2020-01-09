@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: ubuntu:18.04
+  Commands:
+  - Labels:
+    - Key: bio_node
+      Value: v1.0
+    - Key: bionode_entrypoint
+      Value: /app/bionode.sh
+    - Key: input_1
+      Value: '"fastq_file|fastq_gz"'
+    - Key: input_2
+      Value: '"fastq_file|fastq_gz"'
+    - Key: output_1
+      Value: '"fasta_file"'
+    - Key: output_2
+      Value: '"fasta_file"'
+    - Key: maintainer
+      Value: mmiller@bromberglab.org
+    - Key: description
+      Value: '"An ultra-fast all-in-one FASTQ preprocessor (QC/adapters/trimming/filtering/splitting/merging...)"'
+    Name: label
+  From:
+    Image: ubuntu:18.04
+  Name: base
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as base
+- As: builder
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app
+  - CmdLine:
+    - apt-get update -y && apt-get install -y     build-essential     curl     wget     zlib1g-dev     &&
+      apt-get clean && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - LATEST=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/OpenGene/fastp/releases/latest/download/)
+      | cut -c 2-) &&     echo ${LATEST} > /app/version &&     wget -q https://github.com/OpenGene/fastp/archive/v${LATEST}.tar.gz
+      &&     tar xzf v${LATEST}.tar.gz &&     cd fastp-${LATEST} &&     mkdir -p /install/bin
+      && PREFIX=/install make && PREFIX=/install make install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base as builder
+- BaseName: base
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /install
+    - /usr/local
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /app
+  - Name: workdir
+    Path: /app
+  - Env:
+    - Key: INPUT_PATH
+      Value: /input
+    - Key: OUTPUT_PATH
+      Value: /output
+    Name: env
+  - CmdLine:
+    - fastp
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

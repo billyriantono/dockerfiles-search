@@ -1,0 +1,71 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: ubuntu:18.04
+  Commands:
+  - Key: ZNC_TAG
+    Name: arg
+    Value: znc-1.7.1
+  - Key: PALAVER_TAG
+    Name: arg
+    Value: 1.1.2
+  - Key: TINI_TAG
+    Name: arg
+    Value: v0.18.0
+  - Key: SU_EXEC_TAG
+    Name: arg
+    Value: v0.2
+  - CmdLine:
+    - apt-get update && apt-get install --no-install-recommends -y     build-essential     libboost-locale1.65-dev     libgettextpo-dev     gettext     git     libssl-dev     libsasl2-dev     cmake     libicu-dev     ca-certificates   &&
+      git clone     --branch ${ZNC_TAG}     -c advice.detachedHead=false     https://github.com/znc/znc
+      /znc-src   && git clone   -c advice.detachedHead=false   https://github.com/jpnurmi/znc-playback   /znc-playback   &&
+      cp /znc-playback/playback.cpp /znc-src/modules/   && git clone   -c advice.detachedHead=false   https://github.com/Palaver/znc-palaver   --branch
+      ${PALAVER_TAG} /znc-palaver   && cp /znc-palaver/palaver.cpp /znc-src/modules/   &&
+      cd /znc-src   && git submodule update --init --recursive   && mkdir build   &&
+      cd build   && cmake ..   && make   && make install   && git clone -c advice.detachedHead=false   https://github.com/krallin/tini   --branch
+      ${TINI_TAG}   /tini   && cd /tini   && cmake .   && make tini   && git clone   -c
+      advice.detachedHead=false   https://github.com/ncopa/su-exec   --branch ${SU_EXEC_TAG}   /su-exec   &&
+      cd /su-exec   && make   && mkdir /local_built   && cd /local_built   && mkdir
+      bin lib share   && cp /usr/local/bin/znc bin/   && cp /tini/tini bin/   && cp
+      /su-exec/su-exec bin/   && cp -r /usr/local/lib/znc lib/   && cp -r /usr/local/share/znc
+      share/   && cp -r /usr/local/share/locale share/
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: build
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 AS build
+- BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install --no-install-recommends -y     libssl1.1     libicu60     libsasl2-2     libboost-locale1.65.1     ca-certificates   &&
+      rm -rf /var/lib/apt/lists/*   && useradd -Ms /bin/bash -u 1000 znc   && mkdir
+      /znc-data   && chown znc /znc-data
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /local_built
+    - /usr/local
+  - Name: volume
+    Volumes:
+    - /znc-data
+  - CmdLine:
+    - /usr/local/bin/tini
+    - --
+    - /usr/local/bin/su-exec
+    - znc
+    - /usr/local/bin/znc
+    - -d
+    - /znc-data
+    - -f
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

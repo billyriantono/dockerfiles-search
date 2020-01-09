@@ -1,0 +1,176 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:18.04
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update     && apt-get -y install --no-install-recommends apt-utils dialog
+      2>&1     && apt-get -y install git procps lsb-release     && apt-get -y install
+      build-essential cmake cppcheck valgrind     && apt-get install -y sudo
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    - Key: LC_ALL
+      Value: C.UTF-8
+    Name: env
+  - CmdLine:
+    - apt-get update --fix-missing &&     apt-get install -y curl python3.6 python3.6-dev
+      python3-pip wget bzip2 ca-certificates libglib2.0-0 libxext6 libsm6 libxrender1
+      git mercurial subversion iproute2 git libncurses-dev flex bison gperf cmake
+      ninja-build ccache gawk grep gettext automake bison flex texinfo help2man libtool
+      libtool-bin make unzip &&     apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /usr/bin/python &&     ln -s /usr/bin/python3.6 /usr/bin/python
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip3 install esptool pylint micropy-cli setuptools pyserial click cryptography
+      future pyparsing==2.3.1 pyelftools mpfshell-lite
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /usr/lib/python3.6/config-3.6m-x86_64-linux-gnu/libpython3.6m.a /usr/lib/python3.6/config-3.6m-x86_64-linux-gnu/libpython3.6m.a.bak
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /esp
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /esp &&     git clone https://github.com/espressif/crosstool-NG.git &&     cd
+      crosstool-NG &&     git checkout 6c4433a &&     ./bootstrap &&     ./configure
+      --enable-local &&     make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /esp &&     cd crosstool-NG &&     make install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - crosstool_old.config
+    - /esp/crosstool-NG/samples/xtensa-esp32-elf/crosstool.config
+  - CmdLine:
+    - cd /esp &&     cd crosstool-NG &&     ./ct-ng xtensa-esp32-elf &&    CT_ONLY_EXTRACT=y
+      ./ct-ng build
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - python_gdb_new.patch
+    - /esp/crosstool-NG/.build/src/gdb-7.10/python_gdb.patch
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - 300-gdb.sh.patch
+    - /esp/crosstool-NG/300-gdb.sh.patch
+  - CmdLine:
+    - cd /esp/crosstool-NG &&     patch -p0 < 300-gdb.sh.patch &&     cd /esp/crosstool-NG/.build/src/gdb-7.10
+      &&     patch -p0 < python_gdb.patch &&     cd /esp/crosstool-NG &&     ./ct-ng
+      build &&     chmod -R u+w builds/xtensa-esp32-elf
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: '"/esp/crosstool-NG/builds/xtensa-esp32-elf/bin:$PATH"'
+    Name: env
+  - CmdLine:
+    - cd /esp &&     git clone -b v3.3 --recursive https://github.com/espressif/esp-idf.git
+      &&     cd /esp/esp-idf &&     git submodule update --init --recursive
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: IDF_PATH
+      Value: /esp/esp-idf
+    Name: env
+  - CmdLine:
+    - git clone --recurse-submodules https://github.com/micropython/micropython.git
+      /root/micropython
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /root/micropython &&     make -C mpy-cross
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - lolin32_makefile
+    - /root/micropython/ports/esp32/lolin32_makefile
+  - CmdLine:
+    - cd /root/micropython/ports/esp32 &&     ESPIDF=$IDF_PATH make -j4 -f lolin32_makefile
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - checks.py.patch
+    - /checks.py.patch
+  - CmdLine:
+    - patch -p0 < checks.py.patch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - micropy stubs add esp32-micropython-1.11.0
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - sudoers
+    - /etc/sudoers
+  - Env:
+    - Key: SHELL
+      Value: /bin/bash
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - bashrc
+    - /root/bashrc
+  - CmdLine:
+    - chmod 755 /root     && chmod 755 /root/bashrc
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: USER
+      Value: root
+    Name: env
+  - CmdLine:
+    - addgroup --gid 999 vscode &&     adduser --uid 999 --ingroup vscode --home /home/_vscode
+      --disabled-password --gecos "" vscode &&     usermod -a -G sudo,plugdev,dialout,adm
+      vscode
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'USER=vscode &&     GROUP=vscode &&     curl -SsL https://github.com/boxboat/fixuid/releases/download/v0.4/fixuid-0.4-linux-amd64.tar.gz
+      | tar -C /usr/local/bin -xzf - &&     chown root:root /usr/local/bin/fixuid
+      &&     chmod 4755 /usr/local/bin/fixuid &&     mkdir -p /etc/fixuid &&     printf
+      "user: $USER\ngroup: $GROUP\npaths:\n  - /home/_vscode\n  - /root/.vscode-server"
+      > /etc/fixuid/config.yml'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /root/.vscode-server && chown vscode:vscode /root/.vscode-server
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ESPIDF
+      Value: /esp/esp-idf
+    Name: env
+  - Name: user
+    User: vscode:vscode
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

@@ -1,0 +1,226 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "fetch",
+      "BaseName": "alpine",
+      "SourceCode": "FROM alpine as fetch",
+      "Platform": "",
+      "As": "fetch",
+      "From": {
+        "Image": "alpine"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add curl  \u0026\u0026 printf \"\\nfetch CR\\n\\n\"  \u0026\u0026 curl -sL https://origin.softwaredownloads.sap.com/public/file/0020000000899062019 \u003e /tmp/cr-32.zip  \u0026\u0026 printf \"\\nfetch wine-mono\\n\\n\"  \u0026\u0026 curl -sL https://dl.winehq.org/wine/wine-mono/4.9.2/wine-mono-4.9.2.msi \u003e /tmp/wine-mono-2.9.2.msi  \u0026\u0026 printf \"\\nfetch wine-gecko\\n\\n\"  \u0026\u0026 curl -sL http://dl.winehq.org/wine/wine-gecko/2.47/wine_gecko-2.47-x86.msi \u003e /tmp/wine_gecko-2.47-x86.msi"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "build",
+      "BaseName": "mono:5",
+      "SourceCode": "FROM mono:5 AS build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Image": "mono:5"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "./fcgi",
+            "/tmp/fcgi"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "CmdLine": [
+            "apt-get update  \u0026\u0026 apt-get install -y git  \u0026\u0026 git clone https://github.com/Agilicus/xsp.git  \u0026\u0026 cd xsp  \u0026\u0026 git checkout 5b68b25db1be92243c8b9533f0a344b5562418a3  \u0026\u0026 cd src/Mono.WebServer         \u0026\u0026 nuget restore -PackagesDirectory ../packages \u0026\u0026 cd ../..  \u0026\u0026 cd src/Mono.WebServer.FastCgi \u0026\u0026 nuget restore -PackagesDirectory ../packages \u0026\u0026 cd ../..  \u0026\u0026 cd src/Mono.WebServer         \u0026\u0026 cp AssemblyInfo4.cs.in AssemblyInfo4.cs                                 \u0026\u0026 msbuild /p:Configuration=Release \u0026\u0026 cd ../..  \u0026\u0026 cd src/Mono.WebServer.FastCgi \u0026\u0026 sed -e 's?@XSP_VERSION@?0.4.0.0?g' AssemblyInfo.cs.in \u003e AssemblyInfo.cs \u0026\u0026 msbuild /p:Configuration=Release \u0026\u0026 cd ../..  \u0026\u0026 cp src/Mono.WebServer/bin/Release/* /tmp/fcgi  \u0026\u0026 cp src/Mono.WebServer.FastCgi/bin/Release/* /tmp/fcgi  \u0026\u0026 ls /tmp/fcgi"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "ubuntu:18.04",
+      "SourceCode": "FROM ubuntu:18.04",
+      "Platform": "",
+      "From": {
+        "Image": "ubuntu:18.04"
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"don@agilicus.com\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Env": [
+            {
+              "Key": "APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE",
+              "Value": "DontWarn"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "DEBIAN_FRONTEND",
+              "Value": "noninteractive"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "dpkg --add-architecture i386  \u0026\u0026 apt-get update  \u0026\u0026 apt-get -y upgrade  \u0026\u0026 apt-get -y install curl gnupg2 dumb-init libfcgi0ldbl software-properties-common  \u0026\u0026 add-apt-repository -y ppa:nginx/stable  \u0026\u0026 apt-get -y install nginx-extras  \u0026\u0026 curl -L https://dl.winehq.org/wine-builds/winehq.key | apt-key add -  \u0026\u0026 echo \"deb https://dl.winehq.org/wine-builds/ubuntu/ bionic main\" \u003e\u003e /etc/apt/sources.list  \u0026\u0026 apt-get update  \u0026\u0026 curl -L https://download.opensuse.org/repositories/Emulators:/Wine:/Debian/xUbuntu_18.04/amd64/libfaudio0_19.07-0~bionic_amd64.deb \u003e /tmp/libfaudio0_19.07-0~bionic_amd64.deb  \u0026\u0026 curl -L https://download.opensuse.org/repositories/Emulators:/Wine:/Debian/xUbuntu_18.04/i386/libfaudio0_19.07-0~bionic_i386.deb \u003e /tmp/libfaudio0_19.07-0~bionic_i386.deb  \u0026\u0026 dpkg -i --force-all /tmp/libf*deb  \u0026\u0026 apt --fix-broken -y install  \u0026\u0026 echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | debconf-set-selections  \u0026\u0026 apt-get install -y --install-recommends winehq-stable wine-stable wine-stable-amd64 wine-stable-i386 xvfb x11vnc cabextract libntlm0 libwbclient0 ttf-mscorefonts-installer winbind unzip wget  \u0026\u0026 curl -sL https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks \u003e /usr/local/bin/winetricks  \u0026\u0026 chmod a=rx /usr/local/bin/winetricks  \u0026\u0026 useradd --create-home -s /bin/bash dotnet  \u0026\u0026 mkdir -p /app  \u0026\u0026 chown dotnet:dotnet /app  \u0026\u0026 chown -R dotnet:dotnet /var/log/nginx /etc/nginx  \u0026\u0026 rm -rf /var/lib/apt/lists/* /tmp/* /home/dotnet/.wine/drive_c/users/dotnet/Temp/*  \u0026\u0026 mkdir -p /tmp/.X11-unix  \u0026\u0026 chmod 1777 /tmp/.X11-unix"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "user",
+          "User": "dotnet"
+        },
+        {
+          "Env": [
+            {
+              "Key": "WINEARCH",
+              "Value": "win32"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "WINEDEBUG",
+              "Value": "-all"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "WINEPATH",
+              "Value": "'C:\\\\windows\\\\system32;C:\\\\windows;C:\\\\windows\\\\system32\\\\wbem;C:\\\\Program Files\\\\SAP BusinessObjects\\\\Crystal Reports for .NET Framework 4.0\\\\Common\\\\SAP BusinessObjects Enterprise XI 4.0\\\\win32_x86'"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "DISPLAY",
+              "Value": ":1"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "dotnet",
+          "From": "fetch",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/tmp/*",
+            "/tmp/"
+          ]
+        },
+        {
+          "Chown": "dotnet",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/tmp/fcgi",
+            "/tmp/fcgi"
+          ]
+        },
+        {
+          "CmdLine": [
+            "Xvfb :1 \u0026 echo  \u0026\u0026 cd /tmp  \u0026\u0026 printf \"\\nCreate wine prefix\\n\\n\"  \u0026\u0026 WINEDLLOVERRIDES=\"mscoree,mshtml=\" wineboot -u  \u0026\u0026 printf \"\\nInstall wine-mono\\n\\n\"  \u0026\u0026 wine msiexec /i /tmp/wine-mono-2.9.2.msi  \u0026\u0026 printf \"\\nInstall wine-gecko\\n\\n\"  \u0026\u0026 wine msiexec /i wine_gecko-2.47-x86.msi  \u0026\u0026 printf \"\\nReboot\\n\\n\"  \u0026\u0026 wineboot -s  \u0026\u0026 printf \"\\nInstall dotnet452\\n\\n\"  \u0026\u0026 winetricks -q dotnet452  \u0026\u0026 printf \"\\nInstall dotnet471\\n\\n\"  \u0026\u0026 winetricks -q dotnet471  \u0026\u0026 printf \"\\nInstall fonts\\n\\n\"  \u0026\u0026 winetricks -q corefonts consolas cambria calibri arial courier georgia impact lucida tahoma trebuchet verdana webdings  \u0026\u0026 printf \"\\nunzip CR\\n\\n\"  \u0026\u0026 unzip cr-32.zip  \u0026\u0026 printf \"start CR phase(1)\\n\"  \u0026\u0026 wine msiexec /i CRforVS_redist_install_32bit_13_0_25/CRRuntime_32bit_13_0_25.msi /qn /norestart ALLUSERS=1  \u0026\u0026 printf \"Compile .net assemblies\\n\"  \u0026\u0026 (wine /home/dotnet/.wine/drive_c/windows/Microsoft.NET/Framework/v4.0.30319/ngen.exe update /nologo /force || /bin/true)  \u0026\u0026 printf \"start CR phase(2)\\n\"  \u0026\u0026 wine msiexec /i CRforVS_redist_install_32bit_13_0_25/CRRuntime_32bit_13_0_25.msi /qn /norestart ALLUSERS=1  \u0026\u0026 printf \"done\\n\"  \u0026\u0026 sleep 1  \u0026\u0026 (pkill Xvfb || /bin/true)  \u0026\u0026 cd /tmp/fcgi  \u0026\u0026 unzip gac.zip  \u0026\u0026 ls  \u0026\u0026 wine ./gacutil.exe /i fastcgi-mono-server4.exe  \u0026\u0026 wine ./gacutil.exe /i Mono.WebServer.dll  \u0026\u0026 wine ./gacutil.exe /i Mono.Posix.NETStandard.dll  \u0026\u0026 cd /  \u0026\u0026 rm -rf ~/.cache /tmp/.X1-lock /tmp/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "fastcgi_params",
+            "/etc/nginx/fastcgi_params"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "nginx.conf",
+            "/etc/nginx/nginx.conf"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "Index.html",
+            "/app"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "entry-dotnetw.sh",
+            "/"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "5000"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/usr/bin/dumb-init",
+            "--"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "CmdLine": [
+            "/entry-dotnetw.sh"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

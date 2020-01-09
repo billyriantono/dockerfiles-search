@@ -1,0 +1,160 @@
+MetaArgs: null
+Stages:
+- BaseName: registry.access.redhat.com/ubi8/ubi
+  Commands:
+  - Labels:
+    - Key: vendor
+      Value: Sonatype
+    - Key: maintainer
+      Value: '"Sonatype <cloud-ops@sonatype.com>"'
+    - Key: com.sonatype.license
+      Value: '"Apache License, Version 2.0"'
+    - Key: com.sonatype.name
+      Value: '"Nexus Repository Manager base image"'
+    Name: label
+  - Env:
+    - Key: SSL_STOREPASS
+      Value: changeit
+    Name: env
+  - Env:
+    - Key: SSL_KEYPASS
+      Value: changeit
+    Name: env
+  - Env:
+    - Key: SSL_DOMAIN_NAME
+      Value: '"elium.io"'
+    Name: env
+  - Key: NEXUS_VERSION
+    Name: arg
+    Value: 3.19.1-01
+  - Key: NEXUS_DOWNLOAD_URL
+    Name: arg
+    Value: https://download.sonatype.com/nexus/3/nexus-${NEXUS_VERSION}-unix.tar.gz
+  - Key: NEXUS_DOWNLOAD_SHA256_HASH
+    Name: arg
+    Value: 7a2e62848abeb047c99e114b3613d29b4afbd635b03a19842efdcd6b6cb95f4e
+  - Env:
+    - Key: SONATYPE_DIR
+      Value: /opt/sonatype
+    Name: env
+  - Env:
+    - Key: NEXUS_HOME
+      Value: ${SONATYPE_DIR}/nexus
+    - Key: NEXUS_DATA
+      Value: /nexus-data
+    - Key: NEXUS_CONTEXT
+      Value: ''''''
+    - Key: SONATYPE_WORK
+      Value: ${SONATYPE_DIR}/sonatype-work
+    - Key: DOCKER_TYPE
+      Value: '''rh-docker'''
+    Name: env
+  - Env:
+    - Key: SSL_WORK
+      Value: /etc/ssl/private
+    Name: env
+  - Key: NEXUS_REPOSITORY_MANAGER_COOKBOOK_VERSION
+    Name: arg
+    Value: '"release-0.5.20190212-155606.d1afdfe"'
+  - Key: NEXUS_REPOSITORY_MANAGER_COOKBOOK_URL
+    Name: arg
+    Value: '"https://github.com/sonatype/chef-nexus-repository-manager/releases/download/${NEXUS_REPOSITORY_MANAGER_COOKBOOK_VERSION}/chef-nexus-repository-manager.tar.gz"'
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - solo.json.erb
+    - /var/chef/solo.json.erb
+  - CmdLine:
+    - yum install -y --disableplugin=subscription-manager  openssl openssl-devel
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum install -y --disableplugin=subscription-manager hostname procps     && curl
+      -L https://www.getchef.com/chef/install.sh | bash -s -- -v 14.12.9     && /opt/chef/embedded/bin/erb
+      /var/chef/solo.json.erb > /var/chef/solo.json     && chef-solo        --recipe-url
+      ${NEXUS_REPOSITORY_MANAGER_COOKBOOK_URL}        --json-attributes /var/chef/solo.json     &&
+      rpm -qa *chef* | xargs rpm -e     && rm -rf /etc/chef     && rm -rf /opt/chefdk     &&
+      rm -rf /var/cache/yum     && rm -rf /var/chef     && yum clean all
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - run
+    - ${SONATYPE_WORK}/bin/run
+  - CmdLine:
+    - chmod +x ${SONATYPE_WORK}/bin/run
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${SONATYPE_WORK}/etc/ssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${NEXUS_DATA}/etc/ssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "application-port-ssl=8443" >> ${NEXUS_DATA}/etc/nexus.properties
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e '/nexus-args=/ s/=.*/=${jetty.etc}\/jetty.xml,${jetty.etc}\/jetty-http.xml,${jetty.etc}\/jetty-https.xml,${jetty.etc}\/jetty-requestlog.xml,${jetty.etc}\/jetty-http-redirect-to-https.xml/'
+      ${NEXUS_DATA}/etc/nexus.properties
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "ssl.etc=\${karaf.data}/etc/ssl" >> ${NEXUS_DATA}/etc/nexus.properties
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/<Set name="KeyStorePath">.*<\/Set>/<Set name="KeyStorePath">\/opt\/nexus\/etc\/ssl\/keystore.jks<\/Set>/g'
+      /${NEXUS_HOME}/etc/jetty/jetty-https.xml   && sed -i 's/<Set name="KeyStorePassword">.*<\/Set>/<Set
+      name="KeyStorePassword">changeit<\/Set>/g' ${NEXUS_HOME}/etc/jetty/jetty-https.xml   &&
+      sed -i 's/<Set name="KeyManagerPassword">.*<\/Set>/<Set name="KeyManagerPassword">changeit<\/Set>/g'
+      ${NEXUS_HOME}/etc/jetty/jetty-https.xml   && sed -i 's/<Set name="TrustStorePath">.*<\/Set>/<Set
+      name="TrustStorePath">\/opt\/nexus\/etc\/ssl\/keystore.jks<\/Set>/g' ${NEXUS_HOME}/etc/jetty/jetty-https.xml   &&
+      sed -i 's/<Set name="TrustStorePassword">.*<\/Set>/<Set name="TrustStorePassword">changeit<\/Set>/g'
+      ${NEXUS_HOME}/etc/jetty/jetty-https.xml
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - ${NEXUS_DATA}
+  - Name: volume
+    Volumes:
+    - ${SSL_WORK}
+  - Name: expose
+    Ports:
+    - "5000"
+    - "5001"
+    - "8081"
+  - Name: user
+    User: nexus
+  - Env:
+    - Key: INSTALL4J_ADD_VM_PARAMS
+      Value: '"-Xms1200m -Xmx1200m -XX:MaxDirectMemorySize=2g -Djava.util.prefs.userRoot=${NEXUS_DATA}/javaprefs"'
+    Name: env
+  - Name: workdir
+    Path: ${SONATYPE_WORK}
+  - Env:
+    - Key: JAVA_MAX_MEM
+      Value: 4800m
+    Name: env
+  - Env:
+    - Key: JAVA_MIN_MEM
+      Value: 1200m
+    Name: env
+  - Env:
+    - Key: EXTRA_JAVA_OPTS
+      Value: '""'
+    Name: env
+  - CmdLine:
+    - bin/run
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: registry.access.redhat.com/ubi8/ubi
+  Name: ""
+  Platform: ""
+  SourceCode: FROM registry.access.redhat.com/ubi8/ubi

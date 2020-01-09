@@ -1,0 +1,151 @@
+MetaArgs:
+- DefaultValue: "1.13"
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: "1.13"
+- DefaultValue: null
+  Key: BUILD_DATE
+  ProvidedValue: null
+  Value: null
+- DefaultValue: null
+  Key: VCS_REF
+  ProvidedValue: null
+  Value: null
+Stages:
+- As: builder
+  BaseName: golang:${GO_VERSION}-alpine
+  Commands:
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.vendor
+      Value: '"Gianpaolo Del Matto <buildmaint@phunsites.net>"'
+    - Key: org.label-schema.description
+      Value: '"This is a ''DNS over HTTP'' (DoH) server implementation written in
+        Go."'
+    - Key: org.label-schema.name
+      Value: DoH
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.vcs-url
+      Value: https://github.com/gpdm/DoH
+    Name: label
+  - CmdLine:
+    - mkdir /conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache ca-certificates git tzdata zip
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - Name: workdir
+    Path: /usr/share/zoneinfo
+  - CmdLine:
+    - zip -r -0 /zoneinfo.zip .
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./go.mod
+    - ./go.sum
+    - bootstrap/main.go
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - time go build -installsuffix 'static'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm main.go
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - ./
+  - Key: APP_VERSION
+    Name: arg
+    Value: unversioned
+  - CmdLine:
+    - export | grep -i app_version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build     -installsuffix 'static'     -o /DoH
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:${GO_VERSION}-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:${GO_VERSION}-alpine AS builder
+- As: final
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/group
+    - /etc/passwd
+    - /etc/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /DoH
+    - /DoH
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /zoneinfo.zip
+    - /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /conf
+    - /conf
+  - Env:
+    - Key: ZONEINFO
+      Value: /zoneinfo.zip     GLOBAL.LISTEN=     GLOBAL.LOGLEVEL=5     HTTP.ENABLE=0     HTTP.PORT=80     TLS.ENABLE=1     TLS.PORT=443     TLS.PKEY=./conf/private.key     TLS.CERT=./conf/public.crt     DNS.RESOLVERS=     REDIS.ENABLE=0     REDIS.ADDR=     REDIS.PORT=6379     REDIS.USERNAME=     REDIS.PASSWORD=     INFLUX.ENABLE=0     INFLUX.URL=     INFLUX.DATABASE=     INFLUX.USERNAME=     INFLUX.PASSWORD=
+    Name: env
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: expose
+    Ports:
+    - "8443"
+  - Name: user
+    User: nobody:nobody
+  - CmdLine:
+    - /DoH
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: final
+  Platform: ""
+  SourceCode: FROM scratch AS final

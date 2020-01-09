@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.10.3
+  Commands:
+  - CmdLine:
+    - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/taskworld/hyper-selenium/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gopkg.toml
+    - Gopkg.lock
+    - ./
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - Env:
+    - Key: GOOS
+      Value: linux
+    Name: env
+  - CmdLine:
+    - dep ensure -vendor-only
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cmd
+    - ./cmd
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pkg
+    - ./pkg
+  - CmdLine:
+    - mkdir -p build && go build -a -v -installsuffix cgo -o ./build/hyper-selenium-agent
+      ./cmd/hyper-selenium-agent
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10.3
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.10.3 as builder
+- As: env
+  BaseName: selenium/standalone-chrome-debug:3.12.0-cobalt
+  Commands:
+  - CmdLine:
+    - sudo apt-get update && sudo apt-get install -y ffmpeg gpac && sudo rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo mkdir -p /videos/ && sudo chmod a+rwx /videos/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /hyper-selenium/
+  - Env:
+    - Key: SCREEN_WIDTH
+      Value: "1280"
+    Name: env
+  - Env:
+    - Key: SCREEN_HEIGHT
+      Value: "1024"
+    Name: env
+  From:
+    Image: selenium/standalone-chrome-debug:3.12.0-cobalt
+  Name: env
+  Platform: ""
+  SourceCode: FROM selenium/standalone-chrome-debug:3.12.0-cobalt AS env
+- BaseName: env
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/taskworld/hyper-selenium/build/hyper-selenium-agent
+    - .
+  - CmdLine:
+    - ./hyper-selenium-agent
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: env
+  Name: ""
+  Platform: ""
+  SourceCode: FROM env

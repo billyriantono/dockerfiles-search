@@ -1,0 +1,165 @@
+MetaArgs: null
+Stages:
+- As: app
+  BaseName: maven:3.3-jdk-8
+  Commands:
+  - CmdLine:
+    - mkdir -p /code
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /code
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - /code
+  - Key: GIT_COMMIT
+    Name: arg
+    Value: ""
+  - Env:
+    - Key: GIT_COMMIT
+      Value: ${GIT_COMMIT}
+    Name: env
+  - Env:
+    - Key: OSF_URL
+      Value: '"jdbc:postgresql://postgres:5432/osf?targetServerType=master"'
+    Name: env
+  - Env:
+    - Key: OSF_USER
+      Value: '"postgres"'
+    Name: env
+  - Env:
+    - Key: OSF_PASSWORD
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: DB_HOST
+      Value: '"postgres"'
+    Name: env
+  - Env:
+    - Key: DB_PORT
+      Value: '"5432"'
+    Name: env
+  - Env:
+    - Key: DB_NAME
+      Value: '"cas"'
+    Name: env
+  - Env:
+    - Key: DB_USER
+      Value: '"postgres"'
+    Name: env
+  - Env:
+    - Key: DB_PASSWORD
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: MAVEN_OPTS
+      Value: -Dmaven.repo.local=/root/.m2repo/
+    Name: env
+  - CmdLine:
+    - mvn clean package -P nocheck
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.3-jdk-8
+  Name: app
+  Platform: ""
+  SourceCode: FROM maven:3.3-jdk-8 AS app
+- As: dist
+  BaseName: jetty:9.3-jre8-alpine
+  Commands:
+  - Name: user
+    User: root
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./etc/cas.properties
+    - ./etc/institutions-auth.xsl
+    - ./etc/log4j2.xml
+    - /etc/cas/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./etc/services
+    - /etc/cas/services
+  - CmdLine:
+    - mkdir -p /home/jetty     && chown -R jetty:jetty /home/jetty /etc/cas
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: jetty
+  - Chown: ""
+    From: app
+    Name: copy
+    SourcesAndDest:
+    - /code/cas-server-webapp/target/cas.war
+    - /var/lib/jetty/webapps/
+  - CmdLine:
+    - java -jar "$JETTY_HOME/start.jar" --add-to-startd=http-forwarded     && sed
+      -i         -e "s|^osf.api.institutions.auth.xslLocation=.*|osf.api.institutions.auth.xslLocation=file:/etc/cas/institutions-auth.xsl|"         -e
+      "s|^log4j.config.location=.*|log4j.config.location=file:/etc/cas/log4j2.xml|"         -e
+      "s|^service.registry.config.location=.*|service.registry.config.location=file:/etc/cas/services|"         /etc/cas/cas.properties
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo         '<?xml version="1.0" encoding="UTF-8"?>        <!DOCTYPE Configure
+      PUBLIC            "-//Mort Bay Consulting//DTD Configure//EN"            "http://www.eclipse.org/jetty/configure_9_0.dtd">                <Configure
+      class="org.eclipse.jetty.webapp.WebAppContext">            <Set name="allowDuplicateFragmentNames">false</Set>            <Set
+      name="contextPath">/</Set>            <Set name="war">/var/lib/jetty/webapps/cas.war</Set>                    <Call
+      name="setAttribute">                <Arg>org.eclipse.jetty.server.webapp.WebInfIncludeJarPattern</Arg>                <Arg>.*/spring-security[^/]*\.jar$|.*/spring-web[^/]*\.jar$|.*/classes/.*</Arg>            </Call>        </Configure>'
+      >> /var/lib/jetty/webapps/cas.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - java
+    - -jar
+    - /usr/local/jetty/start.jar
+    - -Dcas.properties.filepath=file:/etc/cas/cas.properties
+    - -Dlog4j.configurationFile=file:/etc/cas/log4j2.xml
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: jetty:9.3-jre8-alpine
+  Name: dist
+  Platform: ""
+  SourceCode: FROM jetty:9.3-jre8-alpine AS dist
+- As: dev
+  BaseName: app
+  Commands:
+  - CmdLine:
+    - mvn install -P nocheck
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn install jetty:help
+    Name: run
+    PrependShell: true
+  - CmdLine: null
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/bin/mvn
+    - -pl
+    - cas-server-webapp
+    - jetty:run
+    - -DOSF_DB_URL=${OSF_URL}
+    - -DOSF_DB_USER=${OSF_USER}
+    - -DOSF_DB_PASSWORD=${OSF_PASSWORD}
+    - -DDATABASE_HOST=${DB_HOST}
+    - -DDATABASE_PORT=${DB_PORT}
+    - -DDATABASE_NAME=${DB_NAME}
+    - -DDATABASE_USER=${DB_USER}
+    - -DDATABASE_PASSWORD=${DB_PASSWORD}
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: app
+  Name: dev
+  Platform: ""
+  SourceCode: FROM app AS dev

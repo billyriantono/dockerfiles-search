@@ -1,0 +1,176 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "name",
+      "DefaultValue": "gotinyimg",
+      "ProvidedValue": null,
+      "Value": "gotinyimg"
+    },
+    {
+      "Key": "project",
+      "DefaultValue": "github.com/alcortesm/${name}",
+      "ProvidedValue": null,
+      "Value": "github.com/alcortesm/${name}"
+    },
+    {
+      "Key": "main",
+      "DefaultValue": "${project}/cmd/${name}",
+      "ProvidedValue": null,
+      "Value": "${project}/cmd/${name}"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "golang:1.10.0",
+      "SourceCode": "FROM golang:1.10.0 AS builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "golang:1.10.0"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "curl -fsSL     -o /usr/local/bin/dep     https://github.com/golang/dep/releases/download/v0.4.1/dep-linux-amd64     \u0026\u0026     chmod +x /usr/local/bin/dep"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "src",
+      "BaseName": "builder",
+      "SourceCode": "FROM builder AS src",
+      "Platform": "",
+      "As": "src",
+      "From": {
+        "Stage": {
+          "Named": "builder",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Key": "project",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "Gopkg.toml",
+            "Gopkg.lock",
+            "/go/src/${project}/"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/go/src/${project}"
+        },
+        {
+          "CmdLine": [
+            "dep ensure -vendor-only"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "/go/src/${project}"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "build",
+      "BaseName": "src",
+      "SourceCode": "FROM src AS build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Stage": {
+          "Named": "src",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Key": "name",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "main",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "CmdLine": [
+            "CGO_ENABLED=0 go build     -o /bin/${name}     -ldflags '-extldflags \"-static\"'     ${main}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "run",
+      "BaseName": "scratch",
+      "SourceCode": "FROM scratch AS run",
+      "Platform": "",
+      "As": "run",
+      "From": {
+        "Scratch": true
+      },
+      "Commands": [
+        {
+          "Key": "name",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Chown": "",
+          "From": "src",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/go/lib/time/zoneinfo.zip",
+            "/usr/local/go/lib/time/zoneinfo.zip"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "src",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/etc/ssl/certs/ca-certificates.crt",
+            "/etc/ssl/certs/ca-certificates.crt"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/bin/${name}",
+            "/runme"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/runme"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

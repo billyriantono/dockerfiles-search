@@ -1,0 +1,154 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8-slim
+  Commands:
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - Env:
+    - Key: DOCKER_IMAGE_NAME
+      Value: openskope/timeseries-service
+    Name: env
+  - CmdLine:
+    - echo '***** update apt packages and install utilities *****'                                     &&
+      apt-get -y update                                                                                &&
+      apt-get -y install -y apt-utils                                                                  &&
+      apt-get -y install wget makepasswd                                                                                                                                                                   &&
+      echo '***** create the skope group *****'                                                        &&
+      groupadd skope --gid 1000                                                                                                                                                                            &&
+      echo '***** create the skope user *****'                                                         &&
+      useradd skope --uid 1000                                                                                          --gid
+      skope                                                                                         --shell
+      /bin/bash                                                                                   --create-home                                                                                       --password
+      `echo skope | makepasswd --crypt-md5 --clearfrom - | cut -b11-`                                                                                                             &&
+      echo '***** create the workspace directory *****'                                                &&
+      mkdir /workspace                                                                                 &&
+      chown skope.skope /workspace
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /workspace
+  - Name: workdir
+    Path: /workspace
+  - CmdLine:
+    - echo '***** install development packages required to build service *****'                        &&
+      apt-get -y install git maven
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo '***** Install python2, pip *****'                                                          &&
+      apt-get -y install python python-pip                                                             &&
+      pip2 install --upgrade pip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo '***** install numpy package for python2 *****'                                             &&
+      pip2 install numpy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo '***** download source package for GDAL 2.1.2 *****'                                        &&
+      mkdir -p /tmp/builds                                                                             &&
+      cd /tmp/builds                                                                                   &&
+      wget http://download.osgeo.org/gdal/2.1.2/gdal-2.1.2.tar.gz                                      &&
+      gunzip gdal-2.1.2.tar.gz                                                                         &&
+      tar -xvvf gdal-2.1.2.tar                                                                                                                                                                             &&
+      echo '***** configure and build GDAL with Python2 bindings ******'                               &&
+      cd /tmp/builds/gdal-2.1.2                                                                        &&
+      mkdir -p /opt/gdal                                                                               &&
+      ./configure --prefix /opt/gdal/gdal-2.1.2 --with-python=$(which python2)                         &&
+      make install                                                                                                                                                                                         &&
+      echo '**** clean up GDAL build directories *****'                                                &&
+      rm -rf /tmp/builds
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: /opt/gdal/gdal-2.1.2/lib/
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/gdal/gdal-2.1.2/bin/
+    Name: env
+  - Env:
+    - Key: PYTHONPATH
+      Value: /opt/gdal/gdal-2.1.2/lib/python2.7/site-packages/
+    Name: env
+  - CmdLine:
+    - echo '***** Clone geoserver-loader repo and install CLI tools *****'                             &&
+      cd ~skope                                                                                        &&
+      git clone https://github.com/openskope/geoserver-loader.git                                      &&
+      cd geoserver-loader                                                                              &&
+      pip install .
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: skope
+  - Name: workdir
+    Path: /home/skope
+  - CmdLine:
+    - echo '***** Clone timeseries-service and build the executable JAR *****'                         &&
+      cd ~skope                                                                                        &&
+      git clone https://github.com/openskope/timeseries-service.git                                    &&
+      cd timeseries-service                                                                            &&
+      mvn  install
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAR
+      Value: /home/skope/timeseries-service/target/timeseries-service-0.2.1.jar
+    Name: env
+  - CmdLine:
+    - "echo '***** Create scripts in ~skope/bin directory *****'                                        &&
+      echo \"#!/bin/bash\" > start                                                                       &&
+      echo \"java -jar $JAR $*\" >> start     \t\t\t\t\t\t\t\t\t\t\t\t\t\t\t && chmod
+      +rx start                                                                                  &&
+      echo \"export PATH=$PATH:/home/skope\" >> ~/.bashrc"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: $PATH:/home/skope
+    Name: env
+  - Env:
+    - Key: TIMESERIES_SERVICE_NAME
+      Value: '''SKOPE Timeseries Service'''
+    Name: env
+  - Env:
+    - Key: TIMESERIES_SERVICE_BASE
+      Value: '''timeseries-service/api/v1'''
+    Name: env
+  - Env:
+    - Key: TIMESERIES_DATA_PATH_TEMPLATE
+      Value: /data/{datasetId}_{variableName}
+    Name: env
+  - Env:
+    - Key: TIMESERIES_UNCERTAINTY_PATH_TEMPLATE
+      Value: /data/{datasetId}_{variableName}_uncertainty
+    Name: env
+  - Env:
+    - Key: TIMESERIES_DATA_FILE_EXTENSIONS
+      Value: '''.tif .nc .nc4'''
+    Name: env
+  - Env:
+    - Key: TIMESERIES_GDALLOCATIONINFO_COMMAND
+      Value: '''gdallocationinfo'''
+    Name: env
+  - Env:
+    - Key: TIMESERIES_ZONALINFO_COMMAND
+      Value: '''zonalinfo.py'''
+    Name: env
+  - Env:
+    - Key: TIMESERIES_MAX_PROCESSING_TIME
+      Value: '''5000'''
+    Name: env
+  - CmdLine:
+    - 'echo "Usage: docker run openskope/timeseries-service start"'
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: openjdk:8-slim
+  Name: ""
+  Platform: ""
+  SourceCode: from openjdk:8-slim

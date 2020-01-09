@@ -1,0 +1,128 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8-jre-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Martijn Koster \"mak-docker@greenhills.co.uk\""'
+    Name: label
+  - Labels:
+    - Key: repository
+      Value: '"https://github.com/docker-solr/docker-solr"'
+    Name: label
+  - Key: SOLR_DOWNLOAD_SERVER
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk add --no-cache         lsof         gnupg         procps         tar         bash
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache ca-certificates wget &&         update-ca-certificates
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SOLR_USER
+      Value: '"solr"'
+    - Key: SOLR_UID
+      Value: '"8983"'
+    - Key: SOLR_GROUP
+      Value: '"solr"'
+    - Key: SOLR_GID
+      Value: '"8983"'
+    - Key: SOLR_VERSION
+      Value: '"7.6.0"'
+    - Key: SOLR_URL
+      Value: '"${SOLR_DOWNLOAD_SERVER:-https://archive.apache.org/dist/lucene/solr}/7.6.0/solr-7.6.0.tgz"'
+    - Key: SOLR_SHA256
+      Value: '"2cb425a0b30ff153465d306803e514e53e41924d74f28d842cb3a07cace759d5"'
+    - Key: SOLR_KEYS
+      Value: '"95B01F0E78111D63D331C1A751F0CC22F625308A"'
+    - Key: PATH
+      Value: '"/opt/solr/bin:/opt/docker-solr/scripts:$PATH"'
+    Name: env
+  - Env:
+    - Key: GOSU_VERSION
+      Value: "1.11"
+    Name: env
+  - Env:
+    - Key: GOSU_KEY
+      Value: B42F6819007F00F88E364FD4036A9C25BF357DD4
+    Name: env
+  - CmdLine:
+    - addgroup -S -g $SOLR_GID $SOLR_GROUP &&     adduser -S -u $SOLR_UID -G $SOLR_GROUP
+      $SOLR_USER
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'set -e;   export GNUPGHOME="/tmp/gnupg_home" &&   mkdir -p "$GNUPGHOME" &&   chmod
+      700 "$GNUPGHOME" &&   echo "disable-ipv6" >> "$GNUPGHOME/dirmngr.conf" &&   for
+      key in $SOLR_KEYS $GOSU_KEY; do     found='''';     for server in       ha.pool.sks-keyservers.net       hkp://keyserver.ubuntu.com:80       hkp://p80.pool.sks-keyservers.net:80       pgp.mit.edu     ;
+      do       echo "  trying $server for $key";       gpg --batch --keyserver "$server"
+      --keyserver-options timeout=10 --recv-keys "$key" && found=yes && break;       gpg
+      --batch --keyserver "$server" --keyserver-options timeout=10 --recv-keys "$key"
+      && found=yes && break;     done;     test -z "$found" && echo >&2 "error: failed
+      to fetch $key from several disparate servers -- network issues?" && exit 1;   done;   exit
+      0'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -e;   export GNUPGHOME="/tmp/gnupg_home" &&   apkArch="$(apk --print-arch
+      | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')";   wget -O /usr/local/bin/gosu
+      "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$apkArch";   wget
+      -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$apkArch.asc";   gpg
+      --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu &&   rm /usr/local/bin/gosu.asc
+      &&   chmod +x /usr/local/bin/gosu &&   gosu nobody true &&   mkdir -p /opt/solr
+      &&   echo "downloading $SOLR_URL" &&   wget -q $SOLR_URL -O /opt/solr.tgz &&   echo
+      "downloading $SOLR_URL.asc" &&   wget -q $SOLR_URL.asc -O /opt/solr.tgz.asc
+      &&   echo "$SOLR_SHA256 */opt/solr.tgz" | sha256sum -c - &&   (>&2 ls -l /opt/solr.tgz
+      /opt/solr.tgz.asc) &&   gpg --batch --verify /opt/solr.tgz.asc /opt/solr.tgz
+      &&   tar -C /opt/solr --extract --file /opt/solr.tgz --strip-components=1 &&   rm
+      /opt/solr.tgz* &&   rm -Rf /opt/solr/docs/ &&   mkdir -p /opt/solr/server/solr/lib
+      /opt/solr/server/solr/mycores /opt/solr/server/logs /docker-entrypoint-initdb.d
+      /opt/docker-solr /opt/mysolrhome &&   sed -i -e 's/"\$(whoami)" == "root"/$(id
+      -u) == 0/' /opt/solr/bin/solr &&   sed -i -e 's/lsof -PniTCP:/lsof -t -PniTCP:/'
+      /opt/solr/bin/solr &&   sed -i -e '/-Dsolr.clustering.enabled=true/ a SOLR_OPTS="$SOLR_OPTS
+      -Dsun.net.inetaddr.ttl=60 -Dsun.net.inetaddr.negative.ttl=60"' /opt/solr/bin/solr.in.sh
+      &&   chown -R $SOLR_USER:$SOLR_GROUP /opt/solr /opt/mysolrhome /docker-entrypoint-initdb.d
+      /opt/docker-solr
+    Name: run
+    PrependShell: true
+  - Chown: solr:solr
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts
+    - /opt/docker-solr/scripts
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./7.6/alpine/myconfig
+    - /myconfig
+  - Name: expose
+    Ports:
+    - "8983"
+  - Name: workdir
+    Path: /opt/solr
+  - Name: user
+    User: $SOLR_USER
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - solr-precreate
+    - discovery
+    - /myconfig
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - solr-foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jre-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre-alpine

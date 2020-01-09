@@ -1,0 +1,119 @@
+MetaArgs: null
+Stages:
+- BaseName: kbase/runtime:latest
+  Commands:
+  - Maintainer: Shane Canon scanon@lbl.gov
+    Name: maintainer
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y          python-pip libcurl4-gnutls-dev
+      python-dev ncurses-dev software-properties-common
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo ''|add-apt-repository ppa:nginx/stable; apt-get update; apt-get install
+      -y nginx nginx-extras
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y          lua5.1 luarocks liblua5.1-0
+      liblua5.1-0-dev liblua5.1-json liblua5.1-lpeg2          nodejs-dev npm nodejs-legacy
+      docker.io;         npm install -g grunt-cli
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - luarocks install luasocket;    luarocks install luajson;    luarocks install
+      penlight;    luarocks install lua-spore;    luarocks install luacrypto
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./
+    - /root/dt
+  - Name: workdir
+    Path: /root/dt
+  - Env:
+    - Key: TARGET
+      Value: /kb/deployment
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: ${TARGET}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    Name: env
+  - CmdLine:
+    - perl -e 'use List::Util' && rm perl/List/Util.pm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cpanm -i REST::Client && cpanm -i Time::ParseDate &&     cd /kb/bootstrap/kb_seed_kmers/
+      &&     ./build.seed_kmers /kb/runtime/ &&     cd /kb/bootstrap/kb_glpk/ &&     ./glpk_build.sh
+      /kb/runtime/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp cluster.ini.docker cluster.ini && ./deploy_cluster mkhashfile tagfile &&     rm
+      -f site.cfg && rm -rf ssl && mkdir -p /kb/deployment/services/meme
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - MYSERVICES=awe ./deploy_cluster -s deploy local tagfile &&     find /kb/dev_container/modules
+      -iname ".git" | xargs rm -rf &&     rm -rf /kb/dev_container/modules/trees/data
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/--daemonize [^ ]*log//' /kb/deployment/services/Transform/start_service;        sed
+      -i 's/--daemonize//' /kb/deployment/services/*/start_service;        sed -i
+      's/--error-log [^ "]*//' /kb/deployment/services/*/start_service;        sed
+      -i 's/--pid [^ "]*//' /kb/deployment/services/*/start_service;        [ -e /kb/deployment//services/fbaModelServices/start_service
+      ] && sed -i 's/starman -D/starman/' /kb/deployment/services/fbaModelServices/start_service;        sed
+      -i 's/\/kb\/runtime\/sbin\/daemonize .*\/kb/\/kb/' /kb/deployment/services/*/start_service;        sed
+      -i 's/>.*//' /kb/deployment//services/*/start_service;        sed -i 's/nohup
+      //' /kb/deployment//services/*/start_service;        sed -i 's/start_service
+      &/start_service/' /root/dt/perl/KBDeploy.pm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /kb/dev_container/modules;        git clone https://github.com/kbase/ui-common
+      -b staging;        git clone --recurse-submodules https://github.com/kbase/narrative
+      -b docker;        rm -rf /kb/dev_container/modules/ui-common/.git /kb/dev_container/modules/narrative/.git
+    Name: run
+    PrependShell: true
+  - Expression: ENV USER root
+    Name: onbuild
+  - Expression: ADD cluster.ini /root/dt/cluster.ini
+    Name: onbuild
+  - Expression: ADD ssl /root/dt/ssl
+    Name: onbuild
+  - Expression: RUN cat ssl/proxy.crt  >> /etc/ssl/certs/ca-certificates.crt &&     cat
+      ssl/proxy.crt > /etc/ssl/certs/`openssl x509 -noout -hash -in ssl/proxy.crt`.0
+      &&     cat ssl/narrative.crt  >> /etc/ssl/certs/ca-certificates.crt &&     cat
+      ssl/narrative.crt > /etc/ssl/certs/`openssl x509 -noout -hash -in ssl/narrative.crt`.0
+    Name: onbuild
+  - Expression: RUN cp ./cluster.ini /kb/deployment/deployment.cfg;        cd /kb/dev_container/;.
+      ./user-env.sh;        cd /root/dt;         sed -i 's/10000/256/' /kb/deployment/services/workspace/start_service
+      &&         sed -i 's/15000/384/' /kb/deployment/services/workspace/start_service
+      &&         sed -i 's/--Xms 1000 --Xmx 2000/--Xms 384 --Xmx 512/' /kb/deployment/services/*/start_service
+      &&         cd config;NOSTART=1 MYSERVICES=www ./setup_www;cd ../;        ./config/postprocess_shock;        ./config/postprocess_awe;        sed
+      -i 's/ssl_verify = True/ssl_verify = False/' /kb/deployment/lib/biokbase/Transform/script_utils.py;        MYSERVICES=Transform
+      ./config/postprocess_Transform;        [ -e /mnt/Shock/logs ] || mkdir -p /mnt/Shock/logs;
+    Name: onbuild
+  - Expression: RUN sed -i 's/start_service &/start_service/' /root/dt/perl/KBDeploy.pm
+    Name: onbuild
+  - Expression: RUN PUBLIC=$(grep baseurl= cluster.ini|sed 's/baseurl=//'|sed 's/:.*//')
+      &&          sed -i "s|public.hostname.org|$PUBLIC|" /kb/deployment/lib/biokbase/*/Client.py
+      &&          sed -i "s|public.hostname.org|$PUBLIC|" /kb/deployment/lib/Bio/KBase/*/Client.pm
+      &&          sed -i "s|public.hostname.org|$PUBLIC|" /kb/deployment/lib/javascript/*/Client.js
+    Name: onbuild
+  - Expression: ENTRYPOINT [ "./scripts/entrypoint.sh" ]
+    Name: onbuild
+  - Expression: CMD [ ]
+    Name: onbuild
+  From:
+    Image: kbase/runtime:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM kbase/runtime:latest

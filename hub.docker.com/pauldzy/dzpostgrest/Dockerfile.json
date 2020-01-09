@@ -1,0 +1,117 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "haskell:8.6.3",
+      "SourceCode": "FROM haskell:8.6.3 AS builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "haskell:8.6.3"
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"Paul Dziemiela \u003cPaul@Dziemiela.com\u003e\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Env": [
+            {
+              "Key": "POSTGREST_VERSION",
+              "Value": "5.2.0"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Key": "DEBIAN_FRONTEND",
+          "Name": "arg",
+          "Value": "noninteractive"
+        },
+        {
+          "CmdLine": [
+            "printf \"#!/bin/sh\\nexit 0\" \u003e /usr/sbin/policy-rc.d \u0026\u0026    apt-get update                                     \u0026\u0026    apt-get install -y --no-install-recommends                  vim                                                      build-essential                                          pkg-config                                               clang                                                    zip                                                      unzip                                                    wget                                                     libpq-dev                                       \u0026\u0026    rm -rf /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd /tmp                                            \u0026\u0026    wget -nv https://github.com/begriffs/pg_listen/archive/master.zip \u0026\u0026    unzip -q master.zip                                \u0026\u0026    cd /tmp/pg_listen-master                           \u0026\u0026    make                                               \u0026\u0026    mv pg_listen /usr/local/bin                        \u0026\u0026    chmod 755 /usr/local/bin/pg_listen                 \u0026\u0026    rm -Rf /tmp/pg_listen-master"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd /tmp                                            \u0026\u0026    wget -nv https://github.com/PostgREST/postgrest/archive/v${POSTGREST_VERSION}.tar.gz \u0026\u0026    tar -xf v${POSTGREST_VERSION}.tar.gz"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd /tmp/postgrest-${POSTGREST_VERSION}/src/PostgREST  \u0026\u0026    sed -i.bak -e 's/ActionInvoke{isReadOnly=True} -\u003e HT.Read/ActionInvoke{isReadOnly=True} -\u003e HT.Write/' App.hs"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd /tmp/postgrest-${POSTGREST_VERSION}             \u0026\u0026    stack build                                                 --install-ghc                                            --copy-bins                                              --local-bin-path /usr/local/bin                          --verbosity info                                \u0026\u0026    rm -Rf /tmp/postgrest-${POSTGREST_VERSION}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "debian:stretch",
+      "SourceCode": "FROM debian:stretch",
+      "Platform": "",
+      "From": {
+        "Image": "debian:stretch"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update                                     \u0026\u0026    apt-get install -y --no-install-recommends                  apt-utils                                                dos2unix                                                 psmisc                                                   supervisor                                               libpq-dev                                       \u0026\u0026    rm -rf /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/bin/pg_listen",
+            "/usr/local/bin"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/bin/postgrest",
+            "/usr/local/bin"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "3000"
+          ]
+        }
+      ]
+    }
+  ]
+}

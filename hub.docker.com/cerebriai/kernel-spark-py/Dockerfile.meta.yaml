@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- As: spark
+  BaseName: cerebriai/spark-py:v2.4.3
+  Commands:
+  - CmdLine:
+    - echo "In stage spark"     && ls -la /opt/spark
+    Name: run
+    PrependShell: true
+  From:
+    Image: cerebriai/spark-py:v2.4.3
+  Name: spark
+  Platform: ""
+  SourceCode: FROM cerebriai/spark-py:v2.4.3 as spark
+- BaseName: elyra/kernel-py:2.0.0
+  Commands:
+  - Env:
+    - Key: SPARK_VER
+      Value: 2.4.3
+    Name: env
+  - Env:
+    - Key: KERNEL_LANGUAGE
+      Value: python
+    Name: env
+  - Env:
+    - Key: R_LIBS_USER
+      Value: $R_LIBS_USER:${SPARK_HOME}/R/lib
+    Name: env
+  - Name: user
+    User: root
+  - CmdLine:
+    - apt-get update &&     apt-get install -yq --no-install-recommends     apt-utils     openjdk-8-jdk     less     curl     libssl-dev     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/java-1.8.0-openjdk-amd64
+    Name: env
+  - Chown: ""
+    From: spark
+    Name: copy
+    SourcesAndDest:
+    - /opt/spark
+    - /opt/spark
+  - Chown: ""
+    From: spark
+    Name: copy
+    SourcesAndDest:
+    - /dependencies/
+    - /dependencies
+  - Env:
+    - Key: SPARK_HOME
+      Value: /opt/spark
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:${SPARK_HOME}/bin
+    Name: env
+  - CmdLine:
+    - echo "In stage kernel"     && spark-submit --version     && echo $SPARK_HOME     &&
+      echo $PATH
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opt/ &&     wget https://raw.githubusercontent.com/apache/spark/v${SPARK_VER}/resource-managers/kubernetes/docker/src/main/dockerfiles/spark/entrypoint.sh
+      &&     chmod a+x /opt/entrypoint.sh &&     sed -i 's/tini -s/tini -g/g' /opt/entrypoint.sh
+      &&     ln -sfn /opt/conda/bin/tini /sbin/tini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opt/spark/jars/ &&     wget https://jdbc.postgresql.org/download/postgresql-42.2.8.jar
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $SPARK_HOME/work-dir
+  - CmdLine:
+    - chmod 0777 $SPARK_HOME/work-dir
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /opt/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: user
+    User: jovyan
+  From:
+    Image: elyra/kernel-py:2.0.0
+  Name: ""
+  Platform: ""
+  SourceCode: FROM elyra/kernel-py:2.0.0

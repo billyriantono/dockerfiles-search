@@ -1,0 +1,87 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: httpd:alpine
+  Commands:
+  - Key: MELLON_VERSION
+    Name: arg
+    Value: 0.14.2
+  - Key: XMLSEC_VERSION
+    Name: arg
+    Value: 1.2.28
+  - Key: LASSO_VERSION
+    Name: arg
+    Value: 2.5.1
+  - CmdLine:
+    - apk --update add   autoconf   automake   curl-dev   g++   glib-dev   libtool   libxml2-dev   make   perl-dev   py-six   python   xmlsec-dev   zlib-dev   curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /tmp/xmlsec &&   curl -L https://www.aleksey.com/xmlsec/download/xmlsec1-${XMLSEC_VERSION}.tar.gz
+      | tar -xvz -C /tmp/xmlsec --strip 1 &&   cd /tmp/xmlsec &&   ./configure --enable-soap
+      &&   make &&   make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /tmp/lasso &&   curl -L https://dev.entrouvert.org/releases/lasso/lasso-${LASSO_VERSION}.tar.gz
+      | tar -xvz -C /tmp/lasso --strip 1 &&   cd /tmp/lasso &&   ./configure &&   make
+      &&   make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /tmp/mod_auth_mellon &&   curl -L https://github.com/Uninett/mod_auth_mellon/archive/v${MELLON_VERSION}.tar.gz
+      | tar -xvz -C /tmp/mod_auth_mellon --strip 1 &&   cd /tmp/mod_auth_mellon &&   aclocal
+      &&   autoheader &&   autoconf &&   ./configure --with-apxs2=/usr/local/apache2/bin/apxs
+      &&   make &&   make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: httpd:alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM httpd:alpine AS build
+- BaseName: httpd:alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache add glib curl libxslt libltdl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/mod_auth_mellon/mellon_create_metadata.sh
+    - /usr/sbin/
+  - CmdLine:
+    - chmod +x /usr/sbin/mellon_create_metadata.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/apache2/modules/mod_auth_mellon.so
+    - /usr/local/apache2/modules/mod_auth_mellon.so
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/liblasso*
+    - /usr/local/lib/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/libxmlsec1*
+    - /usr/local/lib/
+  - CmdLine:
+    - sed -i '/<IfModule ssl_module>/a Listen 443' /usr/local/apache2/conf/httpd.conf
+      &&     sed -i '/<IfModule proxy_html_module>/i IncludeOptional conf.d/*.conf'
+      /usr/local/apache2/conf/httpd.conf
+    Name: run
+    PrependShell: true
+  From:
+    Image: httpd:alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM httpd:alpine

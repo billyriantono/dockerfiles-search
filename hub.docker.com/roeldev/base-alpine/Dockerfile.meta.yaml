@@ -1,0 +1,111 @@
+MetaArgs:
+- DefaultValue: '"3.9"'
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: '"3.9"'
+Stages:
+- As: base
+  BaseName: alpine:${ALPINE_VERSION}
+  Commands:
+  - CmdLine:
+    - set -x  && apk update  && apk add     --no-cache         bash         tar         tzdata         xz  &&
+      mkdir /root-out
+    Name: run
+    PrependShell: true
+  - Key: ALPINE_VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: REL
+      Value: '"v${ALPINE_VERSION}"'
+    - Key: ARCH
+      Value: '"x86_64"'
+    - Key: MIRROR
+      Value: '"http://dl-cdn.alpinelinux.org/alpine"'
+    - Key: PACKAGES
+      Value: '"alpine-baselayout,alpine-keys,apk-tools,busybox,libc-utils,xz"'
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://raw.githubusercontent.com/gliderlabs/docker-alpine/master/builder/scripts/mkimage-alpine.bash
+    - /mkimage-alpine.bash
+  - CmdLine:
+    - set -x  && chmod +x /mkimage-alpine.bash  && ./mkimage-alpine.bash  && tar xf
+      /rootfs.tar.xz -C /root-out  && sed -i -e 's/^root::/root:!:/' /root-out/etc/shadow
+    Name: run
+    PrependShell: true
+  - Key: OVERLAY_VERSION
+    Name: arg
+    Value: '"v1.22.1.0"'
+  - Key: OVERLAY_ARCH
+    Name: arg
+    Value: '"amd64"'
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/just-containers/s6-overlay/releases/download/${OVERLAY_VERSION}/s6-overlay-${OVERLAY_ARCH}.tar.gz
+    - /s6-overlay.tar.gz
+  - CmdLine:
+    - set -x  && tar xzf /s6-overlay.tar.gz -C /root-out
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root-out/usr/local/bin
+  - CmdLine:
+    - set -x  && echo "#!/bin/sh" >> alpine_version  && echo "echo \"${ALPINE_VERSION}\""
+      >> alpine_version
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:${ALPINE_VERSION}
+  Name: base
+  Platform: ""
+  SourceCode: FROM alpine:${ALPINE_VERSION} as base
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: base
+    Name: copy
+    SourcesAndDest:
+    - /root-out
+    - /
+  - Env:
+    - Key: ENV
+      Value: '"/etc/motd"'
+    - Key: PS1
+      Value: '"$(whoami)@$(hostname):$(pwd) \\$ "'
+    - Key: DISPLAY_MOTD
+      Value: '"true"'
+    - Key: VERBOSE_INIT
+      Value: '"false"'
+    - Key: PUID
+      Value: '"911"'
+    - Key: PGID
+      Value: '"911"'
+    Name: env
+  - CmdLine:
+    - set -x  && apk update  && apk upgrade --no-cache  && apk add     --no-cache         bash         ca-certificates         coreutils         shadow         tzdata  &&
+      addgroup -g 911 -S abc  && adduser     -D -H -S     -u 911     -h /app     -s
+      /sbin/nologin     -G abc     abc  && usermod --groups users abc  && chmod +x
+      /usr/local/bin/alpine_version
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs/
+    - /
+  - Name: volume
+    Volumes:
+    - /config
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

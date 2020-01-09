@@ -1,0 +1,243 @@
+MetaArgs: null
+Stages:
+- BaseName: pipelineai/ubuntu-16.04-cpu:1.5.0
+  Commands:
+  - Name: workdir
+    Path: /root
+  - CmdLine:
+    - add-apt-repository -y ppa:certbot/certbot   && apt-get update   && apt-get install
+      -y     libatlas-base-dev     libopencv-dev     graphviz     protobuf-compiler     libprotoc-dev   &&
+      pip install gevent gunicorn mxnet-model-server   && pip uninstall --yes mxnet   &&
+      pip install mxnet-mkl   && mkdir /root/mxnet_model_server
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mxnet/wsgi.py
+    - mxnet/setup_mms.py
+    - mxnet/mxnet-model-server.sh
+    - /root/mxnet_model_server/
+  - Env:
+    - Key: PATH
+      Value: '"/root/mxnet_model_server:${PATH}"'
+    - Key: MXNET_MODEL_SERVER_GPU_IMAGE
+      Value: "0"
+    Name: env
+  - CmdLine:
+    - echo "deb https://dl.bintray.com/sbt/debian /" | tee -a /etc/apt/sources.list.d/sbt.list   &&
+      apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823   &&
+      apt-get update   && apt-get install -y --allow-unauthenticated sbt=1.0.2
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/prometheus/
+    - config/prometheus/
+  - Env:
+    - Key: PROMETHEUS_VERSION
+      Value: 2.2.0-rc.1
+    Name: env
+  - CmdLine:
+    - wget https://github.com/prometheus/prometheus/releases/download/v$PROMETHEUS_VERSION/prometheus-$PROMETHEUS_VERSION.linux-amd64.tar.gz   &&
+      tar xvfz prometheus-$PROMETHEUS_VERSION.linux-amd64.tar.gz   && rm prometheus-$PROMETHEUS_VERSION.linux-amd64.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /root/prometheus-$PROMETHEUS_VERSION.linux-amd64/prometheus.yml /root/prometheus-$PROMETHEUS_VERSION.linux-amd64/prometheus.yml.orig   &&
+      cd /root/prometheus-$PROMETHEUS_VERSION.linux-amd64/   && ln -s /root/config/prometheus/prometheus.yml
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /root/prometheus-$PROMETHEUS_VERSION.linux-amd64/:$PATH
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/grafana/
+    - config/grafana/
+  - Env:
+    - Key: GRAFANA_VERSION
+      Value: 5.0.0
+    Name: env
+  - CmdLine:
+    - wget https://s3-us-west-2.amazonaws.com/grafana-releases/release/grafana-$GRAFANA_VERSION.linux-x64.tar.gz   &&
+      tar -zxvf grafana-$GRAFANA_VERSION.linux-x64.tar.gz   && rm grafana-$GRAFANA_VERSION.linux-x64.tar.gz
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /root/grafana-$GRAFANA_VERSION/bin:$PATH
+    Name: env
+  - CmdLine:
+    - cd /root/grafana-$GRAFANA_VERSION/conf   && ln -s /root/config/grafana/custom.ini   &&
+      ln -s /root/config/grafana/dashboards
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /root/logs
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LOGS_HOME
+      Value: /root/logs
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sysutils/
+    - sysutils/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - jvm/
+    - jvm/
+  - Env:
+    - Key: PIPELINE_JVM_MODEL_SERVER_PATH
+      Value: /root/jvm
+    Name: env
+  - CmdLine:
+    - cd $PIPELINE_JVM_MODEL_SERVER_PATH   && ./build.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CONFLUENT_VERSION
+      Value: 4.0.0
+    - Key: CONFLUENT_MAJOR_VERSION
+      Value: "4.0"
+    Name: env
+  - Env:
+    - Key: CONFLUENT_HOME
+      Value: /root/confluent-${CONFLUENT_VERSION}
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $CONFLUENT_HOME/bin:$PATH
+    Name: env
+  - CmdLine:
+    - wget http://packages.confluent.io/archive/${CONFLUENT_MAJOR_VERSION}/confluent-oss-${CONFLUENT_VERSION}-2.11.tar.gz  &&
+      tar xvzf confluent-oss-${CONFLUENT_VERSION}-2.11.tar.gz  && rm confluent-oss-${CONFLUENT_VERSION}-2.11.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/edenhill/librdkafka.git   && cd librdkafka   &&
+      ./configure   && make   && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install git+https://github.com/wintoncode/winton-kafka-streams.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y nginx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - service nginx start
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/nginx/
+    - config/nginx/
+  - CmdLine:
+    - mv /etc/nginx/sites-available/default /etc/nginx/sites-available/default.orig   &&
+      cd /etc/nginx/sites-available/   && ln -s /root/config/nginx/default   && cd
+      /etc/nginx/sites-enabled/   && rm default   && ln -s /etc/nginx/sites-available/default
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ldconfig
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PIPELINE_MODEL_SERVER_PATH
+      Value: /root/src/main/python/model_server
+    Name: env
+  - Env:
+    - Key: PIPELINE_MODEL_SERVER_PORT
+      Value: "9876"
+    Name: env
+  - Env:
+    - Key: PIPELINE_MODEL_SERVER_PROMETHEUS_PORT
+      Value: "10254"
+    Name: env
+  - Env:
+    - Key: PIPELINE_MODEL_SERVER_TENSORFLOW_SERVING_PORT
+      Value: "9000"
+    Name: env
+  - Env:
+    - Key: PIPELINE_MODEL_SERVER_TENSORFLOW_SERVING_REQUEST_BATCHING
+      Value: "true"
+    Name: env
+  - CmdLine:
+    - echo ""   && echo "Installing TensorFlow Serving..."   && echo "deb [arch=amd64]
+      http://storage.googleapis.com/tensorflow-serving-apt stable tensorflow-model-server
+      tensorflow-model-server-universal" | tee /etc/apt/sources.list.d/tensorflow-serving.list   &&
+      curl https://storage.googleapis.com/tensorflow-serving-apt/tensorflow-serving.release.pub.gpg
+      | apt-key add -   && apt-get update   && apt-get install -y tensorflow-model-server;
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PIPELINE_HYSTRIX_DASHBOARD_PORT
+      Value: "7979"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dashboard/jetty-0.4.7.RC0.jar
+    - dashboard/jetty-0.4.7.RC0.jar
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dashboard/hystrix-dashboard-0.1.0-dev.0.uncommitted.war
+    - dashboard/hystrix-dashboard-0.1.0-dev.0.uncommitted.war
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - html/
+    - /var/www/html/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run
+    - run
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/
+    - src/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/kafka/
+    - config/kafka/
+  - Name: expose
+    Ports:
+    - "3000"
+    - "8080"
+    - "9090"
+  - CmdLine:
+    - ./run
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: pipelineai/ubuntu-16.04-cpu:1.5.0
+  Name: ""
+  Platform: ""
+  SourceCode: FROM pipelineai/ubuntu-16.04-cpu:1.5.0

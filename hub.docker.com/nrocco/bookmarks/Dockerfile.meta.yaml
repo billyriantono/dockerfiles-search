@@ -1,0 +1,155 @@
+MetaArgs: null
+Stages:
+- As: gobase
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache         ca-certificates         gcc         git         musl-dev         sqlite
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/jteeuwen/go-bindata/... &&     git clone -b v0.8 https://github.com/cortesi/modd.git
+      /go/src/github.com/cortesi/modd &&     go get github.com/cortesi/modd/cmd/modd
+      &&     go get golang.org/x/lint/golint
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  From:
+    Image: golang:alpine
+  Name: gobase
+  Platform: ""
+  SourceCode: FROM golang:alpine as gobase
+- As: npmbase
+  BaseName: node:alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  From:
+    Image: node:alpine
+  Name: npmbase
+  Platform: ""
+  SourceCode: FROM node:alpine AS npmbase
+- As: npmbuilder
+  BaseName: npmbase
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - web/package*.json
+    - /app/
+  - CmdLine:
+    - npm install --no-progress
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - web/
+    - /app/
+  - CmdLine:
+    - npm run lint --no-progress
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build --production --no-progress
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: npmbase
+  Name: npmbuilder
+  Platform: ""
+  SourceCode: FROM npmbase AS npmbuilder
+- As: gobuilder
+  BaseName: gobase
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - go.sum
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - golint ./...
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - Chown: ""
+    From: npmbuilder
+    Name: copy
+    SourcesAndDest:
+    - /app/dist/
+    - ./web/dist/
+  - CmdLine:
+    - go generate -v api/api.go
+    Name: run
+    PrependShell: true
+  - Key: VERSION
+    Name: arg
+    Value: unknown
+  - Key: COMMIT
+    Name: arg
+    Value: unknown
+  - Key: BUILD_DATE
+    Name: arg
+    Value: unknown
+  - CmdLine:
+    - go build -v -o bookmarks         --tags "fts5"         -ldflags "            -X
+      github.com/nrocco/bookmarks/cmd.version=${VERSION}             -X github.com/nrocco/bookmarks/cmd.commit=${COMMIT}             -X
+      github.com/nrocco/bookmarks/cmd.buildDate=${BUILD_DATE}"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: gobase
+  Name: gobuilder
+  Platform: ""
+  SourceCode: FROM gobase AS gobuilder
+- BaseName: alpine:edge
+  Commands:
+  - CmdLine:
+    - apk add --no-cache         ca-certificates         sqlite     && true
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: gobuilder
+    Name: copy
+    SourcesAndDest:
+    - /src/bookmarks
+    - /usr/bin/bookmarks
+  - Name: expose
+    Ports:
+    - "3000"
+  - Name: workdir
+    Path: /var/lib/bookmarks
+  - Name: volume
+    Volumes:
+    - /var/lib/bookmarks
+  - CmdLine:
+    - '["bookmarks", “server”]'
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:edge

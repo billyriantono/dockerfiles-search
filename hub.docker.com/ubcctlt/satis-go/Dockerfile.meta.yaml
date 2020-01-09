@@ -1,0 +1,148 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12
+  Commands:
+  - CmdLine:
+    - go get -d -v github.com/benschw/satis-go
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/benschw/satis-go/
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o satis-go .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12 as builder
+- As: builder1
+  BaseName: node
+  Commands:
+  - CmdLine:
+    - mkdir -p /opt/satis-go/admin-ui &&     wget -qO- https://github.com/benschw/satis-admin/archive/master.tar.gz
+      |         tar xzv --strip-components=1 -C /opt/satis-go/admin-ui
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/satis-go/admin-ui
+  - CmdLine:
+    - npm i bower &&     node_modules/.bin/bower i --allow-root
+    Name: run
+    PrependShell: true
+  From:
+    Image: node
+  Name: builder1
+  Platform: ""
+  SourceCode: FROM node as builder1
+- BaseName: composer/satis
+  Commands:
+  - Env:
+    - Key: SATIS_GO_BIND
+      Value: 0.0.0.0:8080
+    Name: env
+  - Env:
+    - Key: SATIS_GO_DB_PATH
+      Value: /opt/satis-go/data
+    Name: env
+  - Env:
+    - Key: SATIS_GO_REPOUI_PATH
+      Value: /usr/share/nginx/htlm
+    Name: env
+  - Env:
+    - Key: SATIS_GO_REPO_NAME
+      Value: '"My Satis"'
+    Name: env
+  - Env:
+    - Key: SATIS_GO_REPO_HOST
+      Value: http://localhost:8080
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"/satis/bin:${PATH}"'
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Env:
+    - Key: TINI_VERSION
+      Value: v0.18.0
+    Name: env
+  - CmdLine:
+    - ALPINE_GLIBC_BASE_URL="https://github.com/sgerrand/alpine-pkg-glibc/releases/download"
+      &&     ALPINE_GLIBC_PACKAGE_VERSION="2.29-r0" &&     ALPINE_GLIBC_BASE_PACKAGE_FILENAME="glibc-$ALPINE_GLIBC_PACKAGE_VERSION.apk"
+      &&     ALPINE_GLIBC_BIN_PACKAGE_FILENAME="glibc-bin-$ALPINE_GLIBC_PACKAGE_VERSION.apk"
+      &&     ALPINE_GLIBC_I18N_PACKAGE_FILENAME="glibc-i18n-$ALPINE_GLIBC_PACKAGE_VERSION.apk"
+      &&     apk add --update libintl &&     apk add --no-cache --virtual=.build-dependencies
+      wget ca-certificates gettext &&     echo         "-----BEGIN PUBLIC KEY-----        MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApZ2u1KJKUu/fW4A25y9m        y70AGEa/J3Wi5ibNVGNn1gT1r0VfgeWd0pUybS4UmcHdiNzxJPgoWQhV2SSW1JYu        tOqKZF5QSN6X937PTUpNBjUvLtTQ1ve1fp39uf/lEXPpFpOPL88LKnDBgbh7wkCp        m2KzLVGChf83MS0ShL6G9EQIAUxLm99VpgRjwqTQ/KfzGtpke1wqws4au0Ab4qPY        KXvMLSPLUp7cfulWvhmZSegr5AdhNw5KNizPqCJT8ZrGvgHypXyiFvvAH5YRtSsc        Zvo9GI2e2MaZyo9/lvb+LbLEJZKEQckqRj4P26gmASrZEPStwc+yqy1ShHLA0j6m        1QIDAQAB        -----END
+      PUBLIC KEY-----" | sed 's/   */\n/g' > "/etc/apk/keys/sgerrand.rsa.pub" &&     wget         "$ALPINE_GLIBC_BASE_URL/$ALPINE_GLIBC_PACKAGE_VERSION/$ALPINE_GLIBC_BASE_PACKAGE_FILENAME"         "$ALPINE_GLIBC_BASE_URL/$ALPINE_GLIBC_PACKAGE_VERSION/$ALPINE_GLIBC_BIN_PACKAGE_FILENAME"         "$ALPINE_GLIBC_BASE_URL/$ALPINE_GLIBC_PACKAGE_VERSION/$ALPINE_GLIBC_I18N_PACKAGE_FILENAME"
+      &&     apk add --no-cache         "$ALPINE_GLIBC_BASE_PACKAGE_FILENAME"         "$ALPINE_GLIBC_BIN_PACKAGE_FILENAME"         "$ALPINE_GLIBC_I18N_PACKAGE_FILENAME"
+      &&         rm "/etc/apk/keys/sgerrand.rsa.pub" &&     /usr/glibc-compat/bin/localedef
+      --force --inputfile POSIX --charmap UTF-8 "$LANG" || true &&     echo "export
+      LANG=$LANG" > /etc/profile.d/locale.sh &&     cp /usr/bin/envsubst /usr/local/bin/envsubst
+      &&         apk del glibc-i18n &&         rm "/root/.wget-hsts" &&     apk del
+      .build-dependencies &&     rm         "$ALPINE_GLIBC_BASE_PACKAGE_FILENAME"         "$ALPINE_GLIBC_BIN_PACKAGE_FILENAME"         "$ALPINE_GLIBC_I18N_PACKAGE_FILENAME"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini
+    - /tini
+  - CmdLine:
+    - chmod +x /tini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/satis-go /opt/satis-go/admin-ui
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/benschw/satis-go/satis-go
+    - /opt/satis-go/
+  - CmdLine:
+    - chmod +x /opt/satis-go/satis-go &&     wget -qO- https://github.com/benschw/satis-admin/releases/download/0.1.1/admin-ui.tar.gz
+      |         tar xzv --strip-components=1 -C /opt/satis-go/admin-ui
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder1
+    Name: copy
+    SourcesAndDest:
+    - /opt/satis-go/admin-ui/bower_components
+    - /opt/satis-go/admin-ui/bower_components
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - entrypoint.sh
+    - /entrypoint.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - config.template.yaml
+    - /opt/satis-go/config.template.yaml
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - /tini
+    - -g
+    - --
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /opt/satis-go/satis-go
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: composer/satis
+  Name: ""
+  Platform: ""
+  SourceCode: FROM composer/satis

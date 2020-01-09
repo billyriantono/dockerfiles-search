@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- BaseName: python:2.7.16-slim-buster
+  Commands:
+  - CmdLine:
+    - set -ex     && RUN_DEPS="         libpcre3         mime-support         postgresql-client         curl         nodejs         npm     "     &&
+      seq 1 8 | xargs -I{} mkdir -p /usr/share/man/man{}     && apt-get update &&
+      apt-get install -y --no-install-recommends $RUN_DEPS     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - addgroup --gid 9999 debates   && adduser --no-create-home --disabled-password
+      --uid 9999 --gid 9999 debates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex && npm install -g yuglify less
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex     && pip install virtualenv     && virtualenv -p python2.7 /venv     &&
+      /venv/bin/pip install --no-cache-dir -U pip wheel
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /venv/bin:$PATH
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - requirements.txt
+    - /requirements.txt
+  - CmdLine:
+    - set -ex     && BUILD_DEPS="         build-essential         libpcre3-dev         libpq-dev     "     &&
+      apt-get update && apt-get install -y --no-install-recommends $BUILD_DEPS     &&
+      pip install --no-cache-dir -r /requirements.txt         && apt-get purge -y
+      --auto-remove -o APT::AutoRemove::RecommendsImportant=false $BUILD_DEPS     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /code/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /code/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /code/
+  - Name: expose
+    Ports:
+    - "8000"
+  - Env:
+    - Key: DJANGO_ENV
+      Value: prod
+    Name: env
+  - Env:
+    - Key: DOCKER_CONTAINER
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - DATABASE_URL='' python manage.py collectstatic --noinput -v 0
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - gunicorn
+    - opendebates_deploy.wsgi
+    - --pythonpath
+    - /code/opendebates
+    - --log-file
+    - '-'
+    - --bind
+    - 0.0.0.0:8000
+    - --workers
+    - "2"
+    - --threads
+    - "4"
+    - --worker-tmp-dir
+    - /dev/shm
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:2.7.16-slim-buster
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:2.7.16-slim-buster

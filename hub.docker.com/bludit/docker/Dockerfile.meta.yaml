@@ -1,0 +1,125 @@
+MetaArgs: null
+Stages:
+- BaseName: centos:centos7
+  Commands:
+  - Env:
+    - Key: bludit_content
+      Value: /usr/share/nginx/html/bl-content
+    Name: env
+  - Env:
+    - Key: bludit_url
+      Value: https://www.bludit.com/releases/bludit-3-10-0.zip
+    Name: env
+  - Env:
+    - Key: nginx_path
+      Value: /etc/nginx
+    Name: env
+  - Env:
+    - Key: nginx_conf
+      Value: ${nginx_path}/nginx.conf
+    Name: env
+  - Env:
+    - Key: php_conf
+      Value: /etc/opt/rh/rh-php72/php.ini
+    Name: env
+  - Env:
+    - Key: fpm_conf
+      Value: /etc/opt/rh/rh-php72/php-fpm.conf
+    Name: env
+  - Env:
+    - Key: fpm_pool
+      Value: /etc/opt/rh/rh-php72/php-fpm.d/www.conf
+    Name: env
+  - CmdLine:
+    - "yum install -y epel-release centos-release-scl.noarch && \tyum -y update &&
+      \tyum install -y nginx rh-php72-php-fpm rh-php72-php-gd rh-php72-php-json rh-php72-php-dom
+      rh-php72-php-xml rh-php72-php-zip rh-php72-php-mbstring supervisor unzip jq"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "sed -i -e \"s/;cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/g\" ${php_conf} && \tsed
+      -i -e \"s/upload_max_filesize\\s*=\\s*2M/upload_max_filesize = 100M/g\" ${php_conf}
+      && \tsed -i -e \"s/post_max_size\\s*=\\s*8M/post_max_size = 100M/g\" ${php_conf}
+      && \tsed -i -e \"s/variables_order = \\\"GPCS\\\"/variables_order = \\\"EGPCS\\\"/g\"
+      ${php_conf}"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e "s/;daemonize\s*=\s*yes/daemonize = no/g" ${fpm_conf}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "sed -i -e \"s/listen = 127.0.0.1:9000/listen = \\/var\\/run\\/php-fpm.sock/g\"
+      ${fpm_pool} && \tsed -i -e \"s/;listen.owner = nobody/listen.owner = nginx/g\"
+      ${fpm_pool} && \tsed -i -e \"s/;listen.group = nobody/listen.group = nginx/g\"
+      ${fpm_pool} && \tsed -i -e \"s/user = apache/user = nginx/g\" ${fpm_pool} &&
+      \tsed -i -e \"s/group = apache/group = nginx/g\" ${fpm_pool}"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "daemon off;" >> ${nginx_conf}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R nginx:nginx /var/opt/rh/rh-php72/lib/php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "yum clean all && \trm -rf ${nginx_path}/conf.d/* && \trm -rf /var/cache/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sf /dev/stdout /var/log/nginx/access.log
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sf /dev/stderr /var/log/nginx/error.log
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/default.conf
+    - ${nginx_path}/conf.d/default.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/nginx.conf
+    - ${nginx_conf}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/supervisord.conf
+    - /etc/supervisord.conf
+  - CmdLine:
+    - "ln -sf /dev/stdout /var/log/nginx/access.log && \tln -sf /dev/stderr /var/log/nginx/error.log"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - "curl -o /tmp/bludit.zip ${bludit_url} && \tunzip /tmp/bludit.zip && \trm -rf
+      /usr/share/nginx/html && \tmv bludit-* /usr/share/nginx/html && \tchown -R nginx:nginx
+      /usr/share/nginx/html && \tchmod 755 ${bludit_content} && \tsed -i \"s/'DEBUG_MODE',
+      FALSE/'DEBUG_MODE', TRUE/g\" /usr/share/nginx/html/bl-kernel/boot/init.php &&
+      \trm -f /tmp/bludit.zip"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /usr/bin/supervisord
+    - -n
+    - -c
+    - /etc/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos:centos7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:centos7

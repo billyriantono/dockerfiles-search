@@ -1,0 +1,173 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "ENV_IMG",
+      "DefaultValue": "\"paulchan/minidlna:env-1.0\"",
+      "ProvidedValue": null,
+      "Value": "\"paulchan/minidlna:env-1.0\""
+    },
+    {
+      "Key": "SRC_GIT",
+      "DefaultValue": "\"https://github.com/PaulChanHK/minidlna.git\"",
+      "ProvidedValue": null,
+      "Value": "\"https://github.com/PaulChanHK/minidlna.git\""
+    },
+    {
+      "Key": "SRC_BCH",
+      "DefaultValue": "\"master\"",
+      "ProvidedValue": null,
+      "Value": "\"master\""
+    },
+    {
+      "Key": "DEBIAN_FRONTEND",
+      "DefaultValue": "noninteractive",
+      "ProvidedValue": null,
+      "Value": "noninteractive"
+    },
+    {
+      "Key": "APT_SERVER",
+      "DefaultValue": "\"\"",
+      "ProvidedValue": null,
+      "Value": "\"\""
+    },
+    {
+      "Key": "MEDIA_DIRS",
+      "DefaultValue": "\"Movie Episode Music Photo\"",
+      "ProvidedValue": null,
+      "Value": "\"Movie Episode Music Photo\""
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "pkg_build",
+      "BaseName": "${ENV_IMG}",
+      "SourceCode": "FROM ${ENV_IMG} as pkg_build",
+      "Platform": "",
+      "As": "pkg_build",
+      "From": {
+        "Image": "${ENV_IMG}"
+      },
+      "Commands": [
+        {
+          "Key": "SRC_GIT",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "SRC_BCH",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Name": "workdir",
+          "Path": "/tmp"
+        },
+        {
+          "CmdLine": [
+            "( git clone ${SRC_GIT} -b ${SRC_BCH}   \u0026\u0026 mkdir /pkg   \u0026\u0026 cd minidlna*   \u0026\u0026 export VERGIT=$(git describe --tags)   \u0026\u0026 export VERSTR=$(echo $VERGIT | sed -e 's/^v//' -e 's/_/./g')   \u0026\u0026 echo VERSTR=$VERSTR   \u0026\u0026 { echo \"Git version : $VERGIT\"   \u0026\u0026   echo \"Git branch  : ${SRC_BCH}\"   \u0026\u0026   echo \"Git remote  : $(git remote -v | head -n1)\"   \u0026\u0026   echo Changes in origin/original..HEAD :   \u0026\u0026   git log --pretty=oneline origin/original..HEAD |        sed -r 's/^([0-9a-f]{8})[0-9a-f]{32}(.*)/\\1\\2/'; } | tee /pkg/CHANGES   \u0026\u0026 ./autogen.sh \u003e/dev/null   \u0026\u0026 ./configure \u003e/dev/null    \u0026\u0026 make -j$(nproc) \u003e/dev/null   \u0026\u0026 checkinstall -y -D --install=no --pkgname=minidlna --pkgversion=$VERSTR   \u0026\u0026 mv minidlna_$VERSTR*.deb /pkg   )"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "ubuntu:16.04",
+      "SourceCode": "FROM ubuntu:16.04",
+      "Platform": "",
+      "From": {
+        "Image": "ubuntu:16.04"
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"https://github.com/PaulChanHK/docker-minidlna/tree/master/run\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Key": "DEBIAN_FRONTEND",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "APT_SERVER",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "MEDIA_DIRS",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Chown": "",
+          "From": "pkg_build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/pkg",
+            "/pkg"
+          ]
+        },
+        {
+          "CmdLine": [
+            "( echo \"APT_SERVER=$APT_SERVER\"       \u0026\u0026 [ -z \"$APT_SERVER\" ] || {          echo 'Acquire::http::Proxy \"'http://${APT_SERVER}/'\";' \u003e\u003e /etc/apt/apt.conf.d/01proxy ; }       \u0026\u0026 apt-get update -y       \u0026\u0026 apt-get install --yes --assume-yes         libavcodec-ffmpeg56 libavformat-ffmpeg56 libavutil-ffmpeg54         libexif12 libflac8 libid3tag0 libjpeg8 libjpeg-turbo8         libogg0 libsqlite3-0 libvorbis0a libvorbisenc2 libvorbisfile3       \u0026\u0026 cp /pkg/CHANGES /       \u0026\u0026 dpkg -i /pkg/minidlna*.deb       \u0026\u0026 mkdir -p /conf/       \u0026\u0026 { for i in db ${MEDIA_DIRS}; do mkdir -p /media/$i; done; }       \u0026\u0026 rm -fr /pkg       \u0026\u0026 apt-get clean \u0026\u0026 rm -rf /var/lib/apt/lists/*     )"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "LANGUAGE",
+              "Value": "en_US:en"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "entrypoint.sh",
+            "minidlna.conf",
+            "/conf/"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "8200/tcp"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "1900/udp"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/conf/entrypoint.sh",
+            "-S"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "CmdLine": [
+            "-f",
+            "/conf/minidlna.conf"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

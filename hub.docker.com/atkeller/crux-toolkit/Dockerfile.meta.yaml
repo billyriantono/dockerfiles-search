@@ -1,0 +1,99 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: debian:buster-slim
+  Commands:
+  - CmdLine:
+    - apt-get update       && apt-get -y install       ca-certificates       && rm
+      -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:buster-slim
+  Name: base
+  Platform: ""
+  SourceCode: FROM debian:buster-slim as base
+- As: builder
+  BaseName: base
+  Commands:
+  - Labels:
+    - Key: description
+      Value: '"Build layers - crux-toolkit"'
+    Name: label
+  - CmdLine:
+    - apt-get update && apt-get -y install   build-essential   cmake   curl   git   subversion   wget   libcurl4-openssl-dev   libssl-dev   uuid-dev   zlib1g-dev   libpulse-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - git config --global user.email "you@example.com" &&     git config --global
+      user.name "Your Name"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /src/crux-toolkit
+  - Name: workdir
+    Path: /src/crux-toolkit
+  - CmdLine:
+    - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX:PATH=/app .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /gathered
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ldd /app/bin/crux | grep "=> /" | awk '{print $3}' |  xargs -I '{}' sh -c "cp
+      -v --parents {} /gathered"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp --parents /app/bin/crux /gathered
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base as builder
+- As: runtime
+  BaseName: base
+  Commands:
+  - Labels:
+    - Key: description
+      Value: '"crux-toolkit"'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /gathered
+    - /
+  - Env:
+    - Key: PATH
+      Value: '"${PATH}:/app/bin"'
+    Name: env
+  - Name: workdir
+    Path: /app
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM base as runtime

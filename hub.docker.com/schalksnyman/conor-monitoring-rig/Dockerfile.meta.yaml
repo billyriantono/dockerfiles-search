@@ -1,0 +1,192 @@
+MetaArgs: null
+Stages:
+- BaseName: centos:centos7
+  Commands:
+  - Maintainer: Schalk Snyman <schalksnyman@conor.com>
+    Name: maintainer
+  - Labels:
+    - Key: Description
+      Value: '"This Dockerfile starts up a Riemann, InfluxDB and Grafana"'
+    - Key: Vendor
+      Value: '"Conor Info Tech"'
+    - Key: Version
+      Value: '"0.1"'
+    Name: label
+  - Env:
+    - Key: RIEMANN_VERSION
+      Value: 0.2.11
+    Name: env
+  - Env:
+    - Key: INFLUXDB_VERSION
+      Value: 0.13.0
+    Name: env
+  - Env:
+    - Key: GRAFANA_VERSION
+      Value: 3.0.2
+    Name: env
+  - Env:
+    - Key: PRE_CREATE_DB
+      Value: data grafana
+    Name: env
+  - Env:
+    - Key: INFLUXDB_URL
+      Value: http://localhost:8086
+    Name: env
+  - Env:
+    - Key: INFLUXDB_ADMIN_PW
+      Value: '@dmin@cvm'
+    Name: env
+  - Env:
+    - Key: INFLUXDB_DATA_USER
+      Value: data
+    Name: env
+  - Env:
+    - Key: INFLUXDB_DATA_PW
+      Value: d@ta@cvm
+    Name: env
+  - Env:
+    - Key: INFLUXDB_GRAFANA_USER
+      Value: grafana
+    Name: env
+  - Env:
+    - Key: INFLUXDB_GRAFANA_PW
+      Value: gr@fana@cvm
+    Name: env
+  - Name: volume
+    Volumes:
+    - /mnt/docker_rig/influxdb
+  - Name: volume
+    Volumes:
+    - /var/log/supervisor
+  - CmdLine:
+    - yum -y install epel-release &&         yum -y update &&         yum -y groupinstall
+      "Development Tools" &&         yum -y install fontconfig nodejs npm &&         yum
+      -y install nginx wget &&         yum -y install java-1.8.0-openjdk &&         yum
+      -y install hostname inotify-tools yum-utils which &&         yum -y install
+      rubygems ruby-dev &&         yum -y install python-setuptools &&         easy_install
+      supervisor
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gem install riemann-client riemann-tools riemann-dash
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p src/riemann && cd src/riemann &&         wget https://aphyr.com/riemann/riemann-${RIEMANN_VERSION}.tar.bz2
+      -O riemann.tar.bz2 &&         tar xvfj riemann.tar.bz2 --strip-components=1
+      && rm riemann.tar.bz2
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - repo/influxdb.repo
+    - /etc/yum.repos.d/influxdb.repo
+  - CmdLine:
+    - yum -y install influxdb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum -y install https://grafanarel.s3.amazonaws.com/builds/grafana-3.0.2-1463383025.x86_64.rpm
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - riemann/riemann.config
+    - /src/riemann/etc/riemann.config
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - influxdb/influxdb.conf
+    - /etc/influxdb/influxdb.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - influxdb/run.sh
+    - /usr/local/bin/run_influxdb
+  - CmdLine:
+    - mkdir /mnt/docker_rig/influxdb/shared/data -p &&         mkdir /mnt/docker_rig/influxdb/shared/meta
+      -p &&         mkdir /mnt/docker_rig/influxdb/shared/wal -p
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - grafana/config.js
+    - /usr/share/grafana/config.js
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - grafana/dash.json
+    - /var/lib/grafana/dashboards/dash.json
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - grafana/grafana.ini
+    - /etc/grafana/grafana.ini
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/configure.sh
+    - /configure.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/set_grafana.sh
+    - /set_grafana.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/set_influxdb.sh
+    - /set_influxdb.sh
+  - CmdLine:
+    - /configure.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - nginx/nginx.conf
+    - /etc/nginx/nginx.conf
+  - CmdLine:
+    - mkdir -p /var/www &&         ln -s /usr/share/grafana -d /var/www/grafana &&         chown
+      nginx:nginx /var/www/grafana -R &&         chown nginx:nginx /usr/share/grafana
+      -R &&         rm -f /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/example_ssl.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisor/supervisord.conf
+    - /etc/supervisord.d/supervisord.conf
+  - CmdLine:
+    - yum clean all
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "5555"
+  - Name: expose
+    Ports:
+    - "5556"
+  - Name: expose
+    Ports:
+    - "8083"
+  - Name: expose
+    Ports:
+    - "8086"
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /usr/bin/supervisord
+    - -c
+    - /etc/supervisord.d/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos:centos7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:centos7

@@ -1,0 +1,94 @@
+MetaArgs: null
+Stages:
+- As: tdjson
+  BaseName: node:10.13-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apk add --no-cache alpine-sdk linux-headers git zlib-dev openssl-dev gperf php
+      php-ctype cmake
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/tdlib/td.git .     && rm -rf build     && mkdir
+      build     && cd build     && export CXXFLAGS=""     && cmake -DCMAKE_BUILD_TYPE=Release
+      -DCMAKE_INSTALL_PREFIX:PATH=../tdlib ..     && cmake --build . --target prepare_cross_compiling     &&
+      cd ..     && php SplitSource.php     && cd build     && cmake --build . --target
+      install
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.13-alpine
+  Name: tdjson
+  Platform: ""
+  SourceCode: FROM node:10.13-alpine AS tdjson
+- As: nodebuild
+  BaseName: node:10.13-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apk add --no-cache python alpine-sdk
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - package-lock.json*
+    - npm-shrinkwrap.json*
+    - ./
+  - CmdLine:
+    - npm ci
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - npm run build && npm prune --production
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.13-alpine
+  Name: nodebuild
+  Platform: ""
+  SourceCode: FROM node:10.13-alpine as nodebuild
+- BaseName: node:10.13-alpine
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - Name: workdir
+    Path: /usr/src/app
+  - CmdLine:
+    - apk add --no-cache libssl1.0 libcrypto1.0
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: nodebuild
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - Chown: ""
+    From: tdjson
+    Name: copy
+    SourcesAndDest:
+    - /app/tdlib/lib/libtdjson.so
+    - .
+  - CmdLine:
+    - npm start
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: node:10.13-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:10.13-alpine

@@ -1,0 +1,87 @@
+MetaArgs: null
+Stages:
+- As: filecontainer
+  BaseName: geircode/oracle-xe-11.2.0-1.0.x86_64:latest
+  Commands: null
+  From:
+    Image: geircode/oracle-xe-11.2.0-1.0.x86_64:latest
+  Name: filecontainer
+  Platform: ""
+  SourceCode: FROM geircode/oracle-xe-11.2.0-1.0.x86_64:latest as filecontainer
+- BaseName: oraclelinux:7-slim
+  Commands:
+  - Env:
+    - Key: ORACLE_BASE
+      Value: /u01/app/oracle
+    - Key: ORACLE_HOME
+      Value: /u01/app/oracle/product/11.2.0/xe
+    - Key: ORACLE_SID
+      Value: XE
+    - Key: INSTALL_FILE_1
+      Value: '"oracle-xe-11.2.0-1.0.x86_64.rpm.zip"'
+    - Key: INSTALL_DIR
+      Value: '"$HOME/install"'
+    - Key: CONFIG_RSP
+      Value: '"xe.rsp"'
+    - Key: RUN_FILE
+      Value: '"runOracle.sh"'
+    - Key: PWD_FILE
+      Value: '"setPassword.sh"'
+    - Key: CHECK_DB_FILE
+      Value: '"checkDBStatus.sh"'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $ORACLE_HOME/bin:$PATH
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - $CONFIG_RSP
+    - $RUN_FILE
+    - $PWD_FILE
+    - $CHECK_DB_FILE
+    - $INSTALL_DIR/
+  - Chown: ""
+    From: filecontainer
+    Name: copy
+    SourcesAndDest:
+    - /files
+    - $INSTALL_DIR
+  - CmdLine:
+    - 'yum -y install unzip libaio bc initscripts net-tools openssl compat-libstdc++-33
+      &&     rm -rf /var/cache/yum &&     cd $INSTALL_DIR &&     unzip $INSTALL_FILE_1
+      &&     rm $INSTALL_FILE_1 &&        cat() { declare -A PROC=(["/proc/sys/kernel/shmmax"]=4294967295
+      ["/proc/sys/kernel/shmmni"]=4096 ["/proc/sys/kernel/shmall"]=2097152 ["/proc/sys/fs/file-max"]=6815744);
+      [[ ${PROC[$1]} == "" ]] && /usr/bin/cat $* || echo ${PROC[$1]}; } &&     free()
+      { echo "Swap: 2048 0 2048"; } &&     export -f cat free &&     rpm -i Disk1/*.rpm
+      &&        unset -f cat free &&     mkdir -p $ORACLE_BASE/scripts/setup &&     mkdir
+      $ORACLE_BASE/scripts/startup &&     ln -s $ORACLE_BASE/scripts /docker-entrypoint-initdb.d
+      &&     mkdir $ORACLE_BASE/oradata &&     chown -R oracle:dba $ORACLE_BASE &&     mv
+      $INSTALL_DIR/$CONFIG_RSP $ORACLE_BASE/ &&     mv $INSTALL_DIR/$RUN_FILE $ORACLE_BASE/
+      &&     mv $INSTALL_DIR/$PWD_FILE $ORACLE_BASE/ &&     mv $INSTALL_DIR/$CHECK_DB_FILE
+      $ORACLE_BASE/ &&     ln -s $ORACLE_BASE/$PWD_FILE / &&     cd $HOME &&     rm
+      -rf $INSTALL_DIR &&     chmod ug+x $ORACLE_BASE/*.sh'
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "1521"
+    - "8080"
+  - Health:
+      Interval: 60000000000
+      StartPeriod: 300000000000
+      Test:
+      - CMD-SHELL
+      - '"$ORACLE_BASE/$CHECK_DB_FILE" >/dev/null || exit 1'
+    Name: healthcheck
+  - CmdLine:
+    - exec $ORACLE_BASE/$RUN_FILE
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: oraclelinux:7-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM oraclelinux:7-slim

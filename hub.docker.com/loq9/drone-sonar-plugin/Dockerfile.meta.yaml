@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: debian:buster-slim
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y     bash     git     golang
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - go.sum
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Env:
+    - Key: GOOS
+      Value: linux
+    Name: env
+  - Env:
+    - Key: GARCH
+      Value: amd64
+    Name: env
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - CmdLine:
+    - go build -ldflags="-s -w" -o drone-sonar .
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:buster-slim
+  Name: build
+  Platform: ""
+  SourceCode: FROM debian:buster-slim as build
+- BaseName: openjdk:11-slim
+  Commands:
+  - Key: SONAR_VERSION
+    Name: arg
+    Value: 4.2.0.1873
+  - Key: SONAR_SCANNER_CLI
+    Name: arg
+    Value: sonar-scanner-cli-${SONAR_VERSION}
+  - Key: SONAR_SCANNER
+    Name: arg
+    Value: sonar-scanner-${SONAR_VERSION}
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y     curl     git     nodejs     npm     golang     shellcheck     unzip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install -g typescript
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app/drone-sonar
+    - /bin/drone-sonar
+  - Name: workdir
+    Path: /bin
+  - CmdLine:
+    - curl https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/${SONAR_SCANNER_CLI}.zip
+      -so /bin/${SONAR_SCANNER_CLI}.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip ${SONAR_SCANNER_CLI}.zip     && rm ${SONAR_SCANNER_CLI}.zip
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: $PATH:/bin/${SONAR_SCANNER}/bin
+    Name: env
+  - CmdLine:
+    - /bin/drone-sonar
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:11-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:11-slim

@@ -1,0 +1,126 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:latest
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cpanfile
+    - /
+  - Env:
+    - Key: EV_EXTRA_DEFS
+      Value: -DEV_NO_ATFORK
+    Name: env
+  - CmdLine:
+    - apk update &&     apk add perl     perl-io-socket-ssl     perl-dbd-pg     perl-dev     perl-dbd-mysql     g++     make     wget     curl     git     &&
+      curl -L https://cpanmin.us | perl - App::cpanminus     && cpanm --installdeps
+      --notest .     && rm -rf /root/.cpanm/* /usr/local/share/man/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:latest as builder
+- As: bibspace-base
+  BaseName: builder
+  Commands:
+  - CmdLine:
+    - mkdir -p BibSpace
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/
+    - /BibSpace/bin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - fixture/
+    - /BibSpace/fixture
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - lib/
+    - /BibSpace/lib
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - util/
+    - /BibSpace/util
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - t/
+    - /BibSpace/t
+  - CmdLine:
+    - mkdir -p /BibSpace/json_data   ; [ -f bibspace_preferences.json ]   && cp bibspace_preferences.json
+      /BibSpace/json_data/bibspace_preferences.json   ; [ -f bibspace_stats.json ]   &&
+      cp bibspace_stats.json /BibSpace/json_data/bibspace_stats.json    ; exit 0
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: EV_EXTRA_DEFS
+      Value: -DEV_NO_ATFORK
+    Name: env
+  - Env:
+    - Key: TZ
+      Value: Europe/Berlin
+    Name: env
+  - CmdLine:
+    - apk update   && apk add tzdata   && mkdir -p /config/etc   && cp /usr/share/zoneinfo/Europe/Berlin
+      /etc/localtime   && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Europe/Berlin" > /config/etc/timezone
+    Name: run
+    PrependShell: true
+  - Labels:
+    - Key: version
+      Value: '"0.6.0"'
+    Name: label
+  - Name: expose
+    Ports:
+    - "8083"
+  - Health:
+      Interval: 30000000000
+      Test:
+      - CMD-SHELL
+      - curl --fail http://localhost:8083/system_status || exit 1
+      Timeout: 15000000000
+    Name: healthcheck
+  From:
+    Stage:
+      Index: 0
+      Named: builder
+  Name: bibspace-base
+  Platform: ""
+  SourceCode: FROM builder as bibspace-base
+- As: bibspace
+  BaseName: bibspace-base
+  Commands:
+  - CmdLine:
+    - BibSpace/bin/bibspace
+    - daemon
+    - -m
+    - production
+    - -l
+    - http://*:8083
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: bibspace-base
+  Name: bibspace
+  Platform: ""
+  SourceCode: FROM bibspace-base as bibspace

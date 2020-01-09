@@ -1,0 +1,102 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: python:3.8.0-alpine3.10
+  Commands:
+  - Name: workdir
+    Path: /opt/
+  - Env:
+    - Key: PYTHONPATH
+      Value: /opt/
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Pipfile
+    - Pipfile.lock
+    - ./
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps gcc musl-dev &&     pip install pipenv
+      &&     pipenv install --system &&     apk del .build-deps
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.8.0-alpine3.10
+  Name: base
+  Platform: ""
+  SourceCode: FROM python:3.8.0-alpine3.10 AS base
+- As: test
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps gcc musl-dev &&     pipenv install
+      --system --dev &&     apk del .build-deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./snyk
+    - ./snyk
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./test
+    - ./test
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.py'
+    - ./
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: test
+  Platform: ""
+  SourceCode: FROM base AS test
+- As: testrun
+  BaseName: test
+  Commands:
+  - CmdLine:
+    - py.test --flake8 --cov --mypy --mypy-ignore-missing-imports
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: test
+  Name: testrun
+  Platform: ""
+  SourceCode: FROM test AS testrun
+- As: main
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./snyk
+    - ./snyk
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.py'
+    - ./
+  - CmdLine:
+    - python
+    - /opt/snyk_access.py
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: main
+  Platform: ""
+  SourceCode: FROM base AS main

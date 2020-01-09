@@ -1,0 +1,125 @@
+MetaArgs: null
+Stages:
+- As: watchdog
+  BaseName: openfaas/of-watchdog:0.7.2
+  Commands: null
+  From:
+    Image: openfaas/of-watchdog:0.7.2
+  Name: watchdog
+  Platform: ""
+  SourceCode: FROM openfaas/of-watchdog:0.7.2 as watchdog
+- As: ship
+  BaseName: node:10.12.0-alpine
+  Commands:
+  - Chown: ""
+    From: watchdog
+    Name: copy
+    SourcesAndDest:
+    - /fwatchdog
+    - /usr/bin/fwatchdog
+  - CmdLine:
+    - chmod +x /usr/bin/fwatchdog
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --no-cache add curl ca-certificates     && addgroup -S app && adduser -S
+      -g app app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root/
+  - Env:
+    - Key: NPM_CONFIG_LOGLEVEL
+      Value: warn
+    Name: env
+  - CmdLine:
+    - mkdir -p /home/app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - ./
+  - CmdLine:
+    - npm i
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - index.js
+    - ./
+  - Name: workdir
+    Path: /home/app/function
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - function/*.json
+    - ./
+  - CmdLine:
+    - 'npm i || :'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - function/
+    - ./
+  - Name: workdir
+    Path: /home/app/
+  - CmdLine:
+    - chown app:app -R /home/app     && chmod 777 /tmp
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  - Env:
+    - Key: cgi_headers
+      Value: '"true"'
+    Name: env
+  - Env:
+    - Key: fprocess
+      Value: '"node index.js"'
+    Name: env
+  - Env:
+    - Key: mode
+      Value: '"http"'
+    Name: env
+  - Env:
+    - Key: upstream_url
+      Value: '"http://127.0.0.1:3000"'
+    Name: env
+  - Env:
+    - Key: exec_timeout
+      Value: '"10s"'
+    Name: env
+  - Env:
+    - Key: write_timeout
+      Value: '"15s"'
+    Name: env
+  - Env:
+    - Key: read_timeout
+      Value: '"15s"'
+    Name: env
+  - Health:
+      Interval: 3000000000
+      Test:
+      - CMD-SHELL
+      - '[ -e /tmp/.lock ] || exit 1'
+    Name: healthcheck
+  - CmdLine:
+    - fwatchdog
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: node:10.12.0-alpine
+  Name: ship
+  Platform: ""
+  SourceCode: FROM node:10.12.0-alpine as ship

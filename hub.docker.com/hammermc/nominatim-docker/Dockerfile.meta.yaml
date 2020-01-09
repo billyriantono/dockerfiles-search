@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- As: buildstage
+  BaseName: postgres:10
+  Commands:
+  - Env:
+    - Key: BUMP
+      Value: "2019012101"
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get -y install         build-essential         cmake         curl         g++         git         libboost-all-dev         libboost-filesystem-dev         libboost-python-dev         libboost-system-dev         libbz2-dev         libexpat1-dev         libgeos++-dev         libgeos-dev         libpq-dev         libproj-dev         libxml2-dev         php-cli         php-dev         postgresql-10-postgis-2.4         postgresql-10-postgis-2.4-scripts         postgresql-contrib         postgresql-server-dev-10         python-pip         python3-pip         zlib1g-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth 1 --branch master --single-branch https://github.com/openstreetmap/Nominatim.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip3 install osmium
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install osmium
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd Nominatim &&     git submodule update --recursive --init
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd Nominatim &&     mkdir -p build &&     cd build &&     cmake .. &&     make
+      &&     make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: postgres:10
+  Name: buildstage
+  Platform: ""
+  SourceCode: FROM postgres:10 as buildstage
+- As: runstage
+  BaseName: postgres:10
+  Commands:
+  - Chown: ""
+    From: buildstage
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/
+    - /usr/local/
+  - Chown: ""
+    From: buildstage
+    Name: copy
+    SourcesAndDest:
+    - /Nominatim
+    - /Nominatim
+  - CmdLine:
+    - apt-get update &&     apt-get -y install         apache2         curl         libapache2-mod-php         libboost-filesystem1.62.0         libboost-python1.62.0         libboost-system1.62.0         libproj12         postgresql-10-pgrouting         postgresql-10-pgrouting-scripts         postgresql-10-postgis         postgresql-10-postgis-scripts         postgresql-contrib         php-cli         php-db         php-intl         php-pgsql
+      &&     apt-get clean &&     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /src
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -ms /bin/bash osm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown postgres /Nominatim/build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkfifo -m 600 /Nominatim/build/logpipe &&     chown www-data /Nominatim/build/logpipe
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nominatim-docker-entrypoint.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - osm-config.sh
+    - /usr/local/etc/
+  - Name: expose
+    Ports:
+    - "5432"
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: workdir
+    Path: /Nominatim/build
+  - CmdLine:
+    - nominatim-docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: postgres:10
+  Name: runstage
+  Platform: ""
+  SourceCode: FROM postgres:10 as runstage

@@ -1,0 +1,195 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "alpine:edge",
+      "SourceCode": "FROM alpine:edge AS builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "alpine:edge"
+      },
+      "Commands": [
+        {
+          "Key": "SCRCPY_VER",
+          "Name": "arg",
+          "Value": "1.10"
+        },
+        {
+          "Key": "SERVER_HASH",
+          "Name": "arg",
+          "Value": "\"cbeb1a4e046f1392c1dc73c3ccffd7f86dec4636b505556ea20929687a119390\""
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache         curl         ffmpeg-dev         gcc         git         make         meson         musl-dev         openjdk8         pkgconf         sdl2-dev"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "PATH=$PATH:/usr/lib/jvm/java-1.8-openjdk/bin"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "curl -L -o scrcpy-server.jar https://github.com/Genymobile/scrcpy/releases/download/v${SCRCPY_VER}/scrcpy-server-v${SCRCPY_VER}.jar"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "echo \"$SERVER_HASH  /scrcpy-server.jar\" | sha256sum -c -"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "git clone https://github.com/Genymobile/scrcpy.git"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd scrcpy \u0026\u0026 meson x --buildtype release --strip -Db_lto=true -Dprebuilt_server=/scrcpy-server.jar"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd scrcpy/x \u0026\u0026 ninja"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "runner",
+      "BaseName": "alpine:edge",
+      "SourceCode": "FROM alpine:edge AS runner",
+      "Platform": "",
+      "As": "runner",
+      "From": {
+        "Image": "alpine:edge"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "echo http://dl-cdn.alpinelinux.org/alpine/edge/testing \u003e\u003e /etc/apk/repositories"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"Pierre Gordon \u003cpierregordon@protonmail.com\u003e\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache         android-tools         ffmpeg         virtualgl"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/scrcpy-server.jar",
+            "/usr/local/share/scrcpy/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/scrcpy/x/app/scrcpy",
+            "/usr/local/bin/"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "amd",
+      "BaseName": "runner",
+      "SourceCode": "FROM runner AS amd",
+      "Platform": "",
+      "As": "amd",
+      "From": {
+        "Stage": {
+          "Named": "runner",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add --no-cache mesa-dri-swrast"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "intel",
+      "BaseName": "runner",
+      "SourceCode": "FROM runner AS intel",
+      "Platform": "",
+      "As": "intel",
+      "From": {
+        "Stage": {
+          "Named": "runner",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add --no-cache mesa-dri-intel"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "nvidia",
+      "BaseName": "runner",
+      "SourceCode": "FROM runner AS nvidia",
+      "Platform": "",
+      "As": "nvidia",
+      "From": {
+        "Stage": {
+          "Named": "runner",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add --no-cache mesa-dri-nouveau"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    }
+  ]
+}

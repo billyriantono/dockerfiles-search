@@ -1,0 +1,147 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "apibuilder",
+      "BaseName": "golang:1.13.3-alpine3.10",
+      "SourceCode": "FROM golang:1.13.3-alpine3.10 AS apibuilder",
+      "Platform": "",
+      "As": "apibuilder",
+      "From": {
+        "Image": "golang:1.13.3-alpine3.10"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk update \u0026\u0026 apk add --no-cache git dep"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "api",
+            "$GOPATH/src/github.com/alexbrazier/go-url/api"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "$GOPATH/src/github.com/alexbrazier/go-url/api"
+        },
+        {
+          "CmdLine": [
+            "dep ensure -vendor-only"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "go build -o /go/bin/server"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "frontendbuilder",
+      "BaseName": "node:12.13.0-alpine",
+      "SourceCode": "FROM node:12.13.0-alpine AS frontendbuilder",
+      "Platform": "",
+      "As": "frontendbuilder",
+      "From": {
+        "Image": "node:12.13.0-alpine"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "frontend",
+            "/app"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "CmdLine": [
+            "yarn --frozen-lockfile --network-timeout 600000 \u0026\u0026     yarn build"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "alpine:3.10",
+      "SourceCode": "FROM alpine:3.10",
+      "Platform": "",
+      "From": {
+        "Image": "alpine:3.10"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk update \u0026\u0026 apk add bash dumb-init ca-certificates \u0026\u0026 rm -rf /var/cache/apk/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "apibuilder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/go/bin/server",
+            "/go/bin/server"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "frontendbuilder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/build",
+            "/go/bin/public"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/go/bin"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "entrypoint.sh",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "/usr/bin/dumb-init",
+            "--"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "CmdLine": [
+            "/go/bin/entrypoint.sh"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

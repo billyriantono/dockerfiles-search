@@ -1,0 +1,240 @@
+MetaArgs: null
+Stages:
+- As: resources
+  BaseName: node:12-alpine
+  Commands:
+  - Name: workdir
+    Path: /home/node/app
+  - CmdLine:
+    - chown node:node /home/node/app
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: node
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package*.json
+    - /home/node/app/
+  - CmdLine:
+    - npm ci
+    Name: run
+    PrependShell: true
+  - Chown: node:node
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - public
+    - /home/node/app/public
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - resources/js
+    - /home/node/app/resources/js
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - resources/sass
+    - /home/node/app/resources/sass
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - webpack.mix.js
+    - /home/node/app/
+  - CmdLine:
+    - npm run production
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12-alpine
+  Name: resources
+  Platform: ""
+  SourceCode: FROM node:12-alpine AS resources
+- As: nginx
+  BaseName: nginxinc/nginx-unprivileged:1.17-alpine
+  Commands:
+  - Name: user
+    User: root
+  - CmdLine:
+    - apk add --update --no-cache         su-exec         curl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker/nginx.conf
+    - /etc/nginx/nginx.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker/server.conf
+    - /etc/nginx/conf.d/default.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker/server-ssl.conf
+    - /etc/nginx/conf.d/default-ssl.conf.disabled
+  - Chown: ""
+    From: resources
+    Name: copy
+    SourcesAndDest:
+    - /home/node/app/public
+    - /var/www/html/public
+  - Health:
+      Interval: 30000000000
+      StartPeriod: 15000000000
+      Test:
+      - CMD-SHELL
+      - curl -f http://localhost:8081/health || exit 1
+      Timeout: 5000000000
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - "8080"
+    - "8081"
+    - "8443"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker/nginx-entrypoint.sh
+    - /usr/local/bin/entrypoint.sh
+  - CmdLine:
+    - entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - nginx
+    - -g
+    - daemon off;
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginxinc/nginx-unprivileged:1.17-alpine
+  Name: nginx
+  Platform: ""
+  SourceCode: FROM nginxinc/nginx-unprivileged:1.17-alpine AS nginx
+- As: php-fpm
+  BaseName: php:7.4-fpm-alpine
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache --virtual build-dependencies         autoconf gcc
+      g++ libtool make     && apk add --update --no-cache         libmcrypt-dev         mysql-client         libpng-dev         unzip         fcgi     &&
+      pecl install mcrypt-1.0.3     && docker-php-ext-enable mcrypt     && docker-php-ext-install
+      pdo_mysql     && docker-php-ext-install gd     && docker-php-ext-install pcntl     &&
+      apk del build-dependencies
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"         && echo
+      'log_errors_max_len = 0' >> $PHP_INI_DIR/conf.d/app.ini         && echo 'cgi.fix_pathinfo
+      = 0' >> $PHP_INI_DIR/conf.d/app.ini         && echo 'date.timezone = UTC' >>
+      $PHP_INI_DIR/conf.d/app.ini         && echo 'expose_php = 0' >> $PHP_INI_DIR/conf.d/app.ini
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker/app-fpm.conf
+    - /usr/local/etc/php-fpm.d/app-fpm.conf
+  - Name: workdir
+    Path: /var/www/html
+  - Name: user
+    User: www-data
+  - Key: COMPOSER_VERSION
+    Name: arg
+    Value: 1.8.4
+  - CmdLine:
+    - 'EXPECTED_SIGNATURE="$(curl -s https://composer.github.io/installer.sig)";     php
+      -r "copy(''https://getcomposer.org/installer'', ''composer-setup.php'');";     ACTUAL_SIGNATURE="$(php
+      -r "echo hash_file(''sha384'', ''composer-setup.php'');")";     if [ "$EXPECTED_SIGNATURE"
+      != "$ACTUAL_SIGNATURE" ]; then         >&2 echo ''ERROR: Invalid installer signature'';         rm
+      composer-setup.php;         exit 1;     fi;     php composer-setup.php --quiet
+      --version $COMPOSER_VERSION;     RESULT=$?;     rm composer-setup.php;     exit
+      $RESULT'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - composer.*
+    - /var/www/html/
+  - CmdLine:
+    - php composer.phar docker-install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /var/www/html
+  - Chown: ""
+    From: resources
+    Name: copy
+    SourcesAndDest:
+    - /home/node/app/public
+    - /var/www/html/public
+  - Name: user
+    User: root
+  - CmdLine:
+    - chown -R www-data:www-data         /var/www/html/storage         /var/www/html/bootstrap/cache
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: www-data
+  - CmdLine:
+    - php composer.phar docker-build
+    Name: run
+    PrependShell: true
+  - Key: APP_COMMIT
+    Name: arg
+    Value: null
+  - Env:
+    - Key: APP_COMMIT
+      Value: $APP_COMMIT
+    Name: env
+  - Key: APP_VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: APP_VERSION
+      Value: $APP_VERSION
+    Name: env
+  - Health:
+      Interval: 30000000000
+      StartPeriod: 15000000000
+      Test:
+      - CMD-SHELL
+      - SCRIPT_NAME=/ping         SCRIPT_FILENAME=/ping         REQUEST_METHOD=GET         cgi-fcgi
+        -bind -connect 127.0.0.1:9000 | tee /dev/stderr | grep pong || exit 1
+      Timeout: 5000000000
+    Name: healthcheck
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker/php-fpm-entrypoint.sh
+    - /var/www/html/entrypoint.sh
+  - CmdLine:
+    - /var/www/html/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - php-fpm
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:7.4-fpm-alpine
+  Name: php-fpm
+  Platform: ""
+  SourceCode: FROM php:7.4-fpm-alpine AS php-fpm

@@ -1,0 +1,199 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: maven:3.6.0-jdk-8-alpine
+  Commands:
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pom.xml
+    - pom.xml
+  - CmdLine:
+    - mvn -B dependency:go-offline
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /build/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .git
+    - .git
+  - CmdLine:
+    - mvn -B clean package
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.6.0-jdk-8-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM maven:3.6.0-jdk-8-alpine AS build
+- BaseName: openjdk:8-jre-slim
+  Commands:
+  - Key: DEFAULT_JAVA_OPTIONS
+    Name: arg
+    Value: '"-Xmx300M -server"'
+  - Labels:
+    - Key: maintainer
+      Value: '"gs-w_eto_eb_federal_employees@usgs.gov"'
+    Name: label
+  - Key: artifact_version
+    Name: arg
+    Value: '"set_the_artifact_version_arg_in_your_dockerfile"'
+  - Env:
+    - Key: USER
+      Value: spring
+    Name: env
+  - Env:
+    - Key: HOME
+      Value: /home/$USER
+    Name: env
+  - Env:
+    - Key: SPRING_CLOUD_CONFIG_ENABLED
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: TOMCAT_CHAIN_PATH
+      Value: $HOME/tomcat-wildcard-ssl.chain
+    Name: env
+  - Env:
+    - Key: TOMCAT_CERT_PATH
+      Value: $HOME/tomcat-wildcard-ssl.crt
+    Name: env
+  - Env:
+    - Key: TOMCAT_KEY_PATH
+      Value: $HOME/tomcat-wildcard-ssl.key
+    Name: env
+  - Env:
+    - Key: JAVA_TRUSTSTORE
+      Value: $HOME/cacerts
+    Name: env
+  - Env:
+    - Key: JAVA_TRUSTSTORE_PASS
+      Value: changeit
+    Name: env
+  - Env:
+    - Key: JAVA_OPTIONS
+      Value: $DEFAULT_JAVA_OPTIONS
+    Name: env
+  - Env:
+    - Key: HEALTH_CHECK_ENDPOINT
+      Value: actuator/health
+    Name: env
+  - Env:
+    - Key: HEALTHY_RESPONSE_CONTAINS
+      Value: '{"status":"UP"}'
+    Name: env
+  - Env:
+    - Key: springFrameworkLogLevel
+      Value: info
+    Name: env
+  - Env:
+    - Key: SECURITY_REQUIRESSL
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: SERVER_PORT
+      Value: "8443"
+    Name: env
+  - Env:
+    - Key: serverContextPath
+      Value: /
+    Name: env
+  - Env:
+    - Key: SERVER_SSL_KEYSTORE
+      Value: $HOME/localkeystore.pkcs12
+    Name: env
+  - Env:
+    - Key: SERVER_SSL_KEYSTOREPASSWORD
+      Value: changeme
+    Name: env
+  - Env:
+    - Key: SERVER_SSL_KEYALIAS
+      Value: tomcat
+    Name: env
+  - Env:
+    - Key: LAUNCH_APP_SCRIPT
+      Value: $HOME/launch-app.sh
+    Name: env
+  - CmdLine:
+    - apt-get update &&   apt-get install --no-install-recommends --no-upgrade curl
+      netcat -y &&   rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser --disabled-password --gecos "" -u 1000 $USER
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $HOME
+  - Chown: 1000:1000
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - entrypoint.sh
+  - Chown: 1000:1000
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - launch-app.sh
+    - $LAUNCH_APP_SCRIPT
+  - Chown: 1000:1000
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - java.security.properties
+    - java.security.properties
+  - Chown: 1000:1000
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pull-from-artifactory.sh
+    - pull-from-artifactory.sh
+  - Chown: 1000:1000
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/target/spring-boot-sample*.jar
+    - app.jar
+  - CmdLine:
+    - chmod +x pull-from-artifactory.sh entrypoint.sh $LAUNCH_APP_SCRIPT
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $USER
+  - CmdLine:
+    - curl -o ./wait-for.sh https://raw.githubusercontent.com/eficode/wait-for/f71f8199a0dd95953752fb5d3f76f79ced16d47d/wait-for
+      &&   chmod +x ./wait-for.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 30000000000
+      Test:
+      - CMD-SHELL
+      - curl -k "https://127.0.0.1:${SERVER_PORT}${serverContextPath}${HEALTH_CHECK_ENDPOINT}"
+        | grep -q ${HEALTHY_RESPONSE_CONTAINS} || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - Expression: RUN echo "Removing sample app.jar..." && rm app.jar
+    Name: onbuild
+  - Expression: ENV HEALTH_CHECK_ENDPOINT=health
+    Name: onbuild
+  From:
+    Image: openjdk:8-jre-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre-slim

@@ -1,0 +1,229 @@
+MetaArgs:
+- DefaultValue: log-request
+  Key: SOURCE_BRANCH
+  ProvidedValue: null
+  Value: log-request
+- DefaultValue: log-request
+  Key: FAVA_VERSION
+  ProvidedValue: null
+  Value: log-request
+- DefaultValue: tip
+  Key: BEANCOUNT_VERSION
+  ProvidedValue: null
+  Value: tip
+- DefaultValue: 10.16.0-stretch
+  Key: NODE_BUILD_IMAGE
+  ProvidedValue: null
+  Value: 10.16.0-stretch
+- DefaultValue: 3.7.3-stretch
+  Key: PYTHON_BUILD_IMAGE
+  ProvidedValue: null
+  Value: 3.7.3-stretch
+- DefaultValue: 3.7.3-slim
+  Key: PYTHON_BASE_IMAGE
+  ProvidedValue: null
+  Value: 3.7.3-slim
+- DefaultValue: /usr/local/lib/python3.7/site-packages
+  Key: PYTHON_DIR
+  ProvidedValue: null
+  Value: /usr/local/lib/python3.7/site-packages
+Stages:
+- As: node_build_env
+  BaseName: node:${NODE_BUILD_IMAGE}
+  Commands:
+  - Key: FAVA_VERSION
+    Name: arg
+    Value: null
+  - Name: workdir
+    Path: /tmp/build
+  - CmdLine:
+    - git clone https://github.com/yagebu/fava/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build/fava
+  - CmdLine:
+    - git checkout ${FAVA_VERSION}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make mostlyclean
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:${NODE_BUILD_IMAGE}
+  Name: node_build_env
+  Platform: ""
+  SourceCode: FROM node:${NODE_BUILD_IMAGE} as node_build_env
+- As: build_env
+  BaseName: python:${PYTHON_BUILD_IMAGE}
+  Commands:
+  - Key: BEANCOUNT_VERSION
+    Name: arg
+    Value: null
+  - Key: PYTHON_DIR
+    Name: arg
+    Value: null
+  - Env:
+    - Key: BEANCOUNT_URL
+      Value: https://bitbucket.org/blais/beancount/get/${BEANCOUNT_VERSION}.tar.gz
+    Name: env
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y build-essential libxml2-dev libxslt-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build
+  - CmdLine:
+    - curl -J -L ${BEANCOUNT_URL} -o beancount-${BEANCOUNT_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xvf beancount-${BEANCOUNT_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python3 -mpip install ./beancount-*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: node_build_env
+    Name: copy
+    SourcesAndDest:
+    - /tmp/build/fava
+    - /tmp/build/fava
+  - CmdLine:
+    - python3 -mpip install ./fava
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python3 -mpip install pytest
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find ${PYTHON_DIR} -name *.so -print0|xargs -0 strip -v
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find ${PYTHON_DIR} -name __pycache__ -exec rm -rf -v {} +
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python3 -mpip uninstall -y wheel pip
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:${PYTHON_BUILD_IMAGE}
+  Name: build_env
+  Platform: ""
+  SourceCode: FROM python:${PYTHON_BUILD_IMAGE} as build_env
+- BaseName: python:${PYTHON_BASE_IMAGE}
+  Commands:
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y git nano build-essential gcc poppler-utils wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y install cron
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch /var/log/cron.log
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - (crontab -l ; echo "10 23 * * * /bin/bash /myData/cron.daily > /myData/cron.log
+      2>&1") | crontab
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python3 -mpip install smart_importer
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python3 -mpip install beancount_portfolio_allocation
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python3 -mpip install beancount-plugins-metadata-spray
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python3 -mpip install iexfinance
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python3 -mpip install black
+    Name: run
+    PrependShell: true
+  - Key: PYTHON_DIR
+    Name: arg
+    Value: null
+  - Chown: ""
+    From: build_env
+    Name: copy
+    SourcesAndDest:
+    - ${PYTHON_DIR}
+    - ${PYTHON_DIR}
+  - Chown: ""
+    From: build_env
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/fava
+    - /usr/local/bin/fava
+  - Chown: ""
+    From: build_env
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/bean-bake
+    - /usr/local/bin/bean-check
+    - /usr/local/bin/bean-doctor
+    - /usr/local/bin/bean-example
+    - /usr/local/bin/bean-format
+    - /usr/local/bin/bean-price
+    - /usr/local/bin/bean-query
+    - /usr/local/bin/bean-report
+    - /usr/local/bin/bean-sql
+    - /usr/local/bin/bean-web
+    - /usr/local/bin/bean-identify
+    - /usr/local/bin/bean-extract
+    - /usr/local/bin/bean-file
+    - /usr/local/bin/treeify
+    - /usr/local/bin/upload-to-sheets
+    - /usr/local/bin/
+  - Name: expose
+    Ports:
+    - "5000"
+  - Env:
+    - Key: BEANCOUNT_INPUT_FILE
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: PYTHONPATH
+      Value: '"/myData/myTools"'
+    Name: env
+  - Env:
+    - Key: FAVA_OPTIONS
+      Value: '"-H 0.0.0.0"'
+    Name: env
+  - CmdLine:
+    - cron && fava ${FAVA_OPTIONS} ${BEANCOUNT_INPUT_FILE}
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: python:${PYTHON_BASE_IMAGE}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:${PYTHON_BASE_IMAGE}

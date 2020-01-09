@@ -1,0 +1,120 @@
+MetaArgs:
+- DefaultValue: "10.1"
+  Key: CUDA_VERSION
+  ProvidedValue: null
+  Value: "10.1"
+- DefaultValue: devel
+  Key: BUILD_FLAVOUR
+  ProvidedValue: null
+  Value: devel
+- DefaultValue: runtime
+  Key: RUN_FLAVOUR
+  ProvidedValue: null
+  Value: runtime
+- DefaultValue: ubuntu
+  Key: DISTRO_NAME
+  ProvidedValue: null
+  Value: ubuntu
+- DefaultValue: "18.04"
+  Key: DISTRO_VERSION
+  ProvidedValue: null
+  Value: "18.04"
+Stages:
+- As: build
+  BaseName: nvidia/cuda:${CUDA_VERSION}-${BUILD_FLAVOUR}-${DISTRO_NAME}${DISTRO_VERSION}
+  Commands:
+  - Env:
+    - Key: GIT_REPOSITORY
+      Value: https://github.com/fireice-uk/xmr-stak.git
+    - Key: GIT_BRANCH
+      Value: master
+    Name: env
+  - Env:
+    - Key: CMAKE_FLAGS
+      Value: -DXMR-STAK_COMPILE=generic -DCUDA_ENABLE=ON -DOpenCL_ENABLE=ON
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - donate-level.patch
+    - /tmp
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - set -x   && apt-get update   && apt-get install -qq --no-install-recommends
+      -y build-essential ca-certificates cmake git libhwloc-dev libmicrohttpd-dev
+      libssl-dev ocl-icd-opencl-dev   && git clone --single-branch --depth 1 --branch
+      $GIT_BRANCH $GIT_REPOSITORY xmr-stak   && git -C xmr-stak apply /tmp/donate-level.patch   &&
+      cd xmr-stak   && cmake ${CMAKE_FLAGS} .   && make   && apt-get purge -y -qq
+      build-essential cmake libhwloc-dev libmicrohttpd-dev libssl-dev ocl-icd-opencl-dev   &&
+      apt-get clean -qq
+    Name: run
+    PrependShell: true
+  From:
+    Image: nvidia/cuda:${CUDA_VERSION}-${BUILD_FLAVOUR}-${DISTRO_NAME}${DISTRO_VERSION}
+  Name: build
+  Platform: ""
+  SourceCode: FROM nvidia/cuda:${CUDA_VERSION}-${BUILD_FLAVOUR}-${DISTRO_NAME}${DISTRO_VERSION}
+    as build
+- BaseName: nvidia/cuda:${CUDA_VERSION}-${RUN_FLAVOUR}-${DISTRO_NAME}${DISTRO_VERSION}
+  Commands:
+  - Key: DISTRO_NAME
+    Name: arg
+    Value: null
+  - Key: DISTRO_VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: AMDGPU_VERSION
+      Value: 18.50-725072
+    Name: env
+  - Env:
+    - Key: AMDGPU_DRIVER_NAME
+      Value: amdgpu-pro-${AMDGPU_VERSION}-${DISTRO_NAME}-${DISTRO_VERSION}
+    Name: env
+  - Env:
+    - Key: AMDGPU_DRIVER_URI
+      Value: https://drivers.amd.com/drivers/linux/${AMDGPU_DRIVER_NAME}.tar.xz
+    Name: env
+  - CmdLine:
+    - set -x   && adduser --system --disabled-password --home /config miner   && dpkg
+      --add-architecture i386   && apt-get update   && apt-get install -qq --no-install-recommends
+      -y ca-certificates libhwloc5 libmicrohttpd12 libssl1.0.0 libuv1 wget xz-utils   &&
+      wget -q --show-progress --progress=bar:force:noscroll --referer https://support.amd.com
+      ${AMDGPU_DRIVER_URI}   && tar -xvf ${AMDGPU_DRIVER_NAME}.tar.xz   && SUDO_FORCE_REMOVE=yes
+      apt-get -y remove --purge wget xz-utils   && rm -f ${AMDGPU_DRIVER_NAME}.tar.xz   &&
+      chmod +x ./${AMDGPU_DRIVER_NAME}/amdgpu-pro-install   && ./${AMDGPU_DRIVER_NAME}/amdgpu-pro-install
+      -y --headless --opencl=pal,legacy   && rm -rf ${AMDGPU_DRIVER_NAME}   && rm
+      -rf /var/opt/amdgpu-pro-local   && apt-get -y autoremove   && apt-get clean
+      autoclean   && rm -rf /var/lib/{apt,dpkg,cache,log}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/xmr-stak/bin/*
+    - /usr/local/bin/
+  - Name: user
+    User: miner
+  - Name: workdir
+    Path: /config
+  - Name: volume
+    Volumes:
+    - /config
+  - CmdLine:
+    - /usr/local/bin/xmr-stak
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nvidia/cuda:${CUDA_VERSION}-${RUN_FLAVOUR}-${DISTRO_NAME}${DISTRO_VERSION}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nvidia/cuda:${CUDA_VERSION}-${RUN_FLAVOUR}-${DISTRO_NAME}${DISTRO_VERSION}

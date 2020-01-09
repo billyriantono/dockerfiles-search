@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: debian:10.2-slim
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"kalaksi@users.noreply.github.com"'
+    Name: label
+  - Env:
+    - Key: RUN_DAEMON
+      Value: "0"
+    Name: env
+  - Env:
+    - Key: SHATAGD_OPTIONS
+      Value: '"-rv"'
+    Name: env
+  - Env:
+    - Key: SHATAG_OPTIONS
+      Value: '"-qtsr"'
+    Name: env
+  From:
+    Image: debian:10.2-slim
+  Name: base
+  Platform: ""
+  SourceCode: FROM debian:10.2-slim AS base
+- As: builder
+  BaseName: base
+  Commands:
+  - Key: SOURCE_REVISION
+    Name: arg
+    Value: '"213"'
+  - CmdLine:
+    - apt update && DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends       build-essential       libyaml-dev       mercurial       python3-dev       python3-pip       python3-pyinotify       python3-setuptools       python3-venv
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opt &&     hg clone https://bitbucket.org/maugier/shatag -r "$SOURCE_REVISION"
+      &&     cd shatag &&     python3 -m venv venv --system-site-packages &&     ./venv/bin/python
+      setup.py install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base AS builder
+- BaseName: base
+  Commands:
+  - Key: SHATAG_LOCALE
+    Name: arg
+    Value: '"en_US.UTF-8 UTF-8"'
+  - CmdLine:
+    - apt update && DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends       locales       python3-pyinotify       python3-setuptools
+      &&     apt-get clean &&     rm -rf /var/lib/apt/lists
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "$SHATAG_LOCALE" > /etc/locale.gen &&     locale-gen &&     update-locale
+      LC_ALL=$(echo "$SHATAG_LOCALE" | sed 's/\s.*//')
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/
+    - /opt/
+  - Name: user
+    User: 1000:1000
+  - CmdLine:
+    - set -eu;     set -a; . /etc/default/locale; set +a;     if [ "$RUN_DAEMON" =
+      "1" ] || [ "$RUN_DAEMON" = "yes" ] || [ "${SHATAG_RUN_DAEMON:-0}" != "0" ];
+      then         exec /opt/shatag/venv/bin/shatagd $SHATAGD_OPTIONS /data;     else         exec
+      /opt/shatag/venv/bin/shatag $SHATAG_OPTIONS /data;     fi
+    Name: cmd
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

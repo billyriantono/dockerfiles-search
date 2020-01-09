@@ -1,0 +1,176 @@
+MetaArgs: null
+Stages:
+- As: vault
+  BaseName: alpine:3.10
+  Commands:
+  - Env:
+    - Key: VAULT_VERSION
+      Value: '"v2.12.0"'
+    Name: env
+  - Env:
+    - Key: URL
+      Value: '"https://github.com/dani-garcia/bw_web_builds/releases/download/$VAULT_VERSION/bw_web_$VAULT_VERSION.tar.gz"'
+    Name: env
+  - CmdLine:
+    - apk add --no-cache --upgrade     curl     tar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /web-vault
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /web-vault
+  - Name: shell
+    Shell:
+    - /bin/ash
+    - -eo
+    - pipefail
+    - -c
+  - CmdLine:
+    - curl -L $URL | tar xz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ls
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: vault
+  Platform: ""
+  SourceCode: FROM alpine:3.10 as vault
+- As: build
+  BaseName: rust:1.36
+  Commands:
+  - Key: DB
+    Name: arg
+    Value: mysql
+  - CmdLine:
+    - apt-get update && apt-get install -y     --no-install-recommends     libmariadb-dev     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - USER=root cargo new --bin app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./Cargo.*
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./rust-toolchain
+    - ./rust-toolchain
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./build.rs
+    - ./build.rs
+  - CmdLine:
+    - cargo build --features ${DB} --release
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find . -not -path "./target*" -delete
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - touch src/main.rs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cargo build --features ${DB} --release
+    Name: run
+    PrependShell: true
+  From:
+    Image: rust:1.36
+  Name: build
+  Platform: ""
+  SourceCode: FROM rust:1.36 as build
+- BaseName: debian:stretch-slim
+  Commands:
+  - Env:
+    - Key: ROCKET_ENV
+      Value: '"staging"'
+    Name: env
+  - Env:
+    - Key: ROCKET_PORT
+      Value: "80"
+    Name: env
+  - Env:
+    - Key: ROCKET_WORKERS
+      Value: "10"
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y     --no-install-recommends     openssl     ca-certificates     curl     libmariadbclient-dev     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /data
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: expose
+    Ports:
+    - "3012"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Rocket.toml
+    - .
+  - Chown: ""
+    From: vault
+    Name: copy
+    SourcesAndDest:
+    - /web-vault
+    - ./web-vault
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - app/target/release/bitwarden_rs
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/healthcheck.sh
+    - ./healthcheck.sh
+  - Health:
+      Interval: 10000000000
+      Test:
+      - CMD-SHELL
+      - sh healthcheck.sh || exit 1
+      Timeout: 1000000000
+    Name: healthcheck
+  - CmdLine:
+    - ./bitwarden_rs
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

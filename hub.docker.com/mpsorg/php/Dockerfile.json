@@ -1,0 +1,178 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "php:7.0-fpm",
+      "SourceCode": "FROM php:7.0-fpm AS builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "php:7.0-fpm"
+      },
+      "Commands": [
+        {
+          "Key": "ARTIFACT_DIR",
+          "Name": "arg",
+          "Value": "/artifacts"
+        },
+        {
+          "Key": "BUILD_DIR",
+          "Name": "arg",
+          "Value": "/build"
+        },
+        {
+          "CmdLine": [
+            "set -x \u0026\u0026     mkdir -p ${ARTIFACT_DIR} ${BUILD_DIR} \u0026\u0026     apt-get update"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Key": "AWS_ENV_VERSION",
+          "Name": "arg",
+          "Value": "f6b72b9a61602f60b161590516dac2226e0cf197"
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "https://github.com/Droplr/aws-env/raw/${AWS_ENV_VERSION}/bin/aws-env-linux-amd64",
+            "${ARTIFACT_DIR}/aws-env"
+          ]
+        },
+        {
+          "CmdLine": [
+            "chmod +x ${ARTIFACT_DIR}/aws-env"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Key": "DOCKERIZE_VERSION",
+          "Name": "arg",
+          "Value": "v0.6.1"
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "https://github.com/jwilder/dockerize/releases/download/${DOCKERIZE_VERSION}/dockerize-linux-amd64-${DOCKERIZE_VERSION}.tar.gz",
+            "${BUILD_DIR}/dockerize.tar.gz"
+          ]
+        },
+        {
+          "CmdLine": [
+            "tar -C ${ARTIFACT_DIR} -xzvf ${BUILD_DIR}/dockerize.tar.gz"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "https://getcomposer.org/installer",
+            "${BUILD_DIR}/composer-setup.php"
+          ]
+        },
+        {
+          "CmdLine": [
+            "set -x \u0026\u0026     EXPECTED_SIGNATURE=$(php -r \"echo file_get_contents('https://composer.github.io/installer.sig');\") \u0026\u0026     ACTUAL_SIGNATURE=$(php -r \"echo hash_file('SHA384', '${BUILD_DIR}/composer-setup.php');\") \u0026\u0026     if [ \"${EXPECTED_SIGNATURE}\" != \"${ACTUAL_SIGNATURE}\" ]; then         echo 'ERROR: Invalid installer signature' \u003e\u00262 \u0026\u0026         exit 1;     fi;         apt-get install -y --no-install-recommends git unzip  \u0026\u0026     php ${BUILD_DIR}/composer-setup.php         --quiet         --install-dir=${ARTIFACT_DIR}         --filename=composer"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "php:7.0-fpm",
+      "SourceCode": "FROM php:7.0-fpm",
+      "Platform": "",
+      "From": {
+        "Image": "php:7.0-fpm"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/artifacts",
+            "/usr/local/bin/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "bin",
+            "/usr/local/bin/"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "EXTRAS_PATH",
+              "Value": "/opt"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "templates",
+            "${EXTRAS_PATH}/templates/"
+          ]
+        },
+        {
+          "Key": "DEPS_BZ2",
+          "Name": "arg",
+          "Value": "\"libbz2-dev\""
+        },
+        {
+          "Key": "DEPS_COMPOSER",
+          "Name": "arg",
+          "Value": "\"git unzip\""
+        },
+        {
+          "Key": "DEPS_INTL",
+          "Name": "arg",
+          "Value": "\"g++ libicu-dev zlib1g-dev\""
+        },
+        {
+          "Key": "DEPS_MCRYPT",
+          "Name": "arg",
+          "Value": "\"libmcrypt-dev\""
+        },
+        {
+          "Key": "EXT_VER_APCU",
+          "Name": "arg",
+          "Value": "5.1.8"
+        },
+        {
+          "Key": "EXT_VER_XDEBUG",
+          "Name": "arg",
+          "Value": "2.5.0"
+        },
+        {
+          "Key": "EXTS_SRC",
+          "Name": "arg",
+          "Value": "\"bz2 intl mcrypt pdo_mysql\""
+        },
+        {
+          "CmdLine": [
+            "set -x \u0026\u0026     apt-get update \u0026\u0026         apt-get install -y --no-install-recommends         ${DEPS_BZ2}         ${DEPS_COMPOSER}         ${DEPS_INTL}         ${DEPS_MCRYPT}     \u0026\u0026         docker-php-ext-install -j$(nproc) ${EXTS_SRC} \u0026\u0026     docker-php-pecl-install apcu-${EXT_VER_APCU} \u0026\u0026     docker-php-pecl-install xdebug-${EXT_VER_XDEBUG} \u0026\u0026     docker-php-ext-enable apcu opcache \u0026\u0026         apt-get purge -y --auto-remove         -o APT::AutoRemove::RecommendsImportant=false         -o APT::AutoRemove::SuggestsImportant=false         g++     \u0026\u0026     rm -rf /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    }
+  ]
+}

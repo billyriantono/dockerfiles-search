@@ -1,0 +1,81 @@
+MetaArgs: null
+Stages:
+- As: rsbuild
+  BaseName: alpine:edge
+  Commands:
+  - CmdLine:
+    - apk update && apk add ca-certificates cargo gcc git rust && git clone https://github.com/LinkTed/doh-client
+      /doh-client
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /doh-client
+  - CmdLine:
+    - cargo build --release
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: rsbuild
+  Platform: ""
+  SourceCode: FROM alpine:edge as rsbuild
+- BaseName: alpine:latest
+  Commands:
+  - Env:
+    - Key: LISTEN_ADDR
+      Value: '"127.0.0.1:53"'
+    Name: env
+  - Env:
+    - Key: REMOTE_ADDR
+      Value: '"1.1.1.1:443"'
+    Name: env
+  - Env:
+    - Key: CACHE_SIZE
+      Value: "1024"
+    Name: env
+  - Env:
+    - Key: DOMAIN
+      Value: '"cloudflare-dns.com"'
+    Name: env
+  - Env:
+    - Key: LOCATION_PATH
+      Value: '"dns-query"'
+    Name: env
+  - Env:
+    - Key: TIMEOUT
+      Value: "2"
+    Name: env
+  - Env:
+    - Key: RETRIES
+      Value: "3"
+    Name: env
+  - Name: expose
+    Ports:
+    - 53/tcp
+    - 53/udp
+  - CmdLine:
+    - apk update && apk add ca-certificates-cacert libgcc libunwind
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: rsbuild
+    Name: copy
+    SourcesAndDest:
+    - /doh-client/target/release/doh-client
+    - /usr/local/bin/doh-client
+  - CmdLine:
+    - /bin/sh
+    - -c
+    - /usr/local/bin/doh-client /etc/ssl/cert.pem -c $CACHE_SIZE -d $DOMAIN -l $LISTEN_ADDR
+      -p $LOCATION_PATH -r $REMOTE_ADDR --retries $RETRIES -t $TIMEOUT
+    Name: cmd
+    PrependShell: false
+  - Labels:
+    - Key: maintainer
+      Value: '"Marco Kundt"'
+    Name: label
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

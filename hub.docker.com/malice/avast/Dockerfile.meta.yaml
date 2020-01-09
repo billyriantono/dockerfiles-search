@@ -1,0 +1,105 @@
+MetaArgs: null
+Stages:
+- As: go_builder
+  BaseName: golang:1.11
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/malice-plugins/avast
+  - Name: workdir
+    Path: /go/src/github.com/malice-plugins/avast
+  - CmdLine:
+    - go get -u github.com/golang/dep/cmd/dep && dep ensure
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -ldflags "-s -w -X main.Version=v$(cat VERSION) -X main.BuildTime=$(date
+      -u +%Y%m%d)" -o /bin/avscan
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11
+  Name: go_builder
+  Platform: ""
+  SourceCode: FROM golang:1.11 as go_builder
+- BaseName: ubuntu:xenial
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"https://github.com/blacktop"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.repository
+      Value: = "https://github.com/malice-plugins/avast.git"
+    Name: label
+  - Labels:
+    - Key: malice.plugin.category
+      Value: '"av"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.mime
+      Value: '"*"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.docker.engine
+      Value: '"*"'
+    Name: label
+  - CmdLine:
+    - groupadd -r malice   && useradd --no-log-init -r -g malice malice   && mkdir
+      /malware   && chown -R malice:malice /malware
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - license.avastlic
+    - /etc/avast/license.avastlic
+  - CmdLine:
+    - set -x   && echo "===> Install Avast..."   && echo 'deb http://deb.avast.com/lin/repo
+      debian release' >> /etc/apt/sources.list   && apt-key adv --fetch-keys http://files.avast.com/files/resellers/linux/avast.gpg   &&
+      apt-get update -q && apt-get install -y avast-fss   && chown avast:avast /etc/avast/license.avastlic   &&
+      download='DOWNLOAD="curl -L -s --connect-timeout 5 -f"'   && download_fix='DOWNLOAD="curl
+      -L -s -f"'   && sed -i "s|$download|$download_fix|g" /var/lib/avast/Setup/avast.setup   &&
+      echo "===> Clean up unnecessary files..."   && rm -rf /var/lib/apt/lists/* /tmp/*
+      /var/tmp/* /root/.gnupg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update -qq && apt-get install -yq --no-install-recommends ca-certificates   &&
+      rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - http://www.eicar.org/download/eicar.com.txt
+    - /malware/EICAR
+  - CmdLine:
+    - mkdir -p /opt/malice && echo "===> Update Avast..." && /var/lib/avast/Setup/avast.vpsupdate
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: go_builder
+    Name: copy
+    SourcesAndDest:
+    - /bin/avscan
+    - /bin/avscan
+  - Name: workdir
+    Path: /malware
+  - CmdLine:
+    - /bin/avscan
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:xenial
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:xenial

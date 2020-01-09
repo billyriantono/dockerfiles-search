@@ -1,0 +1,112 @@
+MetaArgs:
+- DefaultValue: v2.0
+  Key: FSLIMAGE_VERSION
+  ProvidedValue: null
+  Value: v2.0
+- DefaultValue: v1.5
+  Key: BIDSAPP_BUILDER_VERSION
+  ProvidedValue: null
+  Value: v1.5
+Stages:
+- As: builder
+  BaseName: cbinyu/bidsapp_builder:${BIDSAPP_BUILDER_VERSION}
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get upgrade -y && apt-get install -y     g++   && apt-get
+      clean -y && apt-get autoclean -y && apt-get autoremove -y
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PYDEFACE_VERSION
+      Value: 2.0.0
+    Name: env
+  - CmdLine:
+    - pip install pydeface==${PYDEFACE_VERSION} &&     sed -i -e "s/which('fsl')/which('flirt')/"
+      ${PYTHON_LIB_PATH}/site-packages/pydeface/utils.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -r ${PYTHON_LIB_PATH}/site-packages/scipy &&     find ${PYTHON_LIB_PATH}/site-packages/
+      -type d -name "tests"  -print0 | xargs -0 rm -r
+    Name: run
+    PrependShell: true
+  From:
+    Image: cbinyu/bidsapp_builder:${BIDSAPP_BUILDER_VERSION}
+  Name: builder
+  Platform: ""
+  SourceCode: FROM cbinyu/bidsapp_builder:${BIDSAPP_BUILDER_VERSION} as builder
+- As: fsl_builder
+  BaseName: cbinyu/fsl6-core:${FSLIMAGE_VERSION}
+  Commands: null
+  From:
+    Image: cbinyu/fsl6-core:${FSLIMAGE_VERSION}
+  Name: fsl_builder
+  Platform: ""
+  SourceCode: FROM cbinyu/fsl6-core:${FSLIMAGE_VERSION} as fsl_builder
+- As: application
+  BaseName: cbinyu/bidsapp_builder:${BIDSAPP_BUILDER_VERSION}
+  Commands:
+  - Env:
+    - Key: FSLDIR
+      Value: /usr/local/fsl/
+    - Key: FSLOUTPUTTYPE
+      Value: NIFTI_GZ
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: ${FSLDIR}/bin:$PATH
+    - Key: LD_LIBRARY_PATH
+      Value: ${FSLDIR}:${LD_LIBRARY_PATH}
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - ./${PYTHON_LIB_PATH}/site-packages/
+    - ${PYTHON_LIB_PATH}/site-packages/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - ./usr/local/bin/
+    - /usr/local/bin/
+  - Chown: ""
+    From: fsl_builder
+    Name: copy
+    SourcesAndDest:
+    - ./${FSLDIR}/bin/flirt
+    - ${FSLDIR}/bin/
+  - Chown: ""
+    From: fsl_builder
+    Name: copy
+    SourcesAndDest:
+    - ./${FSLDIR}/lib/libopenblas.so.0
+    - ./${FSLDIR}/lib/libgfortran.so.3
+    - ${FSLDIR}/lib/
+  - Chown: ""
+    From: fsl_builder
+    Name: copy
+    SourcesAndDest:
+    - ./usr/lib/x86_64-linux-gnu/libquadmath.so.0
+    - ./usr/lib/x86_64-linux-gnu/libquadmath.so.0.0.0
+    - /usr/lib/x86_64-linux-gnu/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.py
+    - version
+    - /
+  - CmdLine:
+    - chmod a+rx /run.py /version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /run.py
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: cbinyu/bidsapp_builder:${BIDSAPP_BUILDER_VERSION}
+  Name: application
+  Platform: ""
+  SourceCode: FROM cbinyu/bidsapp_builder:${BIDSAPP_BUILDER_VERSION} as Application

@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: node:8.15.1-alpine
+  Commands:
+  - Env:
+    - Key: Z2M_VERSION
+      Value: 9cc3740740b57f1e896139b5ffdb25be7576ad58
+    Name: env
+  - CmdLine:
+    - apk update && apk --no-cache add       gnutls       gnutls-dev       libusb       eudev     &&
+      apk --no-cache --virtual .build-deps add       coreutils       eudev-dev       build-base       git       python       bash       libusb-dev       linux-headers       wget       tar        openssl       make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /root     && wget http://old.openzwave.com/downloads/openzwave-1.4.1.tar.gz     &&
+      tar zxvf openzwave-*.gz     && cd openzwave-* && make && make install     &&
+      mkdir -p /dist/lib     && mv libopenzwave.so* /dist/lib/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/package.sh
+    - /root/package.sh
+  - CmdLine:
+    - npm config set unsafe-perm true && npm install -g pkg     && cd /root     &&
+      git clone https://github.com/OpenZWave/Zwave2Mqtt.git      && cd Zwave2Mqtt     &&
+      git checkout ${Z2M_VERSION}     && npm install     && npm run build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /root     && chmod +x package.sh && ./package.sh     && mkdir -p /dist/pkg     &&
+      mv /root/Zwave2Mqtt/pkg/* /dist/pkg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /root     && git clone https://github.com/OpenZWave/open-zwave.git     &&
+      cd open-zwave     && mkdir -p /dist/db     && mv config/* /dist/db
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -R /root/* && apk del .build-deps
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8.15.1-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM node:8.15.1-alpine AS build
+- BaseName: alpine:latest
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"robertsLando"'
+    Name: label
+  - CmdLine:
+    - apk update && apk add --no-cache     libstdc++      libgcc     libusb     eudev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /dist/lib/
+    - /lib/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /dist/db/
+    - /usr/local/etc/openzwave/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /dist/pkg
+    - /usr/src/app
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: /lib
+    Name: env
+  - Name: workdir
+    Path: /usr/src/app
+  - Name: expose
+    Ports:
+    - "8091"
+  - CmdLine:
+    - /usr/src/app/zwave2mqtt
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

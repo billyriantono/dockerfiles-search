@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- As: prep
+  BaseName: ubuntu:18.04
+  Commands:
+  - Labels:
+    - Key: MAINTAINER
+      Value: '"leopere [at] nixc [dot] us"'
+    Name: label
+  - CmdLine:
+    - apt-get update &&   apt-get -y install unzip curl busybox-static &&   apt-get
+      autoclean -y &&   rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -o
+    - pipefail
+    - -c
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./stuff/start.sh
+    - start
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./stuff/healthcheck.sh
+    - healthcheck
+  - CmdLine:
+    - curl --progress-bar -L -o /chainquery https://build.lbry.io/chainquery/branch-master/chainquery
+      &&     chmod +x /chainquery /start /healthcheck
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: prep
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as prep
+- As: app
+  BaseName: ubuntu:18.04
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://raw.githubusercontent.com/lbryio/chainquery/master/config/default/chainqueryconfig.toml
+    - /etc/lbry/chainqueryconfig.toml.orig
+  - CmdLine:
+    - adduser chainquery --gecos GECOS --shell /bin/bash --disabled-password --home
+      /home/chainquery &&   chown -R chainquery:chainquery /etc/lbry
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: prep
+    Name: copy
+    SourcesAndDest:
+    - ./healthcheck
+    - /chainquery
+    - /start
+    - /bin/busybox
+    - /usr/bin/
+  - Health:
+      Interval: 60000000000
+      Test:
+      - CMD-SHELL
+      - healthcheck
+      Timeout: 30000000000
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - "6300"
+  - Name: user
+    User: chainquery
+  - Name: stopsignal
+    Signal: SIGINT
+  - CmdLine:
+    - start
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: app
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as app

@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- BaseName: phusion/baseimage:0.9.19
+  Commands:
+  - Maintainer: AiiDA Team <info@aiida.net>
+    Name: maintainer
+  - CmdLine:
+    - /sbin/my_init
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - apt-get update     && apt-get install -y     torque-scheduler     torque-server     torque-mom     torque-client     &&
+      rm -rf /var/lib/apt/lists/*     && apt-get clean all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -f /etc/service/sshd/down &&     echo "UsePAM yes" >> /etc/ssh/sshd_config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /etc/my_init.d
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./scripts/setup-hostnames.sh
+    - /etc/my_init.d/01_setup-hostnames.sh
+  - Env:
+    - Key: HOSTNAME
+      Value: torquessh
+    Name: env
+  - CmdLine:
+    - echo "$HOSTNAME" > /etc/torque/server_name &&     echo '$pbsserver '"$HOSTNAME"
+      > /var/spool/torque/mom_priv/config &&     echo "$HOSTNAME np=1" > /var/spool/torque/server_priv/nodes
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /etc/my_init.d/01_setup-hostnames.sh &&     /etc/init.d/torque-server start
+      &&     /etc/init.d/torque-mom start &&     /etc/init.d/torque-scheduler start
+      &&     echo "Waiting 5 seconds to make sure the service starts..." &&     sleep
+      5 &&     qmgr -c "create queue batch queue_type=execution" &&     qmgr -c "set
+      server query_other_jobs = True" &&     qmgr -c "set queue batch resources_max.ncpus=1"
+      &&     qmgr -c "set server default_queue=batch" &&     echo "* Torque queue
+      set" &&     qmgr -c "set queue batch enabled=True" &&     qmgr -c "set queue
+      batch started=True" &&     echo "* Torque queue started" &&     qmgr -c "set
+      queue batch resources_default.nodes=1" &&     qmgr -c "set queue batch resources_default.walltime=3600"
+      &&     qmgr -c "set queue batch max_running=1" &&     echo "* Torque queue parameters
+      set" &&     qmgr -c "set server scheduling=True" &&     echo "* Torque scheduling
+      started" &&     qmgr -c "unset server acl_hosts" &&     qmgr -c "set server
+      acl_hosts=$HOSTNAME" &&     echo "* Torque server ACL hosts set"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /scratch
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "22"
+  - CmdLine:
+    - useradd --create-home --home /home/app       --shell /bin/bash app &&     usermod
+      -L app &&     chown app:app /scratch &&     mkdir /home/app/.ssh &&     touch
+      /home/app/.ssh/authorized_keys &&     chown -R app:app /home/app/.ssh &&     chmod
+      -R go= /home/app/.ssh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./scripts/init_authorized_keys.sh
+    - /etc/my_init.d/init_authorized_keys.sh
+  - Name: workdir
+    Path: /root
+  - CmdLine:
+    - mkdir -p /etc/service/torque_server &&     mkdir -p /etc/service/torque_mom_scheduler
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./scripts/torque_server_run.sh
+    - /etc/service/torque_server/run
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./scripts/torque_mom_scheduler_run.sh
+    - /etc/service/torque_mom_scheduler/run
+  From:
+    Image: phusion/baseimage:0.9.19
+  Name: ""
+  Platform: ""
+  SourceCode: FROM phusion/baseimage:0.9.19

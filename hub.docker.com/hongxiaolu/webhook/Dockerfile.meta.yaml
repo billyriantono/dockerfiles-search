@@ -1,0 +1,75 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:alpine3.8
+  Commands:
+  - Name: workdir
+    Path: /go/src/github.com/adnanh/webhook
+  - Env:
+    - Key: WEBHOOK_VERSION
+      Value: 2.6.9
+    Name: env
+  - CmdLine:
+    - apk add --update -t build-deps curl libc-dev gcc libgcc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L --silent -o webhook.tar.gz https://github.com/adnanh/webhook/archive/${WEBHOOK_VERSION}.tar.gz     &&  tar
+      -xzf webhook.tar.gz --strip 1     &&  go get -d     &&  go build -o /usr/local/bin/webhook     &&  apk
+      del --purge build-deps     &&  rm -rf /var/cache/apk/*     &&  rm -rf /go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine3.8
+  Name: build
+  Platform: ""
+  SourceCode: FROM    golang:alpine3.8 AS build
+- BaseName: alpine:3.8
+  Commands:
+  - Env:
+    - Key: DUMB_VERSION
+      Value: 1.2.2
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/webhook
+    - /usr/local/bin/webhook
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - monitoring.sh
+    - webhooks.sh
+    - /
+  - CmdLine:
+    - apk add --no-cache curl wget vim bash jq inotify-tools net-tools tzdata     &&  chmod
+      +x /start.sh /monitoring.sh /webhooks.sh     &&  mkdir -p /etc/webhook/source     &&  touch
+      /etc/webhook/hooks.json     &&  cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime     &&  apk
+      del tzdata     &&  rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L --silent -o /usr/local/bin/kubectl https://www.cnrancher.com/download/kubectl/kubectl_amd64-linux     &&  chmod
+      +x /usr/local/bin/kubectl
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /etc/webhook
+  - Name: workdir
+    Path: /etc/webhook
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - /start.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM    alpine:3.8

@@ -1,0 +1,94 @@
+MetaArgs:
+- DefaultValue: "3.10"
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: "3.10"
+- DefaultValue: 1.13.0
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: 1.13.0
+Stages:
+- As: build
+  BaseName: golang:${GO_VERSION}-alpine${ALPINE_VERSION}
+  Commands:
+  - Key: DOCKERCLI_VERSION
+    Name: arg
+    Value: 19.03.1
+  - Key: DOCKERCLI_CHANNEL
+    Name: arg
+    Value: stable
+  - Key: BUILDTIME
+    Name: arg
+    Value: null
+  - Key: COMMIT
+    Name: arg
+    Value: null
+  - Key: TAG
+    Name: arg
+    Value: null
+  - Key: GOPROXY
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk add --no-cache   bash   make   git   curl   util-linux   coreutils   build-base
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -Ls https://download.docker.com/linux/static/${DOCKERCLI_CHANNEL}/x86_64/docker-${DOCKERCLI_VERSION}.tgz
+      | tar -xz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/docker/cnab-to-oci
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - make BUILDTIME=$BUILDTIME COMMIT=$COMMIT TAG=$TAG bin/cnab-to-oci &&  make BUILDTIME=$BUILDTIME
+      COMMIT=$COMMIT TAG=$TAG build-e2e-test
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:${GO_VERSION}-alpine${ALPINE_VERSION}
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:${GO_VERSION}-alpine${ALPINE_VERSION} as build
+- As: e2e
+  BaseName: alpine:${ALPINE_VERSION}
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/docker/docker
+    - /usr/bin/docker
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/docker/cnab-to-oci/bin/cnab-to-oci
+    - /usr/bin/cnab-to-oci
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/docker/cnab-to-oci/e2e
+    - /e2e
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/docker/cnab-to-oci/e2e.test
+    - /e2e/e2e.test
+  - CmdLine:
+    - e2e/run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:${ALPINE_VERSION}
+  Name: e2e
+  Platform: ""
+  SourceCode: FROM alpine:${ALPINE_VERSION} as e2e

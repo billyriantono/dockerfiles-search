@@ -1,0 +1,144 @@
+MetaArgs: null
+Stages:
+- BaseName: krallin/ubuntu-tini:bionic
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Name: user
+    User: root
+  - CmdLine:
+    - apt-get update && apt-get install --no-install-recommends -y software-properties-common
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install --no-install-recommends -q -y     bzip2     ffmpeg     git     nginx     postgresql     postgresql-client     python-pip     python-setuptools     python3     python3-pip     python3-setuptools     python3-venv     python3-wheel     redis-server
+      &&     apt-get clean &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s/bind .*/bind 127.0.0.1/g" /etc/redis/redis.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/zou /var/log/zou /opt/zou/previews
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b 0.11.8-build --single-branch --depth 1 https://github.com/cgwire/kitsu.git
+      /opt/zou/kitsu
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/zou/zou
+  - CmdLine:
+    - python3 -m venv /opt/zou/env &&     /opt/zou/env/bin/pip install --upgrade pip
+      setuptools wheel &&     /opt/zou/env/bin/pip install zou==0.11.15 &&     rm
+      -rf /root/.cache/pip/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/zou
+  - Name: user
+    User: postgres
+  - CmdLine:
+    - service postgresql start &&     createuser root && createdb -T template0 -E
+      UTF8 --owner root root &&     createdb -T template0 -E UTF8 --owner root zoudb
+      &&     service postgresql stop
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pg_ctl.conf
+    - /etc/postgresql/10/main/pg_ctl.conf
+  - CmdLine:
+    - chmod 0644 /etc/postgresql/10/main/pg_ctl.conf && chown postgres:postgres /etc/postgresql/10/main/pg_ctl.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./gunicorn
+    - /etc/zou/gunicorn.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./gunicorn-events
+    - /etc/zou/gunicorn-events.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./nginx.conf
+    - /etc/nginx/sites-available/zou
+  - CmdLine:
+    - ln -s /etc/nginx/sites-available/zou /etc/nginx/sites-enabled/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /etc/nginx/sites-enabled/default
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install supervisor
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/supervisord.conf
+  - Env:
+    - Key: DB_USERNAME
+      Value: root
+    - Key: DB_HOST
+      Value: ""
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./init_zou.sh
+    - /opt/zou/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./start_zou.sh
+    - /opt/zou/
+  - CmdLine:
+    - chmod +x /opt/zou/init_zou.sh /opt/zou/start_zou.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo Initialising Zou... &&     /opt/zou/init_zou.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: volume
+    Volumes:
+    - /var/lib/postgresql
+    - /opt/zou/zou/previews
+  - CmdLine:
+    - /usr/local/bin/tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /opt/zou/start_zou.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: krallin/ubuntu-tini:bionic
+  Name: ""
+  Platform: ""
+  SourceCode: FROM krallin/ubuntu-tini:bionic

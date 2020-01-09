@@ -1,0 +1,78 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk --no-cache add git ca-certificates wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '[ -z "${VERSION}" ] && echo $(wget -q -O - https://api.github.com/repos/cozy/cozy-stack/releases/latest
+      | grep tag_name | grep -Eo "([0-9]\.)+[0-9]") > /VERSION'
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /cozy
+  - CmdLine:
+    - VERSION=$(cat /VERSION) &&     wget -q -O /cozy.tar.gz https://github.com/cozy/cozy-stack/archive/${VERSION}.tar.gz
+      &&     tar -xzf /cozy.tar.gz -C /tmp &&     mv /tmp/cozy-stack-${VERSION}/*
+      /cozy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -d .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - VERSION=$(cat /VERSION) && CGO_ENABLED=0 GOOS=linux     go build     -ldflags
+      "  -X github.com/cozy/cozy-stack/pkg/config.BuildMode=production                 -X
+      github.com/cozy/cozy-stack/pkg/config.Version=${VERSION}                 -s
+      "     -o cozy-stack -a .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine AS builder
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk --no-cache add ca-certificates imagemagick
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /cozy
+  - CmdLine:
+    - mkdir /cozy/storage /cozy/config
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /cozy/cozy-stack
+    - /cozy/cozy-stack
+  - CmdLine:
+    - ln -s /cozy/cozy-stack /bin/cozy-stack &&     chmod 750 /cozy/cozy-stack
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - root/
+    - /
+  - CmdLine:
+    - /run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

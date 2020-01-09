@@ -1,0 +1,125 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "frontend",
+      "BaseName": "node:lts-alpine",
+      "SourceCode": "FROM node:lts-alpine AS frontend",
+      "Platform": "",
+      "As": "frontend",
+      "From": {
+        "Image": "node:lts-alpine"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "./internal/webui/frontend",
+            "/app"
+          ]
+        },
+        {
+          "CmdLine": [
+            "npm install \u0026\u0026 npm run build"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "nightshift",
+      "BaseName": "docker.io/golang:1.12",
+      "SourceCode": "FROM docker.io/golang:1.12 AS nightshift",
+      "Platform": "",
+      "As": "nightshift",
+      "From": {
+        "Image": "docker.io/golang:1.12"
+      },
+      "Commands": [
+        {
+          "Key": "CODE",
+          "Name": "arg",
+          "Value": "github.com/joyrex2001/nightshift"
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            ".",
+            "/go/src/${CODE}/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "frontend",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/dist",
+            "/go/src/${CODE}/internal/webui/frontend/dist"
+          ]
+        },
+        {
+          "CmdLine": [
+            "cd /go/src/${CODE}  \u0026\u0026 go get -u github.com/jteeuwen/go-bindata/...  \u0026\u0026 go generate ./internal/...  \u0026\u0026 go test ./...  \u0026\u0026 CGO_ENABLED=0 go build -ldflags     \"-X github.com/joyrex2001/nightshift/internal/config.Date=`date -u +%Y%m%d-%H%M%S`      -X github.com/joyrex2001/nightshift/internal/config.Build=`git rev-list -1 HEAD`        -X github.com/joyrex2001/nightshift/internal/config.Version=`git describe --tags`\"     -o /app/nightshift"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "docker.io/busybox:latest",
+      "SourceCode": "FROM docker.io/busybox:latest",
+      "Platform": "",
+      "From": {
+        "Image": "docker.io/busybox:latest"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "nightshift",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app",
+            "/app"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "nightshift",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/share/zoneinfo",
+            "/usr/share/zoneinfo"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "CmdLine": [
+            "/app/nightshift"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "CmdLine": [
+            "--stderrthreshold",
+            "info"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

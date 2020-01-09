@@ -1,0 +1,236 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:14.04
+  Commands:
+  - Maintainer: jimlai Jim.Lai@qcttw.com.tw
+    Name: maintainer
+  - Env:
+    - Key: RABBIT_USER
+      Value: openstack
+    Name: env
+  - Env:
+    - Key: RABBIT_PASS
+      Value: "123"
+    Name: env
+  - Env:
+    - Key: MYSQL_PASS
+      Value: "123"
+    Name: env
+  - Env:
+    - Key: PASS
+      Value: "123"
+    Name: env
+  - Env:
+    - Key: HOSTNAME
+      Value: controller
+    Name: env
+  - Env:
+    - Key: ADMIN_TOKEN
+      Value: "123"
+    Name: env
+  - CmdLine:
+    - "apt-get update && apt-get install -y ubuntu-cloud-keyring keystone python-openstackclient
+      nano git curl && \techo \"deb http://ubuntu-cloud.archive.canonical.com/ubuntu
+      trusty-updates/kilo main\" >         /etc/apt/sources.list.d/cloudarchive-kilo.list
+      &&         curl \"https://bootstrap.pypa.io/get-pip.py\" -o \"/get-pip.py\"
+      && /usr/bin/python /get-pip.py"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y rabbitmq-server apache2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y libapache2-mod-wsgi memcached python-memcache
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y python-mysqldb python-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get -y dist-upgrade
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - service rabbitmq-server start && rabbitmqctl add_user $RABBIT_USER $RABBIT_PASS
+      && rabbitmqctl                        set_permissions $RABBIT_USER ".*" ".*"
+      ".*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - export DEBIAN_FRONTEND=noninteractive
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash -c "debconf-set-selections <<< 'mariadb-server-5.5 mysql-server/root_password
+      password $MYSQL_PASS'"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash -c "debconf-set-selections <<< 'mariadb-server-5.5 mysql-server/root_password_again
+      password $MYSQL_PASS'"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y install mariadb-server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "manual" > /etc/init/keystone.override
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /bin/sh && ln -s /bin/bash /bin/sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "CREATE DATABASE keystone; GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'localhost'                                 IDENTIFIED
+      BY '$PASS'; GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'%'                                 IDENTIFIED
+      BY '$PASS';" > /keystone.db
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - service mysql start && mysql -u root -p$MYSQL_PASS < /keystone.db
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed  -i "/admin_token/c\admin_token = $ADMIN_TOKEN" /etc/keystone/keystone.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed  -i "/connection = sqlite/c\connection = mysql://keystone:$PASS@$HOSTNAME/keystone"
+      /etc/keystone/keystone.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed  -i '/servers=localhost/c\servers = localhost:11211' /etc/keystone/keystone.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed  -i '/provider=/c\provider = keystone.token.providers.uuid.Provider' /etc/keystone/keystone.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed  -i '/driver=keystone.token/c\driver = keystone.token.persistence.backends.memcache.Token'
+      /etc/keystone/keystone.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed  -i '/driver=keystone.contrib.revoke/c\driver = keystone.contrib.revoke.backends.sql.Revoke'
+      /etc/keystone/keystone.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed  -i '/verbose=/c\verbose = true' /etc/keystone/keystone.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - nl=$'\n' && echo "[mysqld] $nl bind-address = $HOSTNAME $nl default-storage-engine
+      = innodb $nl  innodb_file_per_table $nl           collation-server = utf8_general_ci
+      $nl init-connect = 'SET NAMES utf8' $nl character-set-server = utf8"                 >
+      /etc/mysql/conf.d/mysqld_openstack.cnf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo $(head -1 /etc/hosts | cut -f1) $HOSTNAME >> /etc/hosts &&     service
+      mysql start &&     keystone-manage db_sync
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "ServerName $HOSTNAME" >> /etc/apache2/apache2.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - nl=$'\n' && echo " Listen 5000 $nl Listen 35357 $nl <VirtualHost *:5000> $nl     WSGIDaemonProcess
+      keystone-public processes=5 threads=1 user=keystone display-name=%{GROUP} $nl     WSGIProcessGroup
+      keystone-public $nl     WSGIScriptAlias / /var/www/cgi-bin/keystone/main $nl    WSGIApplicationGroup
+      %{GLOBAL} $nl    WSGIPassAuthorization On $nl    <IfVersion >= 2.4> $nl     </IfVersion>
+      $nl     LogLevel info $nl     ErrorLog /var/log/apache2/keystone-error.log $nl     CustomLog
+      /var/log/apache2/keystone-access.log combined $nl </VirtualHost> $nl $nl <VirtualHost
+      *:35357> $nl    WSGIDaemonProcess keystone-admin processes=5 threads=1 user=keystone
+      display-name=%{GROUP} $nl    WSGIProcessGroup keystone-admin $nl    WSGIScriptAlias
+      / /var/www/cgi-bin/keystone/admin $nl    WSGIApplicationGroup %{GLOBAL} $nl    WSGIPassAuthorization
+      On $nl     <IfVersion >= 2.4> $nl    </IfVersion> $nl    LogLevel info $nl    ErrorLog
+      /var/log/apache2/keystone-error.log $nl    CustomLog /var/log/apache2/keystone-access.log
+      combined $nl</VirtualHost> "  > /etc/apache2/sites-available/wsgi-keystone.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /etc/apache2/sites-available/wsgi-keystone.conf /etc/apache2/sites-enabled
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/www/cgi-bin/keystone
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl http://git.openstack.org/cgit/openstack/keystone/plain/httpd/keystone.py?h=stable/kilo   |
+      tee /var/www/cgi-bin/keystone/main /var/www/cgi-bin/keystone/admin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R keystone:keystone /var/www/cgi-bin/keystone
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 755 /var/www/cgi-bin/keystone/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "22"
+    - "3306"
+    - "35357"
+    - "5000"
+    - "80"
+  - CmdLine:
+    - echo $(head -1 /etc/hosts | cut -f1) $HOSTNAME >> /etc/hosts &&    service apache2
+      start &&    service mysql start &&    export OS_TOKEN=$PASS &&    export OS_URL=http://$HOSTNAME:35357/v2.0
+      &&    unset http_proxy &&    unset https_proxy &&    openstack service create
+      --description "OpenStack Identity" --name keystone identity &&    openstack
+      endpoint create   --publicurl http://controller:5000/v2.0   --internalurl http://controller:5000/v2.0   --adminurl
+      http://controller:35357/v2.0   --region RegionOne identity &&   openstack project
+      create --description "Admin Project" admin &&   openstack user create --password
+      $PASS admin &&   openstack role create admin &&   openstack role add --project
+      admin --user admin admin &&   openstack project create --description "Service
+      Project" service  &&   openstack project create --description "Demo Project"
+      demo &&   openstack user create --password $PASS demo &&   openstack role create
+      user &&   openstack role add --project demo --user demo user
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - nl=$'\n' && echo "export OS_PROJECT_DOMAIN_ID=default $nl export OS_USER_DOMAIN_ID=default
+      $nl export OS_PROJECT_NAME=admin  $nl export OS_TENANT_NAME=admin $nl export
+      OS_USERNAME=admin $nl export OS_PASSWORD=$PASS $nl  export OS_AUTH_URL=http://controller:35357/v3"
+      > /admin-openrc.sh && echo "export OS_PROJECT_DOMAIN_ID=default $nl export OS_USER_DOMAIN_ID=default
+      $nl export OS_PROJECT_NAME=demo $nl export OS_TENANT_NAME=demo $nl export OS_USERNAME=demo
+      $nl export OS_PASSWORD=$PASS $nl export OS_AUTH_URL=http://controller:5000/v3"
+      > /demo-openrc.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y openssh-server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ssh-keygen -A && mkdir /var/run/sshd && sed -i "/PermitRootLogin/c\PermitRootLogin
+      yes" /etc/ssh/sshd_config &&     echo root:$PASS | /usr/sbin/chpasswd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - nl=$'\n' && echo "#!/bin/bash $nl source admin-openrc.sh $nl unset http_proxy
+      $nl service mysql start $nl     service rabbitmq-server start & $nl service
+      apache2 start $nl /usr/sbin/sshd & $nl tail -f /dev/null" > /init && chmod +x
+      /init
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:14.04
+  Name: ""
+  Platform: ""
+  SourceCode: from ubuntu:14.04

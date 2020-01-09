@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache python3 make bash openssl ca-certificates gcc python3-dev
+      musl-dev curl &&     addgroup -g 1000 toaster &&     adduser -h /home/toaster
+      -u 1000 -G toaster -s /bin/bash -D toaster
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Makefile
+    - MANIFEST.in
+    - setup.py
+    - /home/toaster/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - toaster_aggregator
+    - /home/toaster/toaster_aggregator
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-production.ini
+    - /home/toaster/dist/
+  - CmdLine:
+    - chown -R toaster:toaster /home/toaster
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: toaster
+  - CmdLine:
+    - cd /home/toaster/ && make dist/toaster_aggregator
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - cd /home/toaster && curl --silent --remote-name https://raw.githubusercontent.com/WindRiver-OpenSourceLabs/license-report/master/generate_report.sh
+      &&     apk update && bash generate_report.sh --pip /home/toaster/.venv/bin/pip
+      > /home/toaster/report && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as builder
+- BaseName: alpine:3.9
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/toaster/report
+    - /license-report/report
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/toaster/generate_report.sh
+    - /license-report/generate_report.sh
+  - CmdLine:
+    - apk add --update python3 tini &&     cd /license-report &&     sh /license-report/generate_report.sh
+      -a report >> report &&     rm -rf /var/cache/apk/* &&     addgroup -g 1000 toaster
+      &&     adduser -h /home/toaster -u 1000 -G toaster -s /bin/ash -D toaster
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "6543"
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/toaster/dist/
+    - /usr/local/bin/
+  - Name: user
+    User: toaster
+  - CmdLine:
+    - /sbin/tini
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/local/bin/toaster_aggregator
+    - --paste
+    - /usr/local/bin/docker-production.ini
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

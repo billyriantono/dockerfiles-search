@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Env:
+    - Key: LEGO_VERSION
+      Value: 2.6.0
+    Name: env
+  - Name: workdir
+    Path: /go/src/github.com/go-acme/lego
+  - CmdLine:
+    - "apk --update add git gawk make && \tgit clone https://github.com/go-acme/lego.git
+      . && \tgit checkout tags/v${LEGO_VERSION} && \tmake generate-dns build"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- BaseName: tmacro/base:latest
+  Commands:
+  - Env:
+    - Key: LEGO_CHALLENGE
+      Value: dns
+    Name: env
+  - Env:
+    - Key: LEGO_DNS_PROVIDER
+      Value: cloudflare
+    Name: env
+  - Env:
+    - Key: LEGO_DNS_RESOLVER
+      Value: 8.8.8.8
+    Name: env
+  - Env:
+    - Key: LEGO_PATH
+      Value: /lego
+    Name: env
+  - Env:
+    - Key: LEGO_HOOKS_DIR
+      Value: $LEGO_PATH/hooks
+    Name: env
+  - Env:
+    - Key: LEGO_KEY_TYPE
+      Value: ec384
+    Name: env
+  - Env:
+    - Key: LEGO_RENEW_DAYS
+      Value: "30"
+    Name: env
+  - Env:
+    - Key: LEGO_ACME_HOST
+      Value: '"https://acme-v02.api.letsencrypt.org/directory"'
+    Name: env
+  - Env:
+    - Key: LEGO_ACME_STAGING_HOST
+      Value: '"https://acme-staging-v02.api.letsencrypt.org/directory"'
+    Name: env
+  - CmdLine:
+    - apk_add ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/go-acme/lego/dist/lego
+    - /usr/bin/lego
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./issue-certs
+    - ./lego-config
+    - ./wait-grep
+    - /usr/bin/
+  - CmdLine:
+    - "chmod +x /usr/bin/issue-certs /usr/bin/wait-grep && \tmkdir -p $LEGO_HOOKS_DIR"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./s6
+    - /etc
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - crontab
+    - /var/spool/cron/crontabs/root
+  From:
+    Image: tmacro/base:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tmacro/base:latest

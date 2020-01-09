@@ -1,0 +1,122 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12-stretch
+  Commands:
+  - Env:
+    - Key: PROTOC_VERSION
+      Value: 3.6.1
+    Name: env
+  - Env:
+    - Key: PROTOC_SHA256SUM
+      Value: 6003de742ea3fcf703cfec1cd4a3380fd143081a2eb0e559065563496af27807
+    Name: env
+  - CmdLine:
+    - apt-get update  && apt-get install -y unzip libpcap-dev  && curl -L -o /tmp/protoc-${PROTOC_VERSION}-linux-x86_64.zip
+      https://github.com/google/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip  &&
+      echo "$PROTOC_SHA256SUM  /tmp/protoc-${PROTOC_VERSION}-linux-x86_64.zip" | sha256sum
+      -c -  && unzip /tmp/protoc-${PROTOC_VERSION}-linux-x86_64.zip -d /tmp/protoc3  &&
+      mv /tmp/protoc3/bin/* /usr/local/bin/  && mv /tmp/protoc3/include/* /usr/local/include/  &&
+      go get -v github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway  &&
+      go get -v github.com/golang/protobuf/protoc-gen-go
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/opencord/voltha-bbsim
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Env:
+    - Key: GOPROXY
+      Value: https://proxy.golang.org
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - go.sum
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Makefile
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - VERSION
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - api/
+    - ./api
+  - CmdLine:
+    - make bbsimapi
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - CmdLine:
+    - make bbsim
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12-stretch
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12-stretch as builder
+- BaseName: golang:1.12-stretch
+  Commands:
+  - CmdLine:
+    - apt-get update  && apt-get install -y libpcap-dev isc-dhcp-server network-manager
+      && ln -s /usr/lib/libpcap.so.1.8.1 /usr/lib/libpcap.so.0.8
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/isc-dhcp-server
+    - /etc/default/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/dhcpd.conf
+    - /etc/dhcp/
+  - CmdLine:
+    - mv /usr/sbin/dhcpd /usr/local/bin/ && mv /sbin/dhclient /usr/local/bin/ && touch
+      /var/lib/dhcp/dhcpd.leases
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/opencord/voltha-bbsim/bbsim
+    - /app/bbsim
+  - CmdLine:
+    - '[ ''/app/bbsim'' ]'
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: golang:1.12-stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM golang:1.12-stretch

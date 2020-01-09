@@ -1,0 +1,150 @@
+MetaArgs: null
+Stages:
+- BaseName: minimum2scp/baseimage-jessie:latest
+  Commands:
+  - Maintainer: YAMADA Tsuyoshi <tyamada@minimum2scp.org>
+    Name: maintainer
+  - Key: NGINX_VERSION
+    Name: arg
+    Value: 1.11.4
+  - Key: NGX_MRUBY_VERSION
+    Name: arg
+    Value: v1.18.6
+  - Key: DEB_BASE_REVISION
+    Name: arg
+    Value: 1~jessie
+  - Key: DEB_NGINX_MODULE_MRUBY_VERSION
+    Name: arg
+    Value: ${NGINX_VERSION}-${NGX_MRUBY_VERSION}
+  - CmdLine:
+    - sed -i -e 's/httpredir.debian.org/ftp.jp.debian.org/' /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl http://nginx.org/keys/nginx_signing.key | apt-key add -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "deb     http://nginx.org/packages/mainline/debian/ jessie nginx"  > /etc/apt/sources.list.d/nginx.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "deb-src http://nginx.org/packages/mainline/debian/ jessie nginx" >> /etc/apt/sources.list.d/nginx.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y --no-install-recommends fakeroot devscripts git patch ruby
+      rake bison
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get build-dep -y nginx=${NGINX_VERSION}-${DEB_BASE_REVISION}
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: debian
+  - CmdLine:
+    - mkdir /home/debian/build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/debian/build
+  - CmdLine:
+    - apt-get source nginx=${NGINX_VERSION}-${DEB_BASE_REVISION}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/debian/build/nginx-${NGINX_VERSION}
+  - CmdLine:
+    - git clone https://github.com/matsumoto-r/ngx_mruby.git debian/extra/ngx_mruby/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd debian/extra/ngx_mruby && git checkout ${NGX_MRUBY_VERSION}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - rules.diff
+    - /tmp/rules.diff
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - control.diff
+    - /tmp/control.diff
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - nginx-module-mruby.install
+    - /home/debian/build/nginx-${NGINX_VERSION}/debian/nginx-module-mruby.install
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - nginx-module-mruby.preinst
+    - /home/debian/build/nginx-${NGINX_VERSION}/debian/nginx-module-mruby.preinst
+  - CmdLine:
+    - echo "${DEB_NGINX_MODULE_MRUBY_VERSION}" > /home/debian/build/nginx-${NGINX_VERSION}/debian/nginx-module-mruby.version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - patch -p1 < /tmp/rules.diff
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - patch -p1 < /tmp/control.diff
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - debchange --local '+local' 'Added mruby dynamic modules subpackage'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - debuild -rfakeroot -uc -us
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - Name: workdir
+    Path: /home/debian/build
+  - CmdLine:
+    - dpkg -i nginx_${NGINX_VERSION}-${DEB_BASE_REVISION}+local1_amd64.deb nginx-module-mruby_${DEB_NGINX_MODULE_MRUBY_VERSION}~`lsb_release
+      -cs`_amd64.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -f -y --no-install-recommends
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - nginx-conf.diff
+    - /tmp/nginx-conf.diff
+  - CmdLine:
+    - cd /etc; patch -p1 < /tmp/nginx-conf.diff && rm /tmp/nginx-conf.diff
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - Name: expose
+    Ports:
+    - "22"
+    - "80"
+  - CmdLine:
+    - /opt/init-wrapper/sbin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /sbin/init
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: minimum2scp/baseimage-jessie:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM minimum2scp/baseimage-jessie:latest

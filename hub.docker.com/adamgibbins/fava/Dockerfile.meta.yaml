@@ -1,0 +1,134 @@
+MetaArgs: null
+Stages:
+- As: build_env
+  BaseName: python:3.7.5-alpine3.9
+  Commands:
+  - Env:
+    - Key: FINGERPRINT
+      Value: '"sha256:32:12:90:9a:70:64:82:1c:5b:52:cc:c3:0a:d0:79:db:e1:a8:62:1b:9a:9a:4c:f4:72:40:1c:a7:3a:d3:0a:8c"'
+    Name: env
+  - Env:
+    - Key: BUILDDEPS
+      Value: '"libxml2-dev libxslt-dev gcc musl-dev mercurial git npm make g++"'
+    Name: env
+  - Env:
+    - Key: PV
+      Value: '"3.7"'
+    Name: env
+  - Name: workdir
+    Path: /root
+  - CmdLine:
+    - apk add --no-cache ${BUILDDEPS}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - hg clone --config hostsecurity.bitbucket.org:fingerprints=${FINGERPRINT} https://bitbucket.org/blais/beancount
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Beancount version:" && cd beancount && hg log -l1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/beancount/fava.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Fava version:" && cd fava && git log -1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Deleting symlink files as they will cause docker build error" && find
+      ./ -type l -delete -print
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Install Beancount..."
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python3 -mpip install ./beancount
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Install Fava..."
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -C fava
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -C fava mostlyclean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python3 -mpip install ./fava
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Strip .so files to reduce image size:"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /usr/local/lib/python${PV}/site-packages -name '*.so' -print0|xargs -0
+      strip -v
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Remove unused files to reduce image size:"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /usr/local/lib/python${PV} -name __pycache__ -exec rm -rf -v {} +
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /usr/local/lib/python${PV} -type f -name '*.exe' -delete
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.7.5-alpine3.9
+  Name: build_env
+  Platform: ""
+  SourceCode: FROM python:3.7.5-alpine3.9 as build_env
+- BaseName: python:3.7.5-alpine3.9
+  Commands:
+  - Env:
+    - Key: PV
+      Value: '"3.7"'
+    Name: env
+  - Env:
+    - Key: BEANCOUNT_INPUT_FILE
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: FAVA_OPTIONS
+      Value: '"-H 0.0.0.0"'
+    Name: env
+  - Chown: ""
+    From: build_env
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/python${PV}/site-packages
+    - /usr/local/lib/python${PV}/site-packages
+  - Chown: ""
+    From: build_env
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/fava
+    - /usr/local/bin
+  - Name: expose
+    Ports:
+    - "5000"
+  - CmdLine:
+    - sh
+    - -c
+    - fava $FAVA_OPTIONS $BEANCOUNT_INPUT_FILE
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3.7.5-alpine3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.7.5-alpine3.9

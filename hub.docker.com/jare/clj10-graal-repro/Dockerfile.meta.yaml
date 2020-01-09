@@ -1,0 +1,75 @@
+MetaArgs: null
+Stages:
+- As: clojure
+  BaseName: clojure:openjdk-11-lein
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - /usr/src/app/
+  - CmdLine:
+    - cd /usr/src/app && lein uberjar
+    Name: run
+    PrependShell: true
+  From:
+    Image: clojure:openjdk-11-lein
+  Name: clojure
+  Platform: ""
+  SourceCode: FROM clojure:openjdk-11-lein as clojure
+- As: graalvm
+  BaseName: ubuntu
+  Commands:
+  - Env:
+    - Key: GRAALVM_V
+      Value: 1.0.0-rc12
+    Name: env
+  - Name: workdir
+    Path: /tmp
+  - Chown: ""
+    From: clojure
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/target/uberjar/uber.jar
+    - ./
+  - CmdLine:
+    - apt-get update && apt-get install -y wget gcc libz-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget --quiet https://github.com/oracle/graal/releases/download/vm-${GRAALVM_V}/graalvm-ce-${GRAALVM_V}-linux-amd64.tar.gz     &&
+      tar -xzf graalvm-ce-${GRAALVM_V}-linux-amd64.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - graalvm-ce-${GRAALVM_V}/bin/native-image     --no-server     -H:+ReportUnsupportedElementsAtRuntime     -jar
+      /tmp/uber.jar
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu
+  Name: graalvm
+  Platform: ""
+  SourceCode: FROM ubuntu as graalvm
+- BaseName: ubuntu
+  Commands:
+  - Chown: ""
+    From: graalvm
+    Name: copy
+    SourcesAndDest:
+    - /tmp/uber
+    - /usr/local/bin
+  - CmdLine:
+    - chmod 775 /usr/local/bin/uber
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/uber
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu

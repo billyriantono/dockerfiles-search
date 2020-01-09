@@ -1,0 +1,114 @@
+MetaArgs: null
+Stages:
+- As: client
+  BaseName: node:10.15-alpine
+  Commands:
+  - Env:
+    - Key: APPUSER
+      Value: appuser
+    - Key: APPGROUP
+      Value: appgroup
+    - Key: CLIENT_DIR
+      Value: /app
+    Name: env
+  - CmdLine:
+    - addgroup -S ${APPGROUP} &&   adduser -S ${APPUSER} -G ${APPGROUP} &&   mkdir
+      $CLIENT_DIR &&   chown ${APPUSER}:${APPGROUP} $CLIENT_DIR
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${APPUSER}
+  - Name: workdir
+    Path: $CLIENT_DIR
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client/package.json
+    - client/package-lock.json
+    - ./
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./client/
+    - ./
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.15-alpine
+  Name: client
+  Platform: ""
+  SourceCode: FROM node:10.15-alpine as client
+- As: server
+  BaseName: python:3.6-slim-stretch
+  Commands:
+  - CmdLine:
+    - apt-get update &&   apt-get install -y cmake g++ libglib2.0-0 libsm6 libxext6
+      libxrender-dev
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: APPUSER
+      Value: appuser
+    - Key: APPGROUP
+      Value: appgroup
+    - Key: SERVER_DIR
+      Value: /app
+    Name: env
+  - CmdLine:
+    - addgroup --system ${APPGROUP} &&   adduser --system --ingroup ${APPGROUP} ${APPUSER}
+      &&   mkdir $SERVER_DIR &&   chown ${APPUSER}:${APPGROUP} $SERVER_DIR
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${APPUSER}
+  - Name: workdir
+    Path: $SERVER_DIR
+  - Env:
+    - Key: FLASK_ENV
+      Value: production
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server/requirements.txt
+    - ./
+  - CmdLine:
+    - pip install --user -r ./requirements.txt --no-cache-dir
+    Name: run
+    PrependShell: true
+  - Chown: appuser:appgroup
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./server
+    - ./server
+  - Chown: ""
+    From: client
+    Name: copy
+    SourcesAndDest:
+    - /app/build
+    - ./client/build
+  - Name: workdir
+    Path: $SERVER_DIR/server
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - /usr/local/bin/python
+    - ./app.py
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: python:3.6-slim-stretch
+  Name: server
+  Platform: ""
+  SourceCode: FROM python:3.6-slim-stretch as server

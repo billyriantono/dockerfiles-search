@@ -1,0 +1,114 @@
+MetaArgs: null
+Stages:
+- As: node-build-env
+  BaseName: node:8-alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - gameboy-client/package.json
+    - gameboy-client/package-lock.json
+    - ./
+  - CmdLine:
+    - npm set progress=false && npm config set depth 0 && npm cache clean --force
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm i && mkdir /ng-app && cp -R ./node_modules ./ng-app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /ng-app
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - gameboy-client
+    - .
+  - CmdLine:
+    - npm run ng build -- --prod
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8-alpine
+  Name: node-build-env
+  Platform: ""
+  SourceCode: FROM node:8-alpine AS node-build-env
+- As: netcore-build-env
+  BaseName: microsoft/aspnetcore-build:1.0-2.0
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '**/*.csproj'
+    - ./
+  - CmdLine:
+    - dotnet restore Retro.Net.csproj
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dotnet restore GameBoy.Net.csproj
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dotnet restore Retro.Net.Api.csproj
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Retro.Net
+    - ./Retro.Net
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - GameBoy.Net
+    - ./GameBoy.Net
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Retro.Net.Api
+    - ./Retro.Net.Api
+  - Name: workdir
+    Path: /app/Retro.Net.Api
+  - CmdLine:
+    - dotnet publish -c Release -o ../out
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/aspnetcore-build:1.0-2.0
+  Name: netcore-build-env
+  Platform: ""
+  SourceCode: FROM microsoft/aspnetcore-build:1.0-2.0 AS netcore-build-env
+- BaseName: microsoft/aspnetcore:2.0
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: netcore-build-env
+    Name: copy
+    SourcesAndDest:
+    - /app/out
+    - .
+  - Chown: ""
+    From: node-build-env
+    Name: copy
+    SourcesAndDest:
+    - /ng-app/dist
+    - ./wwwroot
+  - CmdLine:
+    - dotnet
+    - Retro.Net.Api.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: microsoft/aspnetcore:2.0
+  Name: ""
+  Platform: ""
+  SourceCode: FROM microsoft/aspnetcore:2.0

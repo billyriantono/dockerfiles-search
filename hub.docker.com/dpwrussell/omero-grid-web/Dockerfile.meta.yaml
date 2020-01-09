@@ -1,0 +1,72 @@
+MetaArgs: null
+Stages:
+- BaseName: centos:centos7
+  Commands:
+  - Maintainer: ome-devel@lists.openmicroscopy.org.uk
+    Name: maintainer
+  - Key: OMERO_VERSION
+    Name: arg
+    Value: latest
+  - Key: CI_SERVER
+    Name: arg
+    Value: null
+  - Key: OMEGO_ARGS
+    Name: arg
+    Value: null
+  - Name: workdir
+    Path: /home/omero
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - omero-grid-web-deps.yml
+    - requirements.yml
+    - run.sh
+    - /home/omero/
+  - Env:
+    - Key: OMERO_REQUIREMENTS_FILE
+      Value: OMERO.server/share/web/requirements-py27.txt
+    Name: env
+  - CmdLine:
+    - yum -y install epel-release     && yum -y install ansible     && ansible-galaxy
+      install -r requirements.yml     && ansible-playbook omero-grid-web-deps.yml     &&
+      useradd omero     && pip install omego     && bash -c 'CI=; if [ -n "$CI_SERVER"
+      ]; then CI="--ci $CI_SERVER"; fi;                 omego download python $CI
+      --release $OMERO_VERSION $OMEGO_ARGS'     && rm OMERO.py-*.zip     && ln -s
+      OMERO.py-*/ OMERO.server     && rm /etc/nginx/conf.d/*     && sed -i -r -e 's|/var/([^/]+)(/nginx)?/|/home/omero/nginx/\1/|'            -e
+      '/^user/s/^/#/' /etc/nginx/nginx.conf     && rm -rf /var/cache/nginx /var/log/nginx     &&
+      mkdir -p nginx/cache nginx/log nginx/run nginx/temp OMERO.server/var     &&
+      ln -sf /home/omero/nginx/cache /var/cache/nginx     && ln -sf /home/omero/nginx/log
+      /var/log/nginx     && test -f $OMERO_REQUIREMENTS_FILE && pip install -r $OMERO_REQUIREMENTS_FILE     &&
+      chown omero:omero -R .
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: omero
+  - CmdLine:
+    - OMERO.server/bin/omero web config --http 8080 nginx > omero-web.conf
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - mv omero-web.conf /etc/nginx/conf.d/omero-web.conf     && chown root:root /etc/nginx/conf.d/omero-web.conf
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: omero
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: volume
+    Volumes:
+    - /home/omero/nginx
+    - /home/omero/OMERO.server/var
+  - CmdLine:
+    - /home/omero/run.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: centos:centos7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:centos7

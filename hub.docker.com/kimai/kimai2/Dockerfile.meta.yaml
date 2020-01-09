@@ -1,0 +1,385 @@
+MetaArgs:
+- DefaultValue: '"fpm-alpine"'
+  Key: BASE
+  ProvidedValue: null
+  Value: '"fpm-alpine"'
+Stages:
+- As: git-dev
+  BaseName: alpine:3.10
+  Commands:
+  - Key: KIMAI
+    Name: arg
+    Value: '"1.6"'
+  - CmdLine:
+    - apk add --no-cache git &&     git clone --depth 1 --branch ${KIMAI} https://github.com/kevinpapst/kimai2.git
+      /opt/kimai
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: git-dev
+  Platform: ""
+  SourceCode: FROM alpine:3.10 AS git-dev
+- As: git-prod
+  BaseName: git-dev
+  Commands:
+  - Name: workdir
+    Path: /opt/kimai
+  - CmdLine:
+    - rm -r tests
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: git-dev
+  Name: git-prod
+  Platform: ""
+  SourceCode: FROM git-dev AS git-prod
+- As: composer
+  BaseName: composer:1.9
+  Commands:
+  - CmdLine:
+    - mkdir /opt/kimai &&     composer require --working-dir=/opt/kimai hirak/prestissimo
+    Name: run
+    PrependShell: true
+  From:
+    Image: composer:1.9
+  Name: composer
+  Platform: ""
+  SourceCode: FROM composer:1.9 AS composer
+- As: fpm-alpine-php-ext-base
+  BaseName: php:7.3.10-fpm-alpine3.10
+  Commands:
+  - CmdLine:
+    - apk add --no-cache     autoconf     dpkg     dpkg-dev     file     g++     gcc     libatomic     libc-dev     libgomp     libmagic     m4     make     mpc1     mpfr3     musl-dev     perl     re2c     freetype-dev     libpng-dev     icu-dev     openldap-dev     libldap     libzip-dev
+    Name: run
+    PrependShell: true
+  From:
+    Image: php:7.3.10-fpm-alpine3.10
+  Name: fpm-alpine-php-ext-base
+  Platform: ""
+  SourceCode: FROM php:7.3.10-fpm-alpine3.10 AS fpm-alpine-php-ext-base
+- As: apache-debian-php-ext-base
+  BaseName: php:7.3.10-apache-buster
+  Commands:
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y         libldap2-dev         libicu-dev         libpng-dev         libzip-dev         libfreetype6-dev
+    Name: run
+    PrependShell: true
+  From:
+    Image: php:7.3.10-apache-buster
+  Name: apache-debian-php-ext-base
+  Platform: ""
+  SourceCode: FROM php:7.3.10-apache-buster AS apache-debian-php-ext-base
+- As: php-ext-gd
+  BaseName: ${BASE}-php-ext-base
+  Commands:
+  - CmdLine:
+    - docker-php-ext-configure gd         --with-freetype-dir &&     docker-php-ext-install
+      -j$(nproc) gd
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${BASE}-php-ext-base
+  Name: php-ext-gd
+  Platform: ""
+  SourceCode: FROM ${BASE}-php-ext-base AS php-ext-gd
+- As: php-ext-intl
+  BaseName: ${BASE}-php-ext-base
+  Commands:
+  - CmdLine:
+    - docker-php-ext-install -j$(nproc) intl
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${BASE}-php-ext-base
+  Name: php-ext-intl
+  Platform: ""
+  SourceCode: FROM ${BASE}-php-ext-base AS php-ext-intl
+- As: php-ext-ldap
+  BaseName: ${BASE}-php-ext-base
+  Commands:
+  - CmdLine:
+    - docker-php-ext-configure ldap &&     docker-php-ext-install -j$(nproc) ldap
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${BASE}-php-ext-base
+  Name: php-ext-ldap
+  Platform: ""
+  SourceCode: FROM ${BASE}-php-ext-base AS php-ext-ldap
+- As: php-ext-pdo_mysql
+  BaseName: ${BASE}-php-ext-base
+  Commands:
+  - CmdLine:
+    - docker-php-ext-install -j$(nproc) pdo_mysql
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${BASE}-php-ext-base
+  Name: php-ext-pdo_mysql
+  Platform: ""
+  SourceCode: FROM ${BASE}-php-ext-base AS php-ext-pdo_mysql
+- As: php-ext-zip
+  BaseName: ${BASE}-php-ext-base
+  Commands:
+  - CmdLine:
+    - docker-php-ext-install -j$(nproc) zip
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${BASE}-php-ext-base
+  Name: php-ext-zip
+  Platform: ""
+  SourceCode: FROM ${BASE}-php-ext-base AS php-ext-zip
+- As: fpm-alpine-base
+  BaseName: php:7.3.10-fpm-alpine3.10
+  Commands:
+  - CmdLine:
+    - apk add --no-cache         bash         freetype         haveged         icu         libldap         libpng         libzip
+      &&     touch /use_fpm
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9000"
+  From:
+    Image: php:7.3.10-fpm-alpine3.10
+  Name: fpm-alpine-base
+  Platform: ""
+  SourceCode: FROM php:7.3.10-fpm-alpine3.10 AS fpm-alpine-base
+- As: apache-debian-base
+  BaseName: php:7.3.10-apache-buster
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - 000-default.conf
+    - /etc/apache2/sites-available/000-default.conf
+  - CmdLine:
+    - apt-get update &&     apt-get install -y         bash         haveged         libicu63         libpng16-16         libzip4         libfreetype6
+      &&     echo "Listen 8001" > /etc/apache2/ports.conf &&     a2enmod rewrite &&     touch
+      /use_apache
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8001"
+  From:
+    Image: php:7.3.10-apache-buster
+  Name: apache-debian-base
+  Platform: ""
+  SourceCode: FROM php:7.3.10-apache-buster AS apache-debian-base
+- As: base
+  BaseName: ${BASE}-base
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"tobias@neontribe.co.uk"'
+    Name: label
+  - Labels:
+    - Key: maintainer
+      Value: '"bastian@schroll-software.de"'
+    Name: label
+  - Key: KIMAI
+    Name: arg
+    Value: '"1.6"'
+  - Env:
+    - Key: KIMAI
+      Value: ${KIMAI}
+    Name: env
+  - Key: TZ
+    Name: arg
+    Value: Europe/Berlin
+  - Env:
+    - Key: TZ
+      Value: ${TZ}
+    Name: env
+  - CmdLine:
+    - ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && echo ${TZ} > /etc/timezone
+      &&     mkdir /composer  &&     chown -R www-data:www-data /composer
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - startup.sh
+    - /startup.sh
+  - Chown: ""
+    From: composer
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/composer
+    - /usr/bin/composer
+  - Chown: www-data:www-data
+    From: composer
+    Name: copy
+    SourcesAndDest:
+    - /opt/kimai/vendor
+    - /opt/kimai/vendor
+  - Chown: ""
+    From: php-ext-pdo_mysql
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/etc/php/conf.d/docker-php-ext-pdo_mysql.ini
+    - /usr/local/etc/php/conf.d/docker-php-ext-pdo_mysql.ini
+  - Chown: ""
+    From: php-ext-pdo_mysql
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/php/extensions/no-debug-non-zts-20180731/pdo_mysql.so
+    - /usr/local/lib/php/extensions/no-debug-non-zts-20180731/pdo_mysql.so
+  - Chown: ""
+    From: php-ext-zip
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/etc/php/conf.d/docker-php-ext-zip.ini
+    - /usr/local/etc/php/conf.d/docker-php-ext-zip.ini
+  - Chown: ""
+    From: php-ext-zip
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/php/extensions/no-debug-non-zts-20180731/zip.so
+    - /usr/local/lib/php/extensions/no-debug-non-zts-20180731/zip.so
+  - Chown: ""
+    From: php-ext-ldap
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/etc/php/conf.d/docker-php-ext-ldap.ini
+    - /usr/local/etc/php/conf.d/docker-php-ext-ldap.ini
+  - Chown: ""
+    From: php-ext-ldap
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/php/extensions/no-debug-non-zts-20180731/ldap.so
+    - /usr/local/lib/php/extensions/no-debug-non-zts-20180731/ldap.so
+  - Chown: ""
+    From: php-ext-gd
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/etc/php/conf.d/docker-php-ext-gd.ini
+    - /usr/local/etc/php/conf.d/docker-php-ext-gd.ini
+  - Chown: ""
+    From: php-ext-gd
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/php/extensions/no-debug-non-zts-20180731/gd.so
+    - /usr/local/lib/php/extensions/no-debug-non-zts-20180731/gd.so
+  - Chown: ""
+    From: php-ext-intl
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/etc/php/conf.d/docker-php-ext-intl.ini
+    - /usr/local/etc/php/conf.d/docker-php-ext-intl.ini
+  - Chown: ""
+    From: php-ext-intl
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/php/extensions/no-debug-non-zts-20180731/intl.so
+    - /usr/local/lib/php/extensions/no-debug-non-zts-20180731/intl.so
+  - Env:
+    - Key: DATABASE_URL
+      Value: sqlite:///%kernel.project_dir%/var/data/kimai.sqlite
+    Name: env
+  - Env:
+    - Key: APP_SECRET
+      Value: change_this_to_something_unique
+    Name: env
+  - Env:
+    - Key: TRUSTED_PROXIES
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: TRUSTED_HOSTS
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: MAILER_FROM
+      Value: kimai@example.com
+    Name: env
+  - Env:
+    - Key: MAILER_URL
+      Value: null://localhost
+    Name: env
+  - Env:
+    - Key: ADMINPASS
+      Value: ""
+    Name: env
+  - Env:
+    - Key: ADMINMAIL
+      Value: ""
+    Name: env
+  - Name: volume
+    Volumes:
+    - /opt/kimai/var
+  - Name: workdir
+    Path: /opt/kimai
+  - CmdLine:
+    - /startup.sh
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: ${BASE}-base
+  Name: base
+  Platform: ""
+  SourceCode: FROM ${BASE}-base AS base
+- As: dev
+  BaseName: base
+  Commands:
+  - Chown: www-data:www-data
+    From: git-dev
+    Name: copy
+    SourcesAndDest:
+    - /opt/kimai
+    - /opt/kimai
+  - CmdLine:
+    - export COMPOSER_HOME=/composer &&     composer install --working-dir=/opt/kimai
+      --optimize-autoloader &&     composer clearcache &&     chown -R www-data:www-data
+      /opt/kimai
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - composer require --working-dir=/opt/kimai zendframework/zend-ldap
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: www-data
+  From:
+    Stage:
+      Index: 12
+      Named: base
+  Name: dev
+  Platform: ""
+  SourceCode: FROM base AS dev
+- As: prod
+  BaseName: base
+  Commands:
+  - Chown: www-data:www-data
+    From: git-prod
+    Name: copy
+    SourcesAndDest:
+    - /opt/kimai
+    - /opt/kimai
+  - CmdLine:
+    - export COMPOSER_HOME=/composer &&     composer install --working-dir=/opt/kimai
+      --no-dev --optimize-autoloader &&     composer require --working-dir=/opt/kimai
+      zendframework/zend-ldap &&     composer clearcache &&     chown -R www-data:www-data
+      /opt/kimai
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: www-data
+  From:
+    Stage:
+      Index: 12
+      Named: base
+  Name: prod
+  Platform: ""
+  SourceCode: FROM base AS prod

@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- As: golang
+  BaseName: golang:1.11-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache ca-certificates git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -d github.com/kubernetes-sigs/aws-iam-authenticator/cmd/aws-iam-authenticator
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd $GOPATH/src/github.com/kubernetes-sigs/aws-iam-authenticator &&     git checkout
+      981ecbeef8ead2720c42a62fc41d40ed6a145421 &&     go install ./cmd/aws-iam-authenticator
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/drone/drone
+  - Name: workdir
+    Path: /go/src/github.com/drone/drone
+  - CmdLine:
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /release/drone-server github.com/drone/drone/cmd/drone-server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /release/drone-agent github.com/drone/drone/cmd/drone-agent
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-alpine
+  Name: golang
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine as golang
+- BaseName: alpine:3.7
+  Commands:
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+    - "8000"
+    - "9000"
+  - Env:
+    - Key: DATABASE_DRIVER
+      Value: sqlite3
+    Name: env
+  - Env:
+    - Key: DATABASE_CONFIG
+      Value: /var/lib/drone/drone.sqlite
+    Name: env
+  - Env:
+    - Key: GODEBUG
+      Value: netdns=go
+    Name: env
+  - Env:
+    - Key: XDG_CACHE_HOME
+      Value: /var/lib/drone
+    Name: env
+  - Chown: ""
+    From: golang
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: golang
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/aws-iam-authenticator
+    - /bin
+  - Chown: ""
+    From: golang
+    Name: copy
+    SourcesAndDest:
+    - /release/drone-server
+    - /bin
+  - Chown: ""
+    From: golang
+    Name: copy
+    SourcesAndDest:
+    - /release/drone-agent
+    - /bin
+  - CmdLine:
+    - /bin/drone-server
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

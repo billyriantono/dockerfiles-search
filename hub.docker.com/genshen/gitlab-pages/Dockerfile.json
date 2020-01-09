@@ -1,0 +1,154 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "gitlab-pages-builder",
+      "BaseName": "golang:1.13.4-buster",
+      "SourceCode": "FROM golang:1.13.4-buster AS gitlab-pages-builder",
+      "Platform": "",
+      "As": "gitlab-pages-builder",
+      "From": {
+        "Image": "golang:1.13.4-buster"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "GITLAB_PAGES_INSTALL_DIR",
+              "Value": "\"/usr/local/gitlab-pages\""
+            },
+            {
+              "Key": "GITLAB_PAGES_VERSION_TAG",
+              "Value": "\"v1.11.0\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Key": "GITLAB_PAGES_BUILD_DIR",
+          "Name": "arg",
+          "Value": "\"/tmp/gitlab-pages-builder\""
+        },
+        {
+          "Key": "GITLAB_PAGES_DOWNLOAD_URL",
+          "Name": "arg",
+          "Value": "\"https://gitlab.com/gitlab-org/gitlab-pages.git\""
+        },
+        {
+          "CmdLine": [
+            "apt-get clean \u0026\u0026 apt-get update -y \u0026\u0026 DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y     git-core make"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "git clone -q -b ${GITLAB_PAGES_VERSION_TAG} --depth 1 ${GITLAB_PAGES_DOWNLOAD_URL} ${GITLAB_PAGES_BUILD_DIR}     \u0026\u0026 cd ${GITLAB_PAGES_BUILD_DIR}     \u0026\u0026 make all -j $(nproc)     \u0026\u0026 mkdir -p ${GITLAB_PAGES_INSTALL_DIR}     \u0026\u0026 cp -a ${GITLAB_PAGES_BUILD_DIR}/bin ${GITLAB_PAGES_INSTALL_DIR}     \u0026\u0026 cp -a ${GITLAB_PAGES_BUILD_DIR}/shared ${GITLAB_PAGES_INSTALL_DIR}     \u0026\u0026 rm -rf ${GITLAB_PAGES_BUILD_DIR}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "gitlab-pages",
+      "BaseName": "debian:buster-slim",
+      "SourceCode": "FROM debian:buster-slim AS gitlab-pages",
+      "Platform": "",
+      "As": "gitlab-pages",
+      "From": {
+        "Image": "debian:buster-slim"
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"genshenchu@gmail.com\""
+            },
+            {
+              "Key": "description",
+              "Value": "\"gitlab-pages images.\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Env": [
+            {
+              "Key": "GITLAB_PAGES_USER",
+              "Value": "\"git\""
+            },
+            {
+              "Key": "GITLAB_PAGES_HOME",
+              "Value": "\"/home/git/gitlab-pages\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "GITLAB_PAGES_DATA_DIR",
+              "Value": "\"${GITLAB_PAGES_HOME}/pages\""
+            },
+            {
+              "Key": "GITLAB_PAGES_CONF_FILE",
+              "Value": "\"${GITLAB_PAGES_HOME}/pages.conf\""
+            },
+            {
+              "Key": "GITLAB_PAGES_LOG",
+              "Value": "\"${GITLAB_PAGES_HOME}/gitlab-pages.log\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "apt-get clean \u0026\u0026 apt-get update -y \u0026\u0026 DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y     zip unzip     \u0026\u0026 adduser --disabled-login --gecos 'GitLab' ${GITLAB_PAGES_USER}     \u0026\u0026 passwd -d ${GITLAB_PAGES_USER}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "git:git",
+          "From": "gitlab-pages-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/gitlab-pages",
+            "${GITLAB_PAGES_HOME}/"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "4433/tcp",
+            "8080/tcp"
+          ]
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "${GITLAB_PAGES_DATA_DIR}"
+          ]
+        },
+        {
+          "Name": "user",
+          "User": "${GITLAB_PAGES_USER}"
+        },
+        {
+          "Name": "workdir",
+          "Path": "${GITLAB_PAGES_HOME}"
+        },
+        {
+          "CmdLine": [
+            "./bin/gitlab-pages",
+            "--help"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

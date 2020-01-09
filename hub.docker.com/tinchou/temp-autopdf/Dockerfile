@@ -1,0 +1,54 @@
+# -*- docker-image-name: "fiuba/autopdf" -*-
+
+# Queremos Pandoc 1.15 o posterior, y jq 1.5 o posterior.
+FROM ubuntu:16.04
+
+# Dependencias.
+RUN apt-get update && apt-get upgrade -y               && \
+    env DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        jq       \
+        curl     \
+        gawk     \
+        git      \
+        make     \
+        pandoc   \
+        lmodern  \
+        cabextract      \
+        python-flask    \
+        python-gevent   \
+        openssh-client  \
+        ca-certificates \
+        texlive-xetex   \
+        texlive-lang-spanish \
+        texlive-fonts-extra  \
+        texlive-fonts-recommended && \
+
+    curl -Lo /tmp/ppv.exe    \
+        https://download.microsoft.com/download/E/6/7/E675FFFC-2A6D-4AB0-B3EB-27C9F8C8F696/PowerPointViewer.exe && \
+
+    echo 'ab48a8ebac88219c84f293c6c1e81f1a0f420da6 /tmp/ppv.exe' \
+        | sha1sum -c --status                                 && \
+
+    cabextract -s -F ppviewer.cab -d /tmp /tmp/ppv.exe        && \
+
+    cabextract -s -L -F 'CONSOLA*.TTF'                           \
+        -d /usr/share/fonts/truetype/vista /tmp/ppviewer.cab  && \
+
+    fc-cache -f /usr/share/fonts/truetype/vista && rm -f /tmp/ppv*
+
+# Skicka
+ENV GOLANG_VERSION 1.6.2
+ENV GOLANG_DOWNLOAD_URL https://golang.org/dl/go$GOLANG_VERSION.linux-amd64.tar.gz
+ENV GOLANG_DOWNLOAD_SHA256 e40c36ae71756198478624ed1bb4ce17597b3c19d243f3f0899bb5740d56212a
+RUN curl -fsSL "$GOLANG_DOWNLOAD_URL" -o golang.tar.gz \
+    && echo "$GOLANG_DOWNLOAD_SHA256  golang.tar.gz" | sha256sum -c - \
+    && tar -C /usr/local -xzf golang.tar.gz \
+    && GOPATH=/go /usr/local/go/bin/go get github.com/google/skicka \
+    && cp /go/bin/skicka /usr/local/bin/skicka \
+    && rm golang.tar.gz \
+    && rm -r /usr/local/go \
+    && rm -r /go
+
+WORKDIR /autopdf
+
+CMD make -k -C . --no-print-directory

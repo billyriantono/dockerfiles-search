@@ -1,0 +1,132 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8-jdk
+  Commands:
+  - CmdLine:
+    - echo 'APT::Get::Assume-Yes "true";' > /etc/apt/apt.conf.d/90circleci   && echo
+      'DPkg::Options "--force-confnew";' >> /etc/apt/apt.conf.d/90circleci
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update   && mkdir -p /usr/share/man/man1   && apt-get install -y     git
+      mercurial xvfb     locales sudo openssh-client ca-certificates tar gzip parallel     net-tools
+      netcat unzip zip bzip2 gnupg curl wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - locale-gen C.UTF-8 || true
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - CmdLine:
+    - 'set -ex   && export DOCKER_VERSION=$(curl --silent --fail --retry 3 https://download.docker.com/linux/static/stable/x86_64/
+      | grep -o -e ''docker-[.0-9]*-ce\.tgz'' | sort -r | head -n 1)   && DOCKER_URL="https://download.docker.com/linux/static/stable/x86_64/${DOCKER_VERSION}"   &&
+      echo Docker URL: $DOCKER_URL   && curl --silent --show-error --location --fail
+      --retry 3 --output /tmp/docker.tgz "${DOCKER_URL}"   && ls -lha /tmp/docker.tgz   &&
+      tar -xz -C /tmp -f /tmp/docker.tgz   && mv /tmp/docker/* /usr/bin   && rm -rf
+      /tmp/docker /tmp/docker.tgz   && which docker   && (docker version || true)'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - COMPOSE_URL="https://circle-downloads.s3.amazonaws.com/circleci-images/cache/linux-amd64/docker-compose-latest"   &&
+      curl --silent --show-error --location --fail --retry 3 --output /usr/bin/docker-compose
+      $COMPOSE_URL   && chmod +x /usr/bin/docker-compose   && docker-compose version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DOCKERIZE_URL="https://circle-downloads.s3.amazonaws.com/circleci-images/cache/linux-amd64/dockerize-latest.tar.gz"   &&
+      curl --silent --show-error --location --fail --retry 3 --output /tmp/dockerize-linux-amd64.tar.gz
+      $DOCKERIZE_URL   && tar -C /usr/local/bin -xzvf /tmp/dockerize-linux-amd64.tar.gz   &&
+      rm -rf /tmp/dockerize-linux-amd64.tar.gz   && dockerize --version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'groupadd --gid 3434 circleci   && useradd --uid 3434 --gid circleci --shell
+      /bin/bash --create-home circleci   && echo ''circleci ALL=NOPASSWD: ALL'' >>
+      /etc/sudoers.d/50-circleci   && echo ''Defaults    env_keep += "DEBIAN_FRONTEND"''
+      >> /etc/sudoers.d/env_keep'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if java -fullversion 2>&1 | grep -q '"9.'; then   curl --silent --show-error
+      --location --fail --retry 3 --output /etc/ssl/certs/java/cacerts        https://circle-downloads.s3.amazonaws.com/circleci-images/cache/linux-amd64/openjdk-9-slim-cacerts;  fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --silent --show-error --location --fail --retry 3 --output /tmp/apache-maven.tar.gz     https://www.apache.org/dist/maven/maven-3/3.5.4/binaries/apache-maven-3.5.4-bin.tar.gz   &&
+      tar xf /tmp/apache-maven.tar.gz -C /opt/   && rm /tmp/apache-maven.tar.gz   &&
+      ln -s /opt/apache-maven-* /opt/apache-maven   && /opt/apache-maven/bin/mvn -version
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: '"/opt/sbt/bin:/opt/apache-maven/bin:/opt/apache-ant/bin:/opt/gradle/bin:$PATH"'
+    Name: env
+  - CmdLine:
+    - mvn -version
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pom.xml
+    - .
+  - CmdLine:
+    - mvn dependency:resolve dependency:resolve-plugins clean package
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Name: volume
+    Volumes:
+    - ~/.m2
+  - Key: CLOUD_SDK_VERSION
+    Name: arg
+    Value: 228.0.0
+  - Env:
+    - Key: CLOUD_SDK_VERSION
+      Value: $CLOUD_SDK_VERSION
+    Name: env
+  - CmdLine:
+    - apt-get -qqy update && apt-get install -qqy curl gcc python-dev python-setuptools
+      apt-transport-https lsb-release openssh-client git gnupg && easy_install -U
+      pip && pip install -U crcmod && export CLOUD_SDK_REPO="cloud-sdk-$(lsb_release
+      -c -s)" && echo "deb https://packages.cloud.google.com/apt $CLOUD_SDK_REPO main"
+      > /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg
+      | apt-key add - && apt-get update && apt-get install -y google-cloud-sdk=${CLOUD_SDK_VERSION}-0
+      kubectl && gcloud config set core/disable_usage_reporting true && gcloud config
+      set component_manager/disable_update_check true && gcloud config set metrics/environment
+      github_docker_image && gcloud --version && docker --version && kubectl version
+      --client
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /root/.config
+  - Name: user
+    User: circleci
+  - CmdLine:
+    - /bin/sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jdk
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk

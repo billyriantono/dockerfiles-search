@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- As: node_builder
+  BaseName: node:alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /src/mondash
+  - Name: workdir
+    Path: /src/mondash/src
+  - CmdLine:
+    - set -ex  && npm ci  && npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:alpine
+  Name: node_builder
+  Platform: ""
+  SourceCode: FROM node:alpine as node_builder
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/Luzifer/mondash
+  - Name: workdir
+    Path: /go/src/github.com/Luzifer/mondash
+  - CmdLine:
+    - set -ex  && apk add --update git  && go install -ldflags "-X main.version=$(git
+      describe --tags --always || echo dev)"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- BaseName: alpine:latest
+  Commands:
+  - Env:
+    - Key: FRONTEND_DIR
+      Value: /usr/local/share/mondash/frontend
+    - Key: STORAGE
+      Value: file:///data
+    Name: env
+  - Labels:
+    - Key: maintainer
+      Value: '"Knut Ahlers <knut@ahlers.me>"'
+    Name: label
+  - CmdLine:
+    - set -ex  && apk --no-cache add ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/mondash
+    - /usr/local/bin/mondash
+  - Chown: ""
+    From: node_builder
+    Name: copy
+    SourcesAndDest:
+    - /src/mondash/frontend
+    - /usr/local/share/mondash/frontend
+  - Name: expose
+    Ports:
+    - "3000"
+  - Name: volume
+    Volumes:
+    - /data
+  - CmdLine:
+    - /usr/local/bin/mondash
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

@@ -1,0 +1,81 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: library/ubuntu:xenial
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get install -y         python-software-properties         software-properties-common         apt-utils
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv D68FA50FEA312927
+      &&     echo "deb [ arch=amd64 ] http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2
+      multiverse" > /etc/apt/sources.list.d/mongodb-org-3.2.list &&     apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /build/image
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - apt-get download         mongodb-org         mongodb-org-mongos         mongodb-org-server         mongodb-org-shell         mongodb-org-tools         libssl1.0.0
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - for file in *.deb; do dpkg-deb -x ${file} image/; done
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build/image
+  - CmdLine:
+    - 'mkdir -p         var/log/mongodb &&     ln -s /dev/stdout var/log/mongodb/mongod.log
+      &&     rm -rf         lib/systemd         usr/sbin         usr/share &&     sed
+      -i -r         ''s,^  bindIp:.*,  bindIp: 0.0.0.0,g''         etc/mongod.conf'
+    Name: run
+    PrependShell: true
+  From:
+    Image: library/ubuntu:xenial
+  Name: build
+  Platform: ""
+  SourceCode: FROM library/ubuntu:xenial AS build
+- BaseName: clover/base
+  Commands:
+  - Env:
+    - Key: LC_ALL
+      Value: C
+    Name: env
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/image
+    - /
+  - Name: volume
+    Volumes:
+    - /var/lib/mongodb
+  - CmdLine:
+    - mongod
+    - -f
+    - /etc/mongod.conf
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "27017"
+  From:
+    Image: clover/base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM clover/base

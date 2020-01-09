@@ -1,0 +1,122 @@
+MetaArgs:
+- DefaultValue: 1.7.4
+  Key: ELIXIR_VER
+  ProvidedValue: null
+  Value: 1.7.4
+- DefaultValue: "3.8"
+  Key: ALPINE_VER
+  ProvidedValue: null
+  Value: "3.8"
+Stages:
+- As: deps
+  BaseName: arcblock/forge_deps
+  Commands: null
+  From:
+    Image: arcblock/forge_deps
+  Name: deps
+  Platform: ""
+  SourceCode: FROM arcblock/forge_deps as deps
+- As: builder
+  BaseName: elixir:$ELIXIR_VER-alpine
+  Commands:
+  - Key: GTK
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk update &&   apk upgrade --no-cache &&   apk add --no-cache   wget libbz2
+      libtool openssl-dev unzip binutils zlib  libstdc++ make cmake git g++   autoconf
+      bzip2-dev automake linux-headers  gmp-dev  python curl nodejs npm openssh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/arcblock
+  - CmdLine:
+    - git config --global url."https://${GTK}:@github.com/".insteadOf "git@github.com:"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - mix local.hex --force && mix local.rebar --force
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: deps
+    Name: copy
+    SourcesAndDest:
+    - /src/_build
+    - /home/arcblock/_build
+  - Chown: ""
+    From: deps
+    Name: copy
+    SourcesAndDest:
+    - /src/deps
+    - /home/arcblock/deps
+  - CmdLine:
+    - make docker
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /export && tar -xf "_build/releases/forge_docker_amd64.tgz" -C /export
+    Name: run
+    PrependShell: true
+  From:
+    Image: elixir:$ELIXIR_VER-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM elixir:$ELIXIR_VER-alpine as builder
+- BaseName: alpine:$ALPINE_VER
+  Commands:
+  - Name: expose
+    Ports:
+    - "8210"
+  - Env:
+    - Key: REPLACE_OS_VARS
+      Value: "true"
+    - Key: PORT
+      Value: "8210"
+    - Key: FORGE_CONFIG
+      Value: forge_release.toml
+    - Key: HOME
+      Value: /home/arcblock
+    - Key: SHELL
+      Value: /bin/bash
+    Name: env
+  - Name: workdir
+    Path: /home/arcblock
+  - CmdLine:
+    - addgroup -S arcblock && adduser -S -G arcblock arcblock && chown arcblock /home/arcblock
+      && chown -R arcblock /home/arcblock/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk update &&   apk upgrade --no-cache &&   apk add --no-cache   bash openssl-dev   bzip2-dev  linux-headers  gmp-dev
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: arcblock
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /export/
+    - .
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/arcblock/deps/forge_sdk/priv/forge_release.toml
+    - $HOME/forge_release.toml
+  - CmdLine:
+    - bin/forge console
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:$ALPINE_VER
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:$ALPINE_VER

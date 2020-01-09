@@ -1,0 +1,16 @@
+FROM shadowsocks/shadowsocks-libev:latest
+
+USER root
+
+RUN apk add --no-cache --virtual .build-deps ca-certificates curl \
+&& cd /root/ \
+&&curl -L -H "Cache-Control: no-cache" -o /root/v2ray-plugin.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/v1.1.0/v2ray-plugin-linux-amd64-v1.1.0.tar.gz \
+&& tar -xzf /root/v2ray-plugin.tar.gz \
+&& rm -f /root/v2ray-plugin.tar.gz \
+&& chmod +x /root/v2ray-plugin_linux_amd64 \
+&& touch /root/run.sh \
+&& echo -e 'ss-server -s 0.0.0.0 -p 80 -k PFKccmc8675sb -m rc4-md5 -t 60 -d 1.1.1.1 --plugin /root/v2ray-plugin_linux_amd64 --plugin-opts "server"'> /root/run.sh \
+&& chmod +x /root/run.sh \
+&& apk del .build-deps
+
+CMD /root/run.sh

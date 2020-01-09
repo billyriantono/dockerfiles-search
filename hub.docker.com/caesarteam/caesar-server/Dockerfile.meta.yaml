@@ -1,0 +1,102 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: 4xxi/php-pgsql:flex
+  Commands:
+  - CmdLine:
+    - mkdir -p /var/www/html && chown -R www-data /var
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/www/html
+  - Env:
+    - Key: APP_ENV
+      Value: prod
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - composer.json
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - composer.lock
+    - .
+  From:
+    Image: 4xxi/php-pgsql:flex
+  Name: base
+  Platform: ""
+  SourceCode: FROM 4xxi/php-pgsql:flex AS base
+- As: dependencies
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - composer global require hirak/prestissimo  --prefer-dist --no-progress --no-suggest
+      --optimize-autoloader  --no-interaction
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - composer install --prefer-dist --no-progress --no-suggest --no-interaction --optimize-autoloader
+      --no-scripts
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: dependencies
+  Platform: ""
+  SourceCode: FROM base AS dependencies
+- As: release
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: dependencies
+    Name: copy
+    SourcesAndDest:
+    - /var/www/html/vendor
+    - ./vendor
+  - CmdLine:
+    - apt-get install -y libgpgme11-dev && pecl install gnupg && docker-php-ext-enable
+      gnupg
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./www.conf
+    - /usr/local/etc/php-fpm.d/
+  - CmdLine:
+    - bin/console assets:install public
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: release
+  Platform: ""
+  SourceCode: FROM base AS release

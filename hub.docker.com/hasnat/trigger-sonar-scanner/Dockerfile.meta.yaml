@@ -1,0 +1,124 @@
+MetaArgs:
+- DefaultValue: 3.1.0.1141
+  Key: SONAR_SCANNER_VERSION
+  ProvidedValue: null
+  Value: 3.1.0.1141
+Stages:
+- As: builder
+  BaseName: gradle:4.6-jdk8-alpine
+  Commands:
+  - Key: SONAR_SCANNER_VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: GRADLE_USER_HOME
+      Value: /tmp
+    Name: env
+  - Env:
+    - Key: SONAR_SCANNER_VERSION
+      Value: ${SONAR_SCANNER_VERSION}
+    Name: env
+  - Name: user
+    User: root
+  - Name: workdir
+    Path: /usr/src/myapp
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./build.gradle
+    - /usr/src/myapp/
+  - CmdLine:
+    - gradle -PsonarScannerVersion=${SONAR_SCANNER_VERSION} downloadDependencies  --no-daemon
+      --console plain
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src
+    - /usr/src/myapp/src
+  - CmdLine:
+    - gradle -PsonarScannerVersion=${SONAR_SCANNER_VERSION} build --no-daemon --console
+      plain
+    Name: run
+    PrependShell: true
+  From:
+    Image: gradle:4.6-jdk8-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM gradle:4.6-jdk8-alpine as builder
+- BaseName: openjdk:8-jdk-alpine
+  Commands:
+  - Key: SONAR_SCANNER_VERSION
+    Name: arg
+    Value: null
+  - Key: HTTP_PORT
+    Name: arg
+    Value: "8080"
+  - Env:
+    - Key: SONAR_SCANNER_HOME
+      Value: /usr/src/sonar-scanner
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /usr/src/sonar-scanner:${PATH}
+    Name: env
+  - Env:
+    - Key: HTTP_PORT
+      Value: ${HTTP_PORT}
+    Name: env
+  - Env:
+    - Key: REPOS_PATH
+      Value: /tmp/temp_git_repos/
+    Name: env
+  - CmdLine:
+    - apk add --update --no-cache git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/myapp
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/myapp/build/libs/myapp.jar
+    - /usr/src/myapp/myapp.jar
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/myapp/gradle/repository/org/sonarsource/scanner/cli/sonar-scanner-cli/${SONAR_SCANNER_VERSION}/sonar-scanner-cli-${SONAR_SCANNER_VERSION}.jar
+    - /usr/src/sonar-scanner/sonar-scanner-cli.jar
+  - CmdLine:
+    - ls -lah /usr/src/sonar-scanner/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo -e '#!/bin/sh\njava  -classpath $SONAR_SCANNER_HOME/sonar-scanner-cli.jar  $SONAR_SCANNER_OPTS  $SONAR_SCANNER_DEBUG_OPTS  org.sonarsource.scanner.cli.Main  -Djava.awt.headless=true  -Dscanner.home=$SONAR_SCANNER_HOME  -Dsonar.host.url=$SONAR_URL  -Dsonar.verbose=true  -Dsonar.issuesReport.console.enable=true  -Dsonar.login=$SONAR_TOKEN  $@
+      -X'> /usr/src/sonar-scanner/sonar-scanner
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /usr/src/sonar-scanner/sonar-scanner
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /empty.sonar.java.binaries
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - ${HTTP_PORT}
+  - CmdLine:
+    - java
+    - -jar
+    - myapp.jar
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jdk-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-alpine

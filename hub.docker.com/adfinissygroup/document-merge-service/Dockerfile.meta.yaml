@@ -1,0 +1,92 @@
+MetaArgs: null
+Stages:
+- BaseName: python:3.6
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Key: UNOCONV_LOCAL
+    Name: arg
+    Value: "false"
+  - Key: UID
+    Name: arg
+    Value: "901"
+  - CmdLine:
+    - wget -q https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh
+      -P /usr/local/bin && chmod +x /usr/local/bin/wait-for-it.sh && mkdir -p /app
+      /var/lib/document-merge-service/data /var/lib/document-merge-service/media /var/www/static
+      && useradd -u $UID -r document-merge-service --create-home && mkdir /home/document-merge-service/.config
+      && chmod -R 770 /var/lib/document-merge-service/data /var/lib/document-merge-service/media
+      /var/www/static /home/document-merge-service && bash -c 'if [ "$UNOCONV_LOCAL"
+      = true ]; then apt-get update && apt-get install -y --no-install-recommends
+      unoconv libreoffice-writer && rm -rf /var/lib/apt/lists/*; fi' && chown -R document-merge-service:root
+      /var/lib/document-merge-service/data /var/lib/document-merge-service/media /var/www/static
+      /home/document-merge-service
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HOME
+      Value: /home/document-merge-service
+    Name: env
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: DJANGO_SETTINGS_MODULE
+      Value: document_merge_service.settings
+    Name: env
+  - Env:
+    - Key: APP_HOME
+      Value: /app
+    Name: env
+  - Env:
+    - Key: UWSGI_INI
+      Value: /app/uwsgi.ini
+    Name: env
+  - Env:
+    - Key: STATIC_ROOT
+      Value: /var/www/static
+    Name: env
+  - Env:
+    - Key: MEDIA_ROOT
+      Value: /var/lib/document-merge-service/media
+    Name: env
+  - Key: REQUIREMENTS
+    Name: arg
+    Value: requirements.txt
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - requirements-dev.txt
+    - $APP_HOME/
+  - CmdLine:
+    - pip install --upgrade --no-cache-dir --requirement $REQUIREMENTS --disable-pip-version-check
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $APP_HOME
+  - CmdLine:
+    - ENV=docker ./manage.py collectstatic --noinput && chown -R document-merge-service:root
+      /var/www/static && chmod 770 -R /var/www/static
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: document-merge-service
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - /bin/sh -c "./manage.py migrate && uwsgi"
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: python:3.6
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.6

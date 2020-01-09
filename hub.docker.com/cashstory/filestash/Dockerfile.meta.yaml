@@ -1,0 +1,196 @@
+MetaArgs: null
+Stages:
+- As: buildfront
+  BaseName: node:12-alpine
+  Commands:
+  - CmdLine:
+    - mkdir -p /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - /app/package.json
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - webpack.config.js
+    - /app/webpack.config.js
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .babelrc
+    - /app/.babelrc
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client
+    - /app/client
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Makefile
+    - /app/Makefile
+  - CmdLine:
+    - apk add git make > /dev/null &&     make frontend_install
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - CmdLine:
+    - make frontend_build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12-alpine
+  Name: buildfront
+  Platform: ""
+  SourceCode: FROM node:12-alpine AS buildfront
+- As: buildback
+  BaseName: golang:1.12-stretch
+  Commands:
+  - Name: workdir
+    Path: /usr/local/go/src/github.com/mickael-kerjean/filestash
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - main.go
+    - main.go
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Makefile
+    - Makefile
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config
+    - config
+  - CmdLine:
+    - make frontend_config &&     apt-get update > /dev/null &&     apt-get install
+      -y libglib2.0-dev curl make > /dev/null
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - timeout 1 ./dist/filestash || true
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12-stretch
+  Name: buildback
+  Platform: ""
+  SourceCode: FROM golang:1.12-stretch AS buildback
+- BaseName: debian:stable-slim
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.name
+      Value: '"Filestash"'
+    - Key: org.label-schema.description
+      Value: '"An app to manage your files in the cloud"'
+    - Key: org.label-schema.url
+      Value: '"https://filestash.app"'
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/mickael-kerjean/filestash"'
+    - Key: org.label-schema.vendor
+      Value: '"Filestash, Inc."'
+    - Key: org.label-schema.version
+      Value: $VERSION
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - Labels:
+    - Key: maintainer
+      Value: '"mickael@kerjean.me"'
+    Name: label
+  - Chown: ""
+    From: buildback
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/go/src/github.com/mickael-kerjean/filestash/dist
+    - /app
+  - Chown: ""
+    From: buildfront
+    Name: copy
+    SourcesAndDest:
+    - /app/dist/data/public
+    - /app/data/public
+  - CmdLine:
+    - apt-get update > /dev/null &&     apt-get install -y libglib2.0-0 curl > /dev/null
+      &&     apt-get install -y curl emacs zip poppler-utils > /dev/null &&     cd
+      && apt-get install -y wget perl > /dev/null &&     export CTAN_REPO="http://mirror.las.iastate.edu/tex-archive/systems/texlive/tlnet"
+      &&     curl -sL "https://yihui.name/gh/tinytex/tools/install-unx.sh" | sh &&     mv
+      ~/.TinyTeX /usr/share/tinytex &&     /usr/share/tinytex/bin/x86_64-linux/tlmgr
+      install wasy &&     /usr/share/tinytex/bin/x86_64-linux/tlmgr install ulem &&     /usr/share/tinytex/bin/x86_64-linux/tlmgr
+      install marvosym &&     /usr/share/tinytex/bin/x86_64-linux/tlmgr install wasysym
+      &&     /usr/share/tinytex/bin/x86_64-linux/tlmgr install xcolor &&     /usr/share/tinytex/bin/x86_64-linux/tlmgr
+      install listings &&     /usr/share/tinytex/bin/x86_64-linux/tlmgr install parskip
+      &&     /usr/share/tinytex/bin/x86_64-linux/tlmgr install float &&     /usr/share/tinytex/bin/x86_64-linux/tlmgr
+      install wrapfig &&     /usr/share/tinytex/bin/x86_64-linux/tlmgr install sectsty
+      &&     ln -s /usr/share/tinytex/bin/x86_64-linux/pdflatex /usr/local/bin/pdflatex
+      &&     apt-get purge -y --auto-remove perl wget &&     find /usr/share/ -name
+      'doc' | xargs rm -rf &&     find /usr/share/emacs -name '*.pbm' | xargs rm -f
+      &&     find /usr/share/emacs -name '*.png' | xargs rm -f &&     find /usr/share/emacs
+      -name '*.xpm' | xargs rm -f &&     chmod -R o-r-w-x- /app/filestash &&     useradd
+      filestash &&     chown -R filestash:filestash /app/ &&     rm -rf /var/lib/apt/lists/*
+      &&     rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - timeout 1 /app/filestash | grep -q start
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8334"
+  - Name: volume
+    Volumes:
+    - /app/data/
+  - Name: workdir
+    Path: /app
+  - Name: user
+    User: filestash
+  - CmdLine:
+    - /app/filestash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stable-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stable-slim

@@ -1,0 +1,116 @@
+MetaArgs: null
+Stages:
+- BaseName: docker.io/centos:7.6.1810
+  Commands:
+  - Labels:
+    - Key: name
+      Value: '"kube-nextcloud"'
+    - Key: description
+      Value: '"Nextcould container image for Kubernetes/OpenShift, based on CentOS
+        7"'
+    - Key: maintainer
+      Value: '"Yuxiang Zhu <vfreex@gmail.com>"'
+    Name: label
+  - CmdLine:
+    - yum -y install centos-release-scl bzip2     && yum -y install httpd24-httpd
+      rh-php72 rh-php72-php rh-php72-php-gd rh-php72-php-mbstring         rh-php72-php-intl
+      rh-php72-php-pecl-apcu rh-php72-php-mysqlnd rh-php72-php-pecl-redis         rh-php72-php-opcache
+      rh-php72-php-pecl-memcached rh-php72-php-imagick rh-php72-php-ldap rh-php72-php-pgsql     &&
+      yum clean all
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NEXTCLOUD_VERSION
+      Value: 16.0.3
+    Name: env
+  - CmdLine:
+    - DL_DIR=$(mktemp -d)     && curl --fail -L -o "${DL_DIR}/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2"         "https://download.nextcloud.com/server/releases/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2"     &&
+      curl --fail -L -o "${DL_DIR}/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2.asc"         "https://download.nextcloud.com/server/releases/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2.asc"     &&
+      curl --fail -L -o "${DL_DIR}/nextcloud.asc" https://nextcloud.com/nextcloud.asc     &&
+      gpg --import "${DL_DIR}/nextcloud.asc"     && gpg --verify "${DL_DIR}/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2.asc"
+      "${DL_DIR}/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2"     && rm -rf /var/www &&
+      mkdir -p /var/www     && tar -xvf "${DL_DIR}/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2"
+      -C /var/www     && mv /var/www/nextcloud /var/www/html     && chown apache:root
+      -R /var/www/html     && rm -rf "${DL_DIR}"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/www/html
+  - CmdLine:
+    - ln -s /opt/rh/httpd24/root/etc/httpd /etc/httpd     && sed -i -E 's/^\s*Listen\s+.*/Listen
+      8080/g' /etc/httpd/conf/httpd.conf     && sed -i -E 's#^\s*ErrorLog\s+.*#ErrorLog
+      /proc/self/fd/2#g' /etc/httpd/conf/httpd.conf     && sed -i -E 's#^\s*CustomLog\s+.*#CustomLog
+      /proc/self/fd/1 combined#g' /etc/httpd/conf/httpd.conf      && chown apache:root
+      -R /opt/rh/httpd24/root/var/run/httpd/     && chmod g+rwX -R /opt/rh/httpd24/root/var/run/httpd/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - httpd-conf.d
+    - /etc/httpd/conf.d
+  - Env:
+    - Key: PHP_CONFIG_DIR
+      Value: /etc/opt/rh/rh-php72
+    - Key: PHP_DATA_DIR
+      Value: /var/opt/rh/rh-php72/lib/php
+    Name: env
+  - CmdLine:
+    - '{         echo ''opcache.enable=1'';         echo ''opcache.enable_cli=1'';         echo
+      ''opcache.interned_strings_buffer=8'';         echo ''opcache.max_accelerated_files=10000'';         echo
+      ''opcache.memory_consumption=128'';         echo ''opcache.save_comments=1'';         echo
+      ''opcache.revalidate_freq=1'';     } > "${PHP_CONFIG_DIR}"/php.d/opcache-recommended.ini;         echo
+      ''apc.enable_cli=1'' >> "${PHP_CONFIG_DIR}"/php.d/docker-php-ext-apcu.ini;         echo
+      ''memory_limit=512M'' > "${PHP_CONFIG_DIR}"/php.d/memory-limit.ini;         chown
+      apache:root -R "${PHP_DATA_DIR}"/{session,opcache,wsdlcache};'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config
+    - /var/www/html/config
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - patches
+    - /usr/local/src/patches
+  - CmdLine:
+    - sed -E 's#(ignore_user_abort\(.+\);)#// \1#g' apps/dav/appinfo/*/*.php lib/private/legacy/files.php
+      lib/private/Files/View.php -i   && yum -y install patch   && patch 3rdparty/sabre/http/lib/Sapi.php
+      < /usr/local/src/patches/0001-Significantly-improve-file-download-speed-by-enablin.patch   &&
+      yum clean all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/www/html/{data,custom_apps,config}     && chown apache:root -R
+      /var/www/html/{data,custom_apps,config}     && chmod u=rwX,g=rwX,o= -R /var/www/html/{data,custom_apps,config,.htaccess,.user.ini}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts
+    - /usr/local/bin
+  - CmdLine:
+    - /usr/local/bin/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/local/bin/run-httpd.sh
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: user
+    User: "9999:0"
+  From:
+    Image: docker.io/centos:7.6.1810
+  Name: ""
+  Platform: ""
+  SourceCode: FROM docker.io/centos:7.6.1810

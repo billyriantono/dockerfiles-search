@@ -1,0 +1,139 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk upgrade --update-cache --available &&     apk add --update --no-cache bash
+      chromium g++ git make nodejs npm python2 &&     mkdir -p /kb
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./package.json
+    - /kb
+  - Name: workdir
+    Path: /kb
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /kb
+  - Key: BUILD
+    Name: arg
+    Value: null
+  - CmdLine:
+    - make setup && make build config=$BUILD
+    Name: run
+    PrependShell: true
+  - Labels:
+    - Key: stage
+      Value: intermediate
+    Name: label
+  From:
+    Image: alpine:3.9
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as builder
+- BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk upgrade --update-cache --available &&     apk add --update --no-cache bash
+      ca-certificates nginx &&     mkdir -p /kb
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /kb
+  - CmdLine:
+    - archive=dockerize-alpine-linux-amd64-v0.6.1.tar.gz &&     wget https://github.com/kbase/dockerize/raw/master/$archive
+      &&     tar xvzf $archive &&     rm $archive &&     mv dockerize /usr/local/bin
+    Name: run
+    PrependShell: true
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: BRANCH
+    Name: arg
+    Value: develop
+  - Key: TAG
+    Name: arg
+    Value: null
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /kb/build/dist/client
+    - /kb/deployment/services/kbase-ui/dist/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /kb/deployment/templates
+    - /kb/deployment/templates
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /kb/deployment/config
+    - /kb/deployment/config
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /kb/deployment/scripts
+    - /kb/deployment/scripts
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /kb/build/test
+    - /kb/deployment/services/kbase-ui/test
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/kbase/kbase-ui.git"'
+    - Key: org.label-schema.vcs-ref
+      Value: $COMMIT
+    - Key: org.label-schema.schema-version
+      Value: '"1.0.0-rc1"'
+    - Key: us.kbase.vcs-branch
+      Value: $BRANCH
+    - Key: us.kbase.vcs-tag
+      Value: $TAG
+    - Key: maintainer
+      Value: '"Steve Chan sychan@lbl.gov"'
+    Name: label
+  - CmdLine:
+    - addgroup --system kbmodule &&     adduser --system --ingroup kbmodule kbmodule
+      &&     chown -R kbmodule:kbmodule /kb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dockerize
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -template
+    - /kb/deployment/templates/nginx.conf.tmpl:/etc/nginx/nginx.conf
+    - -template
+    - /kb/deployment/templates/config.json.tmpl:/kb/deployment/services/kbase-ui/dist/modules/deploy/config.json
+    - bash
+    - /kb/deployment/scripts/start-server.bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

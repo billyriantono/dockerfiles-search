@@ -1,0 +1,109 @@
+MetaArgs: null
+Stages:
+- As: overlay
+  BaseName: adoptopenjdk/openjdk11:alpine-slim
+  Commands:
+  - CmdLine:
+    - mkdir -p cas-overlay
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src
+    - cas-overlay/src/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./gradle/
+    - cas-overlay/gradle/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./gradlew
+    - ./settings.gradle
+    - ./build.gradle
+    - ./gradle.properties
+    - /cas-overlay/
+  - CmdLine:
+    - mkdir -p ~/.gradle     && echo "org.gradle.daemon=false" >> ~/.gradle/gradle.properties     &&
+      echo "org.gradle.configureondemand=true" >> ~/.gradle/gradle.properties     &&
+      cd cas-overlay     && chmod 750 ./gradlew     && ./gradlew --version;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd cas-overlay     && ./gradlew clean build --parallel;
+    Name: run
+    PrependShell: true
+  From:
+    Image: adoptopenjdk/openjdk11:alpine-slim
+  Name: overlay
+  Platform: ""
+  SourceCode: FROM adoptopenjdk/openjdk11:alpine-slim AS overlay
+- As: cas
+  BaseName: adoptopenjdk/openjdk11:alpine-jre
+  Commands:
+  - Labels:
+    - Key: '"Organization"'
+      Value: '"Apereo"'
+    Name: label
+  - Labels:
+    - Key: '"Description"'
+      Value: '"Apereo CAS"'
+    Name: label
+  - CmdLine:
+    - cd /     && mkdir -p /etc/cas/config     && mkdir -p /etc/cas/services     &&
+      mkdir -p /etc/cas/saml     && mkdir -p cas-overlay;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/cas/
+    - /etc/cas/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/cas/config/
+    - /etc/cas/config/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/cas/services/
+    - /etc/cas/services/
+  - Chown: ""
+    From: overlay
+    Name: copy
+    SourcesAndDest:
+    - cas-overlay/build/libs/cas.war
+    - cas-overlay/
+  - Name: expose
+    Ports:
+    - "8080"
+    - "8443"
+  - Env:
+    - Key: PATH
+      Value: $PATH:$JAVA_HOME/bin:.
+    Name: env
+  - Name: workdir
+    Path: cas-overlay
+  - CmdLine:
+    - java
+    - -server
+    - -noverify
+    - -Xmx2048M
+    - -jar
+    - cas.war
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: adoptopenjdk/openjdk11:alpine-jre
+  Name: cas
+  Platform: ""
+  SourceCode: FROM adoptopenjdk/openjdk11:alpine-jre AS cas

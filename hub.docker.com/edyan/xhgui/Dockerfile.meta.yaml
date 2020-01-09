@@ -1,0 +1,142 @@
+MetaArgs: null
+Stages:
+- As: xhgui_sources
+  BaseName: alpine/git
+  Commands:
+  - CmdLine:
+    - git clone --depth 1 https://github.com/perftools/xhgui /usr/local/src/xhgui
+      &&         cd /usr/local/src/xhgui &&         rm -rf /usr/local/src/xhgui/.git                /usr/local/src/xhgui/.scrutinizer.yml                /usr/local/src/xhgui/.travis.yml                /usr/local/src/xhgui/phpunit.xml                /usr/local/src/xhgui/README.md                /usr/local/src/xhgui/tests
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine/git
+  Name: xhgui_sources
+  Platform: ""
+  SourceCode: FROM    alpine/git AS xhgui_sources
+- As: xhgui_built
+  BaseName: edyan/php:7.2
+  Commands:
+  - Chown: www-data:www-data
+    From: xhgui_sources
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/src/xhgui
+    - /usr/local/src/xhgui
+  - Chown: www-data:www-data
+    From: composer:1.8
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/composer
+    - /usr/bin/composer
+  - Chown: www-data:www-data
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/xhgui.config.php
+    - /usr/local/src/xhgui/config/config.php
+  - Name: workdir
+    Path: /usr/local/src/xhgui
+  - Name: user
+    User: www-data
+  - CmdLine:
+    - composer global require hirak/prestissimo --no-plugins --no-scripts &&             ln
+      -s /usr/bin/composer composer.phar &&             sed -i 's/composer\.phar install
+      --prefer-dist/composer.phar install --prefer-dist --no-dev/g' install.php &&             php
+      install.php &&             composer require --update-no-dev --no-scripts alcaeus/mongo-php-adapter
+      ^1.1 &&             rm -f composer.phar
+    Name: run
+    PrependShell: true
+  From:
+    Image: edyan/php:7.2
+  Name: xhgui_built
+  Platform: ""
+  SourceCode: FROM        edyan/php:7.2 as xhgui_built
+- BaseName: edyan/php:7.2
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - Labels:
+    - Key: maintainer
+      Value: '"Emmanuel Dyan <emmanueldyan@gmail.com>"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    Name: label
+  - Chown: www-data:www-data
+    From: xhgui_built
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/src/xhgui
+    - /usr/local/src/xhgui
+  - CmdLine:
+    - apt update &&             apt upgrade -y &&             apt install -y mongodb-server-core
+      supervisor libcap2-bin &&             setcap CAP_NET_BIND_SERVICE=+eip /usr/bin/php7.2
+      &&             apt purge -y libcap2-bin &&             apt autoremove -y &&             apt
+      autoclean &&             apt clean &&             find /root /tmp -mindepth
+      1 -delete &&             rm -rf /var/lib/apt/lists/* /usr/share/man/* /usr/share/doc/*                    /var/cache/*
+      /var/log/* /usr/share/php/docs /usr/share/php/tests
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/supervisord.conf
+    - /etc/supervisor/conf.d/supervisord.conf
+  - CmdLine:
+    - mkdir -p /data/db /var/log/mongodb &&             useradd -d /data/db -M mongodb
+      &&             chown -R mongodb:mongodb /data/db &&             mkdir -p /var/log/supervisor
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /usr/local/src/xhgui
+  - Name: expose
+    Ports:
+    - "27017"
+    - "80"
+  - Env:
+    - Key: XHGUI_MONGO_HOST
+      Value: '"mongodb://127.0.0.1"'
+    Name: env
+  - Env:
+    - Key: MONGO_PORT
+      Value: "27017"
+    Name: env
+  - Env:
+    - Key: PHP_WEBSERVER_PORT
+      Value: "80"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tests/test.php
+    - /root/test.php
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - post-run.sh
+    - /root/post-run.sh
+  - CmdLine:
+    - chmod +x /root/post-run.sh /root/test.php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/supervisord
+    - -n
+    - -c
+    - /etc/supervisor/conf.d/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: edyan/php:7.2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM        edyan/php:7.2

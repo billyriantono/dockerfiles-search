@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: node:12-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  From:
+    Image: node:12-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:12-alpine AS base
+- As: builder
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package*.json
+    - ./
+  - CmdLine:
+    - npm set progress=false && npm config set depth 0 && npm cache clean --force
+      && npm config set unsafe-perm true
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk update && apk add python &&     npm install -g node-gyp
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm i --only=production && npm install modclean -g &&     npm rebuild bcrypt
+      --build-from-source &&     modclean -P -e -r --patterns="default:safe,default:caution"
+      &&     mkdir prod && cp -R ./node_modules ./prod
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm i && mkdir dev && cp -R ./node_modules ./dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/dev
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - npm run compile
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base AS builder
+- As: release
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/prod/node_modules
+    - ./src/node_modules
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/dev/lib
+    - ./src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config
+    - ./config
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - node src/index.js
+    Name: cmd
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: release
+  Platform: ""
+  SourceCode: FROM base AS release

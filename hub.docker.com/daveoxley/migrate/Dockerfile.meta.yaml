@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- As: downloader
+  BaseName: golang:1.10-alpine3.7
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk add --no-cache git gcc musl-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/golang-migrate/migrate
+  - Env:
+    - Key: DATABASES
+      Value: '"postgres mysql redshift cassandra spanner cockroachdb clickhouse"'
+    Name: env
+  - Env:
+    - Key: SOURCES
+      Value: '"file go-bindata github aws-s3 google-cloud-storage"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.go'
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cli
+    - ./cli
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - database
+    - ./database
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - source
+    - ./source
+  - CmdLine:
+    - go get -v ./... &&     go get -u github.com/fsouza/fake-gcs-server/fakestorage
+      &&     go get -u github.com/kshvakov/clickhouse &&     go build -a -o build/migrate.linux-386
+      -ldflags="-X main.Version=${VERSION}" -tags "$DATABASES $SOURCES" ./cli
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10-alpine3.7
+  Name: downloader
+  Platform: ""
+  SourceCode: FROM golang:1.10-alpine3.7 AS downloader
+- BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - apk add --no-cache ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: downloader
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/golang-migrate/migrate/build/migrate.linux-386
+    - /migrate
+  - CmdLine:
+    - chmod u+x /migrate
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /migrate
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

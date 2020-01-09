@@ -1,0 +1,94 @@
+MetaArgs: null
+Stages:
+- As: node-build-env
+  BaseName: node:10-alpine
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./web/package.json
+    - /usr/src/app/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./web/yarn.lock
+    - /usr/src/app/
+  - Name: workdir
+    Path: /usr/src/app
+  - CmdLine:
+    - yarn install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./web
+    - /usr/src/app/
+  - CmdLine:
+    - yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10-alpine
+  Name: node-build-env
+  Platform: ""
+  SourceCode: FROM node:10-alpine AS node-build-env
+- As: go-build-env
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk add git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -u github.com/golang/dep/cmd/dep
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -u github.com/UnnoTed/fileb0x
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/esnunes/multiproxy
+  - Chown: ""
+    From: node-build-env
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/dist/*
+    - /go/src/github.com/esnunes/multiproxy/web/dist/
+  - CmdLine:
+    - cd /go/src/github.com/esnunes/multiproxy/ &&     dep ensure -v &&     fileb0x
+      assets.yaml &&     go install ./...
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: go-build-env
+  Platform: ""
+  SourceCode: FROM golang:alpine AS go-build-env
+- BaseName: alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: go-build-env
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/multiproxy
+    - /app/
+  - CmdLine:
+    - ./multiproxy
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - ./config.json
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

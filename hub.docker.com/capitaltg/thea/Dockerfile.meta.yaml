@@ -1,0 +1,93 @@
+MetaArgs: null
+Stages:
+- As: node
+  BaseName: node:10.16.0-jessie
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - thea-ui/package.json
+    - /tmp/
+  - Name: workdir
+    Path: /tmp/thea-ui
+  - CmdLine:
+    - npm install --verbose
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - thea-ui
+    - /tmp/
+  - CmdLine:
+    - npm run ng build -- --aot --output-hashing all --extract-css true --build-optimizer
+      --vendor-chunk --prod --configuration=production
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.16.0-jessie
+  Name: node
+  Platform: ""
+  SourceCode: FROM node:10.16.0-jessie as node
+- As: build
+  BaseName: gradle:5.4.1-jre8
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /home/gradle
+  - Chown: ""
+    From: node
+    Name: copy
+    SourcesAndDest:
+    - /tmp/dist/
+    - /home/gradle/thea-ui/dist/
+  - Name: workdir
+    Path: /home/gradle/
+  - CmdLine:
+    - gradle clean build -x :thea-ui:buildAngular
+    Name: run
+    PrependShell: true
+  From:
+    Image: gradle:5.4.1-jre8
+  Name: build
+  Platform: ""
+  SourceCode: FROM gradle:5.4.1-jre8 as build
+- BaseName: adoptopenjdk/openjdk11:jre-11.0.4_11-alpine
+  Commands:
+  - CmdLine:
+    - adduser -D ctg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /opt/ctg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R ctg:ctg /opt/ctg
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ctg
+  - Chown: ctg
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /home/gradle/thea-api/build/libs/thea-api.jar
+    - /opt/ctg/thea-api.jar
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - java -jar /opt/ctg/thea-api.jar
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: adoptopenjdk/openjdk11:jre-11.0.4_11-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM adoptopenjdk/openjdk11:jre-11.0.4_11-alpine

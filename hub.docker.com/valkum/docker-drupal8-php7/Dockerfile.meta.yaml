@@ -1,0 +1,245 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:14.04
+  Commands:
+  - Maintainer: Andrew Holgate <andrewholgate@yahoo.com>
+    Name: maintainer
+  - CmdLine:
+    - echo "deb http://archive.ubuntu.com/ubuntu trusty multiverse" >> /etc/apt/sources.list
+      &&     echo "deb http://archive.ubuntu.com/ubuntu trusty-updates multiverse"
+      >> /etc/apt/sources.list &&     echo "deb http://security.ubuntu.com/ubuntu
+      trusty-security universe multiverse" >> /etc/apt/sources.list &&     echo "deb
+      http://repos.zend.com/zend-server/early-access/php7/repos ubuntu/" >> /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&     apt-get -y upgrade
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive apt-get -y --force-yes install curl apache2 mysql-client
+      supervisor php5 php7-nightly libapache2-mod-fastcgi php5-fpm apache2-mpm-event
+      php5-gd php5-mysql php-pear php5-curl php5-dev openssh-client make libpcre3-dev
+      software-properties-common
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive apt-get -y install sysstat iotop htop ethtool
+      nmap dnsutils traceroute wget nano
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - add-apt-repository -y ppa:git-core/ppa &&     apt-get update &&     DEBIAN_FRONTEND=noninteractive
+      apt-get -y install git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -ms /bin/bash ubuntu &&     ln -s /var/www /home/ubuntu/www &&     chown
+      -R ubuntu:ubuntu /home/ubuntu
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /usr/local/php7/libphp7.so /usr/lib/apache2/modules/ &&     cp /usr/local/php7/php7.load
+      /etc/apache2/mods-available/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - default.conf
+    - /etc/apache2/sites-available/default.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - default-ssl.conf
+    - /etc/apache2/sites-available/default-ssl.conf
+  - CmdLine:
+    - a2enmod rewrite ssl &&     a2dissite 000-default &&     a2ensite default default-ssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - printf "authz_host authz_user ssl" | a2dismod &&     printf "*" | a2dismod
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod access_compat actions alias authz_host deflate dir expires headers mime
+      rewrite ssl fastcgi mpm_event
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2dismod mpm_event &&     a2enmod mpm_prefork &&     a2enmod php7
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php5-fpm.conf
+    - /etc/apache2/conf-available/php5-fpm.conf
+  - CmdLine:
+    - a2enconf php5-fpm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - printf "<FilesMatch \.php$> \n  SetHandler application/x-httpd-php \n</FilesMatch>"
+      >> /etc/apache2/apache2.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i '166s/None/All/' /etc/apache2/apache2.conf &&     echo "ServerName localhost"
+      >> /etc/apache2/apache2.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pecl channel-update pecl.php.net &&     pecl install uploadprogress
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - uploadprogress.ini
+    - /etc/php5/mods-available/uploadprogress.ini
+  - CmdLine:
+    - ln -s ../../mods-available/uploadprogress.ini /etc/php5/fpm/conf.d/20-uploadprogress.ini
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: COMPOSER_HOME
+      Value: /home/ubuntu/.composer
+    Name: env
+  - CmdLine:
+    - echo "export COMPOSER_HOME=/home/ubuntu/.composer" >> /etc/bash.bashrc &&     curl
+      -sS https://getcomposer.org/installer | php &&     mv composer.phar /usr/local/bin/composer
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -LSs http://drupalconsole.com/installer | php &&     mv console.phar /usr/local/bin/drupal
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ubuntu
+  - Name: workdir
+    Path: /home/ubuntu/
+  - CmdLine:
+    - composer global require drush/drush:dev-master
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - drushrc.php
+    - /home/ubuntu/.drush/drushrc.php
+  - Name: user
+    User: root
+  - CmdLine:
+    - echo "export PATH=/home/ubuntu/.composer/vendor/bin:$PATH" >> /etc/bash.bashrc
+      &&     echo "local0.* /var/log/drupal.log" >> /etc/rsyslog.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -ri 's/^;opcache.enable=0/opcache.enable=1/g' /etc/php5/fpm/php.ini &&     sed
+      -ri 's/^;error_log\s*=\s*syslog/error_log = syslog/g' /etc/php5/fpm/php.ini
+      &&     sed -ri 's/^short_open_tag\s*=\s*On/short_open_tag = Off/g' /etc/php5/fpm/php.ini
+      &&     sed -ri 's/^memory_limit\s*=\s*128M/memory_limit = 256M/g' /etc/php5/fpm/php.ini
+      &&     sed -ri 's/^expose_php\s*=\s*On/expose_php = Off/g' /etc/php5/fpm/php.ini
+      &&     sed -ri 's/^;date.timezone\s*=/date.timezone = "Europe\/Rome"/g' /etc/php5/fpm/php.ini
+      &&     sed -ri 's/^;error_log\s*=\s*syslog/error_log = syslog/g' /etc/php5/cli/php.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "export TERM=xterm" >> /etc/bash.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/www/log &&     ln -s /var/log/apache2/error.log /var/www/log/
+      &&     ln -s /var/log/apache2/access.log /var/www/log/ &&     ln -s /var/log/drupal.log
+      /var/www/log/ &&     ln -s /var/log/syslog /var/www/log/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R ubuntu:ubuntu /home/ubuntu/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opt &&   wget http://nodejs.org/dist/v0.12.4/node-v0.12.4-linux-x64.tar.gz
+      &&   tar -xzf node-v0.12.4-linux-x64.tar.gz &&   mv node-v0.12.4-linux-x64 node
+      &&   cd /usr/local/bin &&   ln -s /opt/node/bin/* . &&   rm -f /opt/node-v0.12.4-linux-x64.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive apt-get -y install tcl8.5
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget http://download.redis.io/releases/redis-3.0.1.tar.gz &&     tar xvzf redis-3.0.1.tar.gz
+      &&     rm redis-3.0.1.tar.gz &&     cd redis-3.0.1 &&     make &&     make test
+      &&     make install &&     rm -Rf ../redis-3.0.1 &&     mkdir /var/log/redis
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ubuntu
+  - CmdLine:
+    - echo "alias taillog='tail -f /var/www/log/syslog /var/log/redis/stdout.log /var/www/log/*.log'"
+      >> ~/.bashrc &&     echo 'export PATH="$PATH:$HOME/.npm-packages/bin"' >> ~/.bashrc
+      &&     npm config set prefix '~/.npm-packages'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - fix-permissions.sh
+    - /var/www/fix-permissions.sh
+  - CmdLine:
+    - mkdir -p /var/log/supervisor
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/supervisor/conf.d/supervisord.conf
+  - CmdLine:
+    - 'apt-get -y install sudo &&     echo "ubuntu ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+      &&     usermod -a -G sudo ubuntu'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - /usr/local/bin/run
+  - CmdLine:
+    - chmod +x /usr/local/bin/run
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive apt-get autoclean && apt-get autoremove
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /etc/init.d/apache2 restart
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "22"
+    - "443"
+    - "80"
+  - CmdLine:
+    - /usr/local/bin/run
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:14.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:14.04

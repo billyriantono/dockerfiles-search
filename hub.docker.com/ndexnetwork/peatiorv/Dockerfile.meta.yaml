@@ -1,0 +1,103 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: ruby:2.6.3
+  Commands:
+  - Maintainer: info@qpay.group
+    Name: maintainer
+  - Key: RAILS_ENV
+    Name: arg
+    Value: production
+  - Env:
+    - Key: RAILS_ENV
+      Value: ${RAILS_ENV}
+    - Key: APP_HOME
+      Value: /home/app
+    Name: env
+  - Key: UID
+    Name: arg
+    Value: "1000"
+  - Key: GID
+    Name: arg
+    Value: "1000"
+  - Env:
+    - Key: TZ
+      Value: UTC
+    Name: env
+  - CmdLine:
+    - groupadd -r --gid ${GID} app  && useradd --system --create-home --home ${APP_HOME}
+      --shell /sbin/nologin --no-log-init       --gid ${GID} --uid ${UID} app
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update  && apt-get install -y       default-libmysqlclient-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $APP_HOME
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gemfile
+    - Gemfile.lock
+    - $APP_HOME/
+  - CmdLine:
+    - mkdir -p /opt/vendor/bundle  && chown -R app:app /opt/vendor $APP_HOME  && su
+      app -s /bin/bash -c "bundle install --path /opt/vendor/bundle"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $APP_HOME
+  - CmdLine:
+    - chown -R app:app $APP_HOME
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  - CmdLine:
+    - echo "# This file was overridden by default during docker image build." > Gemfile.plugin   &&
+      ./bin/init_config   && chmod +x ./bin/logger   && bundle exec rake tmp:create   &&
+      bundle exec rake assets:precompile
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - bundle
+    - exec
+    - puma
+    - --config
+    - config/puma.rb
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ruby:2.6.3
+  Name: base
+  Platform: ""
+  SourceCode: FROM ruby:2.6.3 as base
+- BaseName: base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gemfile.plugin
+    - Gemfile.lock
+    - $APP_HOME/
+  - CmdLine:
+    - bundle install --path /opt/vendor/bundle
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

@@ -1,0 +1,112 @@
+MetaArgs: null
+Stages:
+- As: incron-builder
+  BaseName: alpine:3.7
+  Commands:
+  - Env:
+    - Key: VERSION
+      Value: 0.5.12
+    Name: env
+  - CmdLine:
+    - apk --no-cache add --virtual .build-deps                 build-base                 argp-standalone
+      &&             wget -q https://github.com/ar-/incron/archive/$VERSION.tar.gz
+      -O - | tar xz &&             (                 cd incron-$VERSION &&                 make
+      -j$(nproc) && make install             ) &&             apk del .build-deps
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: incron-builder
+  Platform: ""
+  SourceCode: FROM        alpine:3.7 as incron-builder
+- As: s6-overlay-builder
+  BaseName: alpine:3.7
+  Commands:
+  - Env:
+    - Key: VERSION
+      Value: 1.18.1.5
+    Name: env
+  - CmdLine:
+    - mkdir -p /rootfs &&             wget -q https://github.com/just-containers/s6-overlay/releases/download/v$VERSION/s6-overlay-amd64.tar.gz
+      -O - | tar xz -C /rootfs
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: s6-overlay-builder
+  Platform: ""
+  SourceCode: FROM        alpine:3.7 as s6-overlay-builder
+- As: kubectl
+  BaseName: allanlei/kubectl
+  Commands: null
+  From:
+    Image: allanlei/kubectl
+  Name: kubectl
+  Platform: ""
+  SourceCode: FROM        allanlei/kubectl as kubectl
+- BaseName: alpine:3.7
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Allan Lei <allanlei@helveticode.com>"'
+    Name: label
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - incrond
+    - --foreground
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - apk --no-cache add --virtual .run-deps                 libstdc++                 bash
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: s6-overlay-builder
+    Name: copy
+    SourcesAndDest:
+    - /rootfs/
+    - /
+  - Chown: ""
+    From: incron-builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/sbin/
+    - /usr/local/sbin/
+  - Chown: ""
+    From: incron-builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/
+    - /usr/local/bin/
+  - Chown: ""
+    From: incron-builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/incron.d/
+    - /etc/incron.d/
+  - Chown: ""
+    From: incron-builder
+    Name: copy
+    SourcesAndDest:
+    - /var/spool/incron/
+    - /var/spool/incron/
+  - Chown: ""
+    From: kubectl
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs
+    - /
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM        alpine:3.7

@@ -1,0 +1,92 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine
+  Commands:
+  - Key: nexus_version
+    Name: arg
+    Value: 3.20.1-01
+  - Key: github_connect_version
+    Name: arg
+    Value: 2.0.2
+  - CmdLine:
+    - apk -U add curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /workdir
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /workdir
+  - CmdLine:
+    - curl https://download.sonatype.com/nexus/3/nexus-${nexus_version}-unix.tar.gz|tar
+      -xz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv nexus-* nexus && mkdir -p nexus/system/com/larscheidschmitzhermes/${github_connect_version}/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L https://github.com/larscheid-schmitzhermes/nexus3-github-oauth-plugin/releases/download/${github_connect_version}/nexus3-github-oauth-plugin.zip
+      -o /tmp/nexus3-github-oauth-plugin.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip /tmp/nexus3-github-oauth-plugin.zip &&     mv nexus3-github-oauth-plugin/${github_connect_version}/nexus3-github-oauth-plugin-${github_connect_version}.jar
+      nexus/system/com/larscheidschmitzhermes/${github_connect_version}/ &&    rm
+      -fr nexus3-github-oauth-plugin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "reference\:file\:com/larscheidschmitzhermes/${github_connect_version}/nexus3-github-oauth-plugin-${github_connect_version}.jar
+      = 200" >> nexus/etc/karaf/startup.properties
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine AS builder
+- As: runner
+  BaseName: openjdk:8-alpine
+  Commands:
+  - CmdLine:
+    - adduser -D nexus nexus
+    Name: run
+    PrependShell: true
+  - Chown: nexus:nexus
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /workdir/
+    - /opt/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/entrypoint.sh
+    - /usr/local/bin/
+  - Name: user
+    User: nexus
+  - Name: volume
+    Volumes:
+    - /opt/sonatype-work
+  - Name: expose
+    Ports:
+    - "8081"
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /opt/nexus/bin/nexus
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-alpine
+  Name: runner
+  Platform: ""
+  SourceCode: FROM openjdk:8-alpine as runner

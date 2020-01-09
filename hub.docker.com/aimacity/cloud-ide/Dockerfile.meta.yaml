@@ -1,0 +1,169 @@
+MetaArgs: null
+Stages:
+- As: coder-binary
+  BaseName: aimacity/code-server
+  Commands: null
+  From:
+    Image: aimacity/code-server
+  Name: coder-binary
+  Platform: ""
+  SourceCode: FROM aimacity/code-server as coder-binary
+- As: vscode-env
+  BaseName: ubuntu:18.10
+  Commands:
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - CmdLine:
+    - "apt-get update && \tapt-get install -y curl libnss3   libgtk-3-0  libxss1 libx11-xcb1
+      libasound2  jq&& \tcd $HOME && curl -o vscode-amd64.tar.gz -L  https://vscode-update.azurewebsites.net/latest/linux-x64/stable
+      && \ttar  -zxvf  vscode-amd64.tar.gz || true && \trm -f vscode-amd64.tar.gz
+      && \tpwd && ls -ltr"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts
+    - /root/scripts
+  From:
+    Image: ubuntu:18.10
+  Name: vscode-env
+  Platform: ""
+  SourceCode: FROM ubuntu:18.10 as vscode-env
+- BaseName: aimacity/workspace-full
+  Commands:
+  - Labels:
+    - Key: author
+      Value: '"ide@aima.city"'
+    Name: label
+  - Name: user
+    User: root
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts
+    - /root/scripts
+  - CmdLine:
+    - sh /root/scripts/install-tools-dev.sh
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: aima
+  - Env:
+    - Key: IDE_USER_DATA_DIR
+      Value: '"$HOME/.local/share/code-server"'
+    Name: env
+  - Env:
+    - Key: IDE_WORKSPACE
+      Value: '"/workspace"'
+    Name: env
+  - Env:
+    - Key: IDE_EXTENSIONS_DIR
+      Value: '"$HOME/.local/share/code-server/extensions"'
+    Name: env
+  - Env:
+    - Key: IDE_ALLOW_HTTP
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: IDE_NO_AUTH
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    Name: env
+  - Chown: ""
+    From: coder-binary
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/code-server
+    - /usr/local/bin/code-server
+  - CmdLine:
+    - mkdir -p $IDE_USER_DATA_DIR/User && sudo mkdir /workspace  && sudo chown aima:aima
+      /workspace
+    Name: run
+    PrependShell: true
+  - Chown: aima:aima
+    From: vscode-env
+    Name: copy
+    SourcesAndDest:
+    - /root/VSCode-linux-x64/resources/app/out/nls.metadata.json
+    - $IDE_USER_DATA_DIR/nls.metadata.json
+  - Name: workdir
+    Path: /workspace
+  - Chown: aima:aima
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/settings.xml
+    - $M2_HOME/conf
+  - Name: expose
+    Ports:
+    - "8443"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/supervisord.conf
+    - /etc/supervisord.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/cloud-ide.sh
+    - /usr/local/bin/cloud-ide
+  - CmdLine:
+    - sudo wget -O /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.2/dumb-init_1.2.2_amd64
+      &&  sudo  chmod +x  /usr/local/bin/cloud-ide  && sudo  chmod +x /usr/local/bin/dumb-init
+      &&  pip install supervisor  && sudo ln -s $HOME/.pyenv/shims/supervisord /usr/local/bin/supervisord
+      && sudo ln -s $HOME/.pyenv/shims/supervisorctl /usr/local/bin/supervisorctl
+      && mkdir -p ${IDE_WORKSPACE}/.vscode
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/install-vscode.sh
+    - /usr/bin/install-vscode
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/install-ext.sh
+    - /usr/bin/install-ext
+  - Chown: aima:aima
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/init.sh
+    - ${IDE_WORKSPACE}/.vscode
+  - CmdLine:
+    - sudo chmod +x  /usr/bin/install-vscode && sudo chmod +x  /usr/bin/install-ext
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/dumb-init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/local/bin/supervisord
+    - -n
+    - -c
+    - /etc/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: aimacity/workspace-full
+  Name: ""
+  Platform: ""
+  SourceCode: FROM aimacity/workspace-full

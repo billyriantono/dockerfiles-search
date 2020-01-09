@@ -1,0 +1,111 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "SHELLCHECK_BUILDER_BASE_IMAGE",
+      "DefaultValue": "\"fleshgrinder/debian:stretch-build\"",
+      "ProvidedValue": null,
+      "Value": "\"fleshgrinder/debian:stretch-build\""
+    },
+    {
+      "Key": "SHELLCHECK_BASE_IMAGE",
+      "DefaultValue": "\"fleshgrinder/debian:stretch\"",
+      "ProvidedValue": null,
+      "Value": "\"fleshgrinder/debian:stretch\""
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "shellcheck-build",
+      "BaseName": "${SHELLCHECK_BUILDER_BASE_IMAGE}",
+      "SourceCode": "FROM ${SHELLCHECK_BUILDER_BASE_IMAGE} AS shellcheck-build",
+      "Platform": "",
+      "As": "shellcheck-build",
+      "From": {
+        "Image": "${SHELLCHECK_BUILDER_BASE_IMAGE}"
+      },
+      "Commands": [
+        {
+          "Key": "SHELLCHECK_VERSION_REF",
+          "Name": "arg",
+          "Value": "\"master\""
+        },
+        {
+          "CmdLine": [
+            "apt-install git ghc cabal-install  \u0026\u0026 mkdir -p /usr/src/shellcheck  \u0026\u0026 cd /usr/src/shellcheck  \u0026\u0026 git clone https://github.com/koalaman/shellcheck.git .  \u0026\u0026 git checkout ${SHELLCHECK_VERSION_REF}  \u0026\u0026 cabal update \u0026\u0026 cabal install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "PATH",
+              "Value": "\"$PATH:/root/.cabal/bin\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "mkdir -p  /package/bin /package/lib  \u0026\u0026 cp $(which shellcheck) /package/bin/  \u0026\u0026 ldd $(which shellcheck) | grep \"=\u003e /\" | awk '{print $3}' | xargs -I '{}' cp -v '{}' /package/lib/"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "shellcheck",
+      "BaseName": "${SHELLCHECK_BASE_IMAGE}",
+      "SourceCode": "FROM ${SHELLCHECK_BASE_IMAGE} AS shellcheck",
+      "Platform": "",
+      "As": "shellcheck",
+      "From": {
+        "Image": "${SHELLCHECK_BASE_IMAGE}"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "shellcheck-build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/package/bin/",
+            "/usr/local/bin/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "shellcheck-build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/package/lib/",
+            "/usr/local/lib/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "resources/docker/bin/shellcheckw",
+            "/usr/local/bin/shellcheckw"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apt-install bash file  \u0026\u0026 ldconfig /usr/local/lib"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "shellcheckw"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: postgres:10
+  Commands:
+  - Key: USE_POSTGIS
+    Name: arg
+    Value: "true"
+  - Env:
+    - Key: PLUGIN_VERSION
+      Value: v1.0.0.Final
+    Name: env
+  - Env:
+    - Key: PROTOC_VERSION
+      Value: "1.3"
+    Name: env
+  - Env:
+    - Key: WAL2JSON_COMMIT_ID
+      Value: 92b33c7d7c2fccbeb9f79455dafbc92e87e00ddd
+    Name: env
+  - CmdLine:
+    - apt-get update     && apt-get install -f -y --no-install-recommends         software-properties-common         build-essential         pkg-config         git         postgresql-server-dev-$PG_MAJOR     &&
+      add-apt-repository "deb http://ftp.debian.org/debian testing main contrib"     &&
+      apt-get update && apt-get install -f -y --no-install-recommends         libprotobuf-c-dev=$PROTOC_VERSION.*     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/debezium/postgres-decoderbufs -b $PLUGIN_VERSION
+      --single-branch     && cd /postgres-decoderbufs     && make && make install     &&
+      cd /     && rm -rf postgres-decoderbufs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/eulerto/wal2json -b master --single-branch     &&
+      cd /wal2json     && git checkout $WAL2JSON_COMMIT_ID     && make && make install     &&
+      cd /     && rm -rf wal2json
+    Name: run
+    PrependShell: true
+  From:
+    Image: postgres:10
+  Name: build
+  Platform: ""
+  SourceCode: FROM postgres:10 AS build
+- BaseName: postgres:10
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Debezium Community"'
+    Name: label
+  - Env:
+    - Key: POSTGIS_VERSION
+      Value: "2.4"
+    Name: env
+  - CmdLine:
+    - apt-get update     && apt-get install -f -y --no-install-recommends         software-properties-common     &&
+      if [ "$USE_POSTGIS" != "false" ]; then apt-get install -f -y --no-install-recommends         postgresql-$PG_MAJOR-postgis-$POSTGIS_VERSION         postgresql-$PG_MAJOR-postgis-$POSTGIS_VERSION-scripts         postgis;        fi     &&
+      add-apt-repository "deb http://ftp.debian.org/debian testing main contrib"     &&
+      apt-get update && apt-get install -f -y --no-install-recommends         libprotobuf-c1     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/postgresql/$PG_MAJOR/lib/decoderbufs.so
+    - /usr/lib/postgresql/$PG_MAJOR/lib/wal2json.so
+    - /usr/lib/postgresql/$PG_MAJOR/lib/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/postgresql/$PG_MAJOR/extension/decoderbufs.control
+    - /usr/share/postgresql/$PG_MAJOR/extension/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - postgresql.conf.sample
+    - /usr/share/postgresql/postgresql.conf.sample
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /docker-entrypoint-initdb.d
+    - /docker-entrypoint-initdb.d
+  From:
+    Image: postgres:10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM postgres:10

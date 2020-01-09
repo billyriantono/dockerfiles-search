@@ -1,0 +1,106 @@
+MetaArgs: null
+Stages:
+- As: builder-frontend
+  BaseName: node:12
+  Commands:
+  - Name: workdir
+    Path: /root/workdir
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./frontend/src/main/javascript
+    - .
+  - CmdLine:
+    - npm ci
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12
+  Name: builder-frontend
+  Platform: ""
+  SourceCode: FROM node:12 as builder-frontend
+- As: builder-backend
+  BaseName: maven:3
+  Commands:
+  - Name: workdir
+    Path: /root/workdir
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Chown: ""
+    From: builder-frontend
+    Name: copy
+    SourcesAndDest:
+    - /root/workdir/dist
+    - ./frontend/target/classes
+  - CmdLine:
+    - mvn install package -P !build-frontend
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3
+  Name: builder-backend
+  Platform: ""
+  SourceCode: FROM maven:3 as builder-backend
+- As: builder-ltsmin
+  BaseName: debian
+  Commands:
+  - Name: workdir
+    Path: /root/workdir
+  - CmdLine:
+    - apt-get update -qq && apt-get upgrade -qq && apt-get install -qq wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget http://github.com/utwente-fmt/ltsmin/releases/download/v3.0.2/ltsmin-v3.0.2-linux.tgz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar -xzf ltsmin-v3.0.2-linux.tgz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv v3.0.2 ltsmin
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian
+  Name: builder-ltsmin
+  Platform: ""
+  SourceCode: FROM debian as builder-ltsmin
+- BaseName: openjdk:12
+  Commands:
+  - Chown: ""
+    From: builder-backend
+    Name: copy
+    SourcesAndDest:
+    - /root/workdir/build/target/alex-1.8.0-SNAPSHOT.war
+    - /usr/share/java/alex/alex.war
+  - Chown: ""
+    From: builder-ltsmin
+    Name: copy
+    SourcesAndDest:
+    - /root/workdir/ltsmin
+    - /opt/ltsmin
+  - Name: workdir
+    Path: /var/lib/alex
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - java -jar /usr/share/java/alex/alex.war --ltsmin.path=/opt/ltsmin/bin
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: openjdk:12
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:12

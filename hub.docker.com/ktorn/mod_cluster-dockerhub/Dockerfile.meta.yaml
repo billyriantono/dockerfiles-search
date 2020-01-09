@@ -1,0 +1,140 @@
+MetaArgs: null
+Stages:
+- BaseName: fedora:22
+  Commands:
+  - Maintainer: Michal Karm Babacek <karm@redhat.com>
+    Name: maintainer
+  - Env:
+    - Key: HTTPD_BRANCH
+      Value: 2.4.17
+    Name: env
+  - Env:
+    - Key: APR_BRANCH
+      Value: 1.5.1
+    Name: env
+  - Env:
+    - Key: APR_UTIL_BRANCH
+      Value: 1.5.4
+    Name: env
+  - Env:
+    - Key: MOD_CLUSTER_BRANCH
+      Value: 1.3.10.Final
+    Name: env
+  - Env:
+    - Key: MOD_CLUSTER_MODULES
+      Value: advertise mod_cluster_slotmem mod_manager mod_proxy_cluster
+    Name: env
+  - Env:
+    - Key: HTTPD_DIST
+      Value: https://github.com/apache/httpd/archive/${HTTPD_BRANCH}.zip
+    Name: env
+  - Env:
+    - Key: APR_DIST
+      Value: https://github.com/apache/apr/archive/${APR_BRANCH}.zip
+    Name: env
+  - Env:
+    - Key: APR_UTIL_DIST
+      Value: https://github.com/apache/apr-util/archive/${APR_UTIL_BRANCH}.zip
+    Name: env
+  - Env:
+    - Key: MOD_CLUSTER_DIST
+      Value: https://github.com/modcluster/mod_cluster/archive/${MOD_CLUSTER_BRANCH}.zip
+    Name: env
+  - Env:
+    - Key: COMPILETIME_DEPS
+      Value: binutils libtool openssl-devel unzip make autoconf gcc file which
+    Name: env
+  - Env:
+    - Key: HTTPD_MC_BUILD_DIR
+      Value: /opt/httpd-build
+    Name: env
+  - Env:
+    - Key: CFLAGS
+      Value: '"-Wno-error=declaration-after-statement -O2"'
+    Name: env
+  - Name: workdir
+    Path: /opt
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ${HTTPD_DIST}
+    - ${APR_DIST}
+    - ${APR_UTIL_DIST}
+    - ${MOD_CLUSTER_DIST}
+    - /opt/
+  - CmdLine:
+    - dnf -y update && dnf -y install iproute ${COMPILETIME_DEPS} && dnf clean all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip ${HTTPD_BRANCH}.zip && rm -rf ${HTTPD_BRANCH}.zip &&     unzip ${APR_BRANCH}.zip
+      && mv apr-* httpd-${HTTPD_BRANCH}/srclib/apr && rm -rf ${APR_BRANCH}.zip &&     unzip
+      ${APR_UTIL_BRANCH}.zip && mv apr-util* httpd-${HTTPD_BRANCH}/srclib/apr-util
+      && rm -rf ${APR_UTIL_BRANCH}.zip &&     unzip ${MOD_CLUSTER_BRANCH}.zip && rm
+      -rf ${MOD_CLUSTER_BRANCH}.zip &&     cd /opt/httpd-${HTTPD_BRANCH} &&     ./buildconf
+      && ./configure --prefix=${HTTPD_MC_BUILD_DIR} --with-mpm=worker --enable-mods-shared=most         --enable-maintainer-mode
+      --with-expat=builtin --enable-ssl --enable-proxy --enable-proxy-http         --enable-proxy-ajp
+      --disable-proxy-balancer --with-threads     && make && make install &&     cd
+      /opt/mod_cluster-${MOD_CLUSTER_BRANCH}/native &&     for module in ${MOD_CLUSTER_MODULES};do
+      cd $module;         ./buildconf && ./configure --with-apxs=${HTTPD_MC_BUILD_DIR}/bin/apxs         &&
+      make && make install && cp *.so ${HTTPD_MC_BUILD_DIR}/modules/         && cd
+      ..;     done;     rm -rf /opt/httpd-${HTTPD_BRANCH} /opt/mod_cluster-${MOD_CLUSTER_BRANCH}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mod_cluster.conf
+    - ${HTTPD_MC_BUILD_DIR}/conf/extra/mod_cluster.conf
+  - CmdLine:
+    - cat  ${HTTPD_MC_BUILD_DIR}/conf/extra/mod_cluster.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/LogLevel warn/LogLevel debug/g' ${HTTPD_MC_BUILD_DIR}/conf/httpd.conf
+      &&     echo "Include conf/extra/httpd-mpm.conf" >> ${HTTPD_MC_BUILD_DIR}/conf/httpd.conf
+      &&     echo "Include conf/extra/httpd-default.conf" >> ${HTTPD_MC_BUILD_DIR}/conf/httpd.conf
+      &&     echo "Include conf/extra/mod_cluster.conf" >> ${HTTPD_MC_BUILD_DIR}/conf/httpd.conf
+      &&     ${HTTPD_MC_BUILD_DIR}/bin/apachectl start && sleep 5 &&     cat ${HTTPD_MC_BUILD_DIR}/logs/error_log  &&     cat
+      ${HTTPD_MC_BUILD_DIR}/conf/httpd.conf &&     grep "Apache/" ${HTTPD_MC_BUILD_DIR}/logs/error_log
+      &&     grep "mod_cluster/.* configured -- resuming normal operations" ${HTTPD_MC_BUILD_DIR}/logs/error_log
+      &&     grep "update_workers_node starting" ${HTTPD_MC_BUILD_DIR}/logs/error_log
+      &&     [ "`grep -c 'error\|Segmentation fault\|Invalid argument\|mismatch detected'
+      ${HTTPD_MC_BUILD_DIR}/logs/error_log`" -eq 0 ] &&     ${HTTPD_MC_BUILD_DIR}/bin/apachectl
+      stop &&     rm -rf ${HTTPD_MC_BUILD_DIR}/logs/* && rm -rf ${HTTPD_MC_BUILD_DIR}/cache/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - 80/tcp
+  - Name: expose
+    Ports:
+    - 6666/tcp
+  - Name: expose
+    Ports:
+    - 23364/udp
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - chmod +x /docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - start
+    - -DFOREGROUND
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: fedora:22
+  Name: ""
+  Platform: ""
+  SourceCode: FROM fedora:22

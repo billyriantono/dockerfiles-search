@@ -1,0 +1,168 @@
+MetaArgs: null
+Stages:
+- BaseName: centos:centos7
+  Commands:
+  - Maintainer: devops@signiant.com
+    Name: maintainer
+  - CmdLine:
+    - yum install -y wget     && rpm -ivh https://dl.fedoraproject.org/pub/epel/7/x86_64/Packages/e/$(wget
+      -q -O - https://dl.fedoraproject.org/pub/epel/7/x86_64/Packages/e/ | grep -o
+      'epel-release-[0-9]*\-[0-9]*\.noarch.rpm'| head -1)
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - yum-packages.list
+    - /tmp/yum-packages.list
+  - CmdLine:
+    - chmod +r /tmp/yum-packages.list     && yum install -y -q `cat /tmp/yum-packages.list`     &&
+      yum update -y     && yum clean all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/curl -O https://bootstrap.pypa.io/get-pip.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python get-pip.py
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NAGIOS_VERSION
+      Value: 4.4.1
+    Name: env
+  - Env:
+    - Key: NAGIOS_PLUGINS_VERSION
+      Value: 2.1.2
+    Name: env
+  - Env:
+    - Key: NAGIOS_HOME
+      Value: /usr/local/nagios
+    Name: env
+  - Env:
+    - Key: NAGIOS_USER
+      Value: nagios
+    Name: env
+  - Env:
+    - Key: NAGIOS_UID
+      Value: "1000"
+    Name: env
+  - Env:
+    - Key: NAGIOS_GID
+      Value: "1000"
+    Name: env
+  - Env:
+    - Key: NAGIOS_GROUP
+      Value: nagios
+    Name: env
+  - Env:
+    - Key: NAGIOS_CMDUSER
+      Value: nagios
+    Name: env
+  - Env:
+    - Key: NAGIOS_CMDGROUP
+      Value: nagios
+    Name: env
+  - Env:
+    - Key: NAGIOSADMIN_USER
+      Value: nagiosadmin
+    Name: env
+  - Env:
+    - Key: NAGIOSADMIN_PASS
+      Value: nagios
+    Name: env
+  - Env:
+    - Key: APACHE_RUN_USER
+      Value: nagios
+    Name: env
+  - Env:
+    - Key: APACHE_RUN_GROUP
+      Value: nagios
+    Name: env
+  - Env:
+    - Key: NAGIOS_TIMEZONE
+      Value: UTC
+    Name: env
+  - CmdLine:
+    - ( egrep -i  "^${NAGIOS_GROUP}" /etc/group || groupadd -g $NAGIOS_GID $NAGIOS_GROUP
+      ) && ( egrep -i "^${NAGIOS_CMDGROUP}" /etc/group || groupadd -g $NAGIOS_GID
+      $NAGIOS_CMDGROUP )
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ( id -u $NAGIOS_USER || useradd --system $NAGIOS_USER -u $NAGIOS_UID -g $NAGIOS_GROUP
+      -d $NAGIOS_HOME ) && ( id -u $NAGIOS_CMDUSER || useradd --system -u $NAGIOS_UID
+      -d $NAGIOS_HOME -g $NAGIOS_CMDGROUP $NAGIOS_CMDUSER )
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - usermod -G $NAGIOS_CMDGROUP apache
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget http://downloads.sourceforge.net/project/nagios/nagios-4.x/nagios-$NAGIOS_VERSION/nagios-$NAGIOS_VERSION.tar.gz
+      -O /tmp/nagios.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget http://nagios-plugins.org/download/nagios-plugins-$NAGIOS_PLUGINS_VERSION.tar.gz
+      -O /tmp/nagios-plugins.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd /tmp && tar -zxvf nagios.tar.gz     && cd nagios-$NAGIOS_VERSION     &&
+      ./configure --prefix=${NAGIOS_HOME} --exec-prefix=${NAGIOS_HOME} --enable-event-broker
+      --with-nagios-command-user=${NAGIOS_CMDUSER} --with-command-group=${NAGIOS_CMDGROUP}
+      --with-nagios-user=${NAGIOS_USER} --with-nagios-group=${NAGIOS_GROUP}     &&
+      make all \t&& make install \t&& make install-config \t&& make install-commandmode
+      \t&& cp sample-config/httpd.conf /etc/httpd/conf.d/nagios.conf   && make clean
+      \  && cd /tmp   && rm -rf nagios-$NAGIOS_VERSION"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd /tmp && tar -zxvf nagios-plugins.tar.gz     && cd nagios-plugins-$NAGIOS_PLUGINS_VERSION
+      \t&& ./configure --prefix=${NAGIOS_HOME} --with-openssl=/usr/bin/openssl \t&&
+      make \t&& make install \t&& chown -R ${NAGIOS_USER}:${NAGIOS_GROUP} ${NAGIOS_HOME}/libexec
+      \  && make clean   && cd /tmp   && rm -rf nagios-plugins-$NAGIOS_PLUGINS_VERSION"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://assets.nagios.com/downloads/ncpa/check_ncpa.tar.gz -O /tmp/check_ncpa.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp && tar xvzf check_ncpa.tar.gz     && chown ${NAGIOS_USER}:${NAGIOS_GROUP}
+      check_ncpa.py     && cp check_ncpa.py $NAGIOS_HOME/libexec
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "use_timezone=$NAGIOS_TIMEZONE" >> ${NAGIOS_HOME}/etc/nagios.cfg && echo
+      "SetEnv TZ \"${NAGIOS_TIMEZONE}\"" >> /etc/httpd/conf.d/nagios.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ssl.conf
+    - /etc/httpd/conf.d/ssl.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - index.html
+    - /var/www/html/index.html
+  - Name: expose
+    Ports:
+    - "443"
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - start.sh
+    - /usr/local/bin/start_nagios
+  From:
+    Image: centos:centos7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:centos7

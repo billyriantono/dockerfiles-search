@@ -1,0 +1,126 @@
+MetaArgs: null
+Stages:
+- As: maven-jars
+  BaseName: solsson/curl@sha256:92ebf15ac57bea360484480336ed5d9fa16d38d773fd00f7e9fb2cae94baf25a
+  Commands:
+  - CmdLine:
+    - curl -o /slf4j-simple-1.7.25.jar http://central.maven.org/maven2/org/slf4j/slf4j-simple/1.7.25/slf4j-simple-1.7.25.jar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -o /slf4j-nop-1.7.25.jar http://central.maven.org/maven2/org/slf4j/slf4j-nop/1.7.25/slf4j-nop-1.7.25.jar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -o /quarkus-kafka-client-0.16.1.jar http://central.maven.org/maven2/io/quarkus/quarkus-kafka-client/0.16.1/quarkus-kafka-client-0.16.1.jar
+    Name: run
+    PrependShell: true
+  From:
+    Image: solsson/curl@sha256:92ebf15ac57bea360484480336ed5d9fa16d38d773fd00f7e9fb2cae94baf25a
+  Name: maven-jars
+  Platform: ""
+  SourceCode: FROM solsson/curl@sha256:92ebf15ac57bea360484480336ed5d9fa16d38d773fd00f7e9fb2cae94baf25a
+    as maven-jars
+- As: jopt-simple-jar
+  BaseName: solsson/jar-jopt-simple:5.0.4-reflectless@sha256:703496c5b5bae98d72b2afb58a5de1d74ea6a2a41a09b10c2cf1cef09a78c049
+  Commands: null
+  From:
+    Image: solsson/jar-jopt-simple:5.0.4-reflectless@sha256:703496c5b5bae98d72b2afb58a5de1d74ea6a2a41a09b10c2cf1cef09a78c049
+  Name: jopt-simple-jar
+  Platform: ""
+  SourceCode: FROM solsson/jar-jopt-simple:5.0.4-reflectless@sha256:703496c5b5bae98d72b2afb58a5de1d74ea6a2a41a09b10c2cf1cef09a78c049
+    as jopt-simple-jar
+- As: dist
+  BaseName: solsson/kafka@sha256:9f1f0e769cd10e0503bc5649f9fcb0fc2c28aaf8e3b9b30ef2e6da67655bb3f6
+  Commands:
+  - Chown: ""
+    From: maven-jars
+    Name: copy
+    SourcesAndDest:
+    - /slf4j-nop-1.7.25.jar
+    - /opt/kafka/libs/slf4j-nop-1.7.25.jar
+  - CmdLine:
+    - /opt/java/openjdk/bin/java
+    - -cp
+    - ./libs/kafka_2.12-2.2.1.jar:./libs/kafka-clients-2.2.1.jar:./libs/scala-library-2.12.8.jar:./libs/scala-logging_2.12-3.9.0.jar:./libs/slf4j-api-1.7.25.jar:./libs/slf4j-nop-1.7.25.jar:./libs/jopt-simple-5.0.4.jar:./libs/zookeeper-3.4.13.jar:./libs/metrics-core-2.2.0.jar:./libs/jackson-core-2.9.8.jar:./libs/jackson-databind-2.9.8.jar:./libs/jackson-annotations-2.9.8.jar:./libs/zkclient-0.11.jar
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - kafka.admin.TopicCommand
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: solsson/kafka@sha256:9f1f0e769cd10e0503bc5649f9fcb0fc2c28aaf8e3b9b30ef2e6da67655bb3f6
+  Name: dist
+  Platform: ""
+  SourceCode: FROM solsson/kafka@sha256:9f1f0e769cd10e0503bc5649f9fcb0fc2c28aaf8e3b9b30ef2e6da67655bb3f6
+    as dist
+- As: native-build
+  BaseName: oracle/graalvm-ce:19.0.2@sha256:684ba0e822eb2f569ffef96abb315f5b66550c4e7d5d38ad6570b72f0ce06c35
+  Commands:
+  - CmdLine:
+    - gu install native-image
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/kafka
+  - Chown: ""
+    From: dist
+    Name: copy
+    SourcesAndDest:
+    - /opt/kafka
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - reflection.json
+    - .
+  - Chown: ""
+    From: maven-jars
+    Name: copy
+    SourcesAndDest:
+    - /quarkus-kafka-client-0.16.1.jar
+    - ./libs/quarkus-kafka-client-0.16.1.jar
+  - Chown: ""
+    From: jopt-simple-jar
+    Name: copy
+    SourcesAndDest:
+    - /jopt-simple-5.0.4.jar
+    - ./libs/jopt-simple-5.0.4.jar
+  - CmdLine:
+    - native-image   --no-server   -H:Name=kafka-topics   --report-unsupported-elements-at-runtime   -H:+ReportExceptionStackTraces   --no-fallback   -H:IncludeResourceBundles=joptsimple.HelpFormatterMessages   -H:IncludeResourceBundles=joptsimple.ExceptionMessages   -H:ReflectionConfigurationFiles=reflection.json   -cp
+      ./libs/kafka_2.12-2.2.1.jar:./libs/kafka-clients-2.2.1.jar:./libs/scala-library-2.12.8.jar:./libs/scala-logging_2.12-3.9.0.jar:./libs/slf4j-api-1.7.25.jar:./libs/slf4j-nop-1.7.25.jar:./libs/jopt-simple-5.0.4.jar:./libs/zookeeper-3.4.13.jar:./libs/metrics-core-2.2.0.jar:./libs/jackson-core-2.9.8.jar:./libs/jackson-databind-2.9.8.jar:./libs/jackson-annotations-2.9.8.jar:./libs/zkclient-0.11.jar:./libs/log4j-1.2.17.jar:./libs/lz4-java-1.5.0.jar:./libs/quarkus-kafka-client-0.16.1.jar   kafka.admin.TopicCommand
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./kafka-topics --help 2>&1 | grep REQUIRED
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./kafka-topics
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: oracle/graalvm-ce:19.0.2@sha256:684ba0e822eb2f569ffef96abb315f5b66550c4e7d5d38ad6570b72f0ce06c35
+  Name: native-build
+  Platform: ""
+  SourceCode: FROM oracle/graalvm-ce:19.0.2@sha256:684ba0e822eb2f569ffef96abb315f5b66550c4e7d5d38ad6570b72f0ce06c35
+    as native-build
+- BaseName: oraclelinux:7-slim@sha256:0de5413fba176b3b03a7aaa3c9bd1583371ad88314b29927327ff97d5a94e7f7
+  Commands:
+  - Chown: ""
+    From: native-build
+    Name: copy
+    SourcesAndDest:
+    - /opt/kafka/kafka-topics
+    - /usr/local/bin/kafka-topics
+  - CmdLine:
+    - kafka-topics
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: oraclelinux:7-slim@sha256:0de5413fba176b3b03a7aaa3c9bd1583371ad88314b29927327ff97d5a94e7f7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM oraclelinux:7-slim@sha256:0de5413fba176b3b03a7aaa3c9bd1583371ad88314b29927327ff97d5a94e7f7

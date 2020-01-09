@@ -1,0 +1,112 @@
+MetaArgs: null
+Stages:
+- As: bundler
+  BaseName: ruby:2.6.5-alpine3.10
+  Commands:
+  - Env:
+    - Key: API_DIR
+      Value: /hackaru
+    Name: env
+  - Name: workdir
+    Path: $API_DIR
+  - CmdLine:
+    - apk -U upgrade  && apk add --update --no-cache -t build-dependencies     build-base     postgresql-dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gemfile
+    - Gemfile.lock
+    - $API_DIR/
+  - CmdLine:
+    - bundle install -j4
+    Name: run
+    PrependShell: true
+  From:
+    Image: ruby:2.6.5-alpine3.10
+  Name: bundler
+  Platform: ""
+  SourceCode: FROM ruby:2.6.5-alpine3.10 as bundler
+- As: node
+  BaseName: node:13-alpine
+  Commands:
+  - Env:
+    - Key: API_DIR
+      Value: /hackaru
+    Name: env
+  - Name: workdir
+    Path: $API_DIR
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - yarn.lock
+    - $API_DIR/
+  - CmdLine:
+    - yarn
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:13-alpine
+  Name: node
+  Platform: ""
+  SourceCode: FROM node:13-alpine as node
+- BaseName: ruby:2.6.5-alpine3.10
+  Commands:
+  - Env:
+    - Key: API_DIR
+      Value: /hackaru
+    Name: env
+  - Name: workdir
+    Path: $API_DIR
+  - Chown: ""
+    From: bundler
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bundle
+    - /usr/local/bundle
+  - Chown: ""
+    From: node
+    Name: copy
+    SourcesAndDest:
+    - /hackaru/node_modules
+    - /hackaru/node_modules
+  - Chown: ""
+    From: node
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/node
+    - /usr/local/bin/node
+  - CmdLine:
+    - apk -U upgrade  && apk add --update --no-cache     tzdata     postgresql-client     chromium     nss     freetype     freetype-dev     harfbuzz     ca-certificates     yarn  &&
+      addgroup hackaru  && adduser -s /bin/sh -D -G hackaru hackaru  && chown hackaru:hackaru
+      $API_DIR
+    Name: run
+    PrependShell: true
+  - Chown: hackaru:hackaru
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $API_DIR
+  - Name: user
+    User: hackaru
+  - CmdLine:
+    - /hackaru/bin/webpack
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rails
+    - s
+    - -b
+    - 0.0.0.0
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ruby:2.6.5-alpine3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ruby:2.6.5-alpine3.10

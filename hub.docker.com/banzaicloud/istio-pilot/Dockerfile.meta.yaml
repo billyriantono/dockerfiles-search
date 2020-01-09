@@ -1,0 +1,90 @@
+MetaArgs:
+- DefaultValue: default
+  Key: BASE_DISTRIBUTION
+  ProvidedValue: null
+  Value: default
+- DefaultValue: "1.4"
+  Key: BASE_VERSION
+  ProvidedValue: null
+  Value: "1.4"
+- DefaultValue: "1.13"
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: "1.13"
+Stages:
+- As: builder
+  BaseName: golang:${GO_VERSION}-alpine
+  Commands:
+  - CmdLine:
+    - mkdir -p /go/src/istio.io/istio
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/istio.io/istio
+  - Env:
+    - Key: ISTIO_ENVOY_LINUX_DEBUG_PATH
+      Value: /bin/false
+    Name: env
+  - Env:
+    - Key: ISTIO_ENVOY_LINUX_RELEASE_PATH
+      Value: /bin/false
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - CmdLine:
+    - apk --no-cache add bash=5.0.0-r0 make=4.2.1-r2 git=2.22.0-r0 ca-certificates=20190108-r0
+      curl=7.66.0-r0
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make build
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:${GO_VERSION}-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:${GO_VERSION}-alpine AS builder
+- As: default
+  BaseName: docker.io/istio/base:${BASE_VERSION}
+  Commands: null
+  From:
+    Image: docker.io/istio/base:${BASE_VERSION}
+  Name: default
+  Platform: ""
+  SourceCode: FROM docker.io/istio/base:${BASE_VERSION} as default
+- As: distroless
+  BaseName: gcr.io/distroless/static:latest
+  Commands: null
+  From:
+    Image: gcr.io/distroless/static:latest
+  Name: distroless
+  Platform: ""
+  SourceCode: FROM gcr.io/distroless/static:latest as distroless
+- BaseName: ${BASE_DISTRIBUTION}
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/out/linux_amd64/release/pilot-discovery
+    - /usr/local/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/istio.io/istio/tests/testdata/certs/cacert.pem
+    - /cacert.pem
+  - CmdLine:
+    - /usr/local/bin/pilot-discovery
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ${BASE_DISTRIBUTION}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${BASE_DISTRIBUTION}

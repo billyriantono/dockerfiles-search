@@ -1,0 +1,125 @@
+MetaArgs: null
+Stages:
+- As: client-builder
+  BaseName: node:current-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git     && mkdir /work     && chown node:node /work
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: node
+  - Chown: node:node
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/main/client
+    - /work/client
+  - Name: workdir
+    Path: /work/client
+  - CmdLine:
+    - ls -l
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npx ng version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npx ng build --prod=true --outputPath=/work/static --optimization=true
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:current-alpine
+  Name: client-builder
+  Platform: ""
+  SourceCode: FROM node:current-alpine as client-builder
+- As: java-builder
+  BaseName: openjdk:8-jdk-slim
+  Commands:
+  - CmdLine:
+    - mkdir -p /work/src     && mkdir -p /work/gradle     && mkdir -p /work/.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y imagemagick git     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .git
+    - /work/.git
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /work/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - gradle
+    - /work/gradle
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build.gradle
+    - settings.gradle
+    - gradlew
+    - /work/
+  - CmdLine:
+    - rm -rf /work/src/main/resources/static
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: client-builder
+    Name: copy
+    SourcesAndDest:
+    - /work/static
+    - /work/src/main/resources/static
+  - Name: workdir
+    Path: /work
+  - CmdLine:
+    - ./gradlew build --no-daemon
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8-jdk-slim
+  Name: java-builder
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-slim as java-builder
+- BaseName: openjdk:8-jre-slim
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y imagemagick     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: java-builder
+    Name: copy
+    SourcesAndDest:
+    - /work/build/libs/*.jar
+    - /opt/PreviewService.jar
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - java
+    - -Xmx4g
+    - -jar
+    - /opt/PreviewService.jar
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:8-jre-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre-slim

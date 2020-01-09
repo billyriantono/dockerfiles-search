@@ -1,0 +1,71 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.10
+  Commands:
+  - Key: TR_VERSION
+    Name: arg
+    Value: 2.94-r2
+  - Env:
+    - Key: TR_AUTH
+      Value: '"transmission:transmission"'
+    Name: env
+  - Health:
+      Test:
+      - CMD-SHELL
+      - transmission-remote --authenv --session-info
+      Timeout: 5000000000
+    Name: healthcheck
+  - CmdLine:
+    - mkdir -pv /etc/transmission-daemon/blocklists               /vol/downloads/.incomplete               /vol/watchdir     &&
+      adduser -DHs /sbin/nologin transmission
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./settings.json
+    - /etc/transmission-daemon/settings.json
+  - CmdLine:
+    - apk add --update     curl     transmission-cli=${TR_VERSION}     transmission-daemon=${TR_VERSION}     tzdata     &&
+      rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Key: BLOCKLIST_URL
+    Name: arg
+    Value: '"http://list.iblocklist.com/?list=bt_level1&fileformat=p2p&archiveformat=gz"'
+  - CmdLine:
+    - curl -sL ${BLOCKLIST_URL} | gunzip > /etc/transmission-daemon/blocklists/bt_level1     &&
+      chown -R transmission:transmission /etc/transmission-daemon     && echo -e '#!/usr/bin/env
+      sh \n set -o errexit \n transmission-remote --authenv --blocklist-update > /dev/stdout'
+      > /etc/periodic/hourly/blocklist-update     && chmod +x /etc/periodic/hourly/blocklist-update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -o /tmp/install-tr-control.sh -L https://raw.githubusercontent.com/ronggang/transmission-web-control/master/release/install-tr-control.sh     &&
+      chmod +x /tmp/install-tr-control.sh     && echo 1 | sh /tmp/install-tr-control.sh
+      /usr/share/transmission     && rm /tmp/install-tr-control.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "51413"
+    - 51413/udp
+    - "9091"
+  - Name: volume
+    Volumes:
+    - /etc/transmission-daemon
+    - /vol
+  - Name: user
+    User: transmission
+  - CmdLine:
+    - transmission-daemon --foreground --log-info     --config-dir /etc/transmission-daemon     --download-dir
+      /vol/downloads     --incomplete-dir /vol/downloads/.incomplete     -c /vol/watchdir     -t
+      --username ${TR_AUTH%:*} --password ${TR_AUTH#*:}
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10

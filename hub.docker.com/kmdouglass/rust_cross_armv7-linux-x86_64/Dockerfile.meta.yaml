@@ -1,0 +1,88 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: rust:1.39-buster
+  Commands:
+  - CmdLine:
+    - apt-get update  && apt-get install -y     gcc-arm-linux-gnueabihf  && apt-get
+      clean  && rm -rf /var/lib/apt/lists*
+    Name: run
+    PrependShell: true
+  From:
+    Image: rust:1.39-buster
+  Name: base
+  Platform: ""
+  SourceCode: FROM rust:1.39-buster as base
+- As: openssl_builder
+  BaseName: base
+  Commands:
+  - Key: OPEN_SSL_BUILD_DIR
+    Name: arg
+    Value: /tmp/openssl
+  - Key: OPEN_SSL_INSTALL_DIR
+    Name: arg
+    Value: /opt/openssl
+  - Key: OPEN_SSL_REPO
+    Name: arg
+    Value: https://github.com/openssl/openssl.git
+  - Key: OPEN_SSL_TAG
+    Name: arg
+    Value: OpenSSL_1_1_1d
+  - CmdLine:
+    - mkdir -p ${OPEN_SSL_BUILD_DIR} ${OPEN_SSL_INSTALL_DIR}  && git clone --branch
+      ${OPEN_SSL_TAG} ${OPEN_SSL_REPO} ${OPEN_SSL_BUILD_DIR}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${OPEN_SSL_BUILD_DIR}
+  - CmdLine:
+    - ./Configure linux-generic32                 shared                 --prefix=${OPEN_SSL_INSTALL_DIR}                 --openssldir=${OPEN_SSL_INSTALL_DIR}/openssl                 --cross-compile-prefix=/usr/bin/arm-linux-gnueabihf-  &&
+      make depend  && make  && make install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: openssl_builder
+  Platform: ""
+  SourceCode: FROM base as openssl_builder
+- As: kpal_builder
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: OPEN_SSL_INSTALL_DIR
+      Value: /opt/openssl
+    Name: env
+  - Env:
+    - Key: ARMV7_UNKNOWN_LINUX_GNUEABIHF_OPENSSL_LIB_DIR
+      Value: ${OPEN_SSL_INSTALL_DIR}/lib
+    Name: env
+  - Env:
+    - Key: ARMV7_UNKNOWN_LINUX_GNUEABIHF_OPENSSL_INCLUDE_DIR
+      Value: ${OPEN_SSL_INSTALL_DIR}/include
+    Name: env
+  - Chown: ""
+    From: openssl_builder
+    Name: copy
+    SourcesAndDest:
+    - ${OPEN_SSL_INSTALL_DIR}
+    - ${OPEN_SSL_INSTALL_DIR}
+  - CmdLine:
+    - apt-get update  && apt-get install -y --no-install-recommends     docker.io  &&
+      apt-get clean  && rm -rf /var/lib/apt/lists*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rustup component add rustfmt  && rustup component add clippy  && rustup target
+      add armv7-unknown-linux-gnueabihf  && mkdir ${HOME}/.cargo  && echo '[target.armv7-unknown-linux-gnueabihf]\nlinker
+      = "arm-linux-gnueabihf-gcc"\n' >> ${HOME}/.cargo/config
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: kpal_builder
+  Platform: ""
+  SourceCode: FROM base as kpal_builder

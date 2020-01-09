@@ -1,0 +1,61 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:7.8
+  Commands:
+  - Maintainer: Mike Babineau michael.babineau@gmail.com
+    Name: maintainer
+  - Env:
+    - Key: ZK_RELEASE
+      Value: '"http://www.apache.org/dist/zookeeper/zookeeper-3.4.6/zookeeper-3.4.6.tar.gz"'
+    - Key: EXHIBITOR_POM
+      Value: '"https://raw.githubusercontent.com/Netflix/exhibitor/d911a16d704bbe790d84bbacc655ef050c1f5806/exhibitor-standalone/src/main/resources/buildscripts/standalone/maven/pom.xml"'
+    - Key: BUILD_DEPS
+      Value: '"curl maven openjdk-7-jdk+"'
+    - Key: DEBIAN_FRONTEND
+      Value: '"noninteractive"'
+    Name: env
+  - CmdLine:
+    - apt-get update     && apt-get install -y --allow-unauthenticated --no-install-recommends
+      $BUILD_DEPS     && update-java-alternatives -s java-1.7.0-openjdk-amd64     &&
+      grep '^networkaddress.cache.ttl=' /etc/java-7-openjdk/security/java.security
+      || echo 'networkaddress.cache.ttl=60' >> /etc/java-7-openjdk/security/java.security     &&
+      curl -Lo /tmp/zookeeper.tgz $ZK_RELEASE     && mkdir -p /opt/zookeeper/transactions
+      /opt/zookeeper/snapshots     && tar -xzf /tmp/zookeeper.tgz -C /opt/zookeeper
+      --strip=1     && rm /tmp/zookeeper.tgz     && mkdir -p /opt/exhibitor     &&
+      curl -Lo /opt/exhibitor/pom.xml $EXHIBITOR_POM     && mvn -f /opt/exhibitor/pom.xml
+      package     && ln -s /opt/exhibitor/target/exhibitor*jar /opt/exhibitor/exhibitor.jar     &&
+      apt-get purge -y --auto-remove $BUILD_DEPS     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - include/wrapper.sh
+    - /opt/exhibitor/wrapper.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - include/web.xml
+    - /opt/exhibitor/web.xml
+  - Name: user
+    User: root
+  - Name: workdir
+    Path: /opt/exhibitor
+  - Name: expose
+    Ports:
+    - "2181"
+    - "2888"
+    - "3888"
+    - "8181"
+    - "8250"
+  - CmdLine:
+    - bash
+    - -ex
+    - /opt/exhibitor/wrapper.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:7.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:7.8

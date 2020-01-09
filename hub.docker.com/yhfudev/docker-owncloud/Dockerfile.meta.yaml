@@ -1,0 +1,149 @@
+MetaArgs: null
+Stages:
+- BaseName: yhfudev/docker-lamp
+  Commands:
+  - Maintainer: yhfu <yhfudev@gmail.com>
+    Name: maintainer
+  - CmdLine:
+    - pacman -Syy
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: REGENERATE_SSL_CERT
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: START_APACHE
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: START_MYSQL
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: MAX_UPLOAD_SIZE
+      Value: 30G
+    Name: env
+  - Env:
+    - Key: TARGET_SUBDIR
+      Value: owncloud
+    Name: env
+  - Env:
+    - Key: OC_VERSION
+      Value: '''*'''
+    Name: env
+  - CmdLine:
+    - rm -f /srv/http/info.php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pacman -Suy --noconfirm --needed sudo smbclient ffmpeg libreoffice-fresh php-ldap
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo sed -i 's,;extension=ldap.so,extension=ldap.so,g' /etc/php/php.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pacman -Sw --noconfirm --needed owncloud
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pacman -U --noconfirm --needed /var/cache/pacman/pkg/owncloud-${OC_VERSION}-any.pkg.tar.xz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - configs/oc-config.php
+    - /usr/share/webapps/owncloud/config/config.php
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - fixPerms.sh
+    - /root/fixPerms.sh
+  - CmdLine:
+    - chmod +x /root/fixPerms.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /root/fixPerms.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pacman -S --noconfirm --needed     owncloud-app-bookmarks     owncloud-app-calendar     owncloud-app-contacts     owncloud-app-documents     owncloud-app-gallery
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -e 's,^DAVLockDB /home/httpd/DAV/DAVLock,#&,g'         -e 's,^LoadModule
+      dav_module modules/mod_dav.so,#&,g'         -e 's,^LoadModule dav_fs_module
+      modules/mod_dav_fs.so,#&,g'         -e 's,^LoadModule dav_lock_module modules/mod_dav_lock.so,#&,g'         -i
+      /etc/httpd/conf/httpd.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -e "s,php_value upload_max_filesize 513M,php_value upload_max_filesize ${MAX_UPLOAD_SIZE},g"         -e
+      "s,php_value post_max_size 513M,php_value post_max_size ${MAX_UPLOAD_SIZE},g"         -e
+      's,<IfModule mod_php5.c>,<IfModule mod_php5.c>\nphp_value output_buffering Off,g'         -i
+      /usr/share/webapps/owncloud/.htaccess
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed     -e 's|open_basedir = /srv/http/:/home/:/tmp/:/usr/share/pear/:/usr/share/webapps/|open_basedir
+      = /srv/http/:/home/:/tmp/:/usr/share/pear/:/usr/share/webapps/:/etc/webapps/|g'     -e
+      's/;extension=posix.so/extension=posix.so/g'     -i /etc/php/php.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /etc/webapps/owncloud/apache.example.conf /etc/httpd/conf/extra/owncloud.conf  &&
+      sed -e '/<VirtualHost/,/<\/VirtualHost>/d'         -e 's,Alias /owncloud /usr/share/webapps/owncloud/,Alias
+      /${TARGET_SUBDIR} /usr/share/webapps/owncloud/,g'         -e '/<Directory \/usr\/share\/webapps\/owncloud\/>/a
+      Header always add Strict-Transport-Security "max-age=15768000; includeSubDomains;
+      preload"'         -e 's,php_admin_value open_basedir "[^"]*,&:/dev/urandom,g'         -i
+      /etc/httpd/conf/extra/owncloud.conf  && sed -i '$a Include conf/extra/owncloud.conf'
+      /etc/httpd/conf/httpd.conf  && chown -R http:http /usr/share/webapps/owncloud/
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /usr/share/webapps/owncloud/data
+  - Name: volume
+    Volumes:
+    - /etc/webapps/owncloud/config
+  - Name: volume
+    Volumes:
+    - /usr/share/webapps/owncloud/apps
+  - Name: volume
+    Volumes:
+    - /https
+  - CmdLine:
+    - pacman -S --noconfirm --needed cronie  && systemctl enable cronie.service
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - configs/cron.conf
+    - /etc/oc-cron.conf
+  - CmdLine:
+    - 'crontab /etc/oc-cron.conf  && systemctl start cronie.service; exit 0 # force
+      success due to issue with cronie start https://goo.gl/DcGGb'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: docker
+  - CmdLine:
+    - yaourt -Syyua --noconfirm --needed     owncloud-app-mozilla_sync     owncloud-app-notes-git     owncloud-app-news-git
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - /root/startServers.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: yhfudev/docker-lamp
+  Name: ""
+  Platform: ""
+  SourceCode: FROM yhfudev/docker-lamp

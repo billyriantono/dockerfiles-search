@@ -1,0 +1,132 @@
+MetaArgs: null
+Stages:
+- BaseName: redmine:4.0.2
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Erwin Mueller <erwin.mueller@deventm.com>"'
+    Name: label
+  - Key: APT_CACHE
+    Name: arg
+    Value: null
+  - CmdLine:
+    - set -x   && if [ -n "${APT_CACHE}" ]; then   echo Acquire::ftp::Proxy \"$APT_CACHE\";
+      >> /etc/apt/apt.conf.d/08proxy;  echo Acquire::http::Proxy \"$APT_CACHE\"; >>
+      /etc/apt/apt.conf.d/08proxy;  echo Acquire::https::Proxy \"$APT_CACHE\"; >>
+      /etc/apt/apt.conf.d/08proxy;  fi
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: WEB_ROOT
+      Value: '"/var/www/html"'
+    - Key: WEB_USER
+      Value: '"redmine"'
+    - Key: SRC_DIR
+      Value: '"/usr/src/redmine"'
+    Name: env
+  - CmdLine:
+    - 'set -eux;   apt-get update   && mkdir -p /usr/share/man/man1   && mkdir -p
+      /usr/share/man/man7   && apt-get install -y     rsync     unzip     coreutils     curl   ;   apt-get
+      install -y --no-install-recommends     mariadb-client     postgresql-client   ;   savedAptMark="$(apt-mark
+      showmanual)";   apt-get update;   apt-get install -y --no-install-recommends     dpkg-dev     gcc     libmagickcore-dev     libmagickwand-dev     libmariadbclient-dev     libpq-dev     libsqlite3-dev     make     patch         libssl1.0-dev   ;   rm
+      -rf /var/lib/apt/lists/*;     sed -ie "s/gem ''puma'', ''~> 3.7''/gem ''puma'',
+      ''= 3.12.1''/" Gemfile;   echo ''gem "puma", "= 3.12.1"'' >> Gemfile;   echo
+      ''gem "piwik_analytics", "~> 1.0.2"'' >> Gemfile;   echo ''gem "temple", "~>
+      0.8.0"'' >> Gemfile;   echo ''gem "dalli", "~> 2.7.9"'' >> Gemfile;   wget -O
+      freetds.tar.bz2 ''http://www.freetds.org/files/stable/freetds-1.00.91.tar.bz2'';   echo
+      ''8d71f9f29be0fe0637e443dd3807b3fd *freetds.tar.bz2'' | md5sum -c -;   mkdir
+      freetds;   tar -xf freetds.tar.bz2 -C freetds --strip-components=1;   rm freetds.tar.bz2;   (
+      cd freetds && gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)" && ./configure
+      --build="$gnuArch" --enable-silent-rules && make -j "$(nproc)" && make -C src
+      install && make -C include install );   rm -rf freetds;   gosu redmine gem install
+      json -v ''2.2.0'';   gosu redmine bundle config build.tiny_tds --enable-system-freetds;   gosu
+      redmine bundle install --without development test;   for adapter in mysql2 postgresql
+      sqlserver sqlite3; do     echo "$RAILS_ENV:" > ./config/database.yml;     echo
+      "  adapter: $adapter" >> ./config/database.yml;     gosu redmine bundle install
+      --without development test;     cp Gemfile.lock "Gemfile.lock.${adapter}";   done;   rm
+      ./config/database.yml;   chmod -R ugo=rwX Gemfile.lock "$GEM_HOME";   rm -rf
+      ~redmine/.bundle;     apt-mark auto ''.*'' > /dev/null;   [ -z "$savedAptMark"
+      ] || apt-mark manual $savedAptMark;   find /usr/local -type f -executable -exec
+      ldd ''{}'' '';''     | awk ''/=>/ { print $(NF-1) }''     | sort -u     | grep
+      -v ''^/usr/local/''     | xargs -r dpkg-query --search     | cut -d: -f1     |
+      sort -u     | xargs -r apt-mark manual   ; apt-get purge -y --auto-remove -o
+      APT::AutoRemove::RecommendsImportant=false'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x   && mkdir -p $WEB_ROOT   && chown -R ${WEB_USER}.${WEB_USER} $WEB_ROOT   &&
+      chown -R ${WEB_USER} /usr/local/bundle   && mkdir -p /home/redmine   && chown
+      -R ${WEB_USER}.${WEB_USER} /home/redmine   && mkdir -p /var/run/puma   && chown
+      -R ${WEB_USER}.${WEB_USER} /var/run/puma
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - rootfs/
+    - /
+  - CmdLine:
+    - set -x   && chmod +x /*.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x   && export DEBUG=false   && /install_plugins.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x   && export DEBUG=false   && /install_themes.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DEBUG
+      Value: '"false"'
+    - Key: SYNC_ENABLED
+      Value: '"true"'
+    - Key: SYNC_TIME_S
+      Value: '"300"'
+    - Key: BUNDLE_GEMFILE
+      Value: /var/www/html/Gemfile
+    - Key: PUMA_MIN_THREADS
+      Value: "8"
+    - Key: PUMA_MAX_THREADS
+      Value: "16"
+    - Key: PUMA_CLUSTER_WORKERS
+      Value: "2"
+    - Key: PUMA_WORKER_TIMEOUT
+      Value: "120"
+    - Key: PUMA_WORKER_BOOT_TIMEOUT
+      Value: "120"
+    - Key: PIWIK_ID_SITE
+      Value: "1"
+    - Key: PIWIK_URL
+      Value: localhost
+    - Key: PIWIK_USE_ASYNC
+      Value: "false"
+    - Key: PIWIK_ENABLED
+      Value: "false"
+    Name: env
+  - Name: expose
+    Ports:
+    - "9293"
+  - Name: volume
+    Volumes:
+    - /var/www/html
+  - Name: user
+    User: ${WEB_USER}
+  - Name: workdir
+    Path: ${WEB_ROOT}
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - puma
+    - -C
+    - ./config/config.rb
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: redmine:4.0.2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM redmine:4.0.2

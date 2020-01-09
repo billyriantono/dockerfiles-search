@@ -1,0 +1,106 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: abiosoft/caddy:builder
+  Commands:
+  - Key: CADDY_VERSION
+    Name: arg
+    Value: '"0.10.11"'
+  - Key: CADDY_PLUGINS
+    Name: arg
+    Value: '"git"'
+  - CmdLine:
+    - VERSION=${CADDY_VERSION} PLUGINS=${CADDY_PLUGINS} /bin/sh /usr/bin/builder.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: abiosoft/caddy:builder
+  Name: builder
+  Platform: ""
+  SourceCode: FROM abiosoft/caddy:builder as builder
+- BaseName: alpine:3.7
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Nikita Sobolev <sobolevn@wemake.services>"'
+    Name: label
+  - Labels:
+    - Key: CADDY_VERSION
+      Value: '"0.10.11"'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /install/caddy
+    - /usr/bin/caddy
+  - Key: FOREGO_VERSION
+    Name: arg
+    Value: '"0.16.1"'
+  - Key: DOCKER_GEN_VERSION
+    Name: arg
+    Value: '"0.7.3"'
+  - Env:
+    - Key: CADDYPATH
+      Value: '"/etc/caddy"'
+    Name: env
+  - Env:
+    - Key: DOCKER_HOST
+      Value: unix:///tmp/docker.sock
+    Name: env
+  - CmdLine:
+    - apk update && apk upgrade   && apk add --no-cache bash openssh-client git   &&
+      apk add --no-cache --virtual .build-dependencies curl wget tar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget --quiet "https://github.com/jwilder/forego/releases/download/v${FOREGO_VERSION}/forego"   &&
+      mv ./forego /usr/bin/forego   && chmod u+x /usr/bin/forego
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget --quiet "https://github.com/jwilder/docker-gen/releases/download/$DOCKER_GEN_VERSION/docker-gen-alpine-linux-amd64-$DOCKER_GEN_VERSION.tar.gz"   &&
+      tar -C /usr/bin -xvzf "docker-gen-alpine-linux-amd64-$DOCKER_GEN_VERSION.tar.gz"   &&
+      rm "/docker-gen-alpine-linux-amd64-$DOCKER_GEN_VERSION.tar.gz"   && apk del
+      .build-dependencies
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/caddy -version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/caddy -plugins
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "2015"
+    - "443"
+    - "80"
+  - Name: volume
+    Volumes:
+    - /etc/caddy
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /code
+  - Name: workdir
+    Path: /code
+  - CmdLine:
+    - sh
+    - /code/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/bin/forego
+    - start
+    - -r
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

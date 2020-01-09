@@ -1,0 +1,130 @@
+MetaArgs: null
+Stages:
+- As: ldap-build
+  BaseName: otimo/cyrus-sasl-build
+  Commands:
+  - Labels:
+    - Key: Name
+      Value: '"openldap-build"'
+    - Key: Intermediate
+      Value: '"yes"'
+    - Key: Maintainer
+      Value: '"Otimo Data AB"'
+    Name: label
+  - Key: name
+    Name: arg
+    Value: openldap
+  - Key: version
+    Name: arg
+    Value: 2.4.46
+  - Key: checksum
+    Name: arg
+    Value: 9a90dcb86b99ae790ccab93b7585a31fbcbeec8c94bf0f7ab0ca0a87ea0c4b2d
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - patch/*.patch
+    - ./
+  - CmdLine:
+    - echo "${checksum}  ${name}-${version}.tgz" > CHECKSUM         && sha256sum -c
+      CHECKSUM         || [ $? == 1 ] && wget ftp://ftp.openldap.org/pub/OpenLDAP/openldap-release/${name}-${version}.tgz         &&
+      sha256sum -c CHECKSUM     && tar -xzf ${name}-${version}.tgz     && cd ${name}-${version}     &&
+      patch -Np1 -i ../libressl.patch     && patch -Np1 -i ../openldap-2.4-ppolicy.patch     &&
+      patch -Np1 -i ../openldap-2.4.11-libldap_r.patch     && sed -i '/^STRIP/s,-s,,g'
+      build/top.mk     && libtoolize --force && aclocal && autoconf     && ./configure         --prefix=/usr         --sysconfdir=/etc         --libexecdir=/usr/lib         --localstatedir=/run         --disable-static         --with-tls=openssl         --with-cyrus-sasl         --enable-dynamic         --enable-crypt         --enable-spasswd         --enable-slapd         --enable-modules         --enable-rlookups         --enable-backends=mod         --enable-mdb         --disable-perl         --disable-ndb         --disable-sql         --disable-shell         --disable-bdb         --disable-hdb         --enable-overlays=mod     &&
+      sed -i 's/"run" LDAP_DIRSEP "ldapi"/"ldapi"/g' include/ldap_defaults.h     &&
+      make     && make depend     && make install DESTDIR=/build/install     && cd
+      /build/install     && rm -rf usr/include     && rm -rf usr/share     && rm -rf
+      run/run     && rm etc/openldap/*.default     && rm etc/openldap/slapd.conf     &&
+      find . -name "*.la" -exec rm {} \;     && for path in $(find usr/sbin/ -type
+      l); do ln -sf slapd $path; done     && mv usr/lib/slapd usr/sbin/     && tar
+      --remove-files -czf /build/symlinks.tgz $(find . -type l)     && sed -i -e 's:run/run:run/openldap:g'
+      -e 's:run/openldap-data:srv/openldap/data:g' etc/openldap/slapd.ldif     &&
+      strip usr/bin/* || true     && strip usr/sbin/* || true     && strip usr/lib/*.so*
+      || true     && strip usr/lib/openldap/*.so* || true     && mkdir usr/lib/sasl2
+    Name: run
+    PrependShell: true
+  From:
+    Image: otimo/cyrus-sasl-build
+  Name: ldap-build
+  Platform: ""
+  SourceCode: FROM otimo/cyrus-sasl-build AS ldap-build
+- As: builder
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: ldap-build
+    Name: copy
+    SourcesAndDest:
+    - /bin/pause
+    - /bin/
+  - Chown: ""
+    From: ldap-build
+    Name: copy
+    SourcesAndDest:
+    - /build/install/.
+    - /
+  - Chown: ""
+    From: ldap-build
+    Name: copy
+    SourcesAndDest:
+    - /build/symlinks.tgz
+    - /tmp/
+  - Chown: ""
+    From: ldap-build
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/libuuid.so
+    - /usr/lib/libltdl.so.7
+    - /usr/lib/libsasl2.so.3
+    - /usr/lib/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/
+    - /
+  From:
+    Scratch: true
+  Name: builder
+  Platform: ""
+  SourceCode: FROM scratch AS builder
+- BaseName: alpine:3.7
+  Commands:
+  - Labels:
+    - Key: Name
+      Value: '"openldap"'
+    - Key: Maintainer
+      Value: '"Otimo Data AB"'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /
+  - CmdLine:
+    - tar -xvzf /tmp/symlinks.tgz     && rm -rf /tmp/symlinks.tgz     && rm -rf /etc/init.d     &&
+      addgroup -S -g 3006 openldap     && adduser -S -u 3006 -D -h /srv/openldap -s
+      /bin/sh -G openldap openldap     && ln -sf libuuid.so /usr/lib/libuuid.so.1     &&
+      chmod +x /start.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "389"
+    - "636"
+  - Name: stopsignal
+    Signal: SIGTERM
+  - CmdLine:
+    - /start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

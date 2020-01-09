@@ -1,0 +1,78 @@
+MetaArgs: null
+Stages:
+- As: downloader
+  BaseName: alpine/git
+  Commands:
+  - CmdLine:
+    - cd /tmp && git init cello && cd cello                           &&     git remote
+      add origin https://github.com/hyperledger/cello.git  &&     git config core.sparsecheckout
+      true                             &&     echo "src/agent/fabric-operator/*" >>
+      .git/info/sparse-checkout &&     git pull --depth=1 origin master
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine/git
+  Name: downloader
+  Platform: ""
+  SourceCode: FROM alpine/git AS downloader
+- As: builder
+  BaseName: golang
+  Commands:
+  - CmdLine:
+    - mkdir -p /go/src/github.com/hyperledger/cello
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: downloader
+    Name: copy
+    SourcesAndDest:
+    - /tmp/cello
+    - /go/src/github.com/hyperledger/cello
+  - CmdLine:
+    - cd /go/src/github.com/hyperledger/cello/src/agent/fabric-operator &&   go build
+      -o fabric-operator   -gcflags all=-trimpath=/go/src/github.com/hyperledger/cello/src/agent   -asmflags
+      all=-trimpath=/go/src/github.com/hyperledger/cello/src/agent   github.com/hyperledger/cello/src/agent/fabric-operator/cmd/manager
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang AS builder
+- BaseName: registry.access.redhat.com/ubi7/ubi-minimal:latest
+  Commands:
+  - Env:
+    - Key: OPERATOR
+      Value: /usr/local/bin/fabric-operator
+    - Key: USER_UID
+      Value: "1001"
+    - Key: USER_NAME
+      Value: fabric-operator
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/hyperledger/cello/src/agent/fabric-operator/fabric-operator
+    - ${OPERATOR}
+  - Chown: ""
+    From: downloader
+    Name: copy
+    SourcesAndDest:
+    - /tmp/cello/src/agent/fabric-operator/build/bin
+    - /usr/local/bin
+  - CmdLine:
+    - /usr/local/bin/user_setup
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - Name: user
+    User: ${USER_UID}
+  From:
+    Image: registry.access.redhat.com/ubi7/ubi-minimal:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM registry.access.redhat.com/ubi7/ubi-minimal:latest

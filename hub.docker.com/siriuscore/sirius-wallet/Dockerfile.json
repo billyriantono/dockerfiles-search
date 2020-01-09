@@ -1,0 +1,200 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "base",
+      "BaseName": "alpine",
+      "SourceCode": "FROM alpine as base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Image": "alpine"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "SIRIUS_VERSION",
+              "Value": "0.4-bugfix"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "SIRIUS_PREFIX",
+              "Value": "/opt/sirius-${SIRIUS_VERSION}"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "apk update \u0026\u0026    apk upgrade --no-cache"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "berkeley-db",
+      "BaseName": "base",
+      "SourceCode": "FROM base as berkeley-db",
+      "Platform": "",
+      "As": "berkeley-db",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "BERKELEYDB_VERSION",
+              "Value": "db-4.8.30.NC"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "BERKELEYDB_PREFIX",
+              "Value": "/opt/${BERKELEYDB_VERSION}"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache         autoconf automake build-base libressl \u0026\u0026    wget https://download.oracle.com/berkeley-db/${BERKELEYDB_VERSION}.tar.gz \u0026\u0026    tar -xzf *.tar.gz \u0026\u0026    sed s/__atomic_compare_exchange/__atomic_compare_exchange_db/g -i ${BERKELEYDB_VERSION}/dbinc/atomic.h \u0026\u0026    cd /${BERKELEYDB_VERSION}/build_unix \u0026\u0026    ../dist/configure         --prefix=${BERKELEYDB_PREFIX}         --enable-cxx         --disable-shared         --with-pic  \u0026\u0026    make -j$(nproc) \u0026\u0026    make install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "sirius-core",
+      "BaseName": "base",
+      "SourceCode": "FROM base as sirius-core",
+      "Platform": "",
+      "As": "sirius-core",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "SIRIUS_REPO",
+              "Value": "siriuscore/sirius"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "berkeley-db",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/opt",
+            "/opt"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache         autoconf automake libtool build-base boost-dev         chrpath file libevent-dev libressl-dev         protobuf-dev zeromq-dev jsoncpp-dev \u0026\u0026    wget https://github.com/${SIRIUS_REPO}/archive/${SIRIUS_VERSION}.tar.gz \u0026\u0026    tar -xzf *.tar.gz \u0026\u0026    cd /sirius-${SIRIUS_VERSION} \u0026\u0026    sed -i s:sys/fcntl.h:fcntl.h: src/compat.h \u0026\u0026    ./autogen.sh \u0026\u0026    ./configure LDFLAGS=-L`ls -d /opt/db*`/lib/ CPPFLAGS=-I`ls -d /opt/db*`/include/         --prefix=${SIRIUS_PREFIX}         --mandir=/usr/share/man         --without-gui         --disable-tests         --disable-bench         --disable-ccache \u0026\u0026    make -j$(nproc) \u0026\u0026    make install \u0026\u0026    strip ${SIRIUS_PREFIX}/bin/sirius-cli         ${SIRIUS_PREFIX}/bin/sirius-tx         ${SIRIUS_PREFIX}/bin/siriusd         ${SIRIUS_PREFIX}/lib/libbitcoinconsensus.a         ${SIRIUS_PREFIX}/lib/libbitcoinconsensus.so.0.0.0"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "base",
+      "SourceCode": "FROM base",
+      "Platform": "",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"David Clutter \u003ccluttered.code@gmail.com\u003e\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PATH",
+              "Value": "${SIRIUS_PREFIX}/bin:$PATH"
+            },
+            {
+              "Key": "STAKING",
+              "Value": "false"
+            },
+            {
+              "Key": "PASSPHRASE",
+              "Value": "''"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "sirius-core",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/opt",
+            "/opt"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "docker-entrypoint.sh",
+            "/entrypoint.sh"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache         boost boost-random boost-program_options         libevent libressl libzmq jsoncpp \u0026\u0026    chmod +x /entrypoint.sh"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/root/.sirius"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/entrypoint.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

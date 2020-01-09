@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- BaseName: php:fpm-alpine
+  Commands:
+  - Maintainer: HuadongZuo <admin@zuohuadong.cn>
+    Name: maintainer
+  - Key: plugins
+    Name: arg
+    Value: http.cgi,http.cors,http.filemanager,http.git,http.proxyprotocol,http.realip,http.upload,net
+  - CmdLine:
+    - echo "http://nl.alpinelinux.org/alpine/latest-stable/main" > /etc/apk/repositories
+      && echo "http://nl.alpinelinux.org/alpine/edge/testing/" >> /etc/apk/repositories
+      && echo "http://nl.alpinelinux.org/alpine/edge/community/" >> /etc/apk/repositories
+      && echo "nameserver 119.29.29.29" >> /etc/resolv.conf && apk update && apk upgrade
+      && apk add --no-cache openssh-client git tar curl libmcrypt-dev  shadow libaio  zlib-dev
+      postgresql-dev libpq freetype-dev autoconf libwebp-dev libjpeg-turbo libpng-dev
+      libjpeg-turbo-dev &&   docker-php-ext-configure gd     --with-gd     --with-freetype-dir=/usr/include/     --with-png-dir=/usr/include/     --with-webp-dir=/usr/include/     --with-jpeg-dir=/usr/include/
+      &&   NPROC=$(grep -c ^processor /proc/cpuinfo 2>/dev/null || 1) &&   docker-php-ext-install
+      -j${NPROC} gd &&   set -x &&   apk --no-cache add -t .build-deps     build-base     linux-headers     gcc     g++
+      && docker-php-ext-install mcrypt zip iconv && docker-php-ext-install pdo_mysql
+      mysqli mbstring json opcache fileinfo && docker-php-ext-install pdo_pgsql pgsql
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "{ \t\techo 'opcache.memory_consumption=128'; \t\techo 'opcache.interned_strings_buffer=8';
+      \t\techo 'opcache.max_accelerated_files=4000'; \t\techo 'opcache.revalidate_freq=2';
+      \t\techo 'opcache.fast_shutdown=1'; \t\techo 'opcache.enable_cli=1'; \t} > /usr/local/etc/php/conf.d/opcache-recommended.ini"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'curl --silent --show-error --fail --location       --header "Accept: application/tar+gzip,
+      application/x-gzip, application/octet-stream"       "https://getcomposer.org/installer"     |
+      php -- --install-dir=/usr/bin --filename=composer'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'curl --silent --show-error --fail --location       --header "Accept: application/tar+gzip,
+      application/x-gzip, application/octet-stream" -o -       "https://caddyserver.com/download/linux/amd64?plugins=${plugins}"     |
+      tar --no-same-owner -C /usr/bin/ -xz caddy  &&     chmod 0755 /usr/bin/caddy  &&     /usr/bin/caddy
+      -version &&     mkdir -p /var/www && mkdir -p /var/log &&     echo "log_errors
+      = On" > /usr/local/etc/php/conf.d/log.ini &&     echo "error_log=/var/www/log"
+      > /usr/local/etc/php/conf.d/log.ini &&     cd &&     apk del .build-deps &&     rm
+      -rf /tmp/*'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /var/www &&     git clone https://github.com/notadd/notadd.git &&     cd
+      notadd &&     composer install &&     php notadd vendor:publish --force
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /var/www &&     chmod -R 777 ./*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "2015"
+    - "443"
+    - "80"
+    - "9000"
+  - Name: workdir
+    Path: /var/www
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Caddyfile
+    - /etc/Caddyfile
+  - CmdLine:
+    - /usr/bin/caddy
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --conf
+    - /etc/Caddyfile
+    - --log
+    - stdout
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:fpm-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:fpm-alpine

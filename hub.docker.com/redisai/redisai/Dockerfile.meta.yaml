@@ -1,0 +1,141 @@
+MetaArgs:
+- DefaultValue: 5.0.7
+  Key: REDIS_VER
+  ProvidedValue: null
+  Value: 5.0.7
+- DefaultValue: buster
+  Key: OSNICK
+  ProvidedValue: null
+  Value: buster
+- DefaultValue: debian:buster-slim
+  Key: OS
+  ProvidedValue: null
+  Value: debian:buster-slim
+- DefaultValue: x64
+  Key: ARCH
+  ProvidedValue: null
+  Value: x64
+Stages:
+- As: redis
+  BaseName: redisfab/redis:${REDIS_VER}-${ARCH}-${OSNICK}
+  Commands: null
+  From:
+    Image: redisfab/redis:${REDIS_VER}-${ARCH}-${OSNICK}
+  Name: redis
+  Platform: ""
+  SourceCode: FROM redisfab/redis:${REDIS_VER}-${ARCH}-${OSNICK} AS redis
+- As: builder
+  BaseName: ${OS}
+  Commands:
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: redis
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/
+    - /usr/local/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./opt/
+    - opt/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./test/test_requirements.txt
+    - test/
+  - CmdLine:
+    - ./opt/readies/bin/getpy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./opt/system-setup.py
+    Name: run
+    PrependShell: true
+  - Key: DEPS_ARGS
+    Name: arg
+    Value: '""'
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./get_deps.sh
+    - .
+  - CmdLine:
+    - if [ "$DEPS_ARGS" = "" ]; then ./get_deps.sh cpu; else env $DEPS_ARGS ./get_deps.sh
+      cpu; fi
+    Name: run
+    PrependShell: true
+  - Key: BUILD_ARGS
+    Name: arg
+    Value: '""'
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./
+    - /build
+  - CmdLine:
+    - make -C opt build $BUILD_ARGS SHOW=1
+    Name: run
+    PrependShell: true
+  - Key: PACK
+    Name: arg
+    Value: "0"
+  - Key: TEST
+    Name: arg
+    Value: "0"
+  - CmdLine:
+    - if [ "$PACK" = "1" ]; then make -C opt pack; fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ "$TEST" = "1" ]; then make -C opt test $BUILD_ARGS NO_LFS=1; fi
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${OS}
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ${OS} AS builder
+- BaseName: redisfab/redis:${REDIS_VER}-${ARCH}-${OSNICK}
+  Commands:
+  - CmdLine:
+    - set -e; apt-get -qq update; apt-get -q install -y libgomp1
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: REDIS_MODULES
+      Value: /usr/lib/redis/modules
+    Name: env
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: $REDIS_MODULES
+    Name: env
+  - CmdLine:
+    - mkdir -p $REDIS_MODULES/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/install-cpu/
+    - $REDIS_MODULES/
+  - Name: workdir
+    Path: /data
+  - Name: expose
+    Ports:
+    - "6379"
+  - CmdLine:
+    - --loadmodule
+    - /usr/lib/redis/modules/redisai.so
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: redisfab/redis:${REDIS_VER}-${ARCH}-${OSNICK}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM redisfab/redis:${REDIS_VER}-${ARCH}-${OSNICK}

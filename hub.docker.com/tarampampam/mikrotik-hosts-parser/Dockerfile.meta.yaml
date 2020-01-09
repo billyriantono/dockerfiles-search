@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.13-alpine
+  Commands:
+  - Key: upx_params
+    Name: arg
+    Value: null
+  - Env:
+    - Key: upx_params
+      Value: ${upx_params:--7}
+    Name: env
+  - CmdLine:
+    - apk add --no-cache upx
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /src
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - set -x     && apk add git     && upx -V     && go version     && go generate
+      ./...     && export version=`git symbolic-ref -q --short HEAD || git describe
+      --tags --exact-match`@`git rev-parse --short HEAD`     && go build -ldflags="-s
+      -w -X main.Version=${version}" -o /tmp/mikrotik-hosts-parser .     && upx ${upx_params}
+      /tmp/mikrotik-hosts-parser     && /tmp/mikrotik-hosts-parser version     &&
+      /tmp/mikrotik-hosts-parser -h
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.13-alpine as builder
+- BaseName: alpine:latest
+  Commands:
+  - Labels:
+    - Key: org.label-schema.name
+      Value: '"mikrotik-hosts-parser"'
+    - Key: org.label-schema.description
+      Value: '"Docker image with mikrotik hosts parser"'
+    - Key: org.label-schema.url
+      Value: '"https://github.com/tarampampam/mikrotik-hosts-parser"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/tarampampam/mikrotik-hosts-parser"'
+    - Key: org.label-schema.vendor
+      Value: '"Tarampampam"'
+    - Key: org.label-schema.license
+      Value: '"MIT"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/mikrotik-hosts-parser
+    - /bin/mikrotik-hosts-parser
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/serve-config.yml
+    - /serve-config.yml
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/resources/data/public
+    - /opt/resources
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - /bin/mikrotik-hosts-parser
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - serve
+    - --config
+    - /serve-config.yml
+    - --listen
+    - 0.0.0.0
+    - --port
+    - "8080"
+    - --resources-dir
+    - /opt/resources
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

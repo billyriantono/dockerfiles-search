@@ -1,0 +1,1 @@
+FROM gcr.io/kubernetes-e2e-test-images/mounttest:1.0

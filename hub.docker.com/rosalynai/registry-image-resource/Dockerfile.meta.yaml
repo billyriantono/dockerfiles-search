@@ -1,0 +1,117 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /src
+  - Name: workdir
+    Path: /src
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - CmdLine:
+    - go get -d ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -o /assets/in ./cmd/in
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -o /assets/out ./cmd/out
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -o /assets/check ./cmd/check
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -e; for pkg in $(go list ./...); do \t\tgo test -o \"/tests/$(basename
+      $pkg).test\" -c $pkg; \tdone"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1 as builder
+- As: resource
+  BaseName: alpine:edge
+  Commands:
+  - CmdLine:
+    - apk add --no-cache bash tzdata ca-certificates unzip zip gzip tar
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - assets/
+    - /opt/resource/
+  - CmdLine:
+    - chmod +x /opt/resource/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: resource
+  Platform: ""
+  SourceCode: FROM alpine:edge AS resource
+- As: tests
+  BaseName: resource
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tests
+    - /tests
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /docker-image-resource
+  - Key: DOCKER_PRIVATE_USERNAME
+    Name: arg
+    Value: null
+  - Key: DOCKER_PRIVATE_PASSWORD
+    Name: arg
+    Value: null
+  - Key: DOCKER_PRIVATE_REPO
+    Name: arg
+    Value: null
+  - Key: DOCKER_PUSH_USERNAME
+    Name: arg
+    Value: null
+  - Key: DOCKER_PUSH_PASSWORD
+    Name: arg
+    Value: null
+  - Key: DOCKER_PUSH_REPO
+    Name: arg
+    Value: null
+  - CmdLine:
+    - "set -e; for test in /tests/*.test; do \t\t$test -ginkgo.v; \tdone"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: resource
+  Name: tests
+  Platform: ""
+  SourceCode: FROM resource AS tests
+- BaseName: resource
+  Commands: null
+  From:
+    Stage:
+      Index: 1
+      Named: resource
+  Name: ""
+  Platform: ""
+  SourceCode: FROM resource

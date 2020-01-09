@@ -1,0 +1,164 @@
+MetaArgs:
+- DefaultValue: golang
+  Key: BASE_IMAGE_BUILDER
+  ProvidedValue: null
+  Value: golang
+- DefaultValue: alpine
+  Key: BASE_IMAGE
+  ProvidedValue: null
+  Value: alpine
+- DefaultValue: "3.10"
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: "3.10"
+- DefaultValue: "1.13"
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: "1.13"
+Stages:
+- As: builder
+  BaseName: ${BASE_IMAGE_BUILDER}:${GO_VERSION}-alpine${ALPINE_VERSION}
+  Commands:
+  - Key: GOARCH
+    Name: arg
+    Value: amd64
+  - Key: GOARM
+    Name: arg
+    Value: ""
+  - CmdLine:
+    - apk --update add git build-base
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/gobuild
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - go.sum
+    - ./
+  - CmdLine:
+    - go mod download 2>&1
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pkg/
+    - ./pkg/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - main.go
+    - .
+  - CmdLine:
+    - go test -v ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=1 GOOS=linux GOARCH=${GOARCH} GOARM=${GOARM} go build -a -installsuffix
+      cgo -ldflags="-s -w" -o app
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${BASE_IMAGE_BUILDER}:${GO_VERSION}-alpine${ALPINE_VERSION}
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ${BASE_IMAGE_BUILDER}:${GO_VERSION}-alpine${ALPINE_VERSION} AS
+    builder
+- As: final
+  BaseName: ${BASE_IMAGE}:${ALPINE_VERSION}
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.opencontainers.image.authors
+      Value: '"quentin.mcgaw@gmail.com"'
+    - Key: org.opencontainers.image.created
+      Value: $BUILD_DATE
+    - Key: org.opencontainers.image.version
+      Value: '""'
+    - Key: org.opencontainers.image.revision
+      Value: $VCS_REF
+    - Key: org.opencontainers.image.url
+      Value: '"https://github.com/qdm12/ddns-updater"'
+    - Key: org.opencontainers.image.documentation
+      Value: '"https://github.com/qdm12/ddns-updater"'
+    - Key: org.opencontainers.image.source
+      Value: '"https://github.com/qdm12/ddns-updater"'
+    - Key: org.opencontainers.image.title
+      Value: '"ddns-updater"'
+    - Key: org.opencontainers.image.description
+      Value: '"Universal DNS updater with WebUI. Works with Namecheap, Cloudflare,
+        GoDaddy, DuckDns, Dreamhost and NoIP"'
+    - Key: image-size
+      Value: '"23.5MB"'
+    - Key: ram-usage
+      Value: '"13MB"'
+    - Key: cpu-usage
+      Value: '"Very Low"'
+    Name: label
+  - CmdLine:
+    - apk add --update sqlite ca-certificates &&     mkdir /lib64 && ln -s /lib/libc.musl-x86_64.so.1
+      /lib64/ld-linux-x86-64.so.2 &&     rm -rf /var/cache/apk/* &&     mkdir -p /updater/data
+      &&     touch /updater/data/updates.db &&     chown -R 1000 /updater &&     chmod
+      700 /updater/data &&     chmod 700 /updater/data/updates.db
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8000"
+  - Health:
+      Interval: 10000000000
+      Retries: 2
+      StartPeriod: 5000000000
+      Test:
+      - CMD
+      - /updater/app
+      - healthcheck
+      Timeout: 5000000000
+    Name: healthcheck
+  - Name: user
+    User: "1000"
+  - CmdLine:
+    - /updater/app
+    Name: entrypoint
+    PrependShell: false
+  - Env:
+    - Key: DELAY
+      Value: ""
+    - Key: ROOTURL
+      Value: ""
+    - Key: LISTENINGPORT
+      Value: ""
+    - Key: LOGGING
+      Value: ""
+    - Key: LOGLEVEL
+      Value: ""
+    - Key: NODEID
+      Value: ""
+    Name: env
+  - Chown: "1000"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/gobuild/app
+    - /updater/app
+  - Chown: "1000"
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ui/*
+    - /updater/ui/
+  From:
+    Image: ${BASE_IMAGE}:${ALPINE_VERSION}
+  Name: final
+  Platform: ""
+  SourceCode: FROM ${BASE_IMAGE}:${ALPINE_VERSION} AS final

@@ -1,0 +1,65 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:stretch
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get -y install build-essential make autoconf libtool
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp &&     git clone https://github.com/kkos/oniguruma.git &&     cd /tmp/oniguruma
+      &&     autoreconf -vfi &&     ./configure &&     make &&     make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /go/src/github.com/fstab &&     cd /go/src/github.com/fstab &&     git
+      clone https://github.com/dcwangmit01/grok_exporter.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /go/src/github.com/fstab/grok_exporter &&   git submodule update --init --recursive
+      &&   go get
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /go/src/github.com/fstab/grok_exporter &&   GOOS=linux GOARCH=amd64 CGO_ENABLED=1
+      go build     -ldflags "-w -extldflags \"-static\"     -X github.com/fstab/grok_exporter/exporter.Version=$VERSION     -X
+      github.com/fstab/grok_exporter/exporter.BuildDate=$(date +%Y-%m-%d)     -X github.com/fstab/grok_exporter/exporter.Branch=$(git
+      rev-parse --abbrev-ref HEAD)     -X github.com/fstab/grok_exporter/exporter.Revision=$(git
+      rev-parse --short HEAD)     "
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:stretch
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:stretch as builder
+- BaseName: alpine:latest
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/fstab/grok_exporter/grok_exporter
+    - /app/grok_exporter
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/fstab/grok_exporter/logstash-patterns-core
+    - /app/logstash-patterns-core
+  - Name: expose
+    Ports:
+    - "9144"
+  - CmdLine:
+    - /app/grok_exporter
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

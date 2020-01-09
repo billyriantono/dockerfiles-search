@@ -1,0 +1,119 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: nvidia/cuda:10.1-cudnn7-runtime-ubuntu18.04
+  Commands:
+  - Env:
+    - Key: LANGUAGE
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: PYTHONIOENCODING
+      Value: UTF-8
+    Name: env
+  - Env:
+    - Key: CONDA_ENV
+      Value: upass
+    Name: env
+  - Env:
+    - Key: CONDA_PATH
+      Value: /opt/conda/bin:/opt/conda/envs/$CONDA_ENV/bin/
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $CONDA_PATH:$PATH
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./environment.yml
+    - /environment.yml
+  From:
+    Image: nvidia/cuda:10.1-cudnn7-runtime-ubuntu18.04
+  Name: base
+  Platform: ""
+  SourceCode: FROM nvidia/cuda:10.1-cudnn7-runtime-ubuntu18.04 as base
+- As: conda
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - "apt-get update \t&& apt-get install -y --no-install-recommends wget \t\t\t\tbzip2
+      \t\t\t\tca-certificates \t\t\t\tlibglib2.0-0 \t\t\t\tlibxext6 \t\t\t\tlibsm6
+      \t\t\t\tlibxrender1 \t \t\t\tlibgomp1 \t \t\t\tvim \t \t\t\tsudo \t\t\t\tgcc
+      \t&& wget --quiet https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+      -O ~/miniconda.sh \t&& /bin/bash ~/miniconda.sh -b -p /opt/conda \t&& rm ~/miniconda.sh
+      \t&& echo '. /opt/conda/etc/profile.d/conda.sh' > /etc/profile.d/conda.sh \t&&
+      . /etc/profile.d/conda.sh \t&& conda update -n base conda \t&& conda clean --all
+      -y \t&& rm -rf /var/lib/apt/lists/* \t&& rm -rf /var/cache/apt"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: conda
+  Platform: ""
+  SourceCode: FROM base as conda
+- As: condaenv
+  BaseName: conda
+  Commands:
+  - CmdLine:
+    - ". /etc/profile.d/conda.sh \t&& conda env create -f /environment.yml  \t&& conda
+      clean --all -y \t&& rm -rf ~/.cache/pip \t&& conda activate $CONDA_ENV"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: conda
+  Name: condaenv
+  Platform: ""
+  SourceCode: FROM conda as condaenv
+- As: userspace
+  BaseName: condaenv
+  Commands:
+  - CmdLine:
+    - "groupadd appuser \t&& useradd --create-home -r --shell=/bin/bash -g appuser
+      appuser \t&& usermod -aG sudo appuser \t&& echo \"%sudo ALL=(ALL) NOPASSWD:
+      ALL\" >> /etc/sudoers \t&& mkdir -p /opt/notebooks \t&& mkdir /opt/data \t&&
+      chown appuser:appuser /opt/notebooks \t&& chown -R appuser:appuser /opt/conda
+      \t&& chown -R appuser:appuser /opt/data \t&& echo \". /opt/conda/etc/profile.d/conda.sh\"
+      >> ~/.bashrc"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - '"/opt/notebooks"'
+  - Name: volume
+    Volumes:
+    - '"/opt/data"'
+  - Name: user
+    User: appuser
+  - CmdLine:
+    - jupyter
+    - notebook
+    - --notebook-dir=/opt/notebooks
+    - --ip='0.0.0.0'
+    - --port=8888
+    - --no-browser
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "8888"
+  From:
+    Stage:
+      Index: 2
+      Named: condaenv
+  Name: userspace
+  Platform: ""
+  SourceCode: FROM condaenv as userspace

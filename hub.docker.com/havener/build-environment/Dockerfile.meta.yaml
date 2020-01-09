@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.12
+  Commands:
+  - CmdLine:
+    - go get -u github.com/mvdan/sh/cmd/shfmt &&     git clone https://github.com/direnv/direnv
+      $GOPATH/src/github.com/direnv/direnv &&     cd $GOPATH/src/github.com/direnv/direnv
+      &&     make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -d github.com/SUSE/stampy &&     cd $GOPATH/src/github.com/SUSE/stampy
+      &&     find . -type f -print0 | xargs -0 perl -pi -e 's:github.com/golang/lint/golint:golang.org/x/lint/golint:g'
+      &&     make tools &&     make all &&     mv $GOPATH/src/github.com/SUSE/stampy/build/linux-amd64/stampy
+      /usr/local/bin/stampy
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.12 AS build
+- BaseName: ubuntu:xenial
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/shfmt
+    - /usr/local/bin/shfmt
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/stampy
+    - /usr/local/bin/stampy
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/direnv
+    - /usr/local/bin/direnv
+  - CmdLine:
+    - echo 'eval "$(direnv hook bash)"' >> ~/.bashrc
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update > /dev/null &&     apt-get upgrade -y > /dev/null &&     apt-get
+      install -y     build-essential     curl     git-core     jq     vim     wget     >/dev/null
+      &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update > /dev/null &&     apt-get install -y     apt-transport-https     ca-certificates     curl     software-properties-common     >/dev/null
+      &&     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add
+      - &&     add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu
+      $(lsb_release -cs) stable" &&     apt-get update > /dev/null &&     apt-get
+      install -y docker-ce=17.09.1~ce-0~ubuntu &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --progress-bar --location https://storage.googleapis.com/golang/go1.12.linux-amd64.tar.gz
+      | tar -xzf - -C /usr/local
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:/usr/local/go/bin:$GOPATH/bin
+    Name: env
+  - CmdLine:
+    - curl --silent --location "https://github.com/geofffranks/spruce/releases/download/$(curl
+      --silent --location "https://api.github.com/repos/geofffranks/spruce/releases/latest"
+      | jq -r .tag_name)/spruce-linux-amd64" > /usr/bin/spruce && chmod a+rx /usr/bin/spruce
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:xenial
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:xenial

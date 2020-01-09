@@ -1,0 +1,105 @@
+MetaArgs: null
+Stages:
+- BaseName: python:3.7.0-alpine3.8
+  Commands:
+  - Maintainer: Rich Braun <docker@instantlinux.net>
+    Name: maintainer
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.license
+      Value: LGPL-2.1
+    - Key: org.label-schema.name
+      Value: secondshot
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.vcs-url
+      Value: https://github.com/instantlinux/docker-tools
+    Name: label
+  - Env:
+    - Key: CRON_HOUR
+      Value: 0,8,16
+    - Key: CRON_MINUTE
+      Value: "30"
+    - Key: DBHOST
+      Value: db00
+    - Key: DBNAME
+      Value: secondshot
+    - Key: DBPORT
+      Value: "3306"
+    - Key: DBUSER
+      Value: bkp
+    - Key: DBTYPE
+      Value: sqlite
+    - Key: TZ
+      Value: UTC
+    Name: env
+  - Key: RSNAPSHOT_VERSION
+    Name: arg
+    Value: 1.4.2-r0
+  - Key: SECONDSHOT_VERSION
+    Name: arg
+    Value: 0.9.2
+  - Key: RRSYNC_SHA
+    Name: arg
+    Value: 8c9482dee40c77622e3bde2da3967cc92a0b04e0c0ce3978738410d2dbd3d436
+  - Name: volume
+    Volumes:
+    - /backups
+    - /metadata
+    - /etc/secondshot/conf.d
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - /tmp/
+  - CmdLine:
+    - apk add --no-cache --update rsnapshot=$RSNAPSHOT_VERSION dcron make       tzdata
+      &&     apk add --no-cache --virtual .fetch-deps gcc libffi-dev musl-dev       openssl-dev
+      shadow &&     pip install -r /tmp/requirements.txt &&     adduser -s /bin/sh
+      -S -D -G adm secondshot &&     usermod -o -u 0 secondshot &&     apk del .fetch-deps
+      && rm -fr /var/cache/apk/* /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/backup-daily.conf
+    - /etc/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /build/
+  - CmdLine:
+    - cd /build && ls -lR && make package &&     pip install file:///build/dist/secondshot-$SECONDSHOT_VERSION.tar.gz
+      &&     cp /etc/rsnapshot.conf.default /etc/rsnapshot.conf &&     patch /etc/rsnapshot.conf
+      /build/etc/rsnapshot.conf.patch &&     cat /build/etc/rsnapshot.conf.docker
+      >> /etc/rsnapshot.conf &&     echo "$RRSYNC_SHA  /usr/local/bin/rrsync" > checksum
+      &&     sha256sum -c checksum &&     rm -fr /build
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/entrypoint.sh
+    - /usr/local/bin
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: python:3.7.0-alpine3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.7.0-alpine3.8

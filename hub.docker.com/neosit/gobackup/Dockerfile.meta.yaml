@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache add build-base git dep openssh-client
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOBACKUP_VERSION
+      Value: 0.11.0
+    Name: env
+  - Env:
+    - Key: INTERPOLATOR_VERSION
+      Value: 0.9.0
+    Name: env
+  - CmdLine:
+    - git clone https://github.com/NeosIT/gobackup.git ${GOPATH}/src/gobackup
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${GOPATH}/src/gobackup     && git checkout ${GOBACKUP_VERSION}     && dep
+      ensure -v     && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o gobackup     &&
+      strip gobackup
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/NeosIT/interpolator.git ${GOPATH}/src/interpolator     &&
+      cd ${GOPATH}/src/interpolator     && git checkout ${INTERPOLATOR_VERSION}     &&
+      dep ensure -v     && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o interpolator     &&
+      strip interpolator
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM golang:alpine AS build-env
+- BaseName: fedora:31
+  Commands:
+  - Name: workdir
+    Path: /usr/local/bin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mongodb.repo
+    - /etc/yum.repos.d
+  - CmdLine:
+    - dnf install https://download.postgresql.org/pub/repos/yum/reporpms/F-31-x86_64/pgdg-fedora-repo-latest.noarch.rpm
+      -y     && dnf install postgresql12 mariadb redis mongodb-org-tools cronie procps-ng
+      vim htop strace --refresh -y     && dnf clean all
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /go/src/gobackup/gobackup
+    - .
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /go/src/interpolator/interpolator
+    - .
+  - CmdLine:
+    - mkdir /etc/gobackup
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - .
+  - CmdLine:
+    - perform
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: fedora:31
+  Name: ""
+  Platform: ""
+  SourceCode: FROM fedora:31

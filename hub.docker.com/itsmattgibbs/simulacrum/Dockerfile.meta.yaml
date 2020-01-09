@@ -1,0 +1,173 @@
+MetaArgs: null
+Stages:
+- As: sim_builder
+  BaseName: ubuntu:18.04
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get -y install build-essential xterm man wget readline-common
+      libreadline-dev sudo unzip                        cmake autoconf automake libtool
+      m4 gfortran libtool-bin xorg xorg-dev bc                        libopenmpi-dev
+      gfortran-multilib curl
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -c
+  - CmdLine:
+    - curl https://www.classe.cornell.edu/~cesrulib/downloads/tarballs/ | sed -n 's/.*href="\([^"]*\)\.tgz.*/\1/p'
+      > /bmad_filename.txt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -nv "https://www.classe.cornell.edu/~cesrulib/downloads/tarballs/$(cat
+      /bmad_filename.txt).tgz"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - tar -xvf /tmp/$(cat /bmad_filename.txt).tgz -C /
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv $(cat /bmad_filename.txt) bmad
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bmad_env.bash
+    - /bmad/bmad_env.bash
+  - CmdLine:
+    - ln -s /usr/bin/make /usr/bin/gmake
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /bmad &&     pwd &&     ls -la &&     source ./bmad_env.bash &&     sed -i
+      's/ACC_ENABLE_OPENMP.*/ACC_ENABLE_OPENMP="Y"/' /bmad/util/dist_prefs &&     sed
+      -i 's/ACC_ENABLE_MPI.*/ACC_ENABLE_MPI="Y"/' /bmad/util/dist_prefs &&     sed
+      -i 's/ACC_ENABLE_SHARED.*/ACC_ENABLE_SHARED="Y"/' /bmad/util/dist_prefs &&     sed
+      -i 's/ACC_ENABLE_MPI.*/ACC_ENABLE_MPI="Y"/' /bmad/util/dist_prefs &&     sed
+      -i 's:CMAKE_Fortran_COMPILER\} MATCHES "ifort":CMAKE_Fortran_COMPILER\} STREQUAL
+      "ifort":' /bmad/build_system/Master.cmake &&     sed -i '/export PACKAGE_VERSION=/a
+      source .\/VERSION' /bmad/openmpi/acc_build_openmpi
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /bmad
+  - CmdLine:
+    - source ./bmad_env.bash && ./util/dist_build_production
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: sim_builder
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as sim_builder
+- BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get -y install readline-common python3 python3-pip libzmq5
+      libx11-6 gfortran
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/bin/python3 /usr/bin/python
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip3 install numpy caproto pyzmq
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - model_service
+    - /model_service
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start_all_services.bash
+    - /start_all_services.bash
+  - Env:
+    - Key: TAO_LIB
+      Value: /tao/libtao.so
+    Name: env
+  - Chown: ""
+    From: sim_builder
+    Name: copy
+    SourcesAndDest:
+    - /bmad/production/lib/libtao.so
+    - ${TAO_LIB}
+  - Chown: ""
+    From: sim_builder
+    Name: copy
+    SourcesAndDest:
+    - /bmad/tao/python/pytao
+    - /model_service/pytao
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -c
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /simulacrum
+  - CmdLine:
+    - cd /simulacrum && pip3 install .
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bpm_service
+    - /bpm_service
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - magnet_service
+    - /magnet_service
+  - Env:
+    - Key: MODEL_PORT
+      Value: "12312"
+    Name: env
+  - Env:
+    - Key: ORBIT_PORT
+      Value: "56789"
+    Name: env
+  - Env:
+    - Key: EPICS_CA_SERVER_PORT
+      Value: "5064"
+    Name: env
+  - Env:
+    - Key: EPICS_CA_REPEATER_PORT
+      Value: "5065"
+    Name: env
+  - Name: expose
+    Ports:
+    - ${MODEL_PORT}
+  - Name: expose
+    Ports:
+    - ${ORBIT_PORT}
+  - Name: expose
+    Ports:
+    - ${EPICS_CA_SERVER_PORT}
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

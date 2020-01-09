@@ -1,0 +1,109 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y sudo git wget openssh-client libmcrypt4
+      libjpeg62 ca-certificates libgeoip-dev geoip-database* libgeoip-dev libpng12-0
+      libxslt1.1 npm curl libpcre3 librecode0 libsqlite3-0 libxml2 --no-install-recommends
+      && rm -r /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y autoconf file g++ gcc libc-dev make pkg-config
+      re2c --no-install-recommends && rm -r /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_INI_DIR
+      Value: /usr/local/etc/php
+    Name: env
+  - CmdLine:
+    - mkdir -p $PHP_INI_DIR/conf.d
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_EXTRA_CONFIGURE_ARGS
+      Value: --enable-fpm --with-fpm-user=www-data --with-fpm-group=www-data
+    Name: env
+  - Env:
+    - Key: PACKAGE_LIST
+      Value: xdebug redis-2.2.8 geoip igbinary solr SPL_Types
+    Name: env
+  - Env:
+    - Key: GPG_KEYS
+      Value: 0BD78B5F97500D450838F95DFE857D9A90D90EC1 0B96609E270F565C13292B24C13C70B87267B52D
+    Name: env
+  - CmdLine:
+    - "set -xe \t&& for key in $GPG_KEYS; do \t\tgpg --keyserver ha.pool.sks-keyservers.net
+      --recv-keys \"$key\"; \tdone"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_VERSION
+      Value: 5.5.25
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-ext-*
+    - /usr/local/bin/
+  - CmdLine:
+    - "buildDeps=\" $PHP_EXTRA_BUILD_DEPS libmhash2 libmcrypt-dev bzip2 libbz2-dev
+      libicu-dev libgmp-dev libpcre3-dev libjpeg-dev libpng12-dev libreadline6-dev
+      librecode-dev libsqlite3-dev libssl-dev libxml2-dev libcurl4-gnutls-dev libxslt1-dev
+      \" \t&& set -x \t&& apt-get update && apt-get install -y $buildDeps --no-install-recommends
+      && rm -rf /var/lib/apt/lists/*   && ln -s /usr/include/x86_64-linux-gnu/gmp.h
+      /usr/include/gmp.h   && ln -s /usr/bin/nodejs /usr/bin/node \t&& curl -SL \"http://php.net/get/php-$PHP_VERSION.tar.bz2/from/this/mirror\"
+      -o php.tar.bz2 \t&& curl -SL \"http://php.net/get/php-$PHP_VERSION.tar.bz2.asc/from/this/mirror\"
+      -o php.tar.bz2.asc \t&& gpg --verify php.tar.bz2.asc \t&& mkdir -p /usr/src/php
+      \t&& tar -xof php.tar.bz2 -C /usr/src/php --strip-components=1 \t&& rm php.tar.bz2*
+      \t&& cd /usr/src/php \t&& ./configure \t\t--with-config-file-path=\"$PHP_INI_DIR\"
+      \t\t--with-config-file-scan-dir=\"$PHP_INI_DIR/conf.d\" \t\t$PHP_EXTRA_CONFIGURE_ARGS
+      \t\t--disable-cgi     --enable-bcmath     --enable-calendar     --enable-exif
+      \    --enable-igbinary     --enable-intl     --enable-mbstring \t\t--enable-mysqlnd
+      \    --enable-opcache     --enable-pcntl     --enable-shmop     --enable-soap
+      \    --enable-sockets     --enable-wddx     --enable-zip     --with-bz2 \t\t--with-curl
+      \    --with-gettext     --with-gd     --with-gmp     --with-jpeg-dir \t\t--with-mcrypt
+      \    --with-mysql     --with-mysqli     --with-openssl     --with-pcre     --with-pdo-mysql
+      \t\t--with-readline \t\t--with-recode \t\t--with-zlib     --with-xsl \t&& make
+      -j\"$(nproc)\" \t&& make install \t&& { find /usr/local/bin /usr/local/sbin
+      -type f -executable -exec strip --strip-all '{}' + || true; }   && chmod +x
+      /usr/local/bin/docker-php-ext-* && sync   && cd /usr/src/php/ext && pecl download
+      $PACKAGE_LIST   && for PACKAGE in $PACKAGE_LIST; do tar xzf $PACKAGE*    &&
+      rm $PACKAGE*.tgz && mv $PACKAGE* $PACKAGE; done   && docker-php-ext-install
+      igbinary   && docker-php-ext-configure redis-2.2.8 --enable-redis-igbinary   &&
+      docker-php-ext-install $PACKAGE_LIST   && echo \"zend_extension=opcache.so\">
+      /usr/local/etc/php/conf.d/opcache.ini   && echo \"extension=igbinary.so\" >
+      /usr/local/etc/php/conf.d/ext-igbinary.ini   && ln -s $(which php) /usr/bin/php
+      \t&& apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
+      -o APT::AutoRemove::SuggestsImportant=false $buildDeps   && cd /usr/src/php
+      \\\t&& make clean"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /usr/src/php/ext/* /var/tmp/*             /tmp/* /var/lib/apt/lists/*
+      /usr/src/php/ext/*             /etc/ssh/ssh_host_* /usr/share/man/??             /usr/share/man/??*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/www/html
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php-fpm.conf
+    - /usr/local/etc/
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - php-fpm
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

@@ -1,0 +1,107 @@
+MetaArgs: null
+Stages:
+- As: buildstage
+  BaseName: alpine
+  Commands:
+  - Env:
+    - Key: GITASOF
+      Value: 20.01.05.1
+    Name: env
+  - Env:
+    - Key: WORKDIR
+      Value: /kiwiirc
+    Name: env
+  - Name: workdir
+    Path: ${WORKDIR}
+  - CmdLine:
+    - apk add --update git yarn nodejs-npm g++ make go pkgconfig bash curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth=1 --single-branch https://github.com/kiwiirc/kiwiirc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /kiwiirc/kiwiirc && yarn install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /kiwiirc/kiwiirc && npm run build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /kiwiirc && git clone --depth=1 --single-branch https://github.com/kiwiirc/webircgateway
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /kiwiirc/webircgateway &&         go get github.com/kiwiirc/webircgateway
+      &&         go build -o webircgateway main.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: buildstage
+  Platform: ""
+  SourceCode: FROM alpine as buildstage
+- As: runstage
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache su-exec
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: WORKDIR
+      Value: /kiwiirc
+    Name: env
+  - Name: workdir
+    Path: ${WORKDIR}
+  - Chown: ""
+    From: buildstage
+    Name: copy
+    SourcesAndDest:
+    - ${WORKDIR}/kiwiirc/dist
+    - ${WORKDIR}/www
+  - Chown: ""
+    From: buildstage
+    Name: copy
+    SourcesAndDest:
+    - ${WORKDIR}/webircgateway/webircgateway
+    - ${WORKDIR}/kiwiirc
+  - Chown: ""
+    From: buildstage
+    Name: copy
+    SourcesAndDest:
+    - ${WORKDIR}/webircgateway/config.conf.example
+    - ${WORKDIR}/
+  - CmdLine:
+    - sed -i 's/^port = 80\b/port = 8080/' ${WORKDIR}/config.conf.example
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: volume
+    Volumes:
+    - /kiwiirc-data
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - ${WORKDIR}/docker-entrypoint.sh
+  - CmdLine:
+    - /kiwiirc/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - su-exec
+    - guest
+    - /kiwiirc/kiwiirc
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: runstage
+  Platform: ""
+  SourceCode: FROM alpine as runstage

@@ -1,0 +1,107 @@
+MetaArgs: null
+Stages:
+- As: downloader
+  BaseName: buildpack-deps:stretch-curl
+  Commands:
+  - Key: FIREFOX_VERSION
+    Name: arg
+    Value: "70.0"
+  - Key: FIREFOX_LANGUAGE
+    Name: arg
+    Value: en-US
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://archive.mozilla.org/pub/firefox/releases/${FIREFOX_VERSION}/KEY
+    - KEY
+  - CmdLine:
+    - gpg --no-tty --import KEY
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://archive.mozilla.org/pub/firefox/releases/${FIREFOX_VERSION}/SHA512SUMS
+    - SHA512SUMS
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://archive.mozilla.org/pub/firefox/releases/${FIREFOX_VERSION}/SHA512SUMS.asc
+    - SHA512SUMS.asc
+  - CmdLine:
+    - gpg --verify SHA512SUMS.asc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget --no-verbose --show-progress --progress=dot:giga --directory-prefix linux-x86_64/${FIREFOX_LANGUAGE}
+      https://archive.mozilla.org/pub/firefox/releases/${FIREFOX_VERSION}/linux-x86_64/${FIREFOX_LANGUAGE}/firefox-${FIREFOX_VERSION}.tar.bz2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - grep linux-x86_64/${FIREFOX_LANGUAGE}/firefox-${FIREFOX_VERSION}.tar.bz2 SHA512SUMS
+      | sha512sum -c -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get --quiet update && DEBIAN_FRONTEND=noninteractive apt-get --quiet --assume-yes
+      install bzip2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar --extract --bzip2 --file linux-x86_64/${FIREFOX_LANGUAGE}/firefox-${FIREFOX_VERSION}.tar.bz2
+      --directory tmp/
+    Name: run
+    PrependShell: true
+  From:
+    Image: buildpack-deps:stretch-curl
+  Name: downloader
+  Platform: ""
+  SourceCode: FROM buildpack-deps:stretch-curl as downloader
+- As: firefox
+  BaseName: ubuntu:18.04
+  Commands:
+  - Chown: ""
+    From: downloader
+    Name: copy
+    SourcesAndDest:
+    - /tmp/firefox
+    - /usr/lib/firefox
+  - CmdLine:
+    - apt-get --quiet update && DEBIAN_FRONTEND=noninteractive apt-get --quiet --assume-yes
+      install evince libgtk-3-0 libdbus-glib-1-2 libxt6 libcanberra-gtk-module libcanberra-gtk3-module
+      tzdata libx11-xcb1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get --quiet update && DEBIAN_FRONTEND=noninteractive apt-get --quiet --assume-yes
+      install flashplugin-installer browser-plugin-freshplayer-pepperflash
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir --parents /usr/lib/firefox/plugins
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /usr/lib/flashplugin-installer/libflashplayer.so /usr/lib/firefox/plugins/libflashplayer.so
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /usr/lib/flashplugin-installer/libflashplayer.so /usr/lib/mozilla/plugins/libflashplayer.so
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/lib/firefox/firefox
+    - -headless
+    - -CreateProfile
+    - custom /root/.mozilla/firefox/custom
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - /usr/lib/firefox/firefox
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: firefox
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as firefox

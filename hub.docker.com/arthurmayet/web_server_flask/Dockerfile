@@ -1,0 +1,23 @@
+FROM fedora:23
+
+RUN dnf -y update \
+    && dnf -y install git python-pip \
+    && python3 -m pip install -U pip \
+    && dnf clean all
+
+COPY requirements.txt /
+RUN pip3 install -r /requirements.txt
+
+RUN  mkdir -p /home/PycharmProjects/Web_server_flask
+WORKDIR /home/PycharmProjects/Web_server_flask
+COPY hello.py .
+COPY README.md /home/PycharmProjects/Web_server_flask
+ADD templates /home/PycharmProjects/Web_server_flask/templates
+ADD static /home/PycharmProjects/Web_server_flask/static
+
+EXPOSE 5000
+
+ENTRYPOINT ["python3","hello.py","runserver"]
+CMD ["-h=0.0.0.0"]
+
+

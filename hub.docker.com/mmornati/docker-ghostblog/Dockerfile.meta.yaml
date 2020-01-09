@@ -1,0 +1,141 @@
+MetaArgs: null
+Stages:
+- As: plugin-builder
+  BaseName: node:6.11.3-alpine
+  Commands:
+  - Name: workdir
+    Path: /builder
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/mmornati/ghost-cloudinary-store/archive/update_ghost_1.0.0.zip
+    - .
+  - CmdLine:
+    - unzip update_ghost_1.0.0.zip &&   mv ghost-cloudinary-store-update_ghost_1.0.0
+      ghost-cloudinary-store &&   cd ghost-cloudinary-store &&   npm install --production
+      --loglevel=error
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:6.11.3-alpine
+  Name: plugin-builder
+  Platform: ""
+  SourceCode: FROM node:6.11.3-alpine as plugin-builder
+- As: ghost-builder
+  BaseName: node:6.10
+  Commands:
+  - CmdLine:
+    - npm install --loglevel=error -g knex-migrator ghost-cli
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GHOST_VERSION
+      Value: 1.8.6
+    Name: env
+  - CmdLine:
+    - addgroup --system -gid 1276 ghost &&     adduser --system --home /ghost --ingroup
+      ghost --uid 1276 ghost &&     mkdir /ghost/blog &&     cd /ghost/blog &&     ghost
+      install $GHOST_VERSION --local &&     echo $GHOST_VERSION > /ghost/version
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run-ghost.sh
+    - /ghost
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - migrate-database.sh
+    - /ghost
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.production.json
+    - /ghost/blog
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.development.json
+    - /ghost/blog
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - MigratorConfig.js
+    - /ghost/blog
+  - Chown: ""
+    From: plugin-builder
+    Name: copy
+    SourcesAndDest:
+    - /builder/ghost-cloudinary-store
+    - /ghost/blog/versions/$GHOST_VERSION/core/server/adapters/storage/ghost-cloudinary-store
+  From:
+    Image: node:6.10
+  Name: ghost-builder
+  Platform: ""
+  SourceCode: FROM node:6.10 as ghost-builder
+- BaseName: node:6.11.3-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Marco Mornati <marco@mornati.net>"'
+    Name: label
+  - CmdLine:
+    - addgroup -S -g 1276 ghost &&     adduser -S -h /ghost -G ghost -u 1276 ghost
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ghost-builder
+    Name: copy
+    SourcesAndDest:
+    - /ghost
+    - /ghost
+  - CmdLine:
+    - chown -R ghost:ghost /ghost &&     mkdir /ghost-override &&     chown -R ghost:ghost
+      /ghost-override
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install --loglevel=error -g knex-migrator ghost-cli
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ghost
+  - Env:
+    - Key: HOME
+      Value: /ghost
+    Name: env
+  - Name: workdir
+    Path: /ghost
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - Name: expose
+    Ports:
+    - "2368"
+  - Health:
+      Interval: 300000000000
+      Test:
+      - CMD-SHELL
+      - curl -f http://localhost:2368/ || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - Name: volume
+    Volumes:
+    - /ghost-override
+  - CmdLine:
+    - /bin/sh
+    - /ghost/run-ghost.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: node:6.11.3-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:6.11.3-alpine

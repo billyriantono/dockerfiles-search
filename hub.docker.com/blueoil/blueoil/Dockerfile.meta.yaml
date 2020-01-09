@@ -1,0 +1,228 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: nvidia/cuda:10.0-cudnn7-devel-ubuntu16.04
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"admin@blueoil.org"'
+    Name: label
+  - Name: expose
+    Ports:
+    - "6006"
+  - Key: python_version
+    Name: arg
+    Value: '"3.6.3"'
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: /usr/local/cuda/extras/CUPTI/lib64:${LD_LIBRARY_PATH}
+    - Key: CUDA_HOME
+      Value: /usr/local/cuda-10.0
+    - Key: PYENV_ROOT
+      Value: /usr/local/pyenv
+    Name: env
+  - CmdLine:
+    - apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 60C317803A41BA51845E371A1E9377A2BA9EF27F
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'deb http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu xenial main'
+      | tee /etc/apt/sources.list.d/ubuntu-toolchain-r-ubuntu-test-xenial.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y     cmake     locales    python3     python3-dev     python3-pip     python3-wheel     python3-pil     libjpeg8-dev     zlib1g-dev     python3-matplotlib     liblapack-dev     git     make     build-essential     libssl-dev     libbz2-dev     libreadline-dev     libsqlite3-dev     wget     libncurses5-dev     libncursesw5-dev     xz-utils     tk-dev     g++-9     crossbuild-essential-arm64     g++-5-arm-linux-gnueabihf     openssh-client     openssh-server     &&     apt-get
+      clean &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/bin/arm-linux-gnueabihf-g++-5 /usr/bin/arm-linux-gnueabihf-g++
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/run/sshd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - locale-gen en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    - Key: LANGUAGE
+      Value: en_US:en
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    Name: env
+  - CmdLine:
+    - git clone https://github.com/yyuu/pyenv.git $PYENV_ROOT &&     git clone https://github.com/yyuu/pyenv-virtualenv.git
+      $PYENV_ROOT/plugins/pyenv-virtualenv
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: $PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH
+    Name: env
+  - CmdLine:
+    - eval "$(pyenv init -)" &&     eval "$(pyenv virtualenv-init -)"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pyenv install ${python_version} &&     pyenv virtualenv -p python${python_version%.*}
+      ${python_version} python${python_version%.*} &&     pyenv global python${python_version%.*}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /tmp/openmpi &&     cd /tmp/openmpi &&     wget https://www.open-mpi.org/software/ompi/v4.0/downloads/openmpi-4.0.1.tar.gz
+      &&     tar zxf openmpi-4.0.1.tar.gz &&     cd openmpi-4.0.1 &&     ./configure
+      --enable-orterun-prefix-by-default &&     make -j $(nproc) all &&     make install
+      &&     ldconfig &&     rm -rf /tmp/openmpi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "hwloc_base_binding_policy = none" >> /usr/local/etc/openmpi-mca-params.conf
+      &&     echo "rmaps_base_mapping_policy = slot" >> /usr/local/etc/openmpi-mca-params.conf
+      &&     echo "btl_tcp_if_exclude = lo,docker0" >> /usr/local/etc/openmpi-mca-params.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install -U pip setuptools
+    Name: run
+    PrependShell: true
+  From:
+    Image: nvidia/cuda:10.0-cudnn7-devel-ubuntu16.04
+  Name: base
+  Platform: ""
+  SourceCode: FROM nvidia/cuda:10.0-cudnn7-devel-ubuntu16.04 AS base
+- As: blueoil-base
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./*requirements.txt
+    - /home/blueoil/
+  - CmdLine:
+    - pip install -r /home/blueoil/gpu.requirements.txt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - lmnet/third_party
+    - /home/blueoil/lmnet/third_party
+  - CmdLine:
+    - cd /home/blueoil/lmnet/third_party/coco/PythonAPI && pip install -e .
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HOROVOD_GPU_ALLREDUCE
+      Value: NCCL
+    - Key: HOROVOD_WITH_TENSORFLOW
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - ldconfig /usr/local/cuda-10.0/targets/x86_64-linux/lib/stubs &&     pip install
+      -r /home/blueoil/dist.requirements.txt &&     ldconfig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /.horovod && chmod 777 /.horovod
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/blueoil
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: blueoil-base
+  Platform: ""
+  SourceCode: FROM base AS blueoil-base
+- As: blueoil-dev
+  BaseName: blueoil-base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - blueoil
+    - /home/blueoil/blueoil
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - setup.*
+    - /home/blueoil/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - output_template
+    - /home/blueoil/output_template
+  - CmdLine:
+    - python setup.py install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 777 /home/blueoil
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dlk
+    - /home/blueoil/dlk
+  - Name: workdir
+    Path: /home/blueoil/dlk
+  - CmdLine:
+    - PYTHONPATH=python/dlk python setup.py install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 777 /home/blueoil/dlk
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - lmnet
+    - /home/blueoil/lmnet
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tests
+    - /home/blueoil/tests
+  - Env:
+    - Key: PYTHONPATH
+      Value: $PYTHONPATH:/home/blueoil:/home/blueoil/lmnet:/home/blueoil/dlk/python/dlk
+    Name: env
+  - CmdLine:
+    - pyenv rehash
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: workdir
+    Path: /home/blueoil
+  From:
+    Stage:
+      Index: 1
+      Named: blueoil-base
+  Name: blueoil-dev
+  Platform: ""
+  SourceCode: FROM blueoil-base AS blueoil-dev

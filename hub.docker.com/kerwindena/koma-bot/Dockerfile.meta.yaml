@@ -1,0 +1,104 @@
+MetaArgs:
+- DefaultValue: github.com/thelegy/koma-bot
+  Key: GO_IMPORT_PATH
+  ProvidedValue: null
+  Value: github.com/thelegy/koma-bot
+Stages:
+- As: builder
+  BaseName: golang:1.11-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache     bash     git     npm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install --global     autoprefixer     postcss-cli     sass
+    Name: run
+    PrependShell: true
+  - Key: GO_IMPORT_PATH
+    Name: arg
+    Value: null
+  - Name: workdir
+    Path: src/$GO_IMPORT_PATH
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - ./
+  - CmdLine:
+    - SASS_STYLE=compressed ./processSass.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir _build  && cp -R templates _build/templates  && cp -R static _build/static  &&
+      rm _build/static/**/*.scss
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -v -d ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build       -a -v -o _build/koma-bot -tags netgo       -ldflags
+      "         -s         -X main._versionDate=$(date -Iseconds)         -X main._versionGitDirty=$(git
+      diff-index --quiet HEAD -- && echo f || echo t)         -X main._versionGitBranch=$(git
+      symbolic-ref HEAD 2>/dev/null|sed 's|^refs/heads/||'||true)         -X main._versionGitHash=$(git
+      rev-parse --short --verify HEAD)       " .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine AS builder
+- BaseName: alpine
+  Commands:
+  - Maintainer: The Legy
+    Name: maintainer
+  - Name: workdir
+    Path: /opt/koma-bot/
+  - Name: expose
+    Ports:
+    - "8000"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - koma_bot.example.yaml
+    - koma_bot_sounds.example.yaml
+    - /etc/koma_bot/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ca-certificates.crt
+    - /etc/ssl/certs/
+  - Name: volume
+    Volumes:
+    - '"/etc/koma_bot"'
+  - Key: GO_IMPORT_PATH
+    Name: arg
+    Value: null
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/$GO_IMPORT_PATH/_build/
+    - ./
+  - CmdLine:
+    - mv koma-bot /bin/
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: nobody
+  - CmdLine:
+    - /bin/koma-bot
+    - --docker
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

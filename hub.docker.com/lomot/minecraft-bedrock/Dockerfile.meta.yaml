@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:latest
+  Commands:
+  - Env:
+    - Key: SERVER_HOME
+      Value: '"/mcpe"'
+    - Key: SERVER_PATH
+      Value: '"/mcpe/server"'
+    - Key: SCRIPT_PATH
+      Value: '"/mcpe/script"'
+    - Key: DEFAULT_CONFIG_PATH
+      Value: '"/mcpe/default-config"'
+    - Key: DATA_PATH
+      Value: '"/data"'
+    Name: env
+  - Env:
+    - Key: CORE_VERSION
+      Value: '"1.14.1.4"'
+    - Key: IMAGE_VERSION
+      Value: '"1"'
+    Name: env
+  - CmdLine:
+    - apk --no-cache add unzip wget &&   mkdir -p $SERVER_PATH &&   mkdir -p $DEFAULT_CONFIG_PATH
+      &&   wget https://minecraft.azureedge.net/bin-linux/bedrock-server-$CORE_VERSION.zip
+      -O /tmp/bedrock.zip 2>/dev/null
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip /tmp/bedrock.zip -d $SERVER_PATH &&   mv $SERVER_PATH/permissions.json
+      $DEFAULT_CONFIG_PATH/ &&   mv $SERVER_PATH/server.properties $DEFAULT_CONFIG_PATH/
+      &&   mv $SERVER_PATH/whitelist.json $DEFAULT_CONFIG_PATH/ &&   rm /tmp/bedrock.zip
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./script
+    - $SCRIPT_PATH
+  From:
+    Image: alpine:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:latest as builder
+- As: production
+  BaseName: debian:10-slim
+  Commands:
+  - CmdLine:
+    - apt-get update &&  apt-get -y install libcurl4 &&  apt-get -y autoremove &&  apt-get
+      clean
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: .
+    Name: env
+  - Env:
+    - Key: SERVER_HOME
+      Value: '"/mcpe"'
+    - Key: SERVER_PATH
+      Value: '"/mcpe/server"'
+    - Key: SCRIPT_PATH
+      Value: '"/mcpe/script"'
+    - Key: DEFAULT_CONFIG_PATH
+      Value: '"/mcpe/default-config"'
+    - Key: DATA_PATH
+      Value: '"/data"'
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $SERVER_HOME
+    - $SERVER_HOME
+  - Name: workdir
+    Path: ${SERVER_PATH}
+  - Name: expose
+    Ports:
+    - 19132/udp
+  - CmdLine:
+    - /mcpe/script/start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:10-slim
+  Name: production
+  Platform: ""
+  SourceCode: FROM debian:10-slim as production

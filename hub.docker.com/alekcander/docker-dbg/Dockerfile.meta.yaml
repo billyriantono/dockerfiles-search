@@ -1,0 +1,81 @@
+MetaArgs: null
+Stages:
+- As: build_base
+  BaseName: golang:1.11-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git openssh-client musl-dev gcc
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Name: workdir
+    Path: github.com/alekc/docker-dbg
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.sum
+    - .
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-alpine
+  Name: build_base
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine  AS build_base
+- As: server_builder
+  BaseName: build_base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go install -a .
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build_base
+  Name: server_builder
+  Platform: ""
+  SourceCode: FROM build_base AS server_builder
+- As: final-build
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache tzdata ca-certificates busybox-extras
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Chown: ""
+    From: server_builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/docker-dbg
+    - /bin/docker-dbg
+  - CmdLine:
+    - /bin/docker-dbg
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: final-build
+  Platform: ""
+  SourceCode: FROM alpine AS final-build

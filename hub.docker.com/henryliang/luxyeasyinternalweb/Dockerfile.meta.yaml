@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: microsoft/dotnet:2.2-aspnetcore-runtime
+  Commands:
+  - Name: workdir
+    Path: /app
+  From:
+    Image: microsoft/dotnet:2.2-aspnetcore-runtime
+  Name: base
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2-aspnetcore-runtime AS base
+- As: build
+  BaseName: microsoft/dotnet:2.2-sdk
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Env:
+    - Key: NODE_VERSION
+      Value: 10.15.1
+    Name: env
+  - Env:
+    - Key: NODE_DOWNLOAD_SHA
+      Value: ca1dfa9790876409c8d9ecab7b4cdb93e3276cedfc64d56ef1a4ff1778a40214
+    Name: env
+  - CmdLine:
+    - curl -SL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz"
+      --output nodejs.tar.gz     && echo "$NODE_DOWNLOAD_SHA nodejs.tar.gz" | sha256sum
+      -c -     && tar -xzf "nodejs.tar.gz" -C /usr/local --strip-components=1     &&
+      rm nodejs.tar.gz     && ln -s /usr/local/bin/node /usr/local/bin/nodejs
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - luxyeasy.internalweb/luxyeasy.internalweb.csproj
+    - luxyeasy.internalweb/
+  - CmdLine:
+    - dotnet restore "luxyeasy.internalweb/luxyeasy.internalweb.csproj"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./luxyeasy.internalweb
+    - ./luxyeasy.internalweb
+  - Name: workdir
+    Path: '"/src/luxyeasy.internalweb"'
+  - CmdLine:
+    - dotnet build "luxyeasy.internalweb.csproj" -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.2-sdk
+  Name: build
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2-sdk AS build
+- As: publish
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - dotnet publish "luxyeasy.internalweb.csproj" -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build AS publish
+- As: final
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - ./
+  - CmdLine:
+    - dotnet
+    - luxyeasy.internalweb.dll
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: final
+  Platform: ""
+  SourceCode: FROM base AS final

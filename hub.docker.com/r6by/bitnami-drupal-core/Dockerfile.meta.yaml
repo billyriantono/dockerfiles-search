@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: composer:latest
+  Commands:
+  - Key: DRUPAL_VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: DRUPAL_VERSION
+      Value: ${DRUPAL_VERSION:-8.5.6}
+    - Key: PACKAGE
+      Value: drupal
+    - Key: ORIGINAL_VERSION
+      Value: 8.5.5-1
+    - Key: DISTRO
+      Value: debian-9
+    - Key: ARCH
+      Value: amd64
+    Name: env
+  - Env:
+    - Key: ORIGINAL_DIR
+      Value: ${PACKAGE}-${ORIGINAL_VERSION}-linux-${ARCH}-${DISTRO}
+    - Key: OVERRIDE_FILE
+      Value: ${PACKAGE}-${DRUPAL_VERSION}
+    Name: env
+  - Env:
+    - Key: ORIGINAL_URL
+      Value: https://downloads.bitnami.com/files/stacksmith/${ORIGINAL_DIR}.tar.gz
+    - Key: OVERRIDE_URL
+      Value: https://ftp.drupal.org/files/projects/${OVERRIDE_FILE}.tar.gz
+    - Key: OVERRIDE_DIR
+      Value: ${OVERRIDE_FILE}-linux-${ARCH}-${DISTRO}
+    Name: env
+  - CmdLine:
+    - apk add --no-cache libpng libpng-dev     && docker-php-ext-install gd     &&
+      apk del libpng-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --no-cache add git     && mkdir ${OVERRIDE_DIR}     && curl -sS -LOf ${ORIGINAL_URL}     &&
+      tar xzf ${ORIGINAL_DIR}.tar.gz -C ${OVERRIDE_DIR} --strip-components=1     &&
+      rm -r ${OVERRIDE_DIR}/files/drupal && mkdir -p ${OVERRIDE_DIR}/files/drupal     &&
+      curl -sS -LOf ${OVERRIDE_URL}     && tar xzf ${OVERRIDE_FILE}.tar.gz -C ${OVERRIDE_DIR}/files/drupal
+      --strip-components=1     && cd ${OVERRIDE_DIR}/files/drupal     && composer
+      require drush/drush ^9.3     && cd -     && touch ${OVERRIDE_DIR}/files/drupal/.buildcomplete     &&
+      tar -zcf ${OVERRIDE_DIR}.tar.gz ${OVERRIDE_DIR}     && mv ${OVERRIDE_DIR}.tar.gz
+      /tmp/
+    Name: run
+    PrependShell: true
+  From:
+    Image: composer:latest
+  Name: build
+  Platform: ""
+  SourceCode: FROM composer:latest as build
+- BaseName: bitnami/drupal:latest
+  Commands:
+  - Key: DRUPAL_VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: DRUPAL_VERSION
+      Value: ${DRUPAL_VERSION:-8.5.6}
+    - Key: PACKAGE
+      Value: drupal
+    - Key: DISTRO
+      Value: debian-9
+    - Key: ARCH
+      Value: amd64
+    - Key: CACHE_ROOT
+      Value: /tmp/bitnami/pkg/cache
+    Name: env
+  - Env:
+    - Key: OVERRIDE_FILE
+      Value: ${PACKAGE}-${DRUPAL_VERSION}
+    Name: env
+  - Env:
+    - Key: OVERRIDE_DIR
+      Value: ${OVERRIDE_FILE}-linux-${ARCH}-${DISTRO}
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/${OVERRIDE_DIR}.tar.gz
+    - ${CACHE_ROOT}/${OVERRIDE_DIR}.tar.gz
+  - CmdLine:
+    - nami uninstall com.bitnami.drupal     && bitnami-pkg unpack ${OVERRIDE_FILE}
+    Name: run
+    PrependShell: true
+  From:
+    Image: bitnami/drupal:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM bitnami/drupal:latest

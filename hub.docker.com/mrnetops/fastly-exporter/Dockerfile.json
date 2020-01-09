@@ -1,0 +1,115 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "GO_VERSION",
+      "DefaultValue": "1.12.7",
+      "ProvidedValue": null,
+      "Value": "1.12.7"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "golang:${GO_VERSION}-alpine",
+      "SourceCode": "FROM golang:${GO_VERSION}-alpine AS builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "golang:${GO_VERSION}-alpine"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add --no-cache \tca-certificates \tgit"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "adduser -D -g '' appuser"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "$GOPATH/src/github.com/peterbourgon/fastly-exporter/"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "$GOPATH/src/github.com/peterbourgon/fastly-exporter/"
+        },
+        {
+          "CmdLine": [
+            "CGO_ENABLED=0 go build \t-a \t-ldflags=\"-X main.programVersion=$(git describe | sed -e 's/^v//')\" \t-o /go/bin/fastly-exporter \t./cmd/fastly-exporter"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "scratch",
+      "SourceCode": "FROM scratch",
+      "Platform": "",
+      "From": {
+        "Scratch": true
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/etc/ssl/certs/ca-certificates.crt",
+            "/etc/ssl/certs/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/etc/passwd",
+            "/etc/passwd"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/go/bin/fastly-exporter",
+            "/go/bin/fastly-exporter"
+          ]
+        },
+        {
+          "Name": "user",
+          "User": "appuser"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "8080"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/go/bin/fastly-exporter",
+            "-endpoint",
+            "http://0.0.0.0:8080/metrics"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

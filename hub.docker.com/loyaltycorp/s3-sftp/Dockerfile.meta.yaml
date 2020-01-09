@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- As: php
+  BaseName: php:7.4-rc-cli-alpine3.10
+  Commands:
+  - Name: workdir
+    Path: /var/s3sftp
+  From:
+    Image: php:7.4-rc-cli-alpine3.10
+  Name: php
+  Platform: ""
+  SourceCode: FROM php:7.4-rc-cli-alpine3.10 as php
+- As: composer
+  BaseName: php
+  Commands:
+  - CmdLine:
+    - apk add  --no-cache       curl       unzip     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./composer-installer.sh
+    - /usr/local/bin/composer-installer
+  - CmdLine:
+    - chmod +x /usr/local/bin/composer-installer     && /usr/local/bin/composer-installer     &&
+      mv composer.phar /usr/local/bin/composer     && chmod +x /usr/local/bin/composer     &&
+      /usr/local/bin/composer global require hirak/prestissimo -n
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: php
+  Name: composer
+  Platform: ""
+  SourceCode: FROM php AS composer
+- As: composer_install
+  BaseName: composer
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./composer.json
+    - /var/s3sftp/composer.json
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./composer.lock
+    - /var/s3sftp/composer.lock
+  - CmdLine:
+    - /usr/local/bin/composer install -o -v
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: composer
+  Name: composer_install
+  Platform: ""
+  SourceCode: FROM composer AS composer_install
+- As: final
+  BaseName: php
+  Commands:
+  - Chown: ""
+    From: composer_install
+    Name: copy
+    SourcesAndDest:
+    - /var/s3sftp/vendor
+    - /var/s3sftp/vendor
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./app
+    - /var/s3sftp/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./s3sftp.php
+    - /var/s3sftp/s3sftp.php
+  - CmdLine:
+    - chmod +x /var/s3sftp/s3sftp.php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /var/s3sftp/s3sftp.php
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: php
+  Name: final
+  Platform: ""
+  SourceCode: FROM php AS final

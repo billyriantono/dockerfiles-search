@@ -1,0 +1,55 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:13.0.1-jdk
+  Commands:
+  - Name: expose
+    Ports:
+    - "8443"
+  - CmdLine:
+    - "yum -y update && \tyum -y install sudo &&     echo \"%wheel ALL=(ALL) NOPASSWD:
+      ALL\" >> /etc/sudoers &&     useradd -u 1000 -G users,wheel -d /home/votinguser
+      --shell /bin/bash -m votinguser &&     echo \"votinguser:secret\" | chpasswd
+      &&     yum -y update &&     yum clean all &&     yum -y autoremove"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: votinguser
+  - Env:
+    - Key: TERM
+      Value: xterm
+    Name: env
+  - Name: workdir
+    Path: /workspace
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /workspace/vota
+  - CmdLine:
+    - sudo chown -R votinguser:votinguser /workspace
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd vota && ./gradlew build -x test
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "rm -Rf /home/votinguser/.gradle && \tmv /workspace/vota/build/libs/voting*.jar
+      /workspace/vota.jar && \trm -Rf /workspace/vota &&     keytool -genkey -alias
+      tomcat -storetype PKCS12 -keyalg RSA -keysize 2048 -keystore /workspace/keystore.p12
+      -validity 3650 -dname \"CN=vota-voting.vige.it, OU=Vige, O=Vige, L=Rome, S=Italy,
+      C=IT\" -storepass secret -keypass secret"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "java -jar /workspace/vota.jar --server.port=8443 --server.ssl.key-store=/workspace/keystore.p12
+      --server.ssl.key-store-password=secret --server.ssl.keyStoreType=PKCS12 --server.ssl.keyAlias=tomcat
+      --spring.profiles.active=prod && \ttail -f /dev/null"
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: openjdk:13.0.1-jdk
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:13.0.1-jdk

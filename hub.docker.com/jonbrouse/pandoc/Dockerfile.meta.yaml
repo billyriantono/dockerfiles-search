@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- As: compile-step
+  BaseName: alpine
+  Commands:
+  - Env:
+    - Key: PANDOC_VERSION
+      Value: "2.3"
+    Name: env
+  - Env:
+    - Key: PANDOC_DOWNLOAD_URL
+      Value: https://github.com/jgm/pandoc/archive/$PANDOC_VERSION.tar.gz
+    Name: env
+  - Env:
+    - Key: PANDOC_DOWNLOAD_SHA512
+      Value: 69d8d427134c941415e8917a5c59a2aab70675cf2ca6bb056f2b8726ef612338a26de18d323e0ba8fb764a81383f700cbf025e38cf2248418a8b0f0dc9f80fee
+    Name: env
+  - Env:
+    - Key: PANDOC_ROOT
+      Value: /usr/local/pandoc
+    Name: env
+  - Name: workdir
+    Path: /pandoc-build
+  - Env:
+    - Key: REQUIRED_PACKAGES
+      Value: '"cmark gmp libffi pcre zlib"'
+    Name: env
+  - Env:
+    - Key: BUILD_PACKAGES
+      Value: '"cabal curl ghc gmp-dev linux-headers musl-dev zlib-dev"'
+    Name: env
+  - CmdLine:
+    - apk add --no-cache --virtual build-dependencies                        --repository
+      "http://nl.alpinelinux.org/alpine/edge/community"                        $BUILD_PACKAGES
+      $REQUIRED_PACKAGES &&     curl -fsSL "$PANDOC_DOWNLOAD_URL" -o pandoc.tar.gz
+      &&     echo "$PANDOC_DOWNLOAD_SHA512  pandoc.tar.gz" | sha512sum -c - &&     tar
+      --strip-components=1 -zxvf pandoc.tar.gz &&     cabal sandbox init &&     cabal
+      update &&     cabal install hsb2hs &&     cabal install --only-dependencies
+      &&     cabal configure -v --prefix=$PANDOC_ROOT &&     cabal build --verbose=2
+      &&     cabal copy
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: compile-step
+  Platform: ""
+  SourceCode: FROM alpine as compile-step
+- BaseName: alpine
+  Commands:
+  - Env:
+    - Key: PANDOC_ROOT
+      Value: /usr/local/pandoc
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:$PANDOC_ROOT/bin
+    Name: env
+  - Chown: ""
+    From: compile-step
+    Name: copy
+    SourcesAndDest:
+    - $PANDOC_ROOT
+    - $PANDOC_ROOT
+  - Env:
+    - Key: REQUIRED_PACKAGES
+      Value: '"cmark gmp libffi pcre texlive-xetex zlib"'
+    Name: env
+  - Env:
+    - Key: OPTIONAL_PACKAGES
+      Value: '"texlive-full texmf-dist"'
+    Name: env
+  - CmdLine:
+    - apk add --no-cache --update $REQUIRED_PACKAGES
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /pandoc
+  - CmdLine:
+    - /usr/local/pandoc/bin/pandoc
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

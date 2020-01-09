@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- BaseName: mhart/alpine-node:6
+  Commands:
+  - Maintainer: Andy Savage <andy@savage.hk>
+    Name: maintainer
+  - Labels:
+    - Key: description
+      Value: '"Customized Storjshare Docker using S6 Overlay"'
+    Name: label
+  - Key: registry
+    Name: arg
+    Value: null
+  - Env:
+    - Key: S6_BEHAVIOUR_IF_STAGE2_FAILS
+      Value: "2"
+    Name: env
+  - Key: S6_OVERLAY_RELEASE
+    Name: arg
+    Value: '"v1.19.1.1"'
+  - Key: TMP_BUILD_DIR
+    Name: arg
+    Value: '"/tmp/build"'
+  - Env:
+    - Key: SJ_CONFIGFILE
+      Value: '"/config/config.json"'
+    Name: env
+  - Env:
+    - Key: SJ_DAEMON_LOGLEVEL
+      Value: "3"
+    Name: env
+  - Env:
+    - Key: SJ_DAEMON_RPC_PORT
+      Value: '"45015"'
+    Name: env
+  - Env:
+    - Key: SJ_DAEMON_RPC_ADDRESS
+      Value: '"0.0.0.0"'
+    Name: env
+  - Env:
+    - Key: SJ_DAEMON_LOG_FILE
+      Value: '"/logs/daemon.log"'
+    Name: env
+  - Key: MAKEFLAGS
+    Name: arg
+    Value: '"-j8"'
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/just-containers/s6-overlay/releases/download/$S6_OVERLAY_RELEASE/s6-overlay-nobin.tar.gz.sig
+    - '"${TMP_BUILD_DIR}/"'
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - keys/trust.gpg
+    - '"${TMP_BUILD_DIR}/trust.gpg"'
+  - CmdLine:
+    - addgroup -g 1000 node &&   adduser -u 1000 -G node -s /bin/sh -D node
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --update     s6 s6-portable-utils ca-certificates wget tar     bash
+      curl g++ git make git python &&   apk add --virtual verify gnupg &&   mkdir
+      -p "${TMP_BUILD_DIR}" &&   chmod 700 "${TMP_BUILD_DIR}" &&   cd "${TMP_BUILD_DIR}"
+      &&   wget -q -O "${TMP_BUILD_DIR}/s6-overlay-nobin.tar.gz" https://github.com/just-containers/s6-overlay/releases/download/$S6_OVERLAY_RELEASE/s6-overlay-nobin.tar.gz
+      &&   gpg --no-options --no-default-keyring --homedir "${TMP_BUILD_DIR}" --keyring
+      ./trust.gpg --no-auto-check-trustdb --trust-model always --verify "s6-overlay-nobin.tar.gz.sig"
+      "s6-overlay-nobin.tar.gz" &&   apk del verify &&   tar -C / -xzf "s6-overlay-nobin.tar.gz"
+      &&   npm install     --unsafe-perm=true     --quiet     --production     --no-progress     --suppess-warnings     --registry=${registry:-https://registry.npmjs.org}     --global
+      storjshare-daemon &&   cd "/usr/lib/node_modules/storjshare-daemon/node_modules"
+      &&   npm install       --quiet       --production       --no-progress       --suppess-warnings       'github:zipang/daemon.node#48d0977c26fb3a6a44ae99aae3471b9d5a761085'
+      &&   npm cache clean     --force     --suppess-warnings     --quiet &&   cd
+      / &&   apk del ca-certificates wget tar curl g++ git make git python &&   rm
+      -rf /var/cache/apk/* &&   rm -rf ${TMP_BUILD_DIR}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs/
+    - /
+  - Name: volume
+    Volumes:
+    - /config
+    - /logs
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: mhart/alpine-node:6
+  Name: ""
+  Platform: ""
+  SourceCode: FROM mhart/alpine-node:6

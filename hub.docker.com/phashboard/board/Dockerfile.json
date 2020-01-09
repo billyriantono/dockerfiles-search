@@ -1,0 +1,164 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "composer",
+      "BaseName": "composer:1",
+      "SourceCode": "FROM composer:1 as composer",
+      "Platform": "",
+      "As": "composer",
+      "From": {
+        "Image": "composer:1"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "/var/www/html"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/var/www/html"
+        },
+        {
+          "Env": [
+            {
+              "Key": "APP_ENV",
+              "Value": "prod"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "composer install --no-dev --no-scripts --optimize-autoloader     \u0026\u0026 composer run auto-scripts"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "yarn",
+      "BaseName": "node:11",
+      "SourceCode": "FROM node:11 as yarn",
+      "Platform": "",
+      "As": "yarn",
+      "From": {
+        "Image": "node:11"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "composer",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/var/www/html",
+            "/app"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "CmdLine": [
+            "yarn install     \u0026\u0026 yarn run build     \u0026\u0026 rm -fr node_modules"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "alpine:3.9",
+      "SourceCode": "FROM alpine:3.9",
+      "Platform": "",
+      "From": {
+        "Image": "alpine:3.9"
+      },
+      "Commands": [
+        {
+          "Key": "CURRENT_VERSION",
+          "Name": "arg",
+          "Value": "master"
+        },
+        {
+          "Chown": "",
+          "From": "yarn",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app",
+            "/var/www/html"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/var/www/html"
+        },
+        {
+          "Env": [
+            {
+              "Key": "APP_ENV",
+              "Value": "prod"
+            },
+            {
+              "Key": "APP_SECRET",
+              "Value": "'73adb4285b84053d174db4b65ffa8ff4bfa24e1b'"
+            },
+            {
+              "Key": "PUBLIC_WEBSOCKET_URL",
+              "Value": "'ws://localhost/websocket'"
+            },
+            {
+              "Key": "WAMP_REALM",
+              "Value": "realm1"
+            },
+            {
+              "Key": "WAMP_PASSWORD",
+              "Value": "pleaseChooseASecretPasswordForTheWebsocket"
+            },
+            {
+              "Key": "WAMP_INTERNAL_HOSTNAME",
+              "Value": "board"
+            },
+            {
+              "Key": "BOARD_LOGIN_PASSWORD",
+              "Value": "'phash-board'"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache php7-fpm        php7-cli        php7-ctype        php7-dom        php7-json        php7-mbstring        php7-openssl        php7-session        php7-tokenizer        supervisor     \u0026\u0026 cp docker/*-fpm.conf /etc/php7/php-fpm.d/     \u0026\u0026 echo -e \"parameters:\\n    version: $CURRENT_VERSION\\n\" \u003e /var/www/html/config/packages/parameters.yaml     \u0026\u0026 php bin/console cache:clear     \u0026\u0026 echo \"successfully built $CURRENT_VERSION\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "8080",
+            "8081",
+            "9000"
+          ]
+        },
+        {
+          "CmdLine": [
+            "supervisord",
+            "--configuration",
+            "/var/www/html/docker/supervisord.conf"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

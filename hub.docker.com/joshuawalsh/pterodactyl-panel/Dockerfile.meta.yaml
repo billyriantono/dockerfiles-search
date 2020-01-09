@@ -1,0 +1,145 @@
+MetaArgs: null
+Stages:
+- As: git
+  BaseName: alpine
+  Commands:
+  - Key: pterodactyl_panel_git_branch
+    Name: arg
+    Value: master
+  - CmdLine:
+    - apk add --no-cache git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b $pterodactyl_panel_git_branch --depth 1 https://github.com/pterodactyl/panel.git
+      /git
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: git
+  Platform: ""
+  SourceCode: FROM alpine AS git
+- As: base_php
+  BaseName: php:7.2-fpm-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache         freetype-dev         libjpeg-turbo-dev         libpng-dev         unzip         git     &&
+      docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/     &&
+      docker-php-ext-install -j$(nproc) gd     && docker-php-ext-install -j$(nproc)
+      bcmath     && docker-php-ext-install -j$(nproc) pdo_mysql     && docker-php-ext-install
+      -j$(nproc) zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php-extra.ini
+    - $PHP_INI_DIR/conf.d/extra.ini
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php-fpm-extra.conf
+    - /usr/local/etc/php-fpm.d/extra.conf
+  From:
+    Image: php:7.2-fpm-alpine
+  Name: base_php
+  Platform: ""
+  SourceCode: FROM php:7.2-fpm-alpine AS base_php
+- As: install_dependencies
+  BaseName: base_php
+  Commands:
+  - Name: workdir
+    Path: /var/www/html/
+  - Chown: ""
+    From: composer
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/composer
+    - /usr/bin/composer
+  - Chown: ""
+    From: git
+    Name: copy
+    SourcesAndDest:
+    - /git/
+    - .
+  - CmdLine:
+    - composer install --ignore-platform-reqs --no-scripts --no-dev --optimize-autoloader
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod -R 755 storage/* bootstrap/cache/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://raw.githubusercontent.com/eficode/wait-for/master/wait-for
+    - /root/wait-for
+  - CmdLine:
+    - chmod +x /root/wait-for
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: base_php
+  Name: install_dependencies
+  Platform: ""
+  SourceCode: FROM base_php AS install_dependencies
+- As: app
+  BaseName: base_php
+  Commands:
+  - Name: workdir
+    Path: /var/www/html/
+  - Chown: www-data:www-data
+    From: install_dependencies
+    Name: copy
+    SourcesAndDest:
+    - /var/www/html/
+    - .
+  - Chown: www-data:www-data
+    From: install_dependencies
+    Name: copy
+    SourcesAndDest:
+    - /var/www/html/.env.example
+    - .env
+  - Chown: ""
+    From: install_dependencies
+    Name: copy
+    SourcesAndDest:
+    - /root/wait-for
+    - /root/wait-for
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cronfile
+    - /root/cronfile
+  - CmdLine:
+    - crontab /root/cronfile
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /bin/sh
+    - -c
+    - /root/wait-for database:3306 -t 30 && yes no | php artisan key:generate && php
+      artisan migrate --force && php artisan db:seed --force && crond && php-fpm
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: base_php
+  Name: app
+  Platform: ""
+  SourceCode: FROM base_php AS app

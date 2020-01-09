@@ -1,0 +1,93 @@
+MetaArgs: null
+Stages:
+- As: thrift
+  BaseName: swaggerapi/swagger-codegen-cli
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - api.yml
+    - /app/
+  - CmdLine:
+    - java -jar /opt/swagger-codegen-cli/swagger-codegen-cli.jar     generate     -i
+      /app/api.yml     -l typescript-fetch     -D withInterfaces=true,npmName=redirector-client,supportsES6=true     -o
+      /app/gen/redirector-client/
+    Name: run
+    PrependShell: true
+  From:
+    Image: swaggerapi/swagger-codegen-cli
+  Name: thrift
+  Platform: ""
+  SourceCode: FROM swaggerapi/swagger-codegen-cli AS thrift
+- As: builder
+  BaseName: node:10-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: thrift
+    Name: copy
+    SourcesAndDest:
+    - /app/gen
+    - /app/gen
+  - CmdLine:
+    - cd gen/redirector-client && npm install && npm run build
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - package-lock.json
+    - package.json
+    - /app/
+  - CmdLine:
+    - npm ci
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - webpack.config.js
+    - tsconfig.json
+    - /app/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/
+    - /app/src/
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:10-alpine AS builder
+- BaseName: nginx:1.14-alpine
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/dist/*
+    - /app/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - nginx.conf
+    - /etc/nginx/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/bin/
+  - CmdLine:
+    - /usr/bin/docker-entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginx:1.14-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx:1.14-alpine

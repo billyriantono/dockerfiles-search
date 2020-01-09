@@ -1,0 +1,113 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: exoplatform/ci:jdk8-maven33
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - mvn clean package -Dmaven.test.skip=true
+    Name: run
+    PrependShell: true
+  From:
+    Image: exoplatform/ci:jdk8-maven33
+  Name: build
+  Platform: ""
+  SourceCode: FROM exoplatform/ci:jdk8-maven33 AS build
+- BaseName: java:openjdk-8-jre-alpine
+  Commands:
+  - Maintainer: eXo Platform "<docker@exoplatform.com>"
+    Name: maintainer
+  - Labels:
+    - Key: original_author
+      Value: '"JLL lelan-j@mgdis.fr"'
+    Name: label
+  - Name: expose
+    Ports:
+    - "8080"
+  - Env:
+    - Key: TOMCAT_VERSION_MAJOR
+      Value: "7"
+    Name: env
+  - Env:
+    - Key: TOMCAT_VERSION_FULL
+      Value: 7.0.92
+    Name: env
+  - CmdLine:
+    - set -x   && apk add --no-cache su-exec   && apk add --update curl   && addgroup
+      tomcat && adduser -s /bin/bash -D -G tomcat tomcat   && mkdir /opt   && curl
+      -LO https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_VERSION_MAJOR}/v${TOMCAT_VERSION_FULL}/bin/apache-tomcat-${TOMCAT_VERSION_FULL}.tar.gz   &&
+      curl -LO https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_VERSION_MAJOR}/v${TOMCAT_VERSION_FULL}/bin/apache-tomcat-${TOMCAT_VERSION_FULL}.tar.gz.sha512   &&
+      sha512sum -c apache-tomcat-${TOMCAT_VERSION_FULL}.tar.gz.sha512   && gunzip
+      -c apache-tomcat-${TOMCAT_VERSION_FULL}.tar.gz | tar -xf - -C /opt   && rm -f
+      apache-tomcat-${TOMCAT_VERSION_FULL}.tar.gz apache-tomcat-${TOMCAT_VERSION_FULL}.tar.gz.md5   &&
+      ln -s /opt/apache-tomcat-${TOMCAT_VERSION_FULL} /opt/tomcat   && rm -rf /opt/tomcat/webapps/examples
+      /opt/tomcat/webapps/docs /opt/tomcat/webapps/manager /opt/tomcat/webapps/host-manager   &&
+      apk del curl   && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - tomcat-users.xml
+    - /opt/tomcat/conf/
+  - Env:
+    - Key: TOMCAT_BASE
+      Value: /opt/tomcat
+    Name: env
+  - Env:
+    - Key: CATALINA_HOME
+      Value: /opt/tomcat
+    Name: env
+  - Env:
+    - Key: VERSION
+      Value: 0.13.0-SNAPSHOT
+    Name: env
+  - CmdLine:
+    - set -x     && mkdir -p /data/cmis     && mkdir -p /data/log
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /srv/ciagent/workspace/target/*.war
+    - /tmp/lightweightcmis-${VERSION}.war
+  - CmdLine:
+    - "set -x \t&& mkdir ${TOMCAT_BASE}/webapps/cmis         && cd ${TOMCAT_BASE}/webapps/cmis
+      \        && unzip -qq /tmp/lightweightcmis-${VERSION}.war -d .         && chown
+      -R tomcat:tomcat \"$TOMCAT_BASE\"         && chown -R tomcat:tomcat /data         &&
+      rm -fr /tmp/lightweightcmis-${VERSION}.war"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - chmod 755 /docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - catalina
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: java:openjdk-8-jre-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM java:openjdk-8-jre-alpine

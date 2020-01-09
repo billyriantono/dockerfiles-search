@@ -1,0 +1,132 @@
+MetaArgs:
+- DefaultValue: 3.10.3
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: 3.10.3
+- DefaultValue: "3.7"
+  Key: PYTHON_VERSION
+  ProvidedValue: null
+  Value: "3.7"
+- DefaultValue: /app
+  Key: APP_PATH
+  ProvidedValue: null
+  Value: /app
+- DefaultValue: ${APP_PATH}/venv
+  Key: VIRTUAL_ENV
+  ProvidedValue: null
+  Value: ${APP_PATH}/venv
+Stages:
+- As: builder
+  BaseName: python:${PYTHON_VERSION}-alpine
+  Commands:
+  - Key: VIRTUAL_ENV
+    Name: arg
+    Value: null
+  - Key: APP_PATH
+    Name: arg
+    Value: null
+  - Env:
+    - Key: PATH
+      Value: '"${VIRTUAL_ENV}/bin:$PATH"'
+    - Key: PYTHONDONTWRITEBYTECODE
+      Value: "1"
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - "apk add --no-cache \t\tgcc \t\tlibffi-dev \t\tmake \t\tmusl-dev \t\topenssl-dev
+      \t\tpy3-virtualenv"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $APP_PATH
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - ./
+  - CmdLine:
+    - "python3 -m venv $VIRTUAL_ENV \t&& pip3 install --no-cache-dir --upgrade pip
+      \t&& pip3 install --no-cache-dir -r requirements.txt \t&& rm -f requirements.txt
+      \t&& ln -sf /usr/bin/python3 ${VIRTUAL_ENV}/bin/python3"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir ${APP_PATH}/keys \t&& mkdir ${APP_PATH}/conf"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./dnsmasq_updater.py
+    - ./dnsmasq_updater
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./dnsmasq_updater.conf
+    - ./conf/
+  From:
+    Image: python:${PYTHON_VERSION}-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM python:${PYTHON_VERSION}-alpine as builder
+- BaseName: moonbuggy2000/alpine-s6:${ALPINE_VERSION}
+  Commands:
+  - Key: PYTHON_VERSION
+    Name: arg
+    Value: null
+  - Key: VIRTUAL_ENV
+    Name: arg
+    Value: null
+  - Key: APP_PATH
+    Name: arg
+    Value: null
+  - Env:
+    - Key: APP_PATH
+      Value: '"${APP_PATH}"'
+    - Key: PATH
+      Value: '"${VIRTUAL_ENV}/bin:$PATH"'
+    - Key: PYTHONPATH
+      Value: '"${VIRTUAL_ENV}/lib/python${PYTHON_VERSION}/site-packages/"'
+    - Key: PYTHONDONTWRITEBYTECODE
+      Value: "1"
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - "apk add --no-cache \t\tpython3=~$PYTHON_VERSION"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${APP_PATH}
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - ${APP_PATH}/
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./container/
+    - /
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  - Health:
+      StartPeriod: 10000000000
+      Test:
+      - CMD-SHELL
+      - ${APP_PATH}/healthcheck.sh
+      Timeout: 10000000000
+    Name: healthcheck
+  From:
+    Image: moonbuggy2000/alpine-s6:${ALPINE_VERSION}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM moonbuggy2000/alpine-s6:${ALPINE_VERSION}

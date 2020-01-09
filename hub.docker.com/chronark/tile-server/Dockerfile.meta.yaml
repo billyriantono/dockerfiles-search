@@ -1,0 +1,168 @@
+MetaArgs: null
+Stages:
+- As: compile_stage
+  BaseName: golang:1.12
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"andreas.thomas@th-nuernberg.de"'
+    Name: label
+  - Labels:
+    - Key: name
+      Value: '"tile-server"'
+    Name: label
+  - Labels:
+    - Key: version
+      Value: '"0.1.0"'
+    Name: label
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./scripts/*.go
+    - ./
+  - CmdLine:
+    - go mod init tile_server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - env GOOS=linux go build -o /start /start.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12
+  Name: compile_stage
+  Platform: ""
+  SourceCode: FROM golang:1.12 AS compile_stage
+- As: carto_stage
+  BaseName: node
+  Commands:
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - git clone https://github.com/gravitystorm/openstreetmap-carto
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /openstreetmap-carto/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - project.mml
+    - project.mml
+  - CmdLine:
+    - npx carto project.mml > /mapnik.xml
+    Name: run
+    PrependShell: true
+  From:
+    Image: node
+  Name: carto_stage
+  Platform: ""
+  SourceCode: FROM node AS carto_stage
+- BaseName: ubuntu:18.04
+  Commands:
+  - Env:
+    - Key: DB_HOST
+      Value: X
+    Name: env
+  - Env:
+    - Key: DB_PORT
+      Value: X
+    Name: env
+  - Env:
+    - Key: DB_USER
+      Value: X
+    Name: env
+  - Env:
+    - Key: DB_PASSWORD
+      Value: X
+    Name: env
+  - Env:
+    - Key: DB_NAME
+      Value: X
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - "apt-get -qq update && apt-get -qq install -y --no-install-recommends \t\tapache2
+      \t\tapache2-dev \t\tautoconf \t\tca-certificates \t\tfonts-hanazono \t\tfonts-noto-cjk
+      \t\tfonts-noto-hinted \t\tfonts-noto-unhinted \t\tg++ \t\tgdal-bin \t\tgit \t\tlibbz2-dev
+      \t\tlibgeos-dev \t\tlibgeos++-dev \t\tlibmapnik-dev \t\tlibproj-dev \t\tlibtool
+      \t\tlibxml2-dev \t\tmapnik-utils \t\tpython-mapnik \t\tttf-unifont \t\twget
+      \t&& apt-get -qq autoremove -y \t&& rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - git clone https://github.com/gravitystorm/openstreetmap-carto.git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: carto_stage
+    Name: copy
+    SourcesAndDest:
+    - /mapnik.xml
+    - /openstreetmap-carto/mapnik.xml
+  - CmdLine:
+    - git clone -b switch2osm https://github.com/SomeoneElseOSM/mod_tile.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /mod_tile
+  - CmdLine:
+    - "./autogen.sh \t&& ./configure \t&& make -j \"$(nproc)\" \t&& make -j \"$(nproc)\"
+      install \t&& make -j \"$(nproc)\" install-mod_tile \t&& ldconfig"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./renderd.conf
+    - /usr/local/etc/renderd.conf
+  - CmdLine:
+    - mkdir -p /var/lib/mod_tile && mkdir -p /var/run/renderd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "LoadModule tile_module /usr/lib/apache2/modules/mod_tile.so" >> /etc/apache2/conf-available/mod_tile.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enconf mod_tile
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./apache.conf
+    - /etc/apache2/sites-available/000-default.conf
+  - CmdLine:
+    - service apache2 start && service apache2 reload && service apache2 reload
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Chown: ""
+    From: compile_stage
+    Name: copy
+    SourcesAndDest:
+    - /start
+    - /start
+  - CmdLine:
+    - /start
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

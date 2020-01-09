@@ -1,0 +1,115 @@
+MetaArgs: null
+Stages:
+- As: elixir
+  BaseName: alpine:3.7
+  Commands:
+  - Env:
+    - Key: ELIXIR_VERSION
+      Value: 1.5.2
+    Name: env
+  - CmdLine:
+    - echo 'http://dl-4.alpinelinux.org/alpine/edge/main' >> /etc/apk/repositories
+      &&     apk --update add ncurses-libs wget curl git bash &&     apk --update
+      add nodejs nodejs-npm &&     apk --update add erlang erlang-crypto erlang-syntax-tools
+      erlang-parsetools                      erlang-inets erlang-ssl erlang-public-key
+      erlang-eunit                      erlang-asn1 erlang-sasl erlang-erl-interface
+      erlang-dev &&     apk --update add --virtual build-dependencies ca-certificates
+      &&     wget --no-check-certificate "https://github.com/elixir-lang/elixir/releases/download/v${ELIXIR_VERSION}/Precompiled.zip"
+      &&     mkdir -p /opt/elixir-${ELIXIR_VERSION}/ &&     unzip Precompiled.zip
+      -d /opt/elixir-${ELIXIR_VERSION}/ &&     rm Precompiled.zip &&     apk del build-dependencies
+      &&     rm -rf /etc/ssl &&     rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: $PATH:/opt/elixir-${ELIXIR_VERSION}/bin
+    Name: env
+  - CmdLine:
+    - mix local.hex --force &&     mix local.rebar --force
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: elixir
+  Platform: ""
+  SourceCode: FROM alpine:3.7 as elixir
+- As: builder
+  BaseName: elixir
+  Commands:
+  - Name: workdir
+    Path: /opt/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mix.exs
+    - mix.lock
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config
+    - config/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - Env:
+    - Key: MIX_ENV
+      Value: prod
+    Name: env
+  - CmdLine:
+    - mix deps.get &&     mix deps.compile &&     cd apps/elixir_countdown_web/assets
+      &&     npm config set strict-ssl false &&     npm install &&     node node_modules/brunch/bin/brunch
+      build &&     cd ../../.. &&     mix phx.digest &&     mix release --env=$MIX_ENV
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: elixir
+  Name: builder
+  Platform: ""
+  SourceCode: FROM elixir as builder
+- BaseName: alpine:3.7
+  Commands:
+  - Env:
+    - Key: APP_NAME
+      Value: elixir_countdown_umbrella
+    - Key: MIX_ENV
+      Value: prod
+    - Key: PORT
+      Value: "4000"
+    Name: env
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - echo 'http://dl-4.alpinelinux.org/alpine/edge/main' >> /etc/apk/repositories
+      &&     apk --update add ncurses-libs bash
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/app/_build/${MIX_ENV}
+    - /opt/app/_build/${MIX_ENV}
+  - Name: expose
+    Ports:
+    - $PORT
+  - CmdLine:
+    - /opt/app/_build/${MIX_ENV}/rel/${APP_NAME}/bin/${APP_NAME} foreground
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

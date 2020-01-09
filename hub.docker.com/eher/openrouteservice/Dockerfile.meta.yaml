@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: maven:3-jdk-8
+  Commands:
+  - Env:
+    - Key: MAVEN_OPTS
+      Value: '"-Dmaven.repo.local=.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN
+        -Dorg.slf4j.simpleLogger.showDateTime=true -Djava.awt.headless=true"'
+    Name: env
+  - Env:
+    - Key: MAVEN_CLI_OPTS
+      Value: '"--batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true
+        -DdeployAtEnd=true"'
+    Name: env
+  - Key: APP_CONFIG
+    Name: arg
+    Value: docker/conf/app.config.sample
+  - CmdLine:
+    - mkdir -p /ors-core/build
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .git
+    - /ors-core/.git
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - openrouteservice
+    - /ors-core/openrouteservice
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - $APP_CONFIG
+    - /ors-core/openrouteservice/WebContent/WEB-INF/app.config
+  - Name: workdir
+    Path: /ors-core
+  - CmdLine:
+    - mvn -f ./openrouteservice/pom.xml package -DskipTests
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ORS_VER=$(mvn -f ./openrouteservice/pom.xml -q -Dexec.executable="echo" -Dexec.args='${project.version}'
+      --non-recursive exec:exec) && cp /ors-core/openrouteservice/target/openrouteservice-$ORS_VER.war
+      /ors-core/build/ors.war
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3-jdk-8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM maven:3-jdk-8 as builder
+- BaseName: tomcat:8-jre8
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/conf/catalina.properties
+    - /usr/local/tomcat/conf/catalina.properties
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /ors-core/build/
+    - /usr/local/tomcat/webapps/
+  - Name: volume
+    Volumes:
+    - /usr/local/tomcat/data/
+  - Name: volume
+    Volumes:
+    - /var/log/ors/
+  - Name: volume
+    Volumes:
+    - /usr/local/tomcat/logs
+  - Env:
+    - Key: JAVA_OPTS
+      Value: -Djava.awt.headless=true -server -XX:TargetSurvivorRatio=75 -XX:SurvivorRatio=64
+        -XX:MaxTenuringThreshold=3 -XX:+UseConcMarkSweepGC -XX:+UseParNewGC -XX:ParallelGCThreads=4
+        -Xms1g -Xmx2g
+    Name: env
+  From:
+    Image: tomcat:8-jre8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tomcat:8-jre8

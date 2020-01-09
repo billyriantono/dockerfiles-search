@@ -1,0 +1,104 @@
+MetaArgs: null
+Stages:
+- BaseName: nvidia/cuda:8.0-cudnn6-devel-ubuntu16.04
+  Commands:
+  - Maintainer: Liam Jones <liam@stardive.co.uk>
+    Name: maintainer
+  - Env:
+    - Key: ANACONDA_VERSION
+      Value: 4.2.0
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get install --assume-yes         ca-certificates         curl
+      &&     curl --location "https://repo.continuum.io/archive/Anaconda3-${ANACONDA_VERSION}-Linux-x86_64.sh"
+      > /anaconda.sh &&     /bin/bash anaconda.sh -b -p /opt/conda &&     rm anaconda.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PAINTSCHAINER_MODEL
+      Value: original
+    - Key: PAINTSCHAINER_GPU
+      Value: "0"
+    - Key: PAINTSCHAINER_S_SIZE
+      Value: "128"
+    - Key: TINI_VERSION
+      Value: 0.14.0
+    - Key: DOCKERIZE_VERSION
+      Value: 0.3.0
+    - Key: PATH
+      Value: /opt/conda/bin:$PATH
+    - Key: CFLAGS
+      Value: -I/usr/local/cuda-8.0/targets/x86_64-linux/include/:$CFLAGS
+    - Key: LDFLAGS
+      Value: -L/usr/local/cuda-8.0/targets/x86_64-linux/lib/:$LDFLAGS
+    - Key: LD_LIBRARY_PATH
+      Value: /usr/local/cuda-8.0/targets/x86_64-linux/lib/:$LD_LIBRARY_PATH
+    Name: env
+  - CmdLine:
+    - curl --location "https://github.com/liamjones/PaintsChainer-Models/releases/download/{$PAINTSCHAINER_MODEL}/unet_128_standard"
+      > unet_128_standard &&     curl --location "https://github.com/liamjones/PaintsChainer-Models/releases/download/{$PAINTSCHAINER_MODEL}/unet_512_standard"
+      > unet_512_standard &&     curl --location "https://github.com/liamjones/PaintsChainer-Models/releases/download/{$PAINTSCHAINER_MODEL}/License.txt"
+      > Licence.txt &&     curl --location "https://github.com/krallin/tini/releases/download/v${TINI_VERSION}/tini"
+      > /usr/local/bin/tini &&     curl --location "https://github.com/jwilder/dockerize/releases/download/v$DOCKERIZE_VERSION/dockerize-linux-amd64-v$DOCKERIZE_VERSION.tar.gz"
+      > /dockerize.tar.gz &&     tar -C /usr/local/bin -zxvf /dockerize.tar.gz &&     rm
+      /dockerize.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir --parents /opt/conda/var/lib/dbus/ &     apt-get update &&     apt-get
+      install --assume-yes         cron         git         libgtk2.0-0         libpng12-0         tmpreaper
+      &&     apt-get clean &&     rm --recursive --force /var/lib/apt/lists/* &&     chmod
+      +x /usr/local/bin/tini &&     conda install --yes --channel menpo opencv3 &&     conda
+      clean --all &&     pip --no-cache-dir install         cupy         chainer
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PAINTSCHAINER_REPO
+      Value: https://github.com/pfnet/PaintsChainer.git
+    - Key: PAINTSCHAINER_COMMIT
+      Value: 1c14f9e
+    Name: env
+  - CmdLine:
+    - git clone $PAINTSCHAINER_REPO &&     mkdir /PaintsChainer/cgi-bin/paint_x2_unet/models/
+      &&     mv /unet_*_standard /Licence.txt /PaintsChainer/cgi-bin/paint_x2_unet/models/
+      &&     touch /PaintsChainer/images/line/.tmpreaper &&     touch /PaintsChainer/images/out/.tmpreaper
+      &&     touch /PaintsChainer/images/out_min/.tmpreaper &&     touch /PaintsChainer/images/ref/.tmpreaper
+      &&     /bin/bash -c "echo -e \"* * * * * root /usr/sbin/tmpreaper --protect
+      '*/.tmpreaper' 1h /PaintsChainer/images/\n\" > /etc/cron.d/delete-old-paintschainer-images"
+      &&     chmod 0644 /etc/cron.d/delete-old-paintschainer-images
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /PaintsChainer
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.patch'
+    - ./
+  - CmdLine:
+    - git checkout $PAINTSCHAINER_COMMIT &&     git apply *.patch &&     rm *.patch
+      &&     mv server.py server.py.template
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - tini
+    - -g
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - sh
+    - -c
+    - cron && dockerize --template server.py.template:server.py && python -u server.py
+      --host 0.0.0.0 --gpu $PAINTSCHAINER_GPU
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nvidia/cuda:8.0-cudnn6-devel-ubuntu16.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nvidia/cuda:8.0-cudnn6-devel-ubuntu16.04

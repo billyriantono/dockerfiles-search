@@ -1,0 +1,93 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.11.1-alpine3.8
+  Commands:
+  - Env:
+    - Key: WORK_DIR
+      Value: $GOPATH/src/github.com/prometheus
+    Name: env
+  - Name: workdir
+    Path: $WORK_DIR
+  - CmdLine:
+    - set -ex; apk update; apk add --no-cache make curl git;     git clone https://github.com/prometheus/alertmanager.git;     cd
+      alertmanager; make build;     mkdir -p /alertmanager/bin /alertmanager/config;     cp
+      -a alertmanager /alertmanager/bin/;     cp -a doc/examples/simple.yml /alertmanager/config/simple.yml
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11.1-alpine3.8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.11.1-alpine3.8 as builder
+- BaseName: alpine:3.8
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Platform/IIBU <zhangzhitao@fmsh.com.cn>"'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /alertmanager/bin
+    - /bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /alertmanager/config
+    - /etc/alertmanager/
+  - Env:
+    - Key: TZ
+      Value: Asia/Shanghai
+    Name: env
+  - CmdLine:
+    - set -ex; apk upgrade; apk add curl bash tzdata busybox-extras;     ln -sf /usr/share/zoneinfo/${TZ}
+      /etc/localtime;     echo ${TZ} > /etc/timezone;     rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config
+    - /etc/alertmanager/config
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - template
+    - /etc/alertmanager/template
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint
+    - /
+  - CmdLine:
+    - chmod 770 /*.sh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /alertmanager
+  - Name: volume
+    Volumes:
+    - /alertmanager
+  - Name: expose
+    Ports:
+    - "9093"
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -config.file=/etc/alertmanager/config/alertmanager.yml
+    - -storage.path=/alertmanager
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

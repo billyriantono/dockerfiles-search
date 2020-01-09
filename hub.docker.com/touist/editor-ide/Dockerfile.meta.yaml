@@ -1,0 +1,80 @@
+MetaArgs: null
+Stages:
+- As: node
+  BaseName: node:latest
+  Commands:
+  - CmdLine:
+    - mkdir -p /usr/src/app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - yarn.lock
+    - ./
+  - CmdLine:
+    - yarn --pure-lockfile
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:latest
+  Name: node
+  Platform: ""
+  SourceCode: FROM node:latest as node
+- BaseName: nginx:latest
+  Commands:
+  - Chown: ""
+    From: node
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/dist
+    - /usr/share/nginx/html
+  - CmdLine:
+    - echo 'server {\n  listen ${PORT};\n  server_name ${HOST};\n  location / {\n    root
+      /usr/share/nginx/html;\n    index index.html index.htm;\n    if ($http_x_forwarded_proto
+      = "http") {\n         return 301 https://$server_name$request_uri;\n    }\n  }\n}\n'>>
+      /etc/nginx/conf.d/nginx.tmpl
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PORT
+      Value: "8080"
+    Name: env
+  - Env:
+    - Key: HOST
+      Value: localhost
+    Name: env
+  - Env:
+    - Key: API_URL
+      Value: http://localhost:8000
+    Name: env
+  - Name: expose
+    Ports:
+    - ${PORT}
+  - CmdLine:
+    - /bin/bash
+    - -c
+    - sed -i s#%API_URL%#${API_URL}# /usr/share/nginx/html/static/js/app.*.js     &&
+      envsubst '$$PORT,$$HOST' < /etc/nginx/conf.d/nginx.tmpl > /etc/nginx/conf.d/default.conf     &&
+      cat /etc/nginx/conf.d/default.conf     && nginx -g "daemon off;"
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginx:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx:latest

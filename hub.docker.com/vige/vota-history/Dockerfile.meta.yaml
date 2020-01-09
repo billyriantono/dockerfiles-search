@@ -1,0 +1,64 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:13.0.1-jdk
+  Commands:
+  - Name: expose
+    Ports:
+    - "8643"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /mongodb-org-4.2.repo
+    - /etc/yum.repos.d
+  - CmdLine:
+    - "yum -y update && \tyum -y install sudo mongodb-org &&     echo \"%wheel ALL=(ALL)
+      NOPASSWD: ALL\" >> /etc/sudoers &&     useradd -u 1000 -G users,wheel -d /home/votinguser
+      --shell /bin/bash -m votinguser &&     echo \"votinguser:secret\" | chpasswd
+      &&     yum -y update &&     yum clean all &&     yum -y autoremove"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: votinguser
+  - Env:
+    - Key: TERM
+      Value: xterm
+    Name: env
+  - Name: workdir
+    Path: /workspace
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /workspace/vota
+  - CmdLine:
+    - sudo chown -R votinguser:votinguser /workspace
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd vota && ./gradlew build -x test
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "rm -Rf /home/votinguser/.gradle && \tmv /workspace/vota/build/libs/history*.jar
+      /workspace/vota.jar && \trm -Rf /workspace/vota && \tmkdir /workspace/mongodb
+      && \techo \"nohup /usr/bin/mongod --bind_ip_all --dbpath /workspace/mongodb
+      &\" > /workspace/start_mongo.sh && \tchmod 775 /workspace/start_mongo.sh &&
+      \    keytool -genkey -alias tomcat -storetype PKCS12 -keyalg RSA -keysize 2048
+      -keystore /workspace/keystore.p12 -validity 3650 -dname \"CN=vota-history.vige.it,
+      OU=Vige, O=Vige, L=Rome, S=Italy, C=IT\" -storepass secret -keypass secret"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "/workspace/start_mongo.sh && \tjava -jar /workspace/vota.jar --server.port=8643
+      --server.ssl.key-store=/workspace/keystore.p12 --server.ssl.key-store-password=secret
+      --server.ssl.keyStoreType=PKCS12 --server.ssl.keyAlias=tomcat --spring.profiles.active=prod
+      && \ttail -f /dev/null"
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: openjdk:13.0.1-jdk
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:13.0.1-jdk

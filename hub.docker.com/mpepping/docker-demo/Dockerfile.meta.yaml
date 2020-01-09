@@ -1,0 +1,137 @@
+MetaArgs: null
+Stages:
+- As: ui
+  BaseName: node:latest
+  Commands:
+  - CmdLine:
+    - npm install -g gulp browserify babelify
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ui/package.json
+    - /tmp/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ui/semantic.json
+    - /tmp/
+  - CmdLine:
+    - cd /tmp && npm install &&     mkdir -p /usr/src/app/ui &&     cp -rf /tmp/node_modules
+      /usr/src/app/ui/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /usr/src/app
+  - CmdLine:
+    - cd ui/node_modules/semantic-ui && gulp install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -f ui/semantic.theme.config ui/semantic/src/theme.config &&     mkdir -p
+      ui/semantic/src/themes/app &&     cp -rf ui/semantic.theme/* ui/semantic/src/themes/app
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ui/semantic && gulp build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:latest
+  Name: ui
+  Platform: ""
+  SourceCode: FROM node:latest as ui
+- As: app
+  BaseName: golang:1.11-alpine
+  Commands:
+  - CmdLine:
+    - apk add -U build-base git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/app
+  - Name: workdir
+    Path: /go/src/app
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - CmdLine:
+    - go build -a -v -tags 'netgo' -ldflags '-w -linkmode external -extldflags -static'
+      -o docker-demo .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-alpine
+  Name: app
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine as app
+- BaseName: alpine:latest
+  Commands:
+  - Maintainer: '"Evan Hazlett <ejhazlett@gmail.com>"'
+    Name: maintainer
+  - CmdLine:
+    - apk add -U --no-cache curl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - static
+    - /static
+  - Chown: ""
+    From: ui
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/ui/semantic/dist/semantic.min.css
+    - static/dist/semantic.min.css
+  - Chown: ""
+    From: ui
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/ui/semantic/dist/semantic.min.js
+    - static/dist/semantic.min.js
+  - Chown: ""
+    From: ui
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/ui/semantic/dist/themes/default/assets
+    - static/dist/themes/default/
+  - Chown: ""
+    From: app
+    Name: copy
+    SourcesAndDest:
+    - /go/src/app/docker-demo
+    - /bin/docker-demo
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates
+    - /templates
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - /bin/docker-demo
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

@@ -1,0 +1,147 @@
+MetaArgs:
+- DefaultValue: buster
+  Key: BASE_IMAGE
+  ProvidedValue: null
+  Value: buster
+Stages:
+- BaseName: debian:${BASE_IMAGE}
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: docker@katagena.com
+    Name: label
+  - Labels:
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/nouchka/docker-symfony"'
+    Name: label
+  - Key: PHPVERSION
+    Name: arg
+    Value: "7.3"
+  - Key: PHPCONF
+    Name: arg
+    Value: /etc/php/${PHPVERSION}
+  - Key: DOCKER_TAG
+    Name: arg
+    Value: ${PHPVERSION}
+  - Key: PUID
+    Name: arg
+    Value: "1000"
+  - Key: PGID
+    Name: arg
+    Value: "1000"
+  - Labels:
+    - Key: version
+      Value: '"${DOCKER_TAG}"'
+    Name: label
+  - Env:
+    - Key: PUID
+      Value: ${PUID}
+    Name: env
+  - Env:
+    - Key: PGID
+      Value: ${PGID}
+    Name: env
+  - Env:
+    - Key: SHELL
+      Value: /bin/bash
+    Name: env
+  - Env:
+    - Key: SYMFONY_ENV
+      Value: prod
+    - Key: SYMFONY_DIRECTORY
+      Value: /var/www/
+    Name: env
+  - Env:
+    - Key: APACHE_RUN_USER
+      Value: www-data
+    - Key: APACHE_RUN_GROUP
+      Value: www-data
+    - Key: APACHE_LOG_DIR
+      Value: /var/log/apache2
+    - Key: APACHE_LOCK_DIR
+      Value: /var/lock/apache2
+    - Key: APACHE_RUN_DIR
+      Value: /var/run/apache2
+    - Key: APACHE_PID_FILE
+      Value: /var/run/apache2/apache2.pid
+    Name: env
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -o
+    - pipefail
+    - -c
+  - CmdLine:
+    - "apt-get update && \tDEBIAN_FRONTEND=noninteractive apt-get -yq install \t\tbash-completion
+      \t\tcurl \t\tunzip \t\tgit \t\tmemcached \t\tapache2 \t\timagemagick \t\tphp${PHPVERSION}
+      \t\tphp${PHPVERSION}-mysql \t\tphp${PHPVERSION}-pgsql \t\tphp${PHPVERSION}-redis
+      \t\tphp${PHPVERSION}-cli \t\tphp${PHPVERSION}-curl \t\tphp${PHPVERSION}-gd \t\tphp${PHPVERSION}-imagick
+      \t\tphp${PHPVERSION}-intl \t\tphp${PHPVERSION}-xdebug \t\tphp${PHPVERSION}-apcu
+      \t\tphp${PHPVERSION}-memcached \t\tlibapache2-mod-php${PHPVERSION} && \t[ \"$PHPVERSION\"
+      != \"5\" ] || apt-get -yq install php${PHPVERSION}-memcache && \t[ \"$PHPVERSION\"
+      != \"5\" ] || ln -s /usr/sbin/php5dismod /usr/sbin/phpdismod && \t[ \"$PHPVERSION\"
+      == \"5\" ] || apt-get -yq install php${PHPVERSION}-pdo-sqlite libnghttp2-dev
+      php-memcache php${PHPVERSION}-xml php-mbstring zip librsvg2-2 && \t[ \"$PHPVERSION\"
+      == \"7.3\" ] || apt-get -yq install php${PHPVERSION}-mcrypt && \trm -rf /var/lib/apt/lists/*
+      /tmp/* /var/tmp/* && \ta2enmod rewrite && \ta2enmod macro && \ta2enmod proxy
+      && \ta2enmod ssl && \ta2enmod proxy_http && \ta2dissite 000-default && \tusermod
+      -u ${PUID} www-data && \tgroupmod -g ${PGID} www-data && \tusermod -s /bin/bash
+      www-data && \tmkdir -p /var/www/.composer && \tchown -R www-data: /var/www &&
+      \techo \"date.timezone = UTC\" >> ${PHPCONF}/cli/php.ini && \techo \"date.timezone
+      = UTC\" >> ${PHPCONF}/apache2/php.ini && \tsed -i 's/session.save_handler =
+      files/session.save_handler = redis/g' ${PHPCONF}/apache2/php.ini &&\techo 'session.save_path
+      = tcp://redis:6379' >> ${PHPCONF}/apache2/php.ini"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin
+      --filename=composer && \tphp /usr/local/bin/composer self-update && \tcurl -sS
+      https://get.symfony.com/cli/installer | bash && \tmv /root/.symfony/bin/symfony
+      /usr/local/bin/symfony && \tchmod a+x /usr/local/bin/symfony && \tcurl http://get.sensiolabs.org/php-cs-fixer.phar
+      -o /usr/local/bin/php-cs-fixer && \tchmod a+x /usr/local/bin/php-cs-fixer &&
+      \tcurl -LsS https://phar.phpunit.de/phpunit.phar  -o /usr/local/bin/phpunit
+      && \tchmod a+x /usr/local/bin/phpunit && \tcomposer global require bamarni/symfony-console-autocomplete
+      && \t/root/.composer/vendor/bin/symfony-autocomplete composer > /etc/bash_completion.d/composer
+      && \tsu - www-data -c 'echo \"source /usr/share/bash-completion/bash_completion\"
+      >> ~/.bashrc'"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - /start.sh
+  - CmdLine:
+    - chmod +x /start.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - check.sh
+    - /check.sh
+  - CmdLine:
+    - chmod +x /check.sh
+    Name: run
+    PrependShell: true
+  - Health:
+      Test:
+      - CMD-SHELL
+      - /check.sh
+    Name: healthcheck
+  - Name: workdir
+    Path: /var/www
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /start.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:${BASE_IMAGE}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:${BASE_IMAGE}

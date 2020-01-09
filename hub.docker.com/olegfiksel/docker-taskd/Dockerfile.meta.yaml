@@ -1,0 +1,75 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: ubuntu:18.04
+  Commands:
+  - Key: TASKD_TAG
+    Name: arg
+    Value: 1a4a67b8f0ebae4e7c26def71c2138a86b1b17ab
+  - CmdLine:
+    - apt-get update &&   apt-get install -y git build-essential cmake make gnutls-dev
+      uuid-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/GothenburgBitFactory/taskserver.git taskd &&   cd
+      taskd &&   git checkout ${TASKD_TAG} &&   cmake -DCMAKE_BUILD_TYPE=release .
+      &&   make install &&   cp -rv pki /usr/local/
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: build
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 AS BUILD
+- BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - groupadd -g 1000 taskd   && useradd -d /home/taskd --create-home -u 1000 -g
+      1000 -s /bin/bash taskd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&   apt-get install -y libgnutls30 uuid netcat gnutls-bin
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: BUILD
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /usr/
+  - Chown: ""
+    From: BUILD
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/pki
+    - /opt/pki
+  - CmdLine:
+    - apt-get clean
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: taskd
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: expose
+    Ports:
+    - 53589/tcp
+  - Health:
+      Interval: 30000000000
+      Test:
+      - CMD-SHELL
+      - nc -q1 127.0.0.1 53589 </dev/null
+      Timeout: 10000000000
+    Name: healthcheck
+  - CmdLine:
+    - taskd server --data /data
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

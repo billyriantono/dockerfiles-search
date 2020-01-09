@@ -1,0 +1,102 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/concourse/pool-resource
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - Env:
+    - Key: GOPATH
+      Value: /go/src/github.com/concourse/pool-resource/Godeps/_workspace:${GOPATH}
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /go/src/github.com/concourse/pool-resource/Godeps/_workspace/bin:${PATH}
+    Name: env
+  - CmdLine:
+    - go build -o /assets/out github.com/concourse/pool-resource/cmd/out
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -e; for pkg in $(go list ./...); do \t\tgo test -o \"/tests/$(basename
+      $pkg).test\" -c $pkg; \tdone"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- As: resource
+  BaseName: concourse/git-resource
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - assets/
+    - /opt/resource/
+  - CmdLine:
+    - chmod +x /opt/resource/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /assets
+    - /opt/go
+  - CmdLine:
+    - chmod +x /opt/go/out
+    Name: run
+    PrependShell: true
+  From:
+    Image: concourse/git-resource
+  Name: resource
+  Platform: ""
+  SourceCode: FROM concourse/git-resource AS resource
+- As: tests
+  BaseName: resource
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tests
+    - /go/resource-tests/
+  - CmdLine:
+    - "set -e; for test in /go/resource-tests/*.test; do \t\t$test; \tdone"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - test/
+    - /opt/resource-tests
+  - CmdLine:
+    - /opt/resource-tests/all.sh
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: resource
+  Name: tests
+  Platform: ""
+  SourceCode: FROM resource AS tests
+- BaseName: resource
+  Commands: null
+  From:
+    Stage:
+      Index: 1
+      Named: resource
+  Name: ""
+  Platform: ""
+  SourceCode: FROM resource

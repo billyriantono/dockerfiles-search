@@ -1,0 +1,138 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:edge
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Key: VCS_URL
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - CmdLine:
+    - echo "http://nl.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --no-cache --update add vips-dev go make git musl-dev fftw-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/hyperscale/hyperpic/
+  - CmdLine:
+    - go get -u github.com/golang/dep/cmd/dep
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - /go/bin/dep ensure
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -ldflags "-X github.com/hyperscale/hyperpic/version.Version=${VERSION}
+      -X github.com/hyperscale/hyperpic/version.Revision=${VCS_REF} -X github.com/hyperscale/hyperpic/version.BuildAt=${BUILD_DATE}"
+      ./cmd/hyperpic/
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:edge as builder
+- BaseName: alpine:edge
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Key: VCS_URL
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Env:
+    - Key: PORT
+      Value: "8080"
+    Name: env
+  - Health:
+      Interval: 10000000000
+      Test:
+      - CMD-SHELL
+      - curl -f http://localhost:${PORT}/health > /dev/null 2>&1 || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - ${PORT}
+  - Name: volume
+    Volumes:
+    - /var/lib/hyperpic
+  - CmdLine:
+    - echo "http://nl.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --no-cache --update add ca-certificates curl vips
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/hyperscale/hyperpic/hyperpic
+    - .
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/hyperscale/hyperpic/config.yml.dist
+    - /etc/hyperpic/config.yml
+  - CmdLine:
+    - ./hyperpic
+    Name: cmd
+    PrependShell: false
+  - Labels:
+    - Key: org.label-schema.vendor
+      Value: '"Hyperscale"'
+    - Key: org.label-schema.url
+      Value: '"https://github.com/hyperscale/hyperpic"'
+    - Key: org.label-schema.name
+      Value: '"Hyperpic"'
+    - Key: org.label-schema.description
+      Value: '"Fast HTTP microservice for high-level image processing."'
+    - Key: org.label-schema.version
+      Value: '"v${VERSION}"'
+    - Key: org.label-schema.vcs-url
+      Value: ${VCS_URL}
+    - Key: org.label-schema.vcs-ref
+      Value: ${VCS_REF}
+    - Key: org.label-schema.build-date
+      Value: ${BUILD_DATE}
+    - Key: org.label-schema.docker.schema-version
+      Value: '"1.0"'
+    Name: label
+  From:
+    Image: alpine:edge
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:edge

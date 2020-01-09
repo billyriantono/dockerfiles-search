@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- BaseName: dockerfile/java:oracle-java7
+  Commands:
+  - Maintainer: Matt Ho <matt.ho@gmail.com>
+    Name: maintainer
+  - CmdLine:
+    - apt-get update && apt-get install -y wget curl git python-pip supervisor
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "pip install gradle ; \tpip install virtualenv"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TARGET
+      Value: /opt
+    Name: env
+  - Name: workdir
+    Path: /opt
+  - Env:
+    - Key: TOMCAT_VERSION
+      Value: 7.0.56
+    Name: env
+  - CmdLine:
+    - "wget -qq http://mirror.nexcess.net/apache/tomcat/tomcat-7/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz
+      ; \ttar -xzvf apache-tomcat-${TOMCAT_VERSION}.tar.gz ; \trm -r apache-tomcat-${TOMCAT_VERSION}/webapps/*
+      ; \trm apache-tomcat-${TOMCAT_VERSION}.tar.gz ; \tln -s apache-tomcat-${TOMCAT_VERSION}
+      /opt/apache-tomcat"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ELASTICSEARCH_VERSION
+      Value: 1.3.2
+    Name: env
+  - CmdLine:
+    - "wget -qq http://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-${ELASTICSEARCH_VERSION}.tar.gz
+      ; \ttar -xzvf elasticsearch-${ELASTICSEARCH_VERSION}.tar.gz ; \trm elasticsearch-${ELASTICSEARCH_VERSION}.tar.gz"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: INVISO_COMMIT_HASH
+      Value: a29450ace4a9f467d34f29b6f69094b69edbff1b
+    Name: env
+  - CmdLine:
+    - "git clone https://github.com/Netflix/inviso.git ; \t(cd inviso; git reset --hard
+      ${INVISO_COMMIT_HASH} ; ./gradlew assemble)"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cp \"${TARGET}/inviso/trace-mr2/build/libs/inviso#mr2#v0.war\" ${TARGET}/apache-tomcat-${TOMCAT_VERSION}/webapps/
+      ; \tln -s ${TARGET}/inviso/web-ui/public ${TARGET}/apache-tomcat-${TOMCAT_VERSION}/webapps/ROOT"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "${TARGET}/elasticsearch-${ELASTICSEARCH_VERSION}/bin/elasticsearch -d ; \tcurl
+      -XPUT http://localhost:9200/inviso -d @${TARGET}/inviso/elasticsearch/mappings/config-settings.json
+      ; \tcurl -XPUT http://localhost:9200/inviso-cluster -d @${TARGET}/inviso/elasticsearch/mappings/cluster-settings.json
+      ; \tkill -9 `ps auxww | grep java | grep -v grep | awk '{print $2}'`"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SERVICE_CONF
+      Value: /etc/supervisor/conf.d/services.conf
+    Name: env
+  - CmdLine:
+    - "echo '[program:elasticsearch]' >> ${SERVICE_CONF} ; \techo \"command=${TARGET}/elasticsearch-${ELASTICSEARCH_VERSION}/bin/elasticsearch\"
+      >> ${SERVICE_CONF} ; \techo '' >> ${SERVICE_CONF} ; \techo '[program:tomcat]'
+      >> ${SERVICE_CONF} ; \techo \"command=${TARGET}/apache-tomcat-${TOMCAT_VERSION}/bin/catalina.sh
+      run\" >> ${SERVICE_CONF} ; \techo '' >> ${SERVICE_CONF}"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - /usr/bin/supervisord
+    - --nodaemon
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: dockerfile/java:oracle-java7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM dockerfile/java:oracle-java7

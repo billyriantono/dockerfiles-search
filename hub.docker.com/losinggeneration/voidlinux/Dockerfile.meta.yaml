@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- As: void-build
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add wget ca-certificates
+    Name: run
+    PrependShell: true
+  - Key: ARCH
+    Name: arg
+    Value: x86_64
+  - Key: MUSL
+    Name: arg
+    Value: musl
+  - Key: XBPS_ARCH
+    Name: arg
+    Value: ${ARCH}-${MUSL}
+  - Key: REPO
+    Name: arg
+    Value: https://alpha.de.repo.voidlinux.org
+  - CmdLine:
+    - wget -q -O- ${REPO}/static/xbps-static-latest.${ARCH}-musl.tar.xz | tar xfJ
+      -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p void/var/db/xbps && cp -r /var/db/xbps/keys/ void/var/db/xbps/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - xbps-install -Sy -R ${REPO}/current/${MUSL} -r void base-files xbps busybox-huge
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "for i in $(chroot void busybox | tail -n+$(expr 1 + $(chroot void busybox |
+      grep -n \"^Currently\" | cut -d: -f1)) | sed \"s/,//g\" | xargs echo); do \tln
+      -s /usr/bin/busybox void/usr/bin/$i; done"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir void/etc/ssl/certs && chroot void update-ca-certificates --fresh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chroot void xbps-reconfigure -a
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chroot void sh -c 'xbps-rindex -c /var/db/xbps/htt*'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -fr void/var/cache/xbps void/usr/share/man/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: void-build
+  Platform: ""
+  SourceCode: FROM alpine as void-build
+- BaseName: scratch
+  Commands:
+  - Key: ARCH
+    Name: arg
+    Value: x86_64
+  - Key: MUSL
+    Name: arg
+    Value: musl
+  - Key: XBPS_ARCH
+    Name: arg
+    Value: ${ARCH}-${MUSL}
+  - Env:
+    - Key: XBPS_ARCH
+      Value: $XBPS_ARCH
+    Name: env
+  - Chown: ""
+    From: void-build
+    Name: copy
+    SourcesAndDest:
+    - /void
+    - /
+  - CmdLine:
+    - sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

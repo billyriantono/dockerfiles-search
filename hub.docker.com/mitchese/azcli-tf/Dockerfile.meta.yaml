@@ -1,0 +1,108 @@
+MetaArgs:
+- DefaultValue: 0.11.11
+  Key: TERRAFORM_IMAGE_VERION
+  ProvidedValue: null
+  Value: 0.11.11
+- DefaultValue: 1.11.5-stretch
+  Key: GOLANG_IMAGE_VERSION
+  ProvidedValue: null
+  Value: 1.11.5-stretch
+- DefaultValue: 2.12.3
+  Key: HELM_IMAGE_VERSION
+  ProvidedValue: null
+  Value: 2.12.3
+Stages:
+- As: terraform
+  BaseName: hashicorp/terraform:${TERRAFORM_IMAGE_VERION}
+  Commands: null
+  From:
+    Image: hashicorp/terraform:${TERRAFORM_IMAGE_VERION}
+  Name: terraform
+  Platform: ""
+  SourceCode: FROM hashicorp/terraform:${TERRAFORM_IMAGE_VERION} as terraform
+- As: helm
+  BaseName: alpine/helm:${HELM_IMAGE_VERSION}
+  Commands: null
+  From:
+    Image: alpine/helm:${HELM_IMAGE_VERSION}
+  Name: helm
+  Platform: ""
+  SourceCode: FROM alpine/helm:${HELM_IMAGE_VERSION} as helm
+- BaseName: golang:${GOLANG_IMAGE_VERSION}
+  Commands:
+  - Chown: ""
+    From: terraform
+    Name: copy
+    SourcesAndDest:
+    - /bin/terraform
+    - /bin/terraform
+  - Chown: ""
+    From: helm
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/helm
+    - /usr/bin/helm
+  - Key: AZURE_CLI_VERSION
+    Name: arg
+    Value: 2.0.57
+  - CmdLine:
+    - apt-get update && apt-get install -y apt-transport-https locales  && rm -rf
+      /var/lib/apt/lists/* &&     echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen && locale-gen
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - prod.list
+    - /etc/apt/sources.list.d/msprod.list
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ms-package-key
+    - /
+  - CmdLine:
+    - apt-key add /ms-package-key
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && ACCEPT_EULA=Y apt-get -y install bash python-pip dumb-init
+      git nodejs gcc libffi-dev musl-dev libssl-dev python-dev make mssql-tools jq
+      &&     pip --no-cache-dir install --upgrade pip && rm -rf /var/lib/apt/lists/*
+      &&     wget https://storage.googleapis.com/kubernetes-release/release/$(wget
+      -qO - https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+      &&     mv kubectl /usr/bin && chmod +x /usr/bin/kubectl && ln -s /opt/mssql-tools/bin/sqlcmd
+      /usr/bin/sqlcmd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip --no-cache-dir install databricks-cli azure-cli==${AZURE_CLI_VERSION} &&
+      pip uninstall --yes pyOpenSSL &&     helm init --client-only
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - Name: workdir
+    Path: $GOPATH/src/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /bin
+  - CmdLine:
+    - /usr/bin/dumb-init
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: golang:${GOLANG_IMAGE_VERSION}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM golang:${GOLANG_IMAGE_VERSION}

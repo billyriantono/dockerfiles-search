@@ -1,0 +1,80 @@
+MetaArgs: null
+Stages:
+- As: builder-restic
+  BaseName: golang:1.12.1-alpine
+  Commands:
+  - Name: workdir
+    Path: /go/src/github.com/restic/restic
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - restic
+    - .
+  - CmdLine:
+    - go
+    - run
+    - build.go
+    Name: run
+    PrependShell: false
+  From:
+    Image: golang:1.12.1-alpine
+  Name: builder-restic
+  Platform: ""
+  SourceCode: FROM golang:1.12.1-alpine AS builder-restic
+- As: builder
+  BaseName: golang:1.12.1-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - .
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - CmdLine:
+    - go mod tidy && go build
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.1-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12.1-alpine AS builder
+- As: runner
+  BaseName: restic/restic:0.9.5
+  Commands:
+  - CmdLine:
+    - apk add --no-cache postgresql-client mariadb-client
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder-restic
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/restic/restic/restic
+    - /usr/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/restic-agent
+    - /usr/bin/
+  - CmdLine:
+    - /usr/bin/restic-agent
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: restic/restic:0.9.5
+  Name: runner
+  Platform: ""
+  SourceCode: FROM restic/restic:0.9.5 AS runner

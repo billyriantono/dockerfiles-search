@@ -1,0 +1,177 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: ubuntu:16.04
+  Commands:
+  - Key: USE_APT_CACHER_NG
+    Name: arg
+    Value: null
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/apt-cache.sh
+    - /usr/local/bin
+  - CmdLine:
+    - chmod +x /usr/local/bin/apt-cache.sh  && /usr/local/bin/apt-cache.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: TERM
+      Value: xterm
+    Name: env
+  - CmdLine:
+    - apt-get update              && apt-get install -y locales  && locale-gen en_US.UTF-8      &&
+      dpkg-reconfigure locales
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANGUAGE
+      Value: en_US.UTF-8
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - CmdLine:
+    - apt-get install -y               cron                     nginx                    php-fpm                  php-xml                  php-mbstring             php-mysql                php-mcrypt               php-intl                 php-zip                  php-imap                 php-curl                 php-gd                   php-bcmath               sudo
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/makeconfig.php
+    - /usr/local/share/mautic/scripts/makeconfig.php
+  - CmdLine:
+    - apt-get install -y --no-install-recommends runit
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.04
+  Name: base
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04 as base
+- As: build
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apt-get install -y             wget                   unzip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://github.com/mautic/mautic/releases/download/2.14.2/2.14.2.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip 2.14.2.zip -d /var/www/html  && rm -rf unzip 2.14.2.zip                                           &&
+      cd /var/www/html                                                  && chown -R
+      www-data:www-data /var/www/html
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: build
+  Platform: ""
+  SourceCode: FROM base AS build
+- As: final
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /var/www/html
+    - /var/www/html
+  - CmdLine:
+    - cd /var/www/html/app         && mkdir -p local/cache/prod                local/config                    local/themes                    local/idp                       local/media/files               local/media/images              local/plugins
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/paths_local.php
+    - /var/www/html/app/config/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/parameters_local.php
+    - /var/www/html/app/config/
+  - CmdLine:
+    - chown -R www-data:www-data /var/www/html
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/log/mautic                                    && touch /var/log/cron.pipe                                    &&
+      chown www-data:www-data /var/log/mautic /var/log/cron.pipe
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/lib/mautic-default
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/local.php
+    - /var/lib/mautic-default/local.php
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/default
+    - /etc/nginx/sites-enabled/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/crontab
+    - /etc/cron.d/mautic
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/php.ini
+    - /etc/php/7.0/fpm/
+  - CmdLine:
+    - sed -i -e 's|error_log.*;|error_log /dev/stderr;|' /etc/nginx/nginx.conf  &&
+      sed -i -e 's|access_log.*;|access_log /dev/stdout;|' /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/sv
+    - /etc/service
+  - Name: expose
+    Ports:
+    - 80/tcp
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/entrypoint.sh
+    - /usr/local/bin/entrypoint.sh
+  - CmdLine:
+    - chmod +x /usr/local/bin/entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: cmd
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: final
+  Platform: ""
+  SourceCode: FROM base AS final

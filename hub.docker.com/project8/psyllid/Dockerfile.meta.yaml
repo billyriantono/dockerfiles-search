@@ -1,0 +1,149 @@
+MetaArgs:
+- DefaultValue: project8
+  Key: IMG_USER
+  ProvidedValue: null
+  Value: project8
+- DefaultValue: p8compute_dependencies
+  Key: IMG_REPO
+  ProvidedValue: null
+  Value: p8compute_dependencies
+- DefaultValue: v0.7.0
+  Key: IMG_TAG
+  ProvidedValue: null
+  Value: v0.7.0
+Stages:
+- As: psyllid_common
+  BaseName: ${IMG_USER}/${IMG_REPO}:${IMG_TAG}
+  Commands:
+  - Key: PSYLLID_TAG
+    Name: arg
+    Value: v1.12.0
+  - Env:
+    - Key: PSYLLID_TAG
+      Value: ${PSYLLID_TAG}
+    Name: env
+  - Key: PSYLLID_BUILD_PREFIX
+    Name: arg
+    Value: /usr/local/p8/psyllid/$PSYLLID_TAG
+  - Env:
+    - Key: PSYLLID_BUILD_PREFIX
+      Value: ${PSYLLID_BUILD_PREFIX}
+    Name: env
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -c
+  - CmdLine:
+    - mkdir -p $PSYLLID_BUILD_PREFIX &&    if [ -a /etc/centos-release ]; then         chmod
+      -R 777 $PSYLLID_BUILD_PREFIX/.. &&        cd $PSYLLID_BUILD_PREFIX &&        echo
+      "source ${COMMON_BUILD_PREFIX}/setup.sh" > setup.sh &&        echo "export PSYLLID_TAG=${PSYLLID_TAG}"
+      >> setup.sh &&        echo "export PSYLLID_BUILD_PREFIX=${PSYLLID_BUILD_PREFIX}"
+      >> setup.sh &&        echo 'ln -sfT $PSYLLID_BUILD_PREFIX $PSYLLID_BUILD_PREFIX/../current'
+      >> setup.sh &&        echo 'export PATH=$PSYLLID_BUILD_PREFIX/bin:$PATH' >>
+      setup.sh &&        echo 'export LD_LIBRARY_PATH=$PSYLLID_BUILD_PREFIX/lib:$LD_LIBRARY_PATH'
+      >> setup.sh;    elif [ -a /etc/debian_version ]; then         cd $PSYLLID_BUILD_PREFIX
+      &&        echo "export PSYLLID_BUILD_PREFIX=${PSYLLID_BUILD_PREFIX}" >> setup.sh
+      &&        apt-get update &&         apt-get clean &&         apt-get --fix-missing
+      -y install             build-essential             cmake             libfftw3-3             libfftw3-dev             gdb             libboost-all-dev             libhdf5-dev             librabbitmq-dev             wget
+      &&        /bin/true;    fi
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${IMG_USER}/${IMG_REPO}:${IMG_TAG}
+  Name: psyllid_common
+  Platform: ""
+  SourceCode: FROM ${IMG_USER}/${IMG_REPO}:${IMG_TAG} as psyllid_common
+- As: psyllid_done
+  BaseName: psyllid_common
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dripline-cpp
+    - /tmp_source/dripline-cpp
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - external
+    - /tmp_source/external
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - midge
+    - /tmp_source/midge
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - monarch
+    - /tmp_source/monarch
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - source
+    - /tmp_source/source
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - CMakeLists.txt
+    - /tmp_source/CMakeLists.txt
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .git
+    - /tmp_source/.git
+  - Key: EXTRA_CMAKE_ARGS
+    Name: arg
+    Value: '""'
+  - Env:
+    - Key: CMAKE_CONFIG_ARGS_LIST
+      Value: '"      -D CMAKE_INSTALL_PREFIX:PATH=$PSYLLID_BUILD_PREFIX       -D Psyllid_ENABLE_FPA=FALSE       ${EXTRA_CMAKE_ARGS}       "'
+    Name: env
+  - CmdLine:
+    - source $PSYLLID_BUILD_PREFIX/setup.sh &&    mkdir -p /tmp_source/build &&    cd
+      /tmp_source/build &&    cmake ${CMAKE_CONFIG_ARGS_LIST} .. &&    cmake ${CMAKE_CONFIG_ARGS_LIST}
+      .. &&    make install &&    /bin/true
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: psyllid_common
+  Name: psyllid_done
+  Platform: ""
+  SourceCode: FROM psyllid_common as psyllid_done
+- BaseName: psyllid_common
+  Commands:
+  - Chown: ""
+    From: psyllid_done
+    Name: copy
+    SourcesAndDest:
+    - $PSYLLID_BUILD_PREFIX
+    - $PSYLLID_BUILD_PREFIX
+  - CmdLine:
+    - /bin/bash
+    - -l
+    - -c
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - bash
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - ln -s $PSYLLID_BUILD_PREFIX/setup.sh /etc/profile.d/setup.sh
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: psyllid_common
+  Name: ""
+  Platform: ""
+  SourceCode: FROM psyllid_common

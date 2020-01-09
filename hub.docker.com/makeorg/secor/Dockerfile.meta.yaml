@@ -1,0 +1,68 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: maven:3-jdk-8
+  Commands:
+  - Maintainer: Samuel Bernard "samuel.bernard@gmail.com"
+    Name: maintainer
+  - Name: workdir
+    Path: /root
+  - CmdLine:
+    - git clone https://github.com/pinterest/secor.git &&   cd secor &&   git checkout
+      master &&   mvn -T 2C -Pkafka-2.0.0 clean package &&   mv target/secor-*-bin.tar.gz
+      target/secor-bin.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd secor &&   printf 'VERSION=${project.version}\n0\n' |   mvn org.apache.maven.plugins:maven-help-plugin:2.1.1:evaluate
+      |   grep '^VERSION' > version &&   echo GIT_SHA=$(git rev-parse --verify HEAD)
+      >> version
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3-jdk-8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM maven:3-jdk-8 as builder
+- BaseName: azul/zulu-openjdk-alpine:8
+  Commands:
+  - CmdLine:
+    - adduser -D secor
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /root/secor/target/secor-bin.tar.gz
+    - /tmp/.
+  - Name: workdir
+    Path: /home/secor
+  - CmdLine:
+    - tar xfz /tmp/secor-bin.tar.gz &&   rm -f *.dev.* *.test.* log4j.prod.* *.warn.*
+      secor.prod.backup.* &&   mv secor-*.jar secor.jar
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /root/secor/version
+    - /home/secor/.
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - /home/secor/.
+  - Name: user
+    User: secor
+  - CmdLine:
+    - /home/secor/run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: azul/zulu-openjdk-alpine:8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM azul/zulu-openjdk-alpine:8

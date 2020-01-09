@@ -1,0 +1,81 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "nginx:alpine",
+      "SourceCode": "FROM nginx:alpine AS builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "nginx:alpine"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "wget \"http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz\" -O nginx.tar.gz \u0026\u0026   wget https://github.com/kvspb/nginx-auth-ldap/archive/master.zip -O nginx-auth-ldap.zip"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache --virtual .build-deps   build-base   curl   pcre-dev   openldap-dev   zlib-dev"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "CONFARGS=$(nginx -V 2\u003e\u00261 | sed -n -e 's/^.*arguments: //p') \ttar -zxC /usr/src -f nginx.tar.gz \u0026\u0026   unzip -x \"nginx-auth-ldap.zip\" -d \"$(pwd)/\" \u0026\u0026   LDAPDIR=\"$(pwd)/nginx-auth-ldap-master\" \u0026\u0026   cd /usr/src/nginx-$NGINX_VERSION \u0026\u0026   ./configure --with-compat $CONFARGS --add-dynamic-module=$LDAPDIR \u0026\u0026   make -j$(getconf _NPROCESSORS_ONLN) \u0026\u0026   make install \u0026\u0026   install -m755 objs/ngx_http_auth_ldap_module.so /usr/lib/nginx/modules/ngx_http_auth_ldap_module.so \u0026\u0026   strip /usr/lib/nginx/modules/*.so"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "nginx:alpine",
+      "SourceCode": "FROM nginx:alpine",
+      "Platform": "",
+      "From": {
+        "Image": "nginx:alpine"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add --no-cache libldap"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "ngx_http_auth_ldap_module.nginx",
+            "/etc/nginx/modules.d/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /etc/nginx/modules.d/ \u0026\u0026     echo \"include /etc/nginx/modules.d/*.conf;\" \u003e\u003e /etc/nginx/nginx.conf"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/lib/nginx/modules/ngx_http_auth_ldap_module.so",
+            "/usr/lib/nginx/modules/ngx_http_auth_ldap_module.so"
+          ]
+        }
+      ]
+    }
+  ]
+}

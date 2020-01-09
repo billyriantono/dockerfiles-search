@@ -1,0 +1,61 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang
+  Commands:
+  - CmdLine:
+    - mkdir /app
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /go/src/app
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/app
+  - Name: workdir
+    Path: /go/src/app
+  - CmdLine:
+    - go get -u github.com/prometheus/client_golang/prometheus &&     go get -u github.com/prometheus/client_golang/prometheus/promhttp
+      &&     go get -u github.com/shrikantpatnaik/go-openvpn-status
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex &&   CGO_ENABLED=0 go build         -tags netgo         -o /app/openvpn_exporter         -v
+      -a         -ldflags '-extldflags "-static"' &&   ls
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang as builder
+- BaseName: busybox
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/openvpn_exporter
+    - /openvpn_exporter
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - examples/server.status
+    - /etc/openvpn_exporter/
+  - Name: expose
+    Ports:
+    - "9176"
+  - CmdLine:
+    - /openvpn_exporter
+    - --openvpn.status_path=/etc/openvpn_exporter/server.status
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: busybox
+  Name: ""
+  Platform: ""
+  SourceCode: FROM busybox

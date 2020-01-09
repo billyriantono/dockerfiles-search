@@ -1,0 +1,103 @@
+MetaArgs:
+- DefaultValue: ubuntu:18.04
+  Key: BASE_IMAGE
+  ProvidedValue: null
+  Value: ubuntu:18.04
+Stages:
+- As: dependencies
+  BaseName: ${BASE_IMAGE}
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install -y       python3-pip       python3.7       python3.7-dev       build-essential       libssl-dev       libacl1-dev       liblz4-dev       libfuse-dev       fuse       pkg-config       fakeroot       git       zlib1g-dev       libbz2-dev       libncurses5-dev       libreadline-dev       liblzma-dev       libsqlite3-dev       zip       libffi-dev       libleveldb-dev
+      &&     update-alternatives --install /usr/bin/python python /usr/bin/python3.7
+      1 &&     update-alternatives --install /usr/bin/python python /usr/bin/python3.7
+      10 &&     update-alternatives --config python &&     python --version &&     pip3
+      --version
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${BASE_IMAGE}
+  Name: dependencies
+  Platform: ""
+  SourceCode: FROM ${BASE_IMAGE} as dependencies
+- As: compile
+  BaseName: dependencies
+  Commands:
+  - CmdLine:
+    - python3.7 -m pip install -U pyinstaller &&     git clone https://github.com/lbryio/lbry.git
+      --depth 1 /lbry
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /lbry
+  - CmdLine:
+    - git clone https://github.com/lbryio/torba.git --depth 1 /lbry/torba
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /lbry/torba
+  - CmdLine:
+    - python3.7 -m pip install -e .
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /lbry/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - stuff/start.sh
+    - /usr/local/bin/start
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - stuff/checkmount.sh
+    - /usr/local/bin/checkmount
+  - CmdLine:
+    - python3.7 scripts/set_build.py &&     python3.7 -m pip install -e . &&     pyinstaller
+      -F -n lbrynet lbrynet/extras/cli.py &&     chmod +x /lbry/dist/lbrynet &&     zip
+      -j /lbry/dist/lbrynet-armhf.zip /lbry/dist/lbrynet &&     chmod a+x /usr/local/bin/*
+      &&     mkdir /target &&     /lbry/dist/lbrynet --version
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: dependencies
+  Name: compile
+  Platform: ""
+  SourceCode: FROM dependencies as compile
+- As: app
+  BaseName: ${BASE_IMAGE}
+  Commands:
+  - CmdLine:
+    - adduser lbrynet --gecos GECOS --shell /bin/bash --disabled-password --home /home/lbrynet
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: compile
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/start
+    - /usr/local/bin/checkmount
+    - /lbry/dist/lbrynet
+    - /usr/local/bin/
+  - Name: expose
+    Ports:
+    - "5279"
+  - Name: user
+    User: lbrynet
+  - CmdLine:
+    - /usr/local/bin/checkmount
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - start
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ${BASE_IMAGE}
+  Name: app
+  Platform: ""
+  SourceCode: FROM ${BASE_IMAGE} as app

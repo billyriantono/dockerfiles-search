@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: golang:alpine
+  Commands:
+  - Env:
+    - Key: CHECKOUT_VER
+      Value: v2.0.3
+    Name: env
+  - Env:
+    - Key: PACKAGES
+      Value: make git libc-dev bash gcc linux-headers eudev-dev curl
+    Name: env
+  - CmdLine:
+    - apk add --no-cache --update ca-certificates $PACKAGES && update-ca-certificates  &&
+      mkdir -p $GOPATH/src/github.com/cosmos  && cd $GOPATH/src/github.com/cosmos  &&
+      git clone https://github.com/cosmos/gaia  && cd $GOPATH/src/github.com/cosmos/gaia  &&
+      git checkout $CHECKOUT_VER  && make tools  && make build  && make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM golang:alpine AS build-env
+- BaseName: qlustor/alpine-runit
+  Commands:
+  - Maintainer: Team PiggyCoin <team@piggy-coin.com>
+    Name: maintainer
+  - Env:
+    - Key: GAIAD_MONIKER
+      Value: piggy-coin.com
+    Name: env
+  - Env:
+    - Key: GAIAD_GENESIS
+      Value: https://raw.githubusercontent.com/cosmos/launch/master/genesis.json
+    Name: env
+  - CmdLine:
+    - apk-install --update wget ca-certificates && update-ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/gaiad
+    - /usr/bin/gaiad
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/gaiacli
+    - /usr/bin/gaiacli
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /
+  - CmdLine:
+    - chmod a+x /etc/service/gaiad/run
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "26656"
+  - Name: volume
+    Volumes:
+    - /root/.gaiad
+  - Name: volume
+    Volumes:
+    - /root/.gaiacli
+  - Name: workdir
+    Path: /root/.gaiad
+  - CmdLine:
+    - /sbin/runit-docker
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: qlustor/alpine-runit
+  Name: ""
+  Platform: ""
+  SourceCode: FROM qlustor/alpine-runit

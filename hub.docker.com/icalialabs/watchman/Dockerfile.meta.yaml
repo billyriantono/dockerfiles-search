@@ -1,0 +1,77 @@
+MetaArgs: null
+Stages:
+- As: runtime
+  BaseName: alpine:3.8
+  Commands:
+  - CmdLine:
+    - apk add --no-cache libcrypto1.0 libgcc libstdc++
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.8
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM alpine:3.8 AS runtime
+- As: builder
+  BaseName: runtime
+  Commands:
+  - CmdLine:
+    - apk add --no-cache --update ca-certificates openssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache  automake  autoconf  bash  build-base  libtool  linux-headers  openssl-dev  python-dev
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: WATCHMAN_VERSION
+      Value: 4.9.0
+    - Key: WATCHMAN_SHA256
+      Value: 1f6402dc70b1d056fffc3748f2fdcecff730d8843bb6936de395b3443ce05322
+    Name: env
+  - CmdLine:
+    - cd /tmp  && wget -O watchman.tar.gz "https://github.com/facebook/watchman/archive/v${WATCHMAN_VERSION}.tar.gz"  &&
+      echo "$WATCHMAN_SHA256 *watchman.tar.gz" | sha256sum -c -  && tar -xz -f watchman.tar.gz
+      -C /tmp/  && rm -rf watchman.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp/watchman-${WATCHMAN_VERSION}  && ./autogen.sh  && ./configure  && make  &&
+      make install  && cd $HOME  && rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: runtime
+  Name: builder
+  Platform: ""
+  SourceCode: FROM runtime AS builder
+- As: release
+  BaseName: runtime
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/watchman*
+    - /usr/local/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/share/doc/watchman-4.9.0
+    - /usr/local/share/doc/watchman-4.9.0
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/var/run/watchman
+    - /usr/local/var/run/watchman
+  From:
+    Stage:
+      Index: 0
+      Named: runtime
+  Name: release
+  Platform: ""
+  SourceCode: FROM runtime AS release

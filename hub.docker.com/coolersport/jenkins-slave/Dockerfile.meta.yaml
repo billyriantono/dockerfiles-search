@@ -1,0 +1,134 @@
+MetaArgs: null
+Stages:
+- As: jnlp
+  BaseName: jenkins/jnlp-slave:3.35-5
+  Commands: null
+  From:
+    Image: jenkins/jnlp-slave:3.35-5
+  Name: jnlp
+  Platform: ""
+  SourceCode: FROM jenkins/jnlp-slave:3.35-5 AS jnlp
+- As: helm
+  BaseName: alpine/helm:2.16.1
+  Commands: null
+  From:
+    Image: alpine/helm:2.16.1
+  Name: helm
+  Platform: ""
+  SourceCode: FROM alpine/helm:2.16.1 AS helm
+- BaseName: ubuntu:18.04
+  Commands:
+  - Env:
+    - Key: COMPOSER_HOME
+      Value: /.composer
+    Name: env
+  - Env:
+    - Key: TZ
+      Value: Australia/Melbourne
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/java-8-openjdk-amd64
+    - Key: PATH
+      Value: $COMPOSER_HOME/vendor/bin:$PATH
+    Name: env
+  - Chown: 1000:1000
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs
+    - /
+  - Chown: ""
+    From: jnlp
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/jenkins/agent.jar
+    - /usr/share/jenkins/
+  - Chown: ""
+    From: jnlp
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/jenkins-agent
+    - /usr/local/bin/jenkins-agent
+  - Chown: ""
+    From: helm
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/helm
+    - /usr/local/bin/helm
+  - Key: VERSION
+    Name: arg
+    Value: "3.35"
+  - Key: user
+    Name: arg
+    Value: jenkins
+  - Key: group
+    Name: arg
+    Value: jenkins
+  - Key: uid
+    Name: arg
+    Value: "1000"
+  - Key: gid
+    Name: arg
+    Value: "1000"
+  - Key: AGENT_WORKDIR
+    Name: arg
+    Value: /home/${user}/agent
+  - Env:
+    - Key: HOME
+      Value: /home/${user}
+    - Key: AGENT_WORKDIR
+      Value: ${AGENT_WORKDIR}
+    Name: env
+  - CmdLine:
+    - groupadd -g ${gid} ${group} &&     useradd -c "Jenkins user" -d $HOME -u ${uid}
+      -g ${gid} -m ${user} &&     mkdir /home/${user}/.jenkins && mkdir -p ${AGENT_WORKDIR}
+      &&     chown -R ${user}:${group} /home/${user}/ &&     chmod 755 /usr/share/jenkins
+      &&     chmod 644 /usr/share/jenkins/agent.jar &&     ln -sf /usr/share/jenkins/agent.jar
+      /usr/share/jenkins/slave.jar &&     ln -s /usr/local/bin/jenkins-agent /usr/local/bin/jenkins-slave
+      &&     apt-get update && apt-get upgrade -y && apt-get install -y gnupg &&     apt
+      install -y openjdk-8-jdk &&     DEBIAN_FRONTEND=noninteractive apt-get install
+      -y tzdata maven &&     apt install -y apt-transport-https ca-certificates curl
+      software-properties-common &&     curl -fsSL https://download.docker.com/linux/debian/gpg
+      | apt-key add - &&     apt-key fingerprint 0EBFCD88 &&     add-apt-repository
+      "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs)
+      stable" &&     apt update && apt install -y docker-ce=18.03.1~ce~3-0~ubuntu
+      &&     curl -L "https://github.com/docker/compose/releases/download/1.24.1/docker-compose-$(uname
+      -s)-$(uname -m)" -o /usr/local/bin/docker-compose &&     chmod +x /usr/local/bin/docker-compose
+      &&     curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key
+      add - &&     echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" |
+      tee -a /etc/apt/sources.list.d/kubernetes.list &&     apt update && apt install
+      -y kubectl &&     echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula
+      select true | debconf-set-selections &&     echo -e '\n\n' | apt install -y
+      libmspack0 libxfont2 xfonts-encodings cabextract xfonts-utils fontconfig msttcorefonts
+      &&     fc-cache -f &&     apt install -y libjpeg8 libtiff-dev libdc1394-22 &&     curl
+      -fs http://security.ubuntu.com/ubuntu/pool/main/j/jasper/libjasper1_1.900.1-debian1-2.4ubuntu1.2_amd64.deb
+      -o /tmp/libjasper1.deb &&     curl -fs http://security.ubuntu.com/ubuntu/pool/main/j/jasper/libjasper-dev_1.900.1-debian1-2.4ubuntu1.2_amd64.deb
+      -o /tmp/libjasper-dev.deb &&     apt install /tmp/libjasper1.deb /tmp/libjasper-dev.deb
+      &&     dpkgArch="$(dpkg --print-architecture | awk -F- '{ print $NF }')" &&     curl
+      -fsLo /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/1.11/gosu-$dpkgArch"
+      &&     chmod +x /usr/local/bin/gosu &&     gosu nobody true &&     chmod +x
+      /entrypoint.sh &&     sed -i 's/${CLASSWORLDS_LAUNCHER} "$@"/${CLASSWORLDS_LAUNCHER}
+      "$@" $MAVEN_OPTIONS/g' /usr/share/maven/bin/mvn &&     apt-get install -y tmux
+      screen mc vim links zip php nodejs npm &&     mkdir -p $COMPOSER_HOME/cache
+      &&     chmod 777 $COMPOSER_HOME/cache &&     mkdir -p $COMPOSER_HOME/vendor/bin
+      &&     curl -sSL https://getcomposer.org/installer |     php -- --install-dir=$COMPOSER_HOME/vendor/bin
+      --filename=composer &&     apt-get autoremove -y &&     rm -rf /var/lib/apt/lists/*
+      /tmp/*
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /home/${user}/.jenkins
+  - Name: volume
+    Volumes:
+    - ${AGENT_WORKDIR}
+  - Name: workdir
+    Path: /home/${user}
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

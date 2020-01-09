@@ -1,0 +1,70 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - Maintainer: Ralf Herzog "ralf@rherzog.de"
+    Name: maintainer
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update -qq && apt-get -q -y install     postfix     postfix-ldap     mailutils     libsasl2-2     ca-certificates     libsasl2-modules     sasl2-bin     supervisor     syslog-ng     syslog-ng-core
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /var/lib/apt/lists/* /tmp/* && apt-get autoremove -y && apt-get autoclean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -E 's/^(\s*)system\(\);/\1unix-stream("\/dev\/log");/' /etc/syslog-ng/syslog-ng.conf
+      && sed -i '/^smtp_tls_CAfile =/d' /etc/postfix/main.cf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - postconf -e smtpd_banner="\$myhostname ESMTP" && postconf -e smtpd_sasl_auth_enable=yes
+      && postconf -e smtpd_sasl_type=cyrus && postconf -e smtpd_sasl_path=smtpd &&
+      postconf -e smtpd_reject_unlisted_sender=yes && postconf -e relayhost=[smtp.mailgun.org]:587
+      && postconf -e smtp_sasl_auth_enable=yes && postconf -e smtp_sasl_password_maps=hash:/etc/postfix/sasl_passwd
+      && postconf -e smtp_sasl_security_options=noanonymous && postconf -e smtpd_sasl_tls_security_options=noanonymous
+      && postconf -e smtp_tls_CAfile=/etc/postfix/cacert.pem  && postconf -e smtp_use_tls=yes
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - usermod -aG sasl postfix
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'mkdir -p /var/spool/postfix/var/run/saslauthd && chown postfix /var/spool/postfix/var/
+      -R && rm -rf /run/saslauthd && ln -s /var/spool/postfix/var/run/saslauthd /run/saslauthd
+      && echo "pwcheck_method: saslauthd\nmech_list: PLAIN LOGIN\n" > /etc/postfix/sasl/smtpd.conf
+      && sed -i "s/START=no/START=yes/" /etc/default/saslauthd && sed -i "s/MECHANISMS=\"pam\"/MECHANISMS=\"ldap\"/"
+      /etc/default/saslauthd'
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "25"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/supervisor/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - init.sh
+    - /opt/init.sh
+  - CmdLine:
+    - /usr/bin/supervisord
+    - -c
+    - /etc/supervisor/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

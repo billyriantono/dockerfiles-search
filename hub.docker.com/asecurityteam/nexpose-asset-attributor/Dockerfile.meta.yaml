@@ -1,0 +1,81 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: asecurityteam/sdcli:v1
+  Commands:
+  - CmdLine:
+    - mkdir -p /go/src/github.com/asecurityteam/nexpose-asset-attributor
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH/src/github.com/asecurityteam/nexpose-asset-attributor
+  - Chown: sdcli:sdcli
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - sdcli go dep
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -o /opt/app main.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: asecurityteam/sdcli:v1
+  Name: builder
+  Platform: ""
+  SourceCode: FROM asecurityteam/sdcli:v1 AS BUILDER
+- As: certs
+  BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk --no-cache add tzdata zip ca-certificates
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/share/zoneinfo
+  - CmdLine:
+    - zip -r -0 /zoneinfo.zip .
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: certs
+  Platform: ""
+  SourceCode: FROM alpine:latest as CERTS
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: BUILDER
+    Name: copy
+    SourcesAndDest:
+    - /opt/app
+    - .
+  - Chown: ""
+    From: CERTS
+    Name: copy
+    SourcesAndDest:
+    - /zoneinfo.zip
+    - /
+  - Chown: ""
+    From: CERTS
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Env:
+    - Key: ZONEINFO
+      Value: /zoneinfo.zip
+    Name: env
+  - CmdLine:
+    - /app
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

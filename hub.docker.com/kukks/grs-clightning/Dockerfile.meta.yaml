@@ -1,0 +1,115 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:stretch-slim
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y   autoconf automake build-essential git
+      libtool libgmp-dev   libsqlite3-dev python python3 net-tools zlib1g-dev wget
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt
+  - Env:
+    - Key: GROESTLCOIN_VERSION
+      Value: 2.16.3
+    Name: env
+  - Env:
+    - Key: GROESTLCOIN_URL
+      Value: https://github.com/Groestlcoin/groestlcoin/releases/download/v2.16.3/groestlcoin-2.16.3-x86_64-linux-gnu.tar.gz
+    Name: env
+  - Env:
+    - Key: GROESTLCOIN_SHA256
+      Value: f15bd5e38b25a103821f1563cd0e1b2cf7146ec9f9835493a30bd57313d3b86f
+    Name: env
+  - CmdLine:
+    - mkdir /opt/groestlcoin && cd /opt/groestlcoin     && wget -qO groestlcoin.tar.gz
+      "$GROESTLCOIN_URL"     && echo "$GROESTLCOIN_SHA256  groestlcoin.tar.gz" | sha256sum
+      -c -     && tar -xzvf groestlcoin.tar.gz groestlcoin-cli --exclude=*-qt     &&
+      rm groestlcoin.tar.gz
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LIGHTNINGD_VERSION
+      Value: master
+    Name: env
+  - Name: workdir
+    Path: /opt/lightningd
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Key: DEVELOPER
+    Name: arg
+    Value: "0"
+  - CmdLine:
+    - ./configure && make -j3 DEVELOPER=${DEVELOPER} && cp lightningd/lightning* cli/lightning-cli
+      /usr/bin/
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim as builder
+- BaseName: debian:stretch-slim
+  Commands:
+  - CmdLine:
+    - "apt-get update && apt-get install -y \tautoconf automake build-essential git
+      libtool libgmp-dev \tlibsqlite3-dev python python3 net-tools zlib1g-dev jq bc"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LIGHTNINGD_DATA
+      Value: /root/.lightning
+    Name: env
+  - Env:
+    - Key: LIGHTNINGD_RPC_PORT
+      Value: "9835"
+    Name: env
+  - CmdLine:
+    - mkdir $LIGHTNINGD_DATA &&     touch $LIGHTNINGD_DATA/config
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /root/.lightning
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/lightningd/cli/lightning-cli
+    - /usr/bin
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/lightningd/lightningd/lightning*
+    - /usr/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/groestlcoin
+    - /usr/bin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tools/docker-entrypoint.sh
+    - entrypoint.sh
+  - Name: expose
+    Ports:
+    - "9735"
+    - "9835"
+  - CmdLine:
+    - ./entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

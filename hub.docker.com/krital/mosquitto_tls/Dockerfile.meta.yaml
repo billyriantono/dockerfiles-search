@@ -1,0 +1,209 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:14.04
+  Commands:
+  - Maintainer: Alex Kritikos <alex@kritikal.org>
+    Name: maintainer
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: '"noninteractive"'
+    Name: env
+  - Env:
+    - Key: MOSQUITTO_PORT
+      Value: '"8883"'
+    Name: env
+  - Env:
+    - Key: MOSQUITTO_SOURCE_DIR
+      Value: '"/usr/local/src"'
+    Name: env
+  - Env:
+    - Key: MOSQUITTO_CONFIG_DIR
+      Value: '"/etc/mosquitto"'
+    Name: env
+  - Env:
+    - Key: MOSQUITTO_VERSION
+      Value: '"1.4.8"'
+    Name: env
+  - Env:
+    - Key: MOSQUITTO_USER
+      Value: '"mosquitto"'
+    Name: env
+  - Env:
+    - Key: CERTIFICATE_DURATION
+      Value: '"365"'
+    Name: env
+  - Env:
+    - Key: CA_FILE_PREFIX
+      Value: '"ca"'
+    Name: env
+  - Env:
+    - Key: CA_KEY_PASSWORD
+      Value: '"capasswd"'
+    Name: env
+  - Env:
+    - Key: CA_COUNTRY
+      Value: '"GR"'
+    Name: env
+  - Env:
+    - Key: CA_STATE
+      Value: '"Attica"'
+    Name: env
+  - Env:
+    - Key: CA_LOCALITY
+      Value: '"Athens"'
+    Name: env
+  - Env:
+    - Key: CA_ORGANIZATION
+      Value: '"SYRIZA"'
+    Name: env
+  - Env:
+    - Key: CA_COMMON_NAME
+      Value: '"SYRIZA CA"'
+    Name: env
+  - Env:
+    - Key: SERVER_FILE_PREFIX
+      Value: '"server"'
+    Name: env
+  - Env:
+    - Key: SERVER_KEY_SIZE
+      Value: '"2048"'
+    Name: env
+  - Env:
+    - Key: SERVER_KEY_PASSWORD
+      Value: '"serverpasswd"'
+    Name: env
+  - Env:
+    - Key: SERVER_COUNTRY
+      Value: '"GR"'
+    Name: env
+  - Env:
+    - Key: SERVER_STATE
+      Value: '"Attica"'
+    Name: env
+  - Env:
+    - Key: SERVER_LOCALITY
+      Value: '"Athens"'
+    Name: env
+  - Env:
+    - Key: SERVER_ORGANIZATION
+      Value: '"kritikal.org"'
+    Name: env
+  - Env:
+    - Key: SERVER_DOMAIN
+      Value: '"mosquitto.kritikal.org"'
+    Name: env
+  - Env:
+    - Key: SERVER_COMMON_NAME
+      Value: '"test.$SERVER_DOMAIN"'
+    Name: env
+  - Env:
+    - Key: ROOT_PASSWORD
+      Value: '"Mosquitto!"'
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get upgrade -y && apt-get install wget build-essential
+      libwrap0-dev libssl-dev python-distutils-extra libc-ares-dev uuid-dev openssl
+      -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $MOSQUITTO_SOURCE_DIR
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $MOSQUITTO_SOURCE_DIR
+  - CmdLine:
+    - wget http://mosquitto.org/files/source/mosquitto-$MOSQUITTO_VERSION.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xvzf ./mosquitto-$MOSQUITTO_VERSION.tar.gz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $MOSQUITTO_SOURCE_DIR/mosquitto-$MOSQUITTO_VERSION
+  - CmdLine:
+    - make && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser --system --disabled-password --disabled-login $MOSQUITTO_USER
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "root:$ROOT_PASSWORD" | chpasswd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $MOSQUITTO_CONFIG_DIR
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $MOSQUITTO_CONFIG_DIR
+  - CmdLine:
+    - chown -R $MOSQUITTO_USER $MOSQUITTO_CONFIG_DIR
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $MOSQUITTO_USER
+  - Name: workdir
+    Path: $MOSQUITTO_CONFIG_DIR
+  - CmdLine:
+    - cd $MOSQUITTO_CONFIG_DIR
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl req -new -x509 -days $CERTIFICATE_DURATION -extensions v3_ca -keyout
+      $CA_FILE_PREFIX.key -out $CA_FILE_PREFIX.crt -nodes -subj "/C=$CA_COUNTRY/ST=$CA_STATE/L=$CA_LOCALITY/O=$CA_ORGANIZATION/CN=$CA_COMMON_NAME"
+      -passout pass:$CA_KEY_PASSWORD
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl genrsa -out $SERVER_FILE_PREFIX.key $SERVER_KEY_SIZE -passout pass:$SERVER_KEY_PASSWORD
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl req -out $SERVER_FILE_PREFIX.csr -key $SERVER_FILE_PREFIX.key -new -nodes
+      -passin pass:$SERVER_KEY_PASSWORD -subj "/C=$SERVER_COUNTRY/ST=$SERVER_STATE/L=$SERVER_LOCALITY/O=$SERVER_ORGANIZATION/CN=$SERVER_COMMON_NAME"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl x509 -req -in $SERVER_FILE_PREFIX.csr -CA $CA_FILE_PREFIX.crt -CAkey
+      $CA_FILE_PREFIX.key -CAcreateserial -out $SERVER_FILE_PREFIX.crt -days $CERTIFICATE_DURATION
+      -passin pass:$CA_KEY_PASSWORD
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp $MOSQUITTO_CONFIG_DIR/mosquitto.conf.example $MOSQUITTO_CONFIG_DIR/mosquitto.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "port $MOSQUITTO_PORT" >> $MOSQUITTO_CONFIG_DIR/mosquitto.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "cafile $MOSQUITTO_CONFIG_DIR/$CA_FILE_PREFIX.crt" >> $MOSQUITTO_CONFIG_DIR/mosquitto.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "certfile $MOSQUITTO_CONFIG_DIR/$SERVER_FILE_PREFIX.crt" >> $MOSQUITTO_CONFIG_DIR/mosquitto.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "keyfile $MOSQUITTO_CONFIG_DIR/$SERVER_FILE_PREFIX.key" >> $MOSQUITTO_CONFIG_DIR/mosquitto.conf
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - $MOSQUITTO_PORT
+  - CmdLine:
+    - /usr/local/sbin/mosquitto
+    - -c
+    - /etc/mosquitto/mosquitto.conf
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:14.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:14.04

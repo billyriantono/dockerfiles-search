@@ -1,0 +1,164 @@
+MetaArgs:
+- DefaultValue: '"10.9.0"'
+  Key: NODE_VER
+  ProvidedValue: null
+  Value: '"10.9.0"'
+- DefaultValue: "3101"
+  Key: PORT
+  ProvidedValue: null
+  Value: "3101"
+- DefaultValue: '"/opt/strategy-heartbeat"'
+  Key: HOME_DIR
+  ProvidedValue: null
+  Value: '"/opt/strategy-heartbeat"'
+Stages:
+- As: base
+  BaseName: node:${NODE_VER}-alpine
+  Commands:
+  - Key: PORT
+    Name: arg
+    Value: null
+  - Key: HOME_DIR
+    Name: arg
+    Value: null
+  - Env:
+    - Key: port
+      Value: $PORT
+    Name: env
+  - Env:
+    - Key: FORCE_COLOR
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: HOME
+      Value: $HOME_DIR
+    Name: env
+  - CmdLine:
+    - mkdir -p $HOME
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $HOME
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - ./
+  From:
+    Image: node:${NODE_VER}-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:${NODE_VER}-alpine as BASE
+- As: dependencies
+  BaseName: BASE
+  Commands:
+  - CmdLine:
+    - npm install --only=production
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -R node_modules prod_node_modules
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  From:
+    Image: BASE
+  Name: dependencies
+  Platform: ""
+  SourceCode: FROM BASE as DEPENDENCIES
+- As: test
+  BaseName: dependencies
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .eslintrc.json
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /src
+    - ./src/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /test
+    - ./test/
+  - Env:
+    - Key: FORCE_COLOR
+      Value: "true"
+    Name: env
+  - CmdLine:
+    - npm run lint:fix && npm run lint && npm run test:unit
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: dependencies
+  Name: test
+  Platform: ""
+  SourceCode: FROM dependencies AS TEST
+- As: release
+  BaseName: node:${NODE_VER}-alpine
+  Commands:
+  - Key: HOME_DIR
+    Name: arg
+    Value: null
+  - Key: PORT
+    Name: arg
+    Value: null
+  - Env:
+    - Key: port
+      Value: $PORT
+    Name: env
+  - Env:
+    - Key: home
+      Value: $HOME_DIR
+    Name: env
+  - CmdLine:
+    - mkdir -p $home
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $home
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - index.*js
+    - package.json
+    - ./
+  - Chown: ""
+    From: dependencies
+    Name: copy
+    SourcesAndDest:
+    - $home/prod_node_modules
+    - ./node_modules
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /src
+    - ./src/
+  - Name: expose
+    Ports:
+    - $port
+  - CmdLine:
+    - npm
+    - run
+    - start
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: node:${NODE_VER}-alpine
+  Name: release
+  Platform: ""
+  SourceCode: FROM node:${NODE_VER}-alpine as RELEASE

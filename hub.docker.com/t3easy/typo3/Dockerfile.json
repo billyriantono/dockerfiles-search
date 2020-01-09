@@ -1,0 +1,252 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "PHP_VERSION",
+      "DefaultValue": "7.2",
+      "ProvidedValue": null,
+      "Value": "7.2"
+    },
+    {
+      "Key": "TARGET_ENVIRONMENT",
+      "DefaultValue": "production",
+      "ProvidedValue": null,
+      "Value": "production"
+    },
+    {
+      "Key": "TARGET_SERVICE",
+      "DefaultValue": "php",
+      "ProvidedValue": null,
+      "Value": "php"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "t3easy/php:${PHP_VERSION}-development",
+      "SourceCode": "FROM t3easy/php:${PHP_VERSION}-development AS builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "t3easy/php:${PHP_VERSION}-development"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "/app"
+          ]
+        },
+        {
+          "CmdLine": [
+            "rm -rf /app/.docker     \u0026\u0026 mkdir -p /app/config     \u0026\u0026 mkdir -p /app/var"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "composer install --no-ansi --no-interaction --no-dev --no-progress --classmap-authoritative"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "php-base",
+      "BaseName": "t3easy/php:${PHP_VERSION}-${TARGET_ENVIRONMENT}",
+      "SourceCode": "FROM t3easy/php:${PHP_VERSION}-${TARGET_ENVIRONMENT} AS php-base",
+      "Platform": "",
+      "As": "php-base",
+      "From": {
+        "Image": "t3easy/php:${PHP_VERSION}-${TARGET_ENVIRONMENT}"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".docker/cron.sh",
+            "/usr/local/bin/cron"
+          ]
+        },
+        {
+          "CmdLine": [
+            "rm /var/spool/cron/crontabs/root  \u0026\u0026 echo '*/15 * * * * php -f /app/vendor/bin/typo3 scheduler:run' \u003e /var/spool/cron/crontabs/www-data"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".docker/ca-certificates",
+            "/usr/local/share/ca-certificates"
+          ]
+        },
+        {
+          "CmdLine": [
+            "update-ca-certificates"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "PATH",
+              "Value": "\"/app/vendor/bin:$PATH\""
+            }
+          ],
+          "Name": "env"
+        }
+      ]
+    },
+    {
+      "Name": "php-production",
+      "BaseName": "php-base",
+      "SourceCode": "FROM php-base as php-production",
+      "Platform": "",
+      "As": "php-production",
+      "From": {
+        "Stage": {
+          "Named": "php-base",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "82",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app",
+            "."
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "TYPO3_CONTEXT",
+              "Value": "Production"
+            }
+          ],
+          "Name": "env"
+        }
+      ]
+    },
+    {
+      "Name": "php-development",
+      "BaseName": "php-base",
+      "SourceCode": "FROM php-base as php-development",
+      "Platform": "",
+      "As": "php-development",
+      "From": {
+        "Stage": {
+          "Named": "php-base",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "TYPO3_CONTEXT",
+              "Value": "Development"
+            }
+          ],
+          "Name": "env"
+        }
+      ]
+    },
+    {
+      "Name": "web-base",
+      "BaseName": "nginx:alpine",
+      "SourceCode": "FROM nginx:alpine as web-base",
+      "Platform": "",
+      "As": "web-base",
+      "From": {
+        "Image": "nginx:alpine"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".docker/web/typo3.conf",
+            "/etc/nginx/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".docker/web/default.conf",
+            "/etc/nginx/conf.d/"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        }
+      ]
+    },
+    {
+      "Name": "web-production",
+      "BaseName": "web-base",
+      "SourceCode": "FROM web-base as web-production",
+      "Platform": "",
+      "As": "web-production",
+      "From": {
+        "Stage": {
+          "Named": "web-base",
+          "Index": 4
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "101",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app",
+            "/app"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "web-development",
+      "BaseName": "web-base",
+      "SourceCode": "FROM web-base as web-development",
+      "Platform": "",
+      "As": "web-development",
+      "From": {
+        "Stage": {
+          "Named": "web-base",
+          "Index": 4
+        }
+      },
+      "Commands": null
+    },
+    {
+      "Name": "runtime",
+      "BaseName": "${TARGET_SERVICE}-${TARGET_ENVIRONMENT}",
+      "SourceCode": "FROM ${TARGET_SERVICE}-${TARGET_ENVIRONMENT} as runtime",
+      "Platform": "",
+      "As": "runtime",
+      "From": {
+        "Image": "${TARGET_SERVICE}-${TARGET_ENVIRONMENT}"
+      },
+      "Commands": null
+    }
+  ]
+}

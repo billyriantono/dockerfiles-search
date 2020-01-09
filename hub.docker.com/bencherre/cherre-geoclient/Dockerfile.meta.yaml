@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- BaseName: tomcat:8.0.43-jre8
+  Commands:
+  - Labels:
+    - Key: GEOSUPPORT_RELEASE
+      Value: 18c
+    - Key: GEOSUPPORT_VERSION
+      Value: "18.3"
+    Name: label
+  - CmdLine:
+    - apt-get update     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends
+      wget unzip git openjdk-8-jdk maven build-essential jq
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /app/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/
+  - CmdLine:
+    - wget --progress=dot -e dotbytes=10M http://www1.nyc.gov/assets/planning/download/zip/data-maps/open-data/gdelx_18c.zip     &&
+      unzip gdelx_18c.zip     && rm gdelx_18c.zip
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GEOSUPPORT_HOME
+      Value: /app/version-18c_18.3
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/java-8-openjdk-amd64/
+    Name: env
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: $GEOSUPPORT_HOME/lib/
+    - Key: GEOFILES
+      Value: $GEOSUPPORT_HOME/fls/
+    - Key: GS_INCLUDE_PATH
+      Value: $GEOSUPPORT_HOME/include/foruser
+    - Key: GS_LIBRARY_PATH
+      Value: $GEOSUPPORT_HOME/lib
+    Name: env
+  - CmdLine:
+    - git clone https://github.com/bhagyas/spring-jsonp-support     && ( cd spring-jsonp-support          &&
+      mvn -Dmaven.compiler.source=1.8 -Dmaven.compiler.target=1.8 install )     &&
+      rm -rf spring-jsonp-support
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - (git clone https://github.com/CityOfNewYork/geoclient.git     && cd geoclient     &&
+      ./gradlew clean build)
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - (rm -rfv $CATALINA_HOME/webapps/ROOT &&     cp -v /app/geoclient/geoclient-service/build/libs/geoclient-service-2.0.0-rc.1.war
+      $CATALINA_HOME/webapps/ROOT.war)
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GEOCLIENT_BUILT_LIBS
+      Value: /app/geoclient_built_libs
+    Name: env
+  - CmdLine:
+    - (mv -v /app/geoclient/build/libs/ $GEOCLIENT_BUILT_LIBS   && rm -rfv /app/geoclient)
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CATALINA_OPTS
+      Value: -Djava.library.path=/usr/lib/jni/:$LD_LIBRARY_PATH:$GEOCLIENT_BUILT_LIBS
+    Name: env
+  - Health:
+      Interval: 5000000000
+      Test:
+      - CMD-SHELL
+      - curl --silent http://localhost:8080/bin.json?bin=1022573 |jq '(.bin.geosupportReturnCode
+        == "00")' ||exit 1
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - "8080"
+  From:
+    Image: tomcat:8.0.43-jre8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tomcat:8.0.43-jre8

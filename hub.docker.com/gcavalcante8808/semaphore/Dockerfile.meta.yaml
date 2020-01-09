@@ -1,0 +1,113 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:9
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt install --no-install-recommends -y     python-minimal     python-setuptools     python-bcrypt     python-dev     binutils     ca-certificates
+      &&     rm -rf /var/lib/apt/lists/* &&     apt-get clean
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - import_admin
+    - /usr/src/
+  - Name: workdir
+    Path: /usr/src
+  - CmdLine:
+    - easy_install pip &&     pip install -r requirements.txt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pyinstaller -F --hidden-import=_cffi_backend --hidden-import=bcrypt     import_user.py
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:9
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:9 as builder
+- BaseName: debian:9
+  Commands:
+  - CmdLine:
+    - groupadd -g 10000 webserver &&     useradd -m -g webserver webserver -u 10000
+      &&     apt-get update && apt-get install --no-install-recommends -y git     openssh-client     python-dev     libffi-dev     libssl-dev     gcc     ca-certificates     python-dev     rsync     curl     rxvt-unicode      python-minimal
+      &&     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* &&     ln -s /home/webserver/ansible
+      /etc/ansible &&     curl https://bootstrap.pypa.io/get-pip.py | python &&     pip
+      install virtualenv &&     rm /bin/sh &&     ln -s /bin/bash /bin/sh &&     mkdir
+      -p /home/webserver/.ssh/
+    Name: run
+    PrependShell: true
+  - Key: ANSIBLE_VERSION
+    Name: arg
+    Value: 2.5.3
+  - Key: SEMAPHORE_VERSION
+    Name: arg
+    Value: 2.5.1
+  - CmdLine:
+    - curl -L --output /tmp/semaphore.tar.gz https://github.com/ansible-semaphore/semaphore/releases/download/v${SEMAPHORE_VERSION}/semaphore_${SEMAPHORE_VERSION}_linux_amd64.tar.gz
+      &&     tar xf /tmp/semaphore.tar.gz -C /usr/bin &&     rm /tmp/semaphore.tar.gz
+      &&     chmod +x /usr/bin/semaphore &&     mkdir /tmp/semaphore &&     chown
+      webserver:webserver /tmp/semaphore
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - virtualenv --no-site-packages /home/webserver/defaultenv &&     /home/webserver/defaultenv/bin/pip
+      install ansible==${ANSIBLE_VERSION} jsonschema &&     echo "export TERM=rxvt-unicode"
+      >> /home/webserver/.bashrc &&     echo "source /home/webserver/defaultenv/bin/activate"
+      >> /home/webserver/.bashrc &&     ln -s /home/webserver/defaultenv/bin/ansible
+      /usr/bin/ansible &&     ln -s /home/webserver/defaultenv/bin/ansible-playbook
+      /usr/bin/ansible-playbook
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/webserver
+  - CmdLine:
+    - mkdir -p ansible/{playbooks,roles,files} &&     touch ansible/hosts
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/
+    - /home/webserver/ansible/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/dist/import_user
+    - /
+  - CmdLine:
+    - chown -R webserver:webserver /home/webserver &&     chmod +x /import_user &&     ln
+      -s /home/webserver/ansible/config.py /docker-entrypoint
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: webserver
+  - Name: workdir
+    Path: /home/webserver/ansible
+  - Env:
+    - Key: GIN_MODE
+      Value: release
+    Name: env
+  - Name: expose
+    Ports:
+    - "3000"
+  - Name: volume
+    Volumes:
+    - /home/webserver/ansible
+  - Name: volume
+    Volumes:
+    - /home/webserver/.ssh
+  - CmdLine:
+    - /docker-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:9

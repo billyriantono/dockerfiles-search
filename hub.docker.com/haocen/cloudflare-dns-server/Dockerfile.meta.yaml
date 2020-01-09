@@ -1,0 +1,88 @@
+MetaArgs:
+- DefaultValue: alpine
+  Key: BASE_IMAGE
+  ProvidedValue: null
+  Value: alpine
+- DefaultValue: "3.10"
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: "3.10"
+Stages:
+- BaseName: ${BASE_IMAGE}:${ALPINE_VERSION}
+  Commands:
+  - Name: expose
+    Ports:
+    - 53/udp
+  - Env:
+    - Key: VERBOSITY
+      Value: "1"
+    - Key: VERBOSITY_DETAILS
+      Value: "0"
+    - Key: BLOCK_MALICIOUS
+      Value: "off"
+    - Key: BLOCK_NSA
+      Value: "off"
+    - Key: UNBLOCK
+      Value: ""
+    - Key: LISTENINGPORT
+      Value: "53"
+    - Key: PROVIDER
+      Value: cloudflare
+    Name: env
+  - CmdLine:
+    - /etc/unbound/entrypoint.sh
+    Name: entrypoint
+    PrependShell: true
+  - Health:
+      Interval: 300000000000
+      Retries: 1
+      StartPeriod: 5000000000
+      Test:
+      - CMD-SHELL
+      - LISTENINGPORT=${LISTENINGPORT:-53}; dig @127.0.0.1 +short +time=1 duckduckgo.com
+        -p $LISTENINGPORT &> /dev/null; [ $? = 0 ] || exit 1
+      Timeout: 15000000000
+    Name: healthcheck
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - block_lists/
+    - /tmp/
+  - CmdLine:
+    - 'apk --update --no-cache --progress -q add ca-certificates unbound bind-tools
+      libcap &&     setcap ''cap_net_bind_service=+ep'' /usr/sbin/unbound &&     apk
+      del libcap &&     rm -rf /var/cache/apk/* /etc/unbound/* &&     adduser nonrootuser
+      -D -H --uid 1000 &&     wget -q http://www.internic.net/domain/named.root -O
+      /etc/unbound/root.hints &&     cd /tmp &&     wget -q https://raw.githubusercontent.com/qdm12/updated/master/files/malicious-hostnames.updated
+      -O malicious-hostnames &&     wget -q https://raw.githubusercontent.com/qdm12/updated/master/files/nsa-hostnames.updated
+      -O nsa-hostnames &&     wget -q https://raw.githubusercontent.com/qdm12/updated/master/files/malicious-ips.updated
+      -O malicious-ips &&     while read hostname; do echo "local-zone: \""$hostname"\"
+      static" >> blocks-malicious.conf; done < malicious-hostnames &&     while read
+      ip; do echo "private-address: $ip" >> blocks-malicious.conf; done < malicious-ips
+      &&     tar -cjf /etc/unbound/blocks-malicious.bz2 blocks-malicious.conf &&     while
+      read hostname; do echo "local-zone: \""$hostname"\" static" >> blocks-nsa.conf;
+      done < nsa-hostnames &&     tar -cjf /etc/unbound/blocks-nsa.bz2 blocks-nsa.conf
+      &&     rm -f /tmp/*'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - unbound.conf
+    - entrypoint.sh
+    - /etc/unbound/
+  - CmdLine:
+    - chown nonrootuser -R /etc/unbound &&     chmod 700 /etc/unbound &&     chmod
+      600 /etc/unbound/unbound.conf &&     chmod 500 /etc/unbound/entrypoint.sh &&     chmod
+      400 /etc/unbound/root.hints /etc/unbound/*.bz2
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: nonrootuser
+  From:
+    Image: ${BASE_IMAGE}:${ALPINE_VERSION}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${BASE_IMAGE}:${ALPINE_VERSION}

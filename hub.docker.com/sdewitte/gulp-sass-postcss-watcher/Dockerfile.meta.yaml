@@ -1,0 +1,143 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:xenial
+  Commands:
+  - Maintainer: Sander de Witte
+    Name: maintainer
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: RUBY_MAJOR
+      Value: "2.4"
+    - Key: RUBY_VERSION
+      Value: 2.4.2
+    - Key: RUBYGEMS_VERSION
+      Value: 2.7.2
+    - Key: BUNDLER_VERSION
+      Value: 1.16.0
+    - Key: NODE_VERSION
+      Value: 6.12.0
+    - Key: GEM_HOME
+      Value: /usr/local/gems
+    - Key: WORK_DIR
+      Value: /data/src
+    Name: env
+  - Env:
+    - Key: BUNDLE_PATH
+      Value: '"$GEM_HOME"'
+    - Key: BUNDLE_BIN
+      Value: '"$GEM_HOME/bin"'
+    - Key: BUNDLE_APP_CONFIG
+      Value: '"$GEM_HOME"'
+    - Key: BUNDLE_SILENCE_ROOT_WARNING
+      Value: "1"
+    - Key: NPM_CONFIG_LOGLEVEL
+      Value: error
+    Name: env
+  - CmdLine:
+    - apt-get -qq update  && apt-get -qq upgrade  && essentialTools='apt-utils wget
+      git'  && buildTools='build-essential autoconf'  && apt-get -qq install -y --no-install-recommends
+      $essentialTools $buildTools
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'mkdir -p /usr/local/etc  && { echo ''install: --no-document --no-prerelease'';
+      echo ''update: --no-document --no-prerelease''; } >> /usr/local/etc/gemrc'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - buildDeps='bison libgdbm-dev libssl-dev libreadline-dev zlib1g-dev ruby'  &&
+      apt-get -qq install -y --no-install-recommends $buildDeps  && rm -rf /var/lib/apt/lists/*  &&
+      wget -nv -O ruby.tar.xz "https://cache.ruby-lang.org/pub/ruby/${RUBY_MAJOR%-rc}/ruby-$RUBY_VERSION.tar.xz"  &&
+      mkdir -p /usr/src/ruby  && tar -xJf ruby.tar.xz -C /usr/src/ruby --strip-components=1  &&
+      rm ruby.tar.xz  && cd /usr/src/ruby  && { echo '#define ENABLE_PATH_CHECK 0';
+      echo; cat file.c; } > file.c.new  && mv file.c.new file.c  && autoconf  && gnuArch="$(dpkg-architecture
+      --query DEB_BUILD_GNU_TYPE)"  && ./configure --build="$gnuArch" --disable-install-doc
+      --enable-shared  && make -j "$(nproc)"  && make install  && make clean  && apt-get
+      -qq purge -y --auto-remove $buildDeps  && apt-get clean  && cd /  && rm -r /usr/src/ruby  &&
+      export LANG="C.UTF-8"  && export LC_ALL="C.UTF-8"  && gem update --system "$RUBYGEMS_VERSION"
+      --no-post-install-message
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: '"$BUNDLE_BIN:$PATH"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gemfile
+    - /var/tmp/Gemfile
+  - CmdLine:
+    - mkdir -p "$GEM_HOME" "$BUNDLE_BIN"  && chmod 777 "$GEM_HOME" "$BUNDLE_BIN"  &&
+      gem install bundler --version "$BUNDLER_VERSION"  && cd /var/tmp  && bundle
+      install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /usr/local/lib  && git clone https://github.com/sass/libsass.git --depth
+      1  && git clone https://github.com/sass/sassc.git --depth 1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /usr/local/lib  && export SASS_LIBSASS_PATH="/usr/local/lib/libsass"  &&
+      make -C libsass  && make -C libsass clean  && make -C sassc  && make -C sassc
+      install  && make -C sassc clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /var/tmp  && wget -nv -O node.tar.gz "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.gz"  &&
+      tar -xzf "node.tar.gz" -C /usr/local --strip-components=1  && rm "node.tar.gz"  &&
+      cd $(npm root --global)  && npm install --global fs-extra  && sed -i -e s/graceful-fs/fs-extra/
+      -e s/fs\.rename/fs.move/ ./npm/lib/utils/rename.js
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd $(npm root --global)  && npm install --global minimist  && npm install --global
+      caniuse-lite  && npm install --global postcss  && npm install --global --unsafe-perm
+      node-sass  && npm install --global gulp  && npm install --global gulp-cli  &&
+      npm install --global gulp-util  && npm install --global gulp-plumber  && npm
+      install --global gulp-postcss  && npm install --global --unsafe-perm gulp-sass
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - /usr/local/lib/package.json
+  - CmdLine:
+    - cd /usr/local/lib  && npm install
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NODE_PATH
+      Value: '"/usr/local/lib/node_modules"'
+    - Key: PATH
+      Value: '"$PATH:/usr/local/lib/node_modules"'
+    Name: env
+  - Name: volume
+    Volumes:
+    - $WORK_DIR
+  - Name: workdir
+    Path: $WORK_DIR
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - chmod +x /docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:xenial
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:xenial

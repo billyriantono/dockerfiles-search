@@ -1,0 +1,78 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: microsoft/aspnetcore:2.0
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Name: expose
+    Ports:
+    - "80"
+  From:
+    Image: microsoft/aspnetcore:2.0
+  Name: base
+  Platform: ""
+  SourceCode: FROM microsoft/aspnetcore:2.0 AS base
+- As: builder
+  BaseName: microsoft/aspnetcore-build:2.0
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - /src
+  - CmdLine:
+    - dotnet restore
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - dotnet build -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/aspnetcore-build:2.0
+  Name: builder
+  Platform: ""
+  SourceCode: FROM microsoft/aspnetcore-build:2.0 AS builder
+- As: publish
+  BaseName: builder
+  Commands:
+  - CmdLine:
+    - dotnet publish -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: builder
+  Name: publish
+  Platform: ""
+  SourceCode: FROM builder AS publish
+- As: production
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - CmdLine:
+    - dotnet
+    - acr-patch-sample-webapi.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: production
+  Platform: ""
+  SourceCode: FROM base AS production

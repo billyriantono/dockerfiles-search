@@ -1,0 +1,138 @@
+MetaArgs: null
+Stages:
+- As: build-deps
+  BaseName: alpine
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    - Key: NPM_CONFIG_LOGLEVEL
+      Value: error
+    - Key: NPM_CONFIG_PRODUCTION
+      Value: "true"
+    - Key: NODE_MODULES_CACHE
+      Value: "false"
+    Name: env
+  - CmdLine:
+    - echo "$NODE_ENV" &&     apk add --update --no-cache --repository http://dl-3.alpinelinux.org/alpine/edge/testing     git
+      nodejs npm vips-dev fftw-dev gcc g++ make libc6-compat
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /code
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /code
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package*.json
+    - .env.example
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client
+    - ./client
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - migrations
+    - ./migrations
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server
+    - ./server
+  - CmdLine:
+    - npm install --production     && npm dedupe --production     && npm install modclean
+      -g     && modclean --no-dotfiles --no-progress --run     && cd migrations     &&
+      npm install --production     && modclean --no-dotfiles --no-progress --run     &&
+      cd node_modules     && rm -rf `ls | grep -v "everysfa"`
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: build-deps
+  Platform: ""
+  SourceCode: FROM alpine as build-deps
+- BaseName: alpine:latest
+  Commands:
+  - Key: APPLICATION_PATH
+    Name: arg
+    Value: /usr/src/app
+  - Key: USERNAME
+    Name: arg
+    Value: '"app"'
+  - Key: USER_ID
+    Name: arg
+    Value: '"1000"'
+  - Key: NODE_ENV
+    Name: arg
+    Value: production
+  - Env:
+    - Key: NODE_ENV
+      Value: '"${NODE_ENV}"'
+    Name: env
+  - Name: workdir
+    Path: ${APPLICATION_PATH}
+  - Chown: ""
+    From: build-deps
+    Name: copy
+    SourcesAndDest:
+    - /code
+    - ${APPLICATION_PATH}
+  - CmdLine:
+    - apk update     && apk upgrade     && apk add --no-cache sqlite nodejs npm     &&
+      apk add --no-cache --repository https://dl-3.alpinelinux.org/alpine/edge/testing/
+      vips-dev fftw-dev     && npm install -g -s --no-progress pm2@3     && ls -ll     &&
+      du -hs     && npm cache clean --force     && apk del npm     && rm -rf         /usr/share/man/*         /usr/includes/*         /var/cache/apk/*         /root/.npm/*         /usr/lib/node_modules/npm/*     &&
+      adduser -H -D ${USERNAME} -u ${USER_ID}     && chown ${USERNAME}:${USERNAME}
+      -R ${APPLICATION_PATH}     && deluser --remove-home daemon     && deluser --remove-home
+      adm     && deluser --remove-home lp     && deluser --remove-home sync     &&
+      deluser --remove-home shutdown     && deluser --remove-home halt     && deluser
+      --remove-home postmaster     && deluser --remove-home cyrus     && deluser --remove-home
+      mail     && deluser --remove-home news     && deluser --remove-home uucp     &&
+      deluser --remove-home operator     && deluser --remove-home man     && deluser
+      --remove-home cron     && deluser --remove-home ftp     && deluser --remove-home
+      sshd     && deluser --remove-home at     && deluser --remove-home squid     &&
+      deluser --remove-home xfs     && deluser --remove-home games     && deluser
+      --remove-home postgres     && deluser --remove-home vpopmail     && deluser
+      --remove-home ntp     && deluser --remove-home smmsp     && deluser --remove-home
+      guest
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - init.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - chmod u+x /usr/local/bin/init.sh
+    Name: run
+    PrependShell: true
+  - Health:
+      Interval: 15000000000
+      Test:
+      - CMD-SHELL
+      - /usr/bin/nc 127.0.0.1 80 < /dev/null || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - init.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

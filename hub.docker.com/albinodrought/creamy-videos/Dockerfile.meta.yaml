@@ -1,0 +1,110 @@
+MetaArgs: null
+Stages:
+- As: spa
+  BaseName: albinodrought/node-alpine-gcc-make-ssh
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./ui
+    - /ui
+  - Name: workdir
+    Path: /ui
+  - CmdLine:
+    - npm install --no-optional
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: albinodrought/node-alpine-gcc-make-ssh
+  Name: spa
+  Platform: ""
+  SourceCode: FROM albinodrought/node-alpine-gcc-make-ssh as SPA
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk add git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $GOPATH/src/github.com/AlbinoDrought/creamy-videos
+  - Name: workdir
+    Path: $GOPATH/src/github.com/AlbinoDrought/creamy-videos
+  - CmdLine:
+    - tar -zcvf /tmp/source.tar.gz .
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: SPA
+    Name: copy
+    SourcesAndDest:
+    - /ui/dist
+    - $GOPATH/src/github.com/AlbinoDrought/creamy-videos/ui/dist
+  - CmdLine:
+    - cp /tmp/source.tar.gz ui/dist
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    - Key: GOOS
+      Value: linux
+    - Key: GOARCH
+      Value: amd64
+    Name: env
+  - CmdLine:
+    - go get -d -v
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/GeertJohan/go.rice/rice
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd cmd && rice embed-go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -a -installsuffix cgo -o /go/bin/creamy-videos
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- BaseName: jrottenberg/ffmpeg:4.0-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache tini
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/creamy-videos
+    - /go/bin/creamy-videos
+  - CmdLine:
+    - /sbin/tini
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /go/bin/creamy-videos
+    - serve
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: jrottenberg/ffmpeg:4.0-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM jrottenberg/ffmpeg:4.0-alpine

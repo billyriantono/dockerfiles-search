@@ -1,0 +1,154 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: node:12-alpine
+  Commands: null
+  From:
+    Image: node:12-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:12-alpine AS base
+- As: uibase
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /src/UI
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: uibase
+  Platform: ""
+  SourceCode: FROM base AS uibase
+- As: serverbase
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /src/Server
+  - CmdLine:
+    - apk add --no-cache git python build-base
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: serverbase
+  Platform: ""
+  SourceCode: FROM base AS serverbase
+- As: uideps
+  BaseName: uibase
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./UI/package-lock.json
+    - ./UI/package.json
+    - ./
+  - CmdLine:
+    - npm ci
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: uibase
+  Name: uideps
+  Platform: ""
+  SourceCode: FROM uibase AS uideps
+- As: serverdeps
+  BaseName: serverbase
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./Server/package-lock.json
+    - ./Server/package.json
+    - ./
+  - CmdLine:
+    - npm ci
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 2
+      Named: serverbase
+  Name: serverdeps
+  Platform: ""
+  SourceCode: FROM serverbase AS serverdeps
+- As: uibuild
+  BaseName: uideps
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./UI
+    - .
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 3
+      Named: uideps
+  Name: uibuild
+  Platform: ""
+  SourceCode: FROM uideps AS uibuild
+- As: combined
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./Server/
+    - /src/Server
+  - Chown: ""
+    From: serverdeps
+    Name: copy
+    SourcesAndDest:
+    - /src/Server/node_modules
+    - /src/Server/node_modules
+  - Chown: ""
+    From: uibuild
+    Name: copy
+    SourcesAndDest:
+    - /src/UI/build
+    - /src/Server/public
+  From:
+    Scratch: true
+  Name: combined
+  Platform: ""
+  SourceCode: FROM scratch AS combined
+- BaseName: base
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - Name: workdir
+    Path: /dist
+  - Name: expose
+    Ports:
+    - "6769"
+  - Chown: ""
+    From: combined
+    Name: copy
+    SourcesAndDest:
+    - /src/Server
+    - /dist
+  - CmdLine:
+    - node index.js
+    Name: cmd
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

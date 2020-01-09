@@ -1,0 +1,72 @@
+MetaArgs: null
+Stages:
+- As: cache
+  BaseName: webuni/base:3.8-build
+  Commands:
+  - CmdLine:
+    - apk -U add ghc cabal wget zlib-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "while true; do echo tick > /proc/1/fd/1; sleep 60; done &" > tick.sh &&
+      sh tick.sh     && cabal update && cabal install "pandoc" -fembed_data_files
+    Name: run
+    PrependShell: true
+  From:
+    Image: webuni/base:3.8-build
+  Name: cache
+  Platform: ""
+  SourceCode: FROM webuni/base:3.8-build AS cache
+- As: build
+  BaseName: cache
+  Commands:
+  - Env:
+    - Key: PANDOC_VERSION
+      Value: "2.5"
+    Name: env
+  - CmdLine:
+    - sh tick.sh && cabal install "pandoc-${PANDOC_VERSION}" -fembed_data_files
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: cache
+  Name: build
+  Platform: ""
+  SourceCode: FROM cache AS build
+- BaseName: webuni/base:3.8
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Martin Hasoň <martin.hason@gmail.com>"'
+    Name: label
+  - CmdLine:
+    - apk add gmp libffi && clean
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PANDOC_VERSION
+      Value: "2.5"
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /root/.cabal/bin/pandoc
+    - /usr/local/bin/pandoc
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs
+    - /
+  - CmdLine:
+    - pandoc
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: webuni/base:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM webuni/base:3.8

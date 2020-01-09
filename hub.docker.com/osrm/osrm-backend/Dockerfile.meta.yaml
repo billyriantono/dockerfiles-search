@@ -1,0 +1,88 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:stretch-slim
+  Commands:
+  - Key: DOCKER_TAG
+    Name: arg
+    Value: null
+  - Key: BUILD_CONCURRENCY
+    Name: arg
+    Value: null
+  - CmdLine:
+    - mkdir -p /src  && mkdir -p /opt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /src
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - NPROC=${BUILD_CONCURRENCY:-$(grep -c ^processor /proc/cpuinfo 2>/dev/null ||
+      1)} &&     apt-get update &&     apt-get -y --no-install-recommends install
+      cmake make git gcc g++ libbz2-dev libxml2-dev     libzip-dev libboost1.62-all-dev
+      lua5.2 liblua5.2-dev libtbb-dev -o APT::Install-Suggests=0 -o APT::Install-Recommends=0
+      &&     echo "Building OSRM ${DOCKER_TAG}" &&     git show --format="%H" | head
+      -n1 > /opt/OSRM_GITSHA &&     echo "Building OSRM gitsha $(cat /opt/OSRM_GITSHA)"
+      &&     mkdir -p build &&     cd build &&     BUILD_TYPE="Release" &&     ENABLE_ASSERTIONS="Off"
+      &&     BUILD_TOOLS="Off" &&     case ${DOCKER_TAG} in *"-debug"*) BUILD_TYPE="Debug";;
+      esac &&     case ${DOCKER_TAG} in *"-assertions"*) BUILD_TYPE="RelWithDebInfo"
+      && ENABLE_ASSERTIONS="On" && BUILD_TOOLS="On";; esac &&     echo "Building ${BUILD_TYPE}
+      with ENABLE_ASSERTIONS=${ENABLE_ASSERTIONS} BUILD_TOOLS=${BUILD_TOOLS}" &&     cmake
+      .. -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DENABLE_ASSERTIONS=${ENABLE_ASSERTIONS}
+      -DBUILD_TOOLS=${BUILD_TOOLS} -DENABLE_LTO=On &&     make -j${NPROC} install
+      &&     cd ../profiles &&     cp -r * /opt &&     strip /usr/local/bin/* &&     rm
+      -rf /src /usr/local/lib/libosrm*
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim as builder
+- As: runstage
+  BaseName: debian:stretch-slim
+  Commands:
+  - CmdLine:
+    - mkdir -p /src  && mkdir -p /opt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&     apt-get install -y --no-install-recommends libboost-program-options1.62.0
+      libboost-regex1.62.0         libboost-date-time1.62.0 libboost-chrono1.62.0
+      libboost-filesystem1.62.0         libboost-iostreams1.62.0 libboost-thread1.62.0
+      expat liblua5.2-0 libtbb2 &&    rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /usr/local
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt
+    - /opt
+  - CmdLine:
+    - /usr/local/bin/osrm-extract --help &&     /usr/local/bin/osrm-routed --help
+      &&     /usr/local/bin/osrm-contract --help &&     /usr/local/bin/osrm-partition
+      --help &&     /usr/local/bin/osrm-customize --help
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt
+  - Name: expose
+    Ports:
+    - "5000"
+  From:
+    Image: debian:stretch-slim
+  Name: runstage
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim as runstage

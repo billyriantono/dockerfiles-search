@@ -1,0 +1,143 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "",
+      "BaseName": "openjdk:8-jdk-alpine",
+      "SourceCode": "FROM openjdk:8-jdk-alpine",
+      "Platform": "",
+      "From": {
+        "Image": "openjdk:8-jdk-alpine"
+      },
+      "Commands": [
+        {
+          "Key": "KAFKA_MANAGER",
+          "Name": "arg",
+          "Value": "2.0.0.2::SHA::363f6619dd0ec82a53b4e304df62895e219fba2f83438c50953c32f695ca4e3b"
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache bash curl"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "curl -fsSL \"https://github.com/yahoo/kafka-manager/archive/${KAFKA_MANAGER%%::SHA::*}.tar.gz\" -o /tmp/kafka-manager.tar.gz     \u0026\u0026 if [ \"${KAFKA_MANAGER##*::SHA::}\" = \"${KAFKA_MANAGER}\" ] ; then         echo \"/tmp/kafka-manager.tar.gz: Unverified\" \u003e\u00262 ;     else         echo \"${KAFKA_MANAGER##*::SHA::}  /tmp/kafka-manager.tar.gz\" | sha256sum -c - ;     fi     \u0026\u0026 mkdir -p /tmp/kafka-manager \u0026\u0026 tar -xzf /tmp/kafka-manager.tar.gz -C /tmp/kafka-manager --strip-components 1"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd /tmp/kafka-manager     \u0026\u0026 ./sbt clean dist"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /opt     \u0026\u0026 cd /opt     \u0026\u0026 unzip /tmp/kafka-manager/target/universal/kafka-manager-${KAFKA_MANAGER%%::SHA::*}.zip     \u0026\u0026 mv kafka-manager-${KAFKA_MANAGER%%::SHA::*} kafka-manager"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "openjdk:8-jre-alpine",
+      "SourceCode": "FROM openjdk:8-jre-alpine",
+      "Platform": "",
+      "From": {
+        "Image": "openjdk:8-jre-alpine"
+      },
+      "Commands": [
+        {
+          "Key": "ENVSUB",
+          "Name": "arg",
+          "Value": "0.1.0::SHA::b10600c03236bbf0711476e11a1dff9ae285a50a48568bfd0bf6c6014fc69f0c"
+        },
+        {
+          "Key": "ZKINIT",
+          "Name": "arg",
+          "Value": "0.1.0::SHA::0556c0f53e94bb27718023f98807c6ea8232eddc6324597ec7c7c0385dd7484c"
+        },
+        {
+          "Chown": "",
+          "From": "0",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/tmp/kafka-manager/target/universal/kafka-manager-*.zip",
+            "/opt/kafka-manager.zip"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache bash tini curl     \u0026\u0026 cd /opt     \u0026\u0026 unzip kafka-manager.zip     \u0026\u0026 for n in kafka-manager-* ; do         mv $n kafka-manager;         break ;     done     \u0026\u0026 ln -s /opt/kafka-manager/bin/kafka-manager /usr/bin/kafka-manager     \u0026\u0026 curl -fsSL \"https://github.com/stephenc/envsub/releases/download/${ENVSUB%%::SHA::*}/envsub\" -o /usr/local/bin/envsub     \u0026\u0026 if [ \"${ENVSUB##*::SHA::}\" = \"${ENVSUB}\" ] ; then         echo \"/usr/local/bin/envsub: Unverified\" \u003e\u00262 ;     else         echo \"${ENVSUB##*::SHA::}  /usr/local/bin/envsub\" | sha256sum -c - ;     fi     \u0026\u0026 chmod +x /usr/local/bin/envsub     \u0026\u0026 curl -fsSL \"https://github.com/stephenc/zkinit/releases/download/${ZKINIT%%::SHA::*}/zkinit\" -o /usr/local/bin/zkinit     \u0026\u0026 if [ \"${ZKINIT##*::SHA::}\" = \"${ZKINIT}\" ] ; then         echo \"/usr/local/bin/zkinit: Unverified\" \u003e\u00262 ;     else         echo \"${ZKINIT##*::SHA::}  /usr/local/bin/zkinit\" | sha256sum -c - ;     fi     \u0026\u0026 chmod +x /usr/local/bin/zkinit"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/opt/kafka-manager"
+        },
+        {
+          "CmdLine": [
+            "/sbin/tini",
+            "-g",
+            "--"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "rootfs/",
+            "/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/docker-entrypoint.sh"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        },
+        {
+          "Health": {
+            "Interval": 5000000000,
+            "Retries": 3,
+            "StartPeriod": 10000000000,
+            "Test": [
+              "CMD",
+              "/docker-healthcheck.sh"
+            ],
+            "Timeout": 1500000000
+          },
+          "Name": "healthcheck"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "8080"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "KM_CONFIGFILE",
+              "Value": "\"conf/application.conf\""
+            }
+          ],
+          "Name": "env"
+        }
+      ]
+    }
+  ]
+}

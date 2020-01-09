@@ -1,0 +1,61 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:latest
+  Commands:
+  - Name: workdir
+    Path: /build
+  - Key: HYBRID_VERSION
+    Name: arg
+    Value: 8.2.24
+  - CmdLine:
+    - apk upgrade --no-cache &&     apk add --no-cache ca-certificates file gcc libc-dev
+      gnutls-dev make curl &&     curl -sL https://github.com/ircd-hybrid/ircd-hybrid/archive/${HYBRID_VERSION}.tar.gz
+      |tar xzf - &&     cd ircd-hybrid-${HYBRID_VERSION} &&     ./configure --prefix
+      /ircd &&     make &&     make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:latest AS builder
+- BaseName: alpine:latest
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Jeremy.Bouse@UnderGrid.net"'
+    Name: label
+  - Name: workdir
+    Path: /ircd
+  - CmdLine:
+    - adduser -D ircd -s /bin/false ircd &&     apk upgrade --no-cache &&     apk
+      add --no-cache ca-certificates gnutls-utils tini
+    Name: run
+    PrependShell: true
+  - Chown: "1000"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /ircd
+    - /ircd
+  - Name: user
+    User: ircd
+  - Name: expose
+    Ports:
+    - "6667"
+  - CmdLine:
+    - /sbin/tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /ircd/bin/ircd
+    - -foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

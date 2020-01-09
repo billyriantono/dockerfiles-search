@@ -1,0 +1,127 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: node:8
+  Commands:
+  - Key: UNIT_TEST
+    Name: arg
+    Value: "0"
+  - Env:
+    - Key: PORT
+      Value: "3001"
+    Name: env
+  - CmdLine:
+    - mkdir -p /opt/app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - package-lock.json*
+    - ./
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y build-essential
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y python
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install && npm cache clean --force
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /opt/node_modules/.bin:$PATH
+    Name: env
+  - Name: workdir
+    Path: /opt/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /opt/app
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:8 as builder
+- As: tester
+  BaseName: node:8
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Env:
+    - Key: PATH
+      Value: /opt/node_modules/.bin:$PATH
+    Name: env
+  - Name: workdir
+    Path: /opt
+  - CmdLine:
+    - if [ "$UNIT_TEST" = "1" ] ; then npm test ; else echo Not running unit tests
+      ; fi
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8
+  Name: tester
+  Platform: ""
+  SourceCode: FROM node:8 as tester
+- BaseName: node:8-slim
+  Commands:
+  - Key: NODE_ENV
+    Name: arg
+    Value: production
+  - Env:
+    - Key: NODE_ENV
+      Value: $NODE_ENV
+    Name: env
+  - Name: expose
+    Ports:
+    - $PORT
+    - "5858"
+    - "9229"
+  - Name: workdir
+    Path: /opt
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/
+    - .
+  - Name: workdir
+    Path: /opt
+  - CmdLine:
+    - npm uninstall --only=dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/app/dist
+  - CmdLine:
+    - node
+    - app.js
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: node:8-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:8-slim

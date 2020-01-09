@@ -1,0 +1,68 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: alpine:3.7
+  Commands:
+  - Key: WRK_VERSION
+    Name: arg
+    Value: 4.0.2
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps     build-base     perl  && wget -O
+      /tmp/wrk.tar.gz https://github.com/wg/wrk/archive/${WRK_VERSION}.tar.gz  &&
+      tar -xzf /tmp/wrk.tar.gz -C /tmp/  && make -C /tmp/wrk-${WRK_VERSION}  && mv
+      /tmp/wrk-${WRK_VERSION}/wrk /wrk
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: build
+  Platform: ""
+  SourceCode: FROM alpine:3.7 as build
+- As: upx
+  BaseName: gruebel/upx:latest
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /wrk
+    - /wrk.org
+  - CmdLine:
+    - upx --best --lzma -o /wrk /wrk.org
+    Name: run
+    PrependShell: true
+  From:
+    Image: gruebel/upx:latest
+  Name: upx
+  Platform: ""
+  SourceCode: FROM gruebel/upx:latest as upx
+- BaseName: alpine:3.7
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: ${BUILD_DATE}
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - CmdLine:
+    - apk add --no-cache     libgcc
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: upx
+    Name: copy
+    SourcesAndDest:
+    - /wrk
+    - /usr/bin/wrk
+  - CmdLine:
+    - wrk
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

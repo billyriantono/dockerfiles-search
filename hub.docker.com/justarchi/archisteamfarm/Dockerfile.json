@@ -1,0 +1,164 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "build-node",
+      "BaseName": "node:lts",
+      "SourceCode": "FROM node:lts AS build-node",
+      "Platform": "",
+      "As": "build-node",
+      "From": {
+        "Image": "node:lts"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "ASF-ui",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "echo \"node: $(node --version)\" \u0026\u0026     echo \"npm: $(npm --version)\" \u0026\u0026     npm ci \u0026\u0026     npm run-script deploy"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "build-dotnet",
+      "BaseName": "mcr.microsoft.com/dotnet/core/sdk:3.1",
+      "SourceCode": "FROM mcr.microsoft.com/dotnet/core/sdk:3.1 AS build-dotnet",
+      "Platform": "",
+      "As": "build-dotnet",
+      "From": {
+        "Image": "mcr.microsoft.com/dotnet/core/sdk:3.1"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "CONFIGURATION",
+              "Value": "Release"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "NET_CORE_VERSION",
+              "Value": "netcoreapp3.1"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Chown": "",
+          "From": "build-node",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/dist",
+            "ASF-ui/dist"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "ArchiSteamFarm",
+            "ArchiSteamFarm"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "ArchiSteamFarm.Tests",
+            "ArchiSteamFarm.Tests"
+          ]
+        },
+        {
+          "CmdLine": [
+            "dotnet --info \u0026\u0026     if [ -f \"ArchiSteamFarm/Localization/Strings.zh-CN.resx\" ]; then ln -s \"Strings.zh-CN.resx\" \"ArchiSteamFarm/Localization/Strings.zh-Hans.resx\"; fi \u0026\u0026     if [ -f \"ArchiSteamFarm/Localization/Strings.zh-TW.resx\" ]; then ln -s \"Strings.zh-TW.resx\" \"ArchiSteamFarm/Localization/Strings.zh-Hant.resx\"; fi \u0026\u0026     dotnet build ArchiSteamFarm -c \"$CONFIGURATION\" -f \"$NET_CORE_VERSION\" --nologo \u0026\u0026     dotnet test ArchiSteamFarm.Tests -c \"$CONFIGURATION\" -f \"$NET_CORE_VERSION\" --nologo \u0026\u0026     dotnet clean ArchiSteamFarm -c \"$CONFIGURATION\" -f \"$NET_CORE_VERSION\" --nologo \u0026\u0026     dotnet publish ArchiSteamFarm -c \"$CONFIGURATION\" -f \"$NET_CORE_VERSION\" -o 'out' --nologo /p:ASFVariant=docker /p:UseAppHost=false \u0026\u0026     cp \"ArchiSteamFarm/overlay/generic/ArchiSteamFarm.sh\" \"out/ArchiSteamFarm.sh\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "runtime",
+      "BaseName": "mcr.microsoft.com/dotnet/core/aspnet:3.1-buster-slim-arm32v7",
+      "SourceCode": "FROM mcr.microsoft.com/dotnet/core/aspnet:3.1-buster-slim-arm32v7 AS runtime",
+      "Platform": "",
+      "As": "runtime",
+      "From": {
+        "Image": "mcr.microsoft.com/dotnet/core/aspnet:3.1-buster-slim-arm32v7"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "ASPNETCORE_URLS",
+              "Value": ""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"JustArchi \u003cJustArchi@JustArchi.net\u003e\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "1242"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Chown": "",
+          "From": "build-dotnet",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/out",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "./ArchiSteamFarm.sh",
+            "--no-restart",
+            "--process-required",
+            "--system-required"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

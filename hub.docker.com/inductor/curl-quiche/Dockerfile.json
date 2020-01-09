@@ -1,0 +1,365 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "base-fetch",
+      "BaseName": "ubuntu:18.04",
+      "SourceCode": "FROM ubuntu:18.04 as base-fetch",
+      "Platform": "",
+      "As": "base-fetch",
+      "From": {
+        "Image": "ubuntu:18.04"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get install -y git"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "base-build",
+      "BaseName": "ubuntu:18.04",
+      "SourceCode": "FROM ubuntu:18.04 as base-build",
+      "Platform": "",
+      "As": "base-build",
+      "From": {
+        "Image": "ubuntu:18.04"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get install -y build-essential pkg-config"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "fetch-quiche",
+      "BaseName": "base-fetch",
+      "SourceCode": "FROM base-fetch as fetch-quiche",
+      "Platform": "",
+      "As": "fetch-quiche",
+      "From": {
+        "Stage": {
+          "Named": "base-fetch",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/root"
+        },
+        {
+          "CmdLine": [
+            "git clone --recursive --depth 1 https://github.com/cloudflare/quiche"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir quiche/deps/boringssl/build"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "prepare-quiche",
+      "BaseName": "base-build",
+      "SourceCode": "FROM base-build as prepare-quiche",
+      "Platform": "",
+      "As": "prepare-quiche",
+      "From": {
+        "Stage": {
+          "Named": "base-build",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get install -y cmake golang-go"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "fetch-quiche",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/root/quiche",
+            "/root/quiche"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/root/quiche/deps/boringssl/build"
+        },
+        {
+          "CmdLine": [
+            "cmake -DCMAKE_POSITION_INDEPENDENT_CODE=on .."
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "make -j`nproc`"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/root/quiche/deps/boringssl"
+        },
+        {
+          "CmdLine": [
+            "mkdir .openssl/lib -p"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cp build/crypto/libcrypto.a build/ssl/libssl.a .openssl/lib"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "ln -s $PWD/include .openssl"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "build-quiche",
+      "BaseName": "base-build",
+      "SourceCode": "FROM base-build as build-quiche",
+      "Platform": "",
+      "As": "build-quiche",
+      "From": {
+        "Stage": {
+          "Named": "base-build",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/root"
+        },
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get install -y wget ca-certificates \u0026\u0026         wget https://sh.rustup.rs -O install.sh         \u0026\u0026 chmod +x install.sh         \u0026\u0026 ./install.sh -y         \u0026\u0026 rm -rf install.sh \u0026\u0026         apt-get purge -y --auto-remove wget"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "prepare-quiche",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/root/quiche",
+            "/root/quiche"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/root/quiche/"
+        },
+        {
+          "CmdLine": [
+            "QUICHE_BSSL_PATH=$PWD/deps/boringssl         $HOME/.cargo/bin/cargo         build         --release         --features         pkg-config-meta"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "fetch-curl",
+      "BaseName": "base-fetch",
+      "SourceCode": "FROM base-fetch as fetch-curl",
+      "Platform": "",
+      "As": "fetch-curl",
+      "From": {
+        "Stage": {
+          "Named": "base-fetch",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/root"
+        },
+        {
+          "CmdLine": [
+            "git clone --depth 1 https://github.com/curl/curl"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "build-curl",
+      "BaseName": "base-build",
+      "SourceCode": "FROM base-build as build-curl",
+      "Platform": "",
+      "As": "build-curl",
+      "From": {
+        "Stage": {
+          "Named": "base-build",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get install -y autoconf libtool"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "fetch-curl",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/root/curl",
+            "/root/curl"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/root/curl"
+        },
+        {
+          "CmdLine": [
+            "./buildconf"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "build-quiche",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/root/quiche",
+            "/root/quiche"
+          ]
+        },
+        {
+          "CmdLine": [
+            "./configure LDFLAGS=\"-Wl,-rpath,$PWD/../quiche/target/release\"         --with-ssl=$PWD/../quiche/deps/boringssl/.openssl         --with-quiche=$PWD/../quiche/target/release"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "make -j`nproc`"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "make install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "executor",
+      "BaseName": "ubuntu:18.04",
+      "SourceCode": "FROM ubuntu:18.04 as executor",
+      "Platform": "",
+      "As": "executor",
+      "From": {
+        "Image": "ubuntu:18.04"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "build-curl",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/etc/ld.so.conf.d/libc.conf",
+            "/etc/ld.so.conf.d/libcurl.conf"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build-curl",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/lib/libcurl.so.4",
+            "/usr/local/lib/libcurl.so.4"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build-curl",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/etc/ld.so.conf.d/libc.conf",
+            "/etc/ld.so.conf.d/libquiche.conf"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build-curl",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/root/quiche/target/release/libquiche.so",
+            "/usr/local/lib/libquiche.so"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build-curl",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/bin/curl",
+            "/usr/local/bin/curl"
+          ]
+        },
+        {
+          "CmdLine": [
+            "ldconfig"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "bash"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

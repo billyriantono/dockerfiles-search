@@ -1,0 +1,96 @@
+MetaArgs:
+- DefaultValue: alpine:3.9
+  Key: BASE
+  ProvidedValue: null
+  Value: alpine:3.9
+Stages:
+- As: base
+  BaseName: ${BASE}
+  Commands: null
+  From:
+    Image: ${BASE}
+  Name: base
+  Platform: ""
+  SourceCode: FROM ${BASE} as base
+- As: builder
+  BaseName: base
+  Commands:
+  - Key: RCLONE_VERSION
+    Name: arg
+    Value: v1.48.0
+  - Key: ARCH
+    Name: arg
+    Value: amd64
+  - CmdLine:
+    - apk -U add ca-certificates wget tzdata
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - URL=http://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-${ARCH}.zip
+      ;   URL=${URL/\/current/} ;   cd /tmp   && wget -q $URL   && unzip /tmp/rclone-${RCLONE_VERSION}-linux-${ARCH}.zip   &&
+      mv /tmp/rclone-*-linux-${ARCH}/rclone /usr/bin   && rm -r /tmp/rclone*
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base as builder
+- BaseName: base
+  Commands:
+  - CmdLine:
+    - apk -U add ca-certificates && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/rclone
+    - /usr/bin/rclone
+  - Name: volume
+    Volumes:
+    - /config
+  - Name: volume
+    Volumes:
+    - /data
+  - Env:
+    - Key: RCLONE_CFG
+      Value: /config/rclone.conf
+    Name: env
+  - Env:
+    - Key: RCLONE_CMD
+      Value: sync
+    Name: env
+  - Env:
+    - Key: RCLONE_SRC
+      Value: ""
+    Name: env
+  - Env:
+    - Key: RCLONE_DST
+      Value: /data
+    Name: env
+  - Env:
+    - Key: RCLONE_OPT
+      Value: '"--fast-list"'
+    Name: env
+  - Name: workdir
+    Path: /config
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - rclone-runner
+    - /
+  - CmdLine:
+    - /rclone-runner
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

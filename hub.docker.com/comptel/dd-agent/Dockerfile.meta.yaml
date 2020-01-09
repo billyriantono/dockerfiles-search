@@ -1,0 +1,93 @@
+MetaArgs: null
+Stages:
+- BaseName: comptel/docker-alpine-base:v36.1
+  Commands:
+  - Env:
+    - Key: DD_HOME
+      Value: /opt/datadog-agent
+    Name: env
+  - Env:
+    - Key: DD_START_AGENT
+      Value: "0"
+    - Key: DOCKER_DD_AGENT
+      Value: "yes"
+    - Key: PYCURL_SSL_LIBRARY
+      Value: openssl
+    - Key: AGENT_VERSION
+      Value: 5.25.1
+    - Key: DD_ETC_ROOT
+      Value: '"$DD_HOME/agent"'
+    - Key: PATH
+      Value: '"$DD_HOME/venv/bin:$DD_HOME/agent/bin:$PATH"'
+    - Key: PYTHONPATH
+      Value: '"$DD_HOME/agent"'
+    - Key: DD_CONF_LOG_TO_SYSLOG
+      Value: "no"
+    - Key: NON_LOCAL_TRAFFIC
+      Value: "yes"
+    - Key: DD_SUPERVISOR_DELETE_USER
+      Value: "yes"
+    - Key: DCOS_METRICS_PLUGIN_VERSION
+      Value: '"1.11.0-5-gc863f06"'
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://raw.githubusercontent.com/DataDog/dd-agent/$AGENT_VERSION/packaging/datadog-agent/source/setup_agent.sh
+    - /tmp/setup_agent.sh
+  - Name: expose
+    Ports:
+    - 8125/udp
+    - 9001/tcp
+  - CmdLine:
+    - apk add -qU --no-cache coreutils curl curl-dev python-dev tar sysstat libintl
+      openssl   && apk add -qU --no-cache -t .build-deps gcc musl-dev postgresql-dev
+      linux-headers gettext   && cp /usr/bin/envsubst /usr/local/bin/envsubst   &&
+      sh /tmp/setup_agent.sh   && "${DD_HOME}"/venv/bin/pip install       requests_unixsocket       businesstime=="0.3.0"       pytz=="2018.5"   &&
+      apk del -q .build-deps   && cp "$DD_ETC_ROOT/datadog.conf.example" "$DD_ETC_ROOT/datadog.conf"   &&
+      rm "$DD_ETC_ROOT/conf.d/network.yaml.default"   && rm /tmp/setup_agent.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/
+    - /
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://s3.amazonaws.com/datad0g-process-agent/process-agent-amd64-${AGENT_VERSION}
+    - /usr/local/bin/process-agent
+  - CmdLine:
+    - chmod +x pre-cmd.sh dcos-metrics-datadog-plugin@"${DCOS_METRICS_PLUGIN_VERSION}"
+      probe.sh /usr/local/bin/process-agent     && mv pre-cmd.sh /usr/local/bin/pre-cmd.sh     &&
+      mv http_check.py /opt/datadog-agent/venv/lib/python2.7/site-packages/datadog_checks/http_check/http_check.py     &&
+      mv process-agent.conf "$DD_ETC_ROOT/process-agent.conf"     && mv dcos-metrics-datadog-plugin@"${DCOS_METRICS_PLUGIN_VERSION}"
+      /usr/local/bin/dcos-metrics-datadog     && mv dd-metrics.conf "$DD_ETC_ROOT/dd-metrics.conf"     &&
+      mv probe.sh "${DD_HOME}/probe.sh"     && mv config_builder.py "${DD_HOME}/config_builder.py"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /conf.d
+    - /checks.d
+  - Name: workdir
+    Path: '"$DD_HOME"'
+  - Health:
+      Interval: 300000000000
+      Retries: 1
+      Test:
+      - CMD-SHELL
+      - ${DD_HOME}/probe.sh
+      Timeout: 30000000000
+    Name: healthcheck
+  - CmdLine:
+    - pre-cmd.sh supervisord -c agent/supervisor.conf
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: comptel/docker-alpine-base:v36.1
+  Name: ""
+  Platform: ""
+  SourceCode: FROM comptel/docker-alpine-base:v36.1

@@ -1,0 +1,204 @@
+MetaArgs: null
+Stages:
+- BaseName: jordi/openssl-with-dhparams
+  Commands:
+  - Maintainer: Jordi Íñigo Griera
+    Name: maintainer
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y nginx gettext-base curl     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sf /dev/stdout /var/log/nginx/access.log     && ln -sf /dev/stderr /var/log/nginx/error.log
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PASSWORD
+      Value: contrasenya
+    Name: env
+  - Name: workdir
+    Path: /root
+  - CmdLine:
+    - mkdir -p ca/private ca/db crl certs reqs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 700 ca/private
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /dev/null ca/db/ca.db
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /dev/null ca/db/ca.db.attr
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 01 > ca/db/ca.crt.srl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 01 > ca/db/ca.crl.srl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - openssl-ca/ca.conf
+    - config/ca.conf
+  - CmdLine:
+    - openssl req -passout env:PASSWORD -new -config config/ca.conf -out ca/ca.csr
+      -keyout ca/private/ca.key
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl ca -batch -passin env:PASSWORD -selfsign -config config/ca.conf -in
+      ca/ca.csr -out ca/ca.crt -notext -extensions ca_ext
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '#-----CA-certificate----------------------------------------------'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl x509 -in ca/ca.crt -noout -text
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cat ca/ca.crt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '#-----EMPTY-CRL---------------------------------------------------'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl ca -batch -passin env:PASSWORD -config config/ca.conf -gencrl -keyfile
+      ca/private/ca.key -cert ca/ca.crt -out /root/ca/crl.pem
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cat /root/ca/crl.pem
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl crl -inform PEM -in /root/ca/crl.pem -outform DER -out /root/ca/crl.crl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - openssl-nginx/nginx.conf
+    - /config/nginx/sites-available/default
+  - CmdLine:
+    - mkdir -p  server/private
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 700 server/private
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - openssl-nginx/server.conf
+    - config/server.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - openssl-nginx/bash_history
+    - .bash_history
+  - CmdLine:
+    - openssl req -passout env:PASSWORD -new -config config/server.conf -out reqs/server.csr
+      -keyout server/private/server.key
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '#-----SERVER-Certificate------------------------------------------'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cat reqs/server.csr
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '#-----SERVER-PrivateKey-(CLEAR-TEXT)------------------------------'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cat server/private/server.key
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl req -in reqs/server.csr -noout -text
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl ca -batch -passin env:PASSWORD -config config/ca.conf -in reqs/server.csr
+      -out certs/server.crt -extensions server_ext
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p  ee/private
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 700 ee/private
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - openssl-client/browser.conf
+    - config/browser.conf
+  - CmdLine:
+    - openssl req -passout env:PASSWORD -new -config config/browser.conf -out reqs/browser.csr
+      -keyout ee/private/browser.key
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl req -in reqs/browser.csr -noout -text
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '#-----CLIENT-Certificate------------------------------------------'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl ca -batch -passin env:PASSWORD -config config/ca.conf -in reqs/browser.csr
+      -out certs/browser.crt -extensions user_ext
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl pkcs12 -passout env:PASSWORD -passin env:PASSWORD -export -in certs/browser.crt
+      -inkey ee/private/browser.key -out ee/private/browser.p12 -name "User Certificate"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '#-----CLIENT-PrivateKey-(PKCS #12:contrasenya)--------------------'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cat ee/private/browser.key
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "443"
+  - CmdLine:
+    - nginx
+    - -g
+    - daemon off;
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: jordi/openssl-with-dhparams
+  Name: ""
+  Platform: ""
+  SourceCode: FROM jordi/openssl-with-dhparams

@@ -1,0 +1,115 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - Env:
+    - Key: PHPIZE_DEPS
+      Value: "autoconf \t\tfile \t\tg++ \t\tgcc \t\tlibc-dev \t\tmake \t\tpkg-config
+        \t\tre2c"
+    Name: env
+  - CmdLine:
+    - "apt-get update && apt-get install -y \t\t$PHPIZE_DEPS \t\tca-certificates \t\tcurl
+      \t\tlibedit2 \t\tlibsqlite3-0 \t\tlibxml2 \t\txz-utils \t--no-install-recommends
+      && rm -r /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_INI_DIR
+      Value: /usr/local/etc/php
+    Name: env
+  - CmdLine:
+    - mkdir -p $PHP_INI_DIR/conf.d
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_EXTRA_CONFIGURE_ARGS
+      Value: --enable-fpm --with-fpm-user=www-data --with-fpm-group=www-data
+    Name: env
+  - Env:
+    - Key: GPG_KEYS
+      Value: 0BD78B5F97500D450838F95DFE857D9A90D90EC1 6E4F6AB321FDC07F2C332E3AC2BF0BC433CFC8B3
+    Name: env
+  - Env:
+    - Key: PHP_VERSION
+      Value: 5.6.27
+    Name: env
+  - Env:
+    - Key: PHP_URL
+      Value: '"https://secure.php.net/get/php-5.6.27.tar.xz/from/this/mirror"'
+    - Key: PHP_ASC_URL
+      Value: '"https://secure.php.net/get/php-5.6.27.tar.xz.asc/from/this/mirror"'
+    Name: env
+  - Env:
+    - Key: PHP_SHA256
+      Value: '"16eb544498339d1d855292826e2e547ab01a31600141094959073e5e10e93ab5"'
+    - Key: PHP_MD5
+      Value: '"9ce6efc96d5ab81ef808f8ed6b1f242d"'
+    Name: env
+  - CmdLine:
+    - "set -xe; \t\tfetchDeps=' \t\twget \t'; \tapt-get update; \tapt-get install
+      -y --no-install-recommends $fetchDeps; \trm -rf /var/lib/apt/lists/*; \t\tmkdir
+      -p /usr/src; \tcd /usr/src; \t\twget -O php.tar.xz \"$PHP_URL\"; \t\tif [ -n
+      \"$PHP_SHA256\" ]; then \t\techo \"$PHP_SHA256 *php.tar.xz\" | sha256sum -c
+      -; \tfi; \tif [ -n \"$PHP_MD5\" ]; then \t\techo \"$PHP_MD5 *php.tar.xz\" |
+      md5sum -c -; \tfi; \t\tif [ -n \"$PHP_ASC_URL\" ]; then \t\twget -O php.tar.xz.asc
+      \"$PHP_ASC_URL\"; \t\texport GNUPGHOME=\"$(mktemp -d)\"; \t\tfor key in $GPG_KEYS;
+      do \t\t\tgpg --keyserver ha.pool.sks-keyservers.net --recv-keys \"$key\"; \t\tdone;
+      \t\tgpg --batch --verify php.tar.xz.asc php.tar.xz; \t\trm -r \"$GNUPGHOME\";
+      \tfi; \t\tapt-get purge -y --auto-remove $fetchDeps"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-source
+    - /usr/local/bin/
+  - CmdLine:
+    - "set -xe \t&& buildDeps=\" \t\t$PHP_EXTRA_BUILD_DEPS \t\tlibcurl4-openssl-dev
+      \t\tlibedit-dev \t\tlibsqlite3-dev \t\tlibssl-dev \t\tlibxml2-dev \t\" \t&&
+      apt-get update && apt-get install -y $buildDeps --no-install-recommends && rm
+      -rf /var/lib/apt/lists/* \t\t&& docker-php-source extract \t&& cd /usr/src/php
+      \t&& ./configure \t\t--with-config-file-path=\"$PHP_INI_DIR\" \t\t--with-config-file-scan-dir=\"$PHP_INI_DIR/conf.d\"
+      \t\t\t\t--disable-cgi \t\t\t\t--enable-ftp \t\t--enable-mbstring \t\t--enable-mysqlnd
+      \t\t\t\t--with-curl \t\t--with-libedit \t\t--with-openssl \t\t--with-zlib \t\t\t\t$PHP_EXTRA_CONFIGURE_ARGS
+      \t&& make -j \"$(nproc)\" \t&& make install \t&& { find /usr/local/bin /usr/local/sbin
+      -type f -executable -exec strip --strip-all '{}' + || true; } \t&& make clean
+      \t&& docker-php-source delete \t\t&& apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
+      $buildDeps"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-ext-*
+    - /usr/local/bin/
+  - Name: workdir
+    Path: /var/www/html
+  - CmdLine:
+    - "set -ex \t&& cd /usr/local/etc \t&& if [ -d php-fpm.d ]; then \t\tsed 's!=NONE/!=!g'
+      php-fpm.conf.default | tee php-fpm.conf > /dev/null; \t\tcp php-fpm.d/www.conf.default
+      php-fpm.d/www.conf; \telse \t\tmkdir php-fpm.d; \t\tcp php-fpm.conf.default
+      php-fpm.d/www.conf; \t\t{ \t\t\techo '[global]'; \t\t\techo 'include=etc/php-fpm.d/*.conf';
+      \t\t} | tee php-fpm.conf; \tfi \t&& { \t\techo '[global]'; \t\techo 'error_log
+      = /proc/self/fd/2'; \t\techo; \t\techo '[www]'; \t\techo '; if we send this
+      to /proc/self/fd/1, it never appears'; \t\techo 'access.log = /proc/self/fd/2';
+      \t\techo; \t\techo 'clear_env = no'; \t\techo; \t\techo '; Ensure worker stdout
+      and stderr are sent to the main error log.'; \t\techo 'catch_workers_output
+      = yes'; \t} | tee php-fpm.d/docker.conf \t&& { \t\techo '[global]'; \t\techo
+      'daemonize = no'; \t\techo; \t\techo '[www]'; \t\techo 'listen = [::]:9000';
+      \t} | tee php-fpm.d/zz-docker.conf"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - php-fpm
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

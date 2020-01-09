@@ -1,0 +1,152 @@
+MetaArgs: null
+Stages:
+- As: client-builder
+  BaseName: node:latest
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install apt-transport-https -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - &&     echo
+      "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list
+      &&     apt-get update &&     apt-get install --no-install-recommends yarn -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn global add webpack webpack-cli
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./client
+    - .
+  - CmdLine:
+    - yarn install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - webpack-cli --config webpack.config.js
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:latest
+  Name: client-builder
+  Platform: ""
+  SourceCode: FROM node:latest as client-builder
+- As: server-builder
+  BaseName: maven:3.5-jdk-8
+  Commands:
+  - CmdLine:
+    - mkdir -p /usr/src/app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/app
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./server
+    - /usr/src/app
+  - CmdLine:
+    - mvn dependency:resolve
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn package
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.5-jdk-8
+  Name: server-builder
+  Platform: ""
+  SourceCode: FROM maven:3.5-jdk-8 as server-builder
+- BaseName: openjdk:10-jre-slim
+  Commands:
+  - Labels:
+    - Key: web
+      Value: '"https://github.com/reimashi/web-3d-viewer"'
+    Name: label
+  - Labels:
+    - Key: maintainer
+      Value: '"Aitor González Fernández <info@aitorgf.com>"'
+    Name: label
+  - Env:
+    - Key: WEB_PORT
+      Value: "4080"
+    Name: env
+  - Env:
+    - Key: WEB_USER
+      Value: admin
+    Name: env
+  - Env:
+    - Key: WEB_PASS
+      Value: admin
+    Name: env
+  - Env:
+    - Key: WEB_AUTH_ENABLE
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: STATIC_PATH
+      Value: /client
+    Name: env
+  - Env:
+    - Key: DATABASE_PATH
+      Value: /database
+    Name: env
+  - Name: expose
+    Ports:
+    - ${WEB_PORT}/tcp
+  - CmdLine:
+    - mkdir -p ${DATABASE_PATH}
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - ${DATABASE_PATH}
+  - Name: workdir
+    Path: ${STATIC_PATH}
+  - Chown: ""
+    From: client-builder
+    Name: copy
+    SourcesAndDest:
+    - /app/dist
+    - .
+  - CmdLine:
+    - mkdir -p ${STATIC_PATH}/models
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - ${STATIC_PATH}/models
+  - Name: workdir
+    Path: /server
+  - Chown: ""
+    From: server-builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/target/server.jar
+    - .
+  - CmdLine:
+    - java
+    - -jar
+    - server.jar
+    Name: entrypoint
+    PrependShell: false
+  - Health:
+      Interval: 300000000000
+      Test:
+      - CMD-SHELL
+      - curl -f http://localhost:${WEB_PORT} || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  From:
+    Image: openjdk:10-jre-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:10-jre-slim

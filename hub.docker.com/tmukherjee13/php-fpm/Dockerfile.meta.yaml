@@ -1,0 +1,108 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - Env:
+    - Key: PHPIZE_DEPS
+      Value: "autoconf \t\tfile \t\tg++ \t\tgcc \t\tlibc-dev \t\tmake \t\tpkg-config
+        \t\tre2c"
+    Name: env
+  - CmdLine:
+    - "apt-get update && apt-get install -y \t\t$PHPIZE_DEPS \t\tca-certificates \t\tcurl
+      \t\tlibedit2 \t\tlibsqlite3-0 \t\tlibxml2 \t--no-install-recommends && rm -r
+      /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_INI_DIR
+      Value: /usr/local/etc/php
+    Name: env
+  - CmdLine:
+    - mkdir -p $PHP_INI_DIR/conf.d
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_EXTRA_CONFIGURE_ARGS
+      Value: --enable-fpm --with-fpm-user=www-data --with-fpm-group=www-data
+    Name: env
+  - Env:
+    - Key: GPG_KEYS
+      Value: 1A4E8B7277C42E53DBA9C7B9BCAA30EA9C0D5763
+    Name: env
+  - Env:
+    - Key: PHP_VERSION
+      Value: 7.0.7
+    Name: env
+  - Env:
+    - Key: PHP_FILENAME
+      Value: php-7.0.7.tar.xz
+    Name: env
+  - Env:
+    - Key: PHP_SHA256
+      Value: 9cc64a7459242c79c10e79d74feaf5bae3541f604966ceb600c3d2e8f5fe4794
+    Name: env
+  - CmdLine:
+    - "set -xe \t&& buildDeps=\" \t\t$PHP_EXTRA_BUILD_DEPS \t\tlibcurl4-openssl-dev
+      \t\tlibedit-dev \t\tlibsqlite3-dev \t\tlibssl-dev \t\tlibxml2-dev \t\txz-utils
+      \t\" \t&& apt-get update && apt-get install -y $buildDeps --no-install-recommends
+      && rm -rf /var/lib/apt/lists/* \t&& curl -fSL \"http://php.net/get/$PHP_FILENAME/from/this/mirror\"
+      -o \"$PHP_FILENAME\" \t&& echo \"$PHP_SHA256 *$PHP_FILENAME\" | sha256sum -c
+      - \t&& curl -fSL \"http://php.net/get/$PHP_FILENAME.asc/from/this/mirror\" -o
+      \"$PHP_FILENAME.asc\" \t&& export GNUPGHOME=\"$(mktemp -d)\" \t&& for key in
+      $GPG_KEYS; do \t\tgpg --keyserver ha.pool.sks-keyservers.net --recv-keys \"$key\";
+      \tdone \t&& gpg --batch --verify \"$PHP_FILENAME.asc\" \"$PHP_FILENAME\" \t&&
+      rm -r \"$GNUPGHOME\" \"$PHP_FILENAME.asc\" \t&& mkdir -p /usr/src/php \t&& tar
+      -xf \"$PHP_FILENAME\" -C /usr/src/php --strip-components=1 \t&& rm \"$PHP_FILENAME\"
+      \t&& cd /usr/src/php \t&& ./configure \t\t--with-config-file-path=\"$PHP_INI_DIR\"
+      \t\t--with-config-file-scan-dir=\"$PHP_INI_DIR/conf.d\" \t\t$PHP_EXTRA_CONFIGURE_ARGS
+      \t\t--disable-cgi \t\t--enable-mysqlnd \t\t--enable-mbstring \t\t--with-curl
+      \t\t--with-libedit \t\t--with-openssl \t\t--with-zlib \t&& make -j\"$(nproc)\"
+      \t&& make install \t&& { find /usr/local/bin /usr/local/sbin -type f -executable
+      -exec strip --strip-all '{}' + || true; } \t&& make clean \t&& apt-get purge
+      -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false -o APT::AutoRemove::SuggestsImportant=false
+      $buildDeps"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-ext-*
+    - /usr/local/bin/
+  - Name: workdir
+    Path: /var/www/html
+  - CmdLine:
+    - "set -ex \t&& cd /usr/local/etc \t&& if [ -d php-fpm.d ]; then \t\tsed 's!=NONE/!=!g'
+      php-fpm.conf.default | tee php-fpm.conf > /dev/null; \t\tcp php-fpm.d/www.conf.default
+      php-fpm.d/www.conf; \telse \t\tmkdir php-fpm.d; \t\tcp php-fpm.conf.default
+      php-fpm.d/www.conf; \t\t{ \t\t\techo '[global]'; \t\t\techo 'include=etc/php-fpm.d/*.conf';
+      \t\t} | tee php-fpm.conf; \tfi \t&& { \t\techo '[global]'; \t\techo 'error_log
+      = /proc/self/fd/2'; \t\techo; \t\techo '[www]'; \t\techo '; if we send this
+      to /proc/self/fd/1, it never appears'; \t\techo 'access.log = /proc/self/fd/2';
+      \t\techo; \t\techo 'clear_env = no'; \t\techo; \t\techo '; Ensure worker stdout
+      and stderr are sent to the main error log.'; \t\techo 'catch_workers_output
+      = yes'; \t} | tee php-fpm.d/docker.conf \t&& { \t\techo '[global]'; \t\techo
+      'daemonize = no'; \t\techo; \t\techo '[www]'; \t\techo 'listen = [::]:9000';
+      \t} | tee php-fpm.d/zz-docker.conf"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /usr/local/bin/docker-php-ext-*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-ext-install mysqli pdo_mysql
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - php-fpm
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

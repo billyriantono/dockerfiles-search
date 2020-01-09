@@ -1,0 +1,151 @@
+MetaArgs: null
+Stages:
+- As: npm-dependencies
+  BaseName: node:alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./react/package.json
+    - /app/react/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./react/package-lock.json
+    - /app/react/
+  - CmdLine:
+    - set -x     && cd /app/react     && npm install
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:alpine
+  Name: npm-dependencies
+  Platform: ""
+  SourceCode: FROM node:alpine as npm-dependencies
+- As: frontend
+  BaseName: node:alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - /app
+  - Chown: ""
+    From: npm-dependencies
+    Name: copy
+    SourcesAndDest:
+    - /app/react/node_modules/
+    - /app/react/node_modules/
+  - CmdLine:
+    - set -x     && cd /app/react/     && npm run build     && cp /app/react/build/index.html
+      /app/app/views/react.html     && rm -rf /app/public/js     && mkdir -p /app/public/js     &&
+      cp /app/react/build/static/js/* /app/public/js
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -x     && mkdir -p /app/public/dist/ \t&& cp -r /app/react/node_modules/bootstrap/dist/
+      /app/public/dist/bootstrap \t&& cp -r /app/react/node_modules/popper.js/dist/umd/
+      /app/public/dist/popper.js"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /app/react
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:alpine
+  Name: frontend
+  Platform: ""
+  SourceCode: FROM node:alpine as frontend
+- As: backend
+  BaseName: golang:1.12
+  Commands:
+  - Name: workdir
+    Path: /go/src/k8s-devops-console
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - /go/src/k8s-devops-console
+  - CmdLine:
+    - curl https://glide.sh/get | sh && glide install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/revel/cmd/revel
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -u github.com/golang/dep/cmd/dep
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: frontend
+    Name: copy
+    SourcesAndDest:
+    - /app/app/views/react.html
+    - /go/src/k8s-devops-console/app/views/react.html
+  - Chown: ""
+    From: frontend
+    Name: copy
+    SourcesAndDest:
+    - /app/public/js
+    - /go/src/k8s-devops-console/public/js
+  - Chown: ""
+    From: frontend
+    Name: copy
+    SourcesAndDest:
+    - /app/public/dist
+    - /go/src/k8s-devops-console/public/dist
+  - CmdLine:
+    - set -x     && CGO_ENABLED=0 GOOS=linux revel build k8s-devops-console /app prod     &&
+      rm -rf /app/src/k8s-devops-console/tests
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12
+  Name: backend
+  Platform: ""
+  SourceCode: FROM golang:1.12 as backend
+- BaseName: gcr.io/distroless/static
+  Commands:
+  - Env:
+    - Key: CONF_PATH
+      Value: /app/src/k8s-devops-console/conf/app.conf
+    Name: env
+  - Env:
+    - Key: APP_SECRET
+      Value: please-change
+    Name: env
+  - Chown: ""
+    From: backend
+    Name: copy
+    SourcesAndDest:
+    - /app/
+    - /app/
+  - Name: user
+    User: "65534"
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - /app/k8s-devops-console
+    - -importPath
+    - k8s-devops-console
+    - -srcPath
+    - /app/src
+    - -runMode
+    - prod
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: gcr.io/distroless/static
+  Name: ""
+  Platform: ""
+  SourceCode: FROM gcr.io/distroless/static

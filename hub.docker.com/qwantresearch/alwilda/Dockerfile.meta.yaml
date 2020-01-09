@@ -1,0 +1,71 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: python:3.5.4-slim
+  Commands:
+  - CmdLine:
+    - apt-get update     && apt-get -y install curl autoconf automake libtool pkg-config
+      g++ git make     && git clone https://github.com/openvenues/libpostal     &&
+      cd libpostal     && ./bootstrap.sh     && ./configure  --datadir=/opt/libpostal_data     &&
+      make     && make install DESTDIR=/tmp/libpostal
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.5.4-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM python:3.5.4-slim as builder
+- BaseName: python:3.5.4-slim
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/libpostal
+    - /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/libpostal_data
+    - /opt/libpostal_data
+  - CmdLine:
+    - apt-get update     && apt-get -y install curl autoconf automake libtool pkg-config
+      g++ git make     && git clone https://github.com/facebookresearch/fastText.git
+      /opt/fasttext     && cd /opt/fasttext     && make     && pip install pipenv
+      gunicorn==19.7.1 meinheld==0.6.1
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - app.py
+    - Pipfile*
+    - /app/
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - pipenv install --system --deploy
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - api
+    - /app/api
+  - Name: expose
+    Ports:
+    - "5000"
+  - Env:
+    - Key: NB_WORKER
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - gunicorn app:app --workers=${NB_WORKER} --bind=0.0.0.0:5000 --pid=pid --worker-class=meinheld.gmeinheld.MeinheldWorker
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: python:3.5.4-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.5.4-slim

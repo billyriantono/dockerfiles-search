@@ -1,0 +1,158 @@
+MetaArgs: null
+Stages:
+- As: gobuild-base
+  BaseName: golang:1.11-alpine
+  Commands:
+  - CmdLine:
+    - "apk add --no-cache \tbash \tbuild-base \tgcc \tgit \tlibseccomp-dev \tlinux-headers
+      \tmake"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-alpine
+  Name: gobuild-base
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine AS gobuild-base
+- As: img
+  BaseName: gobuild-base
+  Commands:
+  - Name: workdir
+    Path: /go/src/github.com/genuinetools/img
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - go get -u github.com/jteeuwen/go-bindata/go-bindata
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make static && mv img /usr/bin/img
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: gobuild-base
+  Name: img
+  Platform: ""
+  SourceCode: FROM gobuild-base AS img
+- As: idmap
+  BaseName: alpine:3.8
+  Commands:
+  - CmdLine:
+    - apk add --no-cache autoconf automake build-base byacc gettext gettext-dev gcc
+      git libcap-dev libtool libxslt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/shadow-maint/shadow.git /shadow
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /shadow
+  - CmdLine:
+    - git checkout 59c2dabb264ef7b3137f5edb52c0b31d5af0cf76
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./autogen.sh --disable-nls --disable-man --without-audit --without-selinux --without-acl
+      --without-attr --without-tcb --without-nscd   && make   && cp src/newuidmap
+      src/newgidmap /usr/bin
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.8
+  Name: idmap
+  Platform: ""
+  SourceCode: FROM alpine:3.8 AS idmap
+- As: base
+  BaseName: alpine:3.8
+  Commands:
+  - Maintainer: Jessica Frazelle <jess@linux.com>
+    Name: maintainer
+  - CmdLine:
+    - apk add --no-cache git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: img
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/img
+    - /usr/bin/img
+  - Chown: ""
+    From: idmap
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/newuidmap
+    - /usr/bin/newuidmap
+  - Chown: ""
+    From: idmap
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/newgidmap
+    - /usr/bin/newgidmap
+  - CmdLine:
+    - chmod u+s /usr/bin/newuidmap /usr/bin/newgidmap   && adduser -D -u 1000 user   &&
+      mkdir -p /run/user/1000   && chown -R user /run/user/1000 /home/user   && echo
+      user:100000:65536 | tee /etc/subuid | tee /etc/subgid
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - passwd -l root || true
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.8
+  Name: base
+  Platform: ""
+  SourceCode: FROM alpine:3.8 AS base
+- As: debug
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apk add --no-cache bash strace
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 3
+      Named: base
+  Name: debug
+  Platform: ""
+  SourceCode: FROM base AS debug
+- As: release
+  BaseName: base
+  Commands:
+  - Name: user
+    User: user
+  - Env:
+    - Key: USER
+      Value: user
+    Name: env
+  - Env:
+    - Key: HOME
+      Value: /home/user
+    Name: env
+  - Env:
+    - Key: XDG_RUNTIME_DIR
+      Value: /run/user/1000
+    Name: env
+  - CmdLine:
+    - img
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 3
+      Named: base
+  Name: release
+  Platform: ""
+  SourceCode: FROM base AS release

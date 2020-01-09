@@ -1,0 +1,156 @@
+MetaArgs:
+- DefaultValue: nvidia/cuda:10.0-devel-ubuntu16.04
+  Key: BASE_CONTAINER
+  ProvidedValue: null
+  Value: nvidia/cuda:10.0-devel-ubuntu16.04
+Stages:
+- BaseName: $BASE_CONTAINER
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Jupyter Project <jupyter@googlegroups.com>"'
+    Name: label
+  - Key: NB_USER
+    Name: arg
+    Value: '"jovyan"'
+  - Key: NB_UID
+    Name: arg
+    Value: '"1000"'
+  - Key: NB_GID
+    Name: arg
+    Value: '"100"'
+  - Name: user
+    User: root
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get -yq dist-upgrade  && apt-get install -yq --no-install-recommends     wget     bzip2     ca-certificates     sudo     locales     fonts-liberation  &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "en_US.UTF-8 UTF-8" > /etc/locale.gen &&     locale-gen
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CONDA_DIR
+      Value: /opt/conda
+    - Key: SHELL
+      Value: /bin/bash
+    - Key: NB_USER
+      Value: $NB_USER
+    - Key: NB_UID
+      Value: $NB_UID
+    - Key: NB_GID
+      Value: $NB_GID
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    - Key: LANG
+      Value: en_US.UTF-8
+    - Key: LANGUAGE
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $CONDA_DIR/bin:$PATH
+    - Key: HOME
+      Value: /home/$NB_USER
+    Name: env
+  - CmdLine:
+    - sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd wheel -g 11 &&     echo "auth required pam_wheel.so use_uid" >> /etc/pam.d/su
+      &&     useradd -m -s /bin/bash -N -u $NB_UID $NB_USER &&     mkdir -p $CONDA_DIR
+      &&     chown $NB_USER:$NB_GID $CONDA_DIR &&     chmod g+w /etc/passwd
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $NB_UID
+  - CmdLine:
+    - mkdir /home/$NB_USER/work
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MINICONDA_VERSION
+      Value: 4.5.12
+    - Key: CONDA_VERSION
+      Value: 4.6.7
+    Name: env
+  - CmdLine:
+    - cd /tmp &&     wget --quiet https://repo.continuum.io/miniconda/Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh
+      &&     echo "866ae9dff53ad0874e1d1a60b1ad1ef8 *Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh"
+      | md5sum -c - &&     /bin/bash Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh
+      -f -b -p $CONDA_DIR &&     rm Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh
+      &&     $CONDA_DIR/bin/conda config --system --prepend channels conda-forge &&     $CONDA_DIR/bin/conda
+      config --system --set auto_update_conda false &&     $CONDA_DIR/bin/conda config
+      --system --set show_channel_urls true &&     $CONDA_DIR/bin/conda install --quiet
+      --yes conda="${CONDA_VERSION%.*}.*" &&     $CONDA_DIR/bin/conda update --all
+      --quiet --yes &&     conda clean -tipsy &&     rm -rf /home/$NB_USER/.cache/yarn
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - conda install --quiet --yes 'tini=0.18.0' &&     conda list tini | grep tini
+      | tr -s ' ' | cut -d ' ' -f 1,2 >> $CONDA_DIR/conda-meta/pinned &&     conda
+      clean -tipsy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - conda install --quiet --yes     'notebook=5.7.5'     'jupyterhub=0.9.4'     'jupyterlab=0.35.4'
+      &&     conda clean -tipsy &&     jupyter labextension install @jupyterlab/hub-extension@^0.12.0
+      &&     npm cache clean --force &&     jupyter notebook --generate-config &&     rm
+      -rf $CONDA_DIR/share/jupyter/lab/staging &&     rm -rf /home/$NB_USER/.cache/yarn
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - Name: expose
+    Ports:
+    - "8888"
+  - Name: workdir
+    Path: $HOME
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start-notebook.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start-singleuser.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - jupyter_notebook_config.py
+    - /etc/jupyter/
+  - Name: user
+    User: $NB_UID
+  - CmdLine:
+    - tini
+    - -g
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - bash
+    - start-notebook.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: $BASE_CONTAINER
+  Name: ""
+  Platform: ""
+  SourceCode: FROM $BASE_CONTAINER

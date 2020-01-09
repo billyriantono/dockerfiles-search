@@ -1,0 +1,153 @@
+MetaArgs: null
+Stages:
+- BaseName: jupyterhub/jupyterhub
+  Commands:
+  - Maintainer: Timothy Hnat twhnat@memphis.edu
+    Name: maintainer
+  - CmdLine:
+    - apt-get -yqq update &&     apt-get install -yqq openjdk-8-jre python3-setuptools
+      libyaml-dev libev-dev liblapack-dev libsnappy-dev gcc g++ &&     apt-get clean
+      &&     rm -rf /var/lib/apt/lists/* &&     rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: APACHE_SPARK_VERSION
+      Value: 2.4.4
+    Name: env
+  - Env:
+    - Key: HADOOP_VERSION
+      Value: "2.7"
+    Name: env
+  - CmdLine:
+    - easy_install pip==9.0.3
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip3 install wheel minio==2.2.4 pytz==2017.2 PyYAML==3.12 pyarrow==0.8.0 kafka
+      influxdb==5.0.0 pympler scipy numpy py4j
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp &&         wget -q http://apache.cs.utah.edu/spark/spark-${APACHE_SPARK_VERSION}/spark-${APACHE_SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz
+      &&         tar xzf spark-${APACHE_SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz
+      -C /usr/local &&         rm spark-${APACHE_SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /usr/local && ln -s spark-${APACHE_SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}
+      spark
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SPARK_HOME
+      Value: /usr/local/spark
+    Name: env
+  - Env:
+    - Key: PYTHONPATH
+      Value: $SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-0.10.4-src.zip
+    Name: env
+  - Env:
+    - Key: SPARK_OPTS
+      Value: --driver-java-options=-Xms1024M --driver-java-options=-Xmx4096M --driver-java-options=-Dlog4j.logLevel=info
+    Name: env
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/java-8-openjdk-amd64
+    Name: env
+  - Env:
+    - Key: PYSPARK_PYTHON
+      Value: /opt/conda/bin/python3
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $JAVA_HOME/bin:$SPARK_HOME/bin:$SPARK_HOME/sbin:$PATH
+    Name: env
+  - Env:
+    - Key: HADOOP_HOME
+      Value: /opt/hadoop
+    Name: env
+  - CmdLine:
+    - wget http://apache.mirrors.tds.net/hadoop/common/hadoop-3.1.3/hadoop-3.1.3.tar.gz
+      &&     tar -xzf hadoop-3.1.3.tar.gz &&     mv hadoop-3.1.3 $HADOOP_HOME &&   echo
+      "export JAVA_HOME=$JAVA_HOME" >> $HADOOP_HOME/etc/hadoop/hadoop-env.sh &&   echo
+      "PATH=$PATH:$HADOOP_HOME/bin" >> ~/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install cerebralcortex-kernel==3.1.0.post4
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install --upgrade jupyterhub
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install jupyter jupyterlab     && jupyter nbextension enable --py widgetsnbextension     &&
+      jupyter serverextension enable --py jupyterlab
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /opt/conda/share/jupyter/kernels/pyspark
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pyspark/kernel.json
+    - /opt/conda/share/jupyter/kernels/pyspark/
+  - CmdLine:
+    - useradd -m md2k && echo "md2k:md2k" | chpasswd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip3 install matplotlib sklearn python-snappy ipywidgets gmaps plotly seaborn
+      ipyleaflet qgrid
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - jupyter labextension install nbdime-jupyterlab --no-build &&     jupyter labextension
+      install @jupyterlab/toc --no-build &&     jupyter labextension install @jupyter-widgets/jupyterlab-manager
+      --no-build &&     jupyter labextension install jupyterlab_bokeh --no-build &&     jupyter
+      labextension install bqplot --no-build &&     jupyter labextension install @jupyterlab/vega3-extension
+      --no-build &&     jupyter labextension install @jupyterlab/git --no-build &&     jupyter
+      labextension install @jupyterlab/hub-extension --no-build &&     jupyter labextension
+      install jupyterlab_tensorboard --no-build &&     jupyter labextension install
+      jupyterlab-kernelspy --no-build &&     jupyter labextension install @jupyterlab/plotly-extension
+      --no-build &&     jupyter labextension install @jupyterlab/latex --no-build
+      &&     jupyter labextension install jupyter-matplotlib --no-build &&     jupyter
+      labextension install jupyterlab-drawio --no-build &&     jupyter labextension
+      install jupyter-leaflet --no-build &&     jupyter labextension install qgrid
+      --no-build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - jupyter lab build &&     jupyter lab clean &&     jlpm cache clean &&     npm
+      cache clean --force &&     rm -rf $HOME/.node-gyp &&     rm -rf $HOME/.local
+    Name: run
+    PrependShell: true
+  - Health:
+      Interval: 60000000000
+      StartPeriod: 30000000000
+      Test:
+      - CMD-SHELL
+      - wget --quiet --tries=1 http://localhost:8000/jupyterhub/ || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - mkdir /data
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 777 /data
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /srv/jupyterhub/conf
+    - /data
+  From:
+    Image: jupyterhub/jupyterhub
+  Name: ""
+  Platform: ""
+  SourceCode: FROM jupyterhub/jupyterhub

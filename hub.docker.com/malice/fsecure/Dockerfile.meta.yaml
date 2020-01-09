@@ -1,0 +1,114 @@
+MetaArgs: null
+Stages:
+- As: go_builder
+  BaseName: golang:1.11
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/malice-plugins/fsecure
+  - Name: workdir
+    Path: /go/src/github.com/malice-plugins/fsecure
+  - CmdLine:
+    - go get -u github.com/golang/dep/cmd/dep && dep ensure
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -ldflags "-s -w -X main.Version=v$(cat VERSION) -X main.BuildTime=$(date
+      -u +%Y%m%d)" -o /bin/avscan
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11
+  Name: go_builder
+  Platform: ""
+  SourceCode: FROM golang:1.11 as go_builder
+- BaseName: ubuntu:bionic
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"https://github.com/blacktop"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.repository
+      Value: = "https://github.com/malice-plugins/fsecure.git"
+    Name: label
+  - Labels:
+    - Key: malice.plugin.category
+      Value: '"av"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.mime
+      Value: '"*"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.docker.engine
+      Value: '"*"'
+    Name: label
+  - CmdLine:
+    - groupadd -r malice   && useradd --no-log-init -r -g malice malice   && mkdir
+      /malware   && chown -R malice:malice /malware
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: FSECURE_VERSION
+      Value: 11.10.68
+    Name: env
+  - CmdLine:
+    - buildDeps='wget rpm ca-certificates'   && apt-get update -qq   && apt-get install
+      -yq $buildDeps lib32stdc++6 psmisc   && echo "===> Install F-Secure..."   &&
+      cd /tmp   && wget -q https://download.f-secure.com/corpro/ls/trial/fsls-${FSECURE_VERSION}-rtm.tar.gz   &&
+      tar zxvf fsls-${FSECURE_VERSION}-rtm.tar.gz   && cd fsls-${FSECURE_VERSION}-rtm   &&
+      chmod a+x fsls-${FSECURE_VERSION}   && ./fsls-${FSECURE_VERSION} --auto standalone
+      lang=en --command-line-only   && fsav --version   && echo "===> Update F-Secure..."   &&
+      cd /tmp   && wget -q http://download.f-secure.com/latest/fsdbupdate9.run   &&
+      mv fsdbupdate9.run /opt/f-secure/   && echo "===> Clean up unnecessary files..."   &&
+      apt-get purge -y --auto-remove $buildDeps && apt-get clean   && rm -rf /var/lib/apt/lists/*
+      /tmp/* /var/tmp/* /root/.gnupg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update -qq && apt-get install -yq --no-install-recommends ca-certificates   &&
+      rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "===> Update F-Secure Database..."   && mkdir -p /opt/malice   && /etc/init.d/fsaua
+      start   && /etc/init.d/fsupdate start   && /opt/f-secure/fsav/bin/dbupdate /opt/f-secure/fsdbupdate9.run;
+      exit 0
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - http://www.eicar.org/download/eicar.com.txt
+    - /malware/EICAR
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - update.sh
+    - /opt/malice/update
+  - Chown: ""
+    From: go_builder
+    Name: copy
+    SourcesAndDest:
+    - /bin/avscan
+    - /bin/avscan
+  - Name: workdir
+    Path: /malware
+  - CmdLine:
+    - /bin/avscan
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:bionic
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic

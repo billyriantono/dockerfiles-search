@@ -1,0 +1,183 @@
+MetaArgs:
+- DefaultValue: "8"
+  Key: NODE_VERSION
+  ProvidedValue: null
+  Value: "8"
+Stages:
+- As: node
+  BaseName: node:$NODE_VERSION
+  Commands: null
+  From:
+    Image: node:$NODE_VERSION
+  Name: node
+  Platform: ""
+  SourceCode: FROM node:$NODE_VERSION  AS node
+- As: nginx
+  BaseName: nginx:stable-alpine
+  Commands: null
+  From:
+    Image: nginx:stable-alpine
+  Name: nginx
+  Platform: ""
+  SourceCode: FROM nginx:stable-alpine AS nginx
+- As: builder
+  BaseName: node
+  Commands:
+  - CmdLine:
+    - apt-get -qq update       && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends
+      -y       pigz       && apt-get clean       && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /workdir
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /workdir
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - yarn.lock
+    - ./
+  - CmdLine:
+    - yarn install --no-cache --frozen-lockfile
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./static/
+    - ./static/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/
+    - ./src/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./comments/
+    - ./comments/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./posts/
+    - ./posts/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./pi/
+    - ./pi/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./package.json
+    - ./yarn.lock
+    - ./gatsby*
+    - ./.eslint*
+    - ./.flow*
+    - ./.mdl*
+    - ./.prettier*
+    - ./
+  From:
+    Stage:
+      Index: 0
+      Named: node
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node AS builder
+- As: lint
+  BaseName: builder
+  Commands:
+  - CmdLine:
+    - yarn run lint
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 2
+      Named: builder
+  Name: lint
+  Platform: ""
+  SourceCode: FROM builder AS lint
+- As: build
+  BaseName: lint
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - Key: SITE_COMMIT
+    Name: arg
+    Value: '"no commit"'
+  - Key: SITE_VERSION
+    Name: arg
+    Value: '"master"'
+  - CmdLine:
+    - yarn run build
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 3
+      Named: lint
+  Name: build
+  Platform: ""
+  SourceCode: FROM lint AS build
+- As: compress
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - find public -type f       \(       -name '*.css' -o       -name '*.html' -o       -name
+      '*.js' -o       -name '*.json' -o       -name '*.map' -o       -name '*.svg'
+      -o       -name '*.txt' -o       -name '*.xml'       \) -print0 | xargs -0 pigz
+      -11 --keep
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 4
+      Named: build
+  Name: compress
+  Platform: ""
+  SourceCode: FROM build AS compress
+- As: final
+  BaseName: nginx
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Christian Höltje <https://docwhat.org>"'
+    - Key: org.label-schema.name
+      Value: '"Website for docwhat.org"'
+    - Key: org.label-schema.url
+      Value: '"https://docwhat.org/"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - Chown: ""
+    From: compress
+    Name: copy
+    SourcesAndDest:
+    - /workdir/public/
+    - /html
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx.conf
+    - /etc/nginx/nginx.conf
+  From:
+    Stage:
+      Index: 1
+      Named: nginx
+  Name: final
+  Platform: ""
+  SourceCode: FROM nginx AS final

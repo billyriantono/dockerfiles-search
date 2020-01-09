@@ -1,0 +1,149 @@
+MetaArgs: null
+Stages:
+- BaseName: multiarch/debian-debootstrap:armhf-stretch
+  Commands:
+  - Env:
+    - Key: JAVA_URL
+      Value: '"https://www.azul.com/downloads/zulu/zdk-8-ga-linux_aarch32hf.tar.gz"'
+    - Key: OPENHAB_URL
+      Value: '"https://bintray.com/openhab/mvn/download_file?file_path=org%2Fopenhab%2Fdistro%2Fopenhab%2F2.2.0%2Fopenhab-2.2.0.zip"'
+    - Key: OPENHAB_VERSION
+      Value: '"2.2.0"'
+    Name: env
+  - Env:
+    - Key: APPDIR
+      Value: '"/openhab"'
+    - Key: EXTRA_JAVA_OPTS
+      Value: '""'
+    - Key: OPENHAB_HTTP_PORT
+      Value: '"8080"'
+    - Key: OPENHAB_HTTPS_PORT
+      Value: '"8443"'
+    - Key: LC_ALL
+      Value: '"en_US.UTF-8"'
+    - Key: LANG
+      Value: '"en_US.UTF-8"'
+    - Key: LANGUAGE
+      Value: '"en_US.UTF-8"'
+    - Key: CRYPTO_POLICY
+      Value: '"limited"'
+    Name: env
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.docker.dockerfile
+      Value: '"/Dockerfile"'
+    - Key: org.label-schema.license
+      Value: '"EPL"'
+    - Key: org.label-schema.name
+      Value: '"openHAB"'
+    - Key: org.label-schema.vendor
+      Value: '"openHAB Foundation e.V."'
+    - Key: org.label-schema.version
+      Value: $VERSION
+    - Key: org.label-schema.description
+      Value: '"An open source, technology agnostic home automation platform"'
+    - Key: org.label-schema.url
+      Value: '"http://www.openhab.com/"'
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.vcs-type
+      Value: '"Git"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/openhab/openhab-docker.git"'
+    - Key: maintainer
+      Value: '"openHAB <info@openhabfoundation.org>"'
+    Name: label
+  - CmdLine:
+    - apt-get update &&     DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends
+      -y     ca-certificates     dirmngr     fontconfig     gnupg     libpcap-dev     locales     locales-all     netbase     unzip     wget     zip
+      &&     ln -s -f /bin/true /usr/bin/chfn
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_HOME
+      Value: '''/usr/lib/java-8'''
+    Name: env
+  - CmdLine:
+    - wget -nv -O /tmp/java.tar.gz ${JAVA_URL} &&     mkdir ${JAVA_HOME} &&     tar
+      --exclude='demo' --exclude='sample' --exclude='src.zip' -xvf /tmp/java.tar.gz
+      --strip-components=1 -C ${JAVA_HOME} &&     rm /tmp/java.tar.gz &&     update-alternatives
+      --install /usr/bin/java java ${JAVA_HOME}/bin/java 50 &&     update-alternatives
+      --install /usr/bin/javac javac ${JAVA_HOME}/bin/javac 50
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOSU_VERSION
+      Value: "1.10"
+    Name: env
+  - CmdLine:
+    - set -x     && dpkgArch="$(dpkg --print-architecture | awk -F- '{ print $NF }')"     &&
+      wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch"     &&
+      wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch.asc"     &&
+      export GNUPGHOME     && GNUPGHOME="$(mktemp -d)"     && GPG_KEY="B42F6819007F00F88E364FD4036A9C25BF357DD4"     &&
+      gpg --keyserver ha.pool.sks-keyservers.net --recv-keys $GPG_KEY        || gpg
+      --keyserver pgp.mit.edu --recv-keys $GPG_KEY        || gpg --keyserver keyserver.pgp.com
+      --recv-keys $GPG_KEY     && gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu     &&
+      rm -rf "$GNUPGHOME" /usr/local/bin/gosu.asc     && chmod +x /usr/local/bin/gosu
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -nv -O /tmp/openhab.zip ${OPENHAB_URL} &&     unzip -q /tmp/openhab.zip
+      -d ${APPDIR} &&     rm /tmp/openhab.zip &&     mkdir -p ${APPDIR}/userdata/logs
+      &&     touch ${APPDIR}/userdata/logs/openhab.log &&     cp -a ${APPDIR}/userdata
+      ${APPDIR}/userdata.dist &&     cp -a ${APPDIR}/conf ${APPDIR}/conf.dist &&     echo
+      "export TERM=dumb" | tee -a ~/.bashrc
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - ${APPDIR}/conf
+    - ${APPDIR}/userdata
+    - ${APPDIR}/addons
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive apt-get remove -y dirmngr gnupg &&     DEBIAN_FRONTEND=noninteractive
+      apt-get autoremove -y &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "5007"
+    - "8080"
+    - "8101"
+    - "8443"
+  - Name: workdir
+    Path: ${APPDIR}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /
+  - CmdLine:
+    - chmod +x /entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - gosu
+    - openhab
+    - ./start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: multiarch/debian-debootstrap:armhf-stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM multiarch/debian-debootstrap:armhf-stretch

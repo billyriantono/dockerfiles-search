@@ -1,0 +1,127 @@
+MetaArgs: null
+Stages:
+- As: gosu
+  BaseName: debian:jessie
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get -y --no-install-recommends install     ca-certificates     curl     wget
+    Name: run
+    PrependShell: true
+  - Key: GOSU_VERSION
+    Name: arg
+    Value: "1.11"
+  - CmdLine:
+    - dpkgArch="$(dpkg --print-architecture | awk -F- '{ print $NF }')"  && wget -O
+      /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch"  &&
+      chmod +x /usr/local/bin/gosu  && gosu nobody true
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:jessie
+  Name: gosu
+  Platform: ""
+  SourceCode: FROM debian:jessie AS gosu
+- As: screeps
+  BaseName: node:8.11.1-stretch
+  Commands:
+  - Env:
+    - Key: SCREEPS_VERSION
+      Value: 3.2.1
+    Name: env
+  - Name: workdir
+    Path: /screeps
+  - CmdLine:
+    - yarn add screeps@"$SCREEPS_VERSION"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install screepsmod-mongo screepsmod-tickrate screepsmod-auth screeps-bot-tooangel
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8.11.1-stretch
+  Name: screeps
+  Platform: ""
+  SourceCode: FROM node:8.11.1-stretch AS screeps
+- BaseName: node:8.11.1-stretch
+  Commands:
+  - Name: volume
+    Volumes:
+    - /screeps
+  - Name: workdir
+    Path: /screeps
+  - Chown: ""
+    From: screeps
+    Name: copy
+    SourcesAndDest:
+    - /screeps
+    - /screeps.base
+  - Env:
+    - Key: DB_PATH
+      Value: /screeps/db.json
+    - Key: ASSET_DIR
+      Value: /screeps/assets
+    - Key: MODFILE
+      Value: /screeps/custom_mods.json
+    - Key: GAME_PORT
+      Value: "21025"
+    - Key: GAME_HOST
+      Value: 0.0.0.0
+    - Key: CLI_PORT
+      Value: "21026"
+    - Key: CLI_HOST
+      Value: 0.0.0.0
+    - Key: STORAGE_PORT
+      Value: "21027"
+    - Key: STORAGE_HOST
+      Value: localhost
+    - Key: DRIVER_MODULE
+      Value: '"@screeps/driver"'
+    Name: env
+  - Chown: ""
+    From: gosu
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/gosu
+    - /usr/local/bin/gosu
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - custom_mods.json
+    - /screeps.base
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/start.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    - /usr/local/bin/start.sh
+    Name: entrypoint
+    PrependShell: false
+  - Health:
+      Test:
+      - CMD-SHELL
+      - curl -sSLf http://localhost:21025 >/dev/null || exit 1
+    Name: healthcheck
+  - CmdLine:
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: node:8.11.1-stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:8.11.1-stretch

@@ -1,0 +1,71 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: node:8
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /build
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - make build-js
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:8 as builder
+- BaseName: tsuru/python
+  Commands:
+  - Env:
+    - Key: PORT
+      Value: "8000"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /home/application/current
+  - Name: workdir
+    Path: /home/application/current
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/tsuru_dashboard/static
+    - /home/application/current/tsuru_dashboard/static/
+  - CmdLine:
+    - sudo chown -R ubuntu:ubuntu /home/application/current
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install pipenv && pipenv install --system --deploy && pyenv rehash
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python manage.py migrate --noinput
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python manage.py createcachetable
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python manage.py collectstatic --noinput
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gunicorn --access-logfile - -b 0.0.0.0:$PORT -w 2 abyss.wsgi -k gevent
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: tsuru/python
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tsuru/python

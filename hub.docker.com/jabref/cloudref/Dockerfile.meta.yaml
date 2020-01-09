@@ -1,0 +1,81 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: ubuntu:17.10
+  Commands:
+  - CmdLine:
+    - apt-get -y update && apt-get -y upgrade && apt-get -y install build-essential
+      git openjdk-8-jdk openjdk-8-jre-headless sqlite3 libsqlite3-dev python2.7 python-pip
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/cloudref
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /tmp/cloudref
+  - CmdLine:
+    - ./gradlew war
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /db
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - user-maintainer.sql
+    - /db
+  - CmdLine:
+    - echo ".read /db/user-maintainer.sql" | /usr/bin/sqlite3 /db/CloudRef.sqlite
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:17.10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ubuntu:17.10 as builder
+- BaseName: tomcat:8.5-jre8
+  Commands:
+  - CmdLine:
+    - rm /dev/random && ln -s /dev/urandom /dev/random     && rm -rf ${CATALINA_HOME}/webapps/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/cloudref/frontend-war/build/libs/cloudref.war
+    - ${CATALINA_HOME}/webapps/cloudref.war
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/cloudref/backend/build/libs/backend.war
+    - ${CATALINA_HOME}/webapps/ROOT.war
+  - CmdLine:
+    - mkdir /root/CloudRef
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /db/CloudRef.sqlite
+    - /root/CloudRef/
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - ${CATALINA_HOME}/bin/catalina.sh run
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: tomcat:8.5-jre8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tomcat:8.5-jre8

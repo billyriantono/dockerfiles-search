@@ -1,0 +1,120 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: node:carbon
+  Commands:
+  - Name: workdir
+    Path: /app
+  From:
+    Image: node:carbon
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:carbon AS base
+- As: dependencies
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package*.json
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - yarn.lock
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - preact.config.js
+    - ./
+  - CmdLine:
+    - npm install -g yarn
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: dependencies
+  Platform: ""
+  SourceCode: FROM base AS dependencies
+- As: build
+  BaseName: dependencies
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /app/src
+  - CmdLine:
+    - yarn build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn install --modules-folder /app/deps --production=true
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: dependencies
+  Name: build
+  Platform: ""
+  SourceCode: FROM dependencies AS build
+- As: release
+  BaseName: node:8.9-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - sed -i -e 's/v[[:digit:]]\.[[:digit:]]/edge/g' /etc/apk/repositories
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk del --purge alpine-baselayout; apk --update add alpine-baselayout busybox;
+      apk upgrade --purge
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --update add ffmpeg
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app/build
+    - ./build
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app/deps
+    - ./node_modules
+  - Name: volume
+    Volumes:
+    - /data
+    - /incoming
+  - CmdLine:
+    - node
+    - build/transcode.js
+    - /incoming
+    - /data
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: node:8.9-alpine
+  Name: release
+  Platform: ""
+  SourceCode: FROM node:8.9-alpine AS release

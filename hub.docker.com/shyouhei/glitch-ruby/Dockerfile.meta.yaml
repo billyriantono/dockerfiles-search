@@ -1,0 +1,67 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stretch-slim
+  Commands:
+  - Maintainer: shyouhei@ruby-lang.org
+    Name: maintainer
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - sources.list
+    - /etc/apt/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - keywords
+    - /root/
+  - Name: workdir
+    Path: /root
+  - CmdLine:
+    - set -ex                                                        &&     apt update                                                     &&     apt-get
+      build-dep -y --no-install-recommends ruby2.3           &&     apt install -y
+      --no-install-recommends git clang llvm llvm-dev &&     apt upgrade -y                                                 &&     apt
+      autoremove                                                 &&     apt clean                                                      &&     rm
+      -rf /var/cache/apt/archives /var/lib/apt/lists
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/mirrorer/afl                      &&     cd afl                                                         &&     make
+      -j4 all                                                   &&     make -C llvm_mode
+      -j4 all LLVM_CONFIG=llvm-config-3.8          &&     make install                                                   &&     cd                                                             &&     rm
+      -rf afl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth 1 --branch american-fuzzy-lop --single-branch         https://github.com/shyouhei/ruby                             &&     cd
+      ruby                                                        &&     autoconf                                                       &&     ./configure
+      -C --disable-install-doc --with-gcc=afl-clang-fast &&     make -j4 miniruby
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - test_in
+    - /root/test_in
+  - CmdLine:
+    - mkdir test_cmin                                                &&     mkdir
+      test_tmin                                                &&     mkdir test_out                                                 &&     afl-cmin
+      -i test_in -o test_cmin ruby/miniruby @@              &&     cd test_cmin                                                   &&     for
+      i in *.rb; do                                                       afl-tmin
+      -i $i -o /root/test_tmin/$i -- /root/ruby/miniruby @@;     done &&     cd                                                             &&     rm
+      -rf test_in && mkdir test_in                                &&     afl-cmin
+      -i test_tmin -o test_in ruby/miniruby @@              &&     rm -rf test_cmin
+      test_tmin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - afl-fuzz -i test_in -o test_out -M bunny1 -x keywords -t 128 -m 256 -- ruby/miniruby
+      @@ sleep 1 &     afl-fuzz -i test_in -o test_out -S bunny2 -x keywords -t 128
+      -m 256 -- ruby/miniruby @@ sleep 1 &     afl-fuzz -i test_in -o test_out -S
+      bunny3 -x keywords -t 128 -m 256 -- ruby/miniruby @@
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

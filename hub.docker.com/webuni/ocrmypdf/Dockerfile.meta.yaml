@@ -1,0 +1,90 @@
+MetaArgs:
+- DefaultValue: 8.3.1
+  Key: version
+  ProvidedValue: null
+  Value: 8.3.1
+- DefaultValue: 8.4.2
+  Key: qpdf_version
+  ProvidedValue: null
+  Value: 8.4.2
+Stages:
+- BaseName: minidocks/base:build
+  Commands:
+  - CmdLine:
+    - apk --update add python3-dev py-defusedxml py-lxml libjpeg-turbo-dev zlib-dev
+      libxml2-dev libxslt-dev py3-pybind11@edge
+    Name: run
+    PrependShell: true
+  - Key: qpdf_version
+    Name: arg
+    Value: null
+  - CmdLine:
+    - wget -O /tmp/qpdf.tar.gz "https://github.com/qpdf/qpdf/releases/download/release-qpdf-${qpdf_version}/qpdf-${qpdf_version}.tar.gz"     &&
+      tar -xzf /tmp/qpdf.tar.gz -C /tmp && cd /tmp/qpdf*     && ./configure --disable-static
+      && make && make install && mkdir -p /tmp/build && make DESTDIR=/tmp/build install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /tmp/build/usr && pip3 install --install-option="--prefix=/tmp/build/usr"
+      pikepdf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /tmp/build/usr && pip3 install --install-option="--prefix=/tmp/build/usr"
+      pycryptodome
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find "/tmp/build" -type f -name \*.pyc -o -name \*.pyo -o -name __pycache__
+      | xargs rm -rf
+    Name: run
+    PrependShell: true
+  From:
+    Image: minidocks/base:build
+  Name: ""
+  Platform: ""
+  SourceCode: FROM minidocks/base:build
+- BaseName: minidocks/img2pdf
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Martin Hasoň <martin.hason@gmail.com>"'
+    Name: label
+  - Key: version
+    Name: arg
+    Value: null
+  - Env:
+    - Key: OCRMYPDF_VERSION
+      Value: $version
+    Name: env
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /tmp/build
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs
+    - /
+  - CmdLine:
+    - apk -U add py-cffi py3-defusedxml py3-lxml py3-reportlab libjpeg-turbo zlib
+      pngquant jbig2enc@edge && clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install ocrmypdf==$OCRMYPDF_VERSION && clean     && patch "$(pip show ocrmypdf
+      | grep Location | cut -d' ' -f2-)/ocrmypdf/pdfa.py" /root/pdfa.py.patch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ocrmypdf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: minidocks/img2pdf
+  Name: ""
+  Platform: ""
+  SourceCode: FROM minidocks/img2pdf

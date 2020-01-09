@@ -1,0 +1,678 @@
+MetaArgs:
+- DefaultValue: '"false"'
+  Key: CROSS
+  ProvidedValue: null
+  Value: '"false"'
+Stages:
+- As: base
+  BaseName: golang:1.12.4
+  Commands:
+  - Key: APT_MIRROR
+    Name: arg
+    Value: deb.debian.org
+  - CmdLine:
+    - sed -ri "s/(httpredir|deb).debian.org/$APT_MIRROR/g" /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.4
+  Name: base
+  Platform: ""
+  SourceCode: FROM golang:1.12.4 AS base
+- As: criu
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: CRIU_VERSION
+      Value: "3.11"
+    Name: env
+  - CmdLine:
+    - "apt-get update && apt-get install -y \tlibnet-dev \tlibprotobuf-c0-dev \tlibprotobuf-dev
+      \tlibnl-3-dev \tlibcap-dev \tprotobuf-compiler \tprotobuf-c-compiler \tpython-protobuf
+      \t&& mkdir -p /usr/src/criu \t&& curl -sSL https://github.com/checkpoint-restore/criu/archive/v${CRIU_VERSION}.tar.gz
+      | tar -C /usr/src/criu/ -xz --strip-components=1 \t&& cd /usr/src/criu \t&&
+      make \t&& make PREFIX=/build/ install-criu"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: criu
+  Platform: ""
+  SourceCode: FROM base AS criu
+- As: registry
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: REGISTRY_COMMIT
+      Value: 47a064d4195a9b56133891bbb13620c3ac83a827
+    Name: env
+  - CmdLine:
+    - "set -x \t&& export GOPATH=\"$(mktemp -d)\" \t&& git clone https://github.com/docker/distribution.git
+      \"$GOPATH/src/github.com/docker/distribution\" \t&& (cd \"$GOPATH/src/github.com/docker/distribution\"
+      && git checkout -q \"$REGISTRY_COMMIT\") \t&& GOPATH=\"$GOPATH/src/github.com/docker/distribution/Godeps/_workspace:$GOPATH\"
+      \t\tgo build -buildmode=pie -o /build/registry-v2 github.com/docker/distribution/cmd/registry
+      \t&& rm -rf \"$GOPATH\""
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: registry
+  Platform: ""
+  SourceCode: FROM base AS registry
+- As: docker-py
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: DOCKER_PY_COMMIT
+      Value: ac922192959870774ad8428344d9faa0555f7ba6
+    Name: env
+  - CmdLine:
+    - "git clone https://github.com/docker/docker-py.git /build \t&& cd /build \t&&
+      git checkout -q $DOCKER_PY_COMMIT"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: docker-py
+  Platform: ""
+  SourceCode: FROM base AS docker-py
+- As: swagger
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: GO_SWAGGER_COMMIT
+      Value: c28258affb0b6251755d92489ef685af8d4ff3eb
+    Name: env
+  - CmdLine:
+    - "set -x \t&& export GOPATH=\"$(mktemp -d)\" \t&& git clone https://github.com/go-swagger/go-swagger.git
+      \"$GOPATH/src/github.com/go-swagger/go-swagger\" \t&& (cd \"$GOPATH/src/github.com/go-swagger/go-swagger\"
+      && git checkout -q \"$GO_SWAGGER_COMMIT\") \t&& go build -o /build/swagger github.com/go-swagger/go-swagger/cmd/swagger
+      \t&& rm -rf \"$GOPATH\""
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: swagger
+  Platform: ""
+  SourceCode: FROM base AS swagger
+- As: frozen-images
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y jq ca-certificates --no-install-recommends
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - contrib/download-frozen-image-v2.sh
+    - /
+  - CmdLine:
+    - "/download-frozen-image-v2.sh /build \tbuildpack-deps:jessie@sha256:dd86dced7c9cd2a724e779730f0a53f93b7ef42228d4344b25ce9a42a1486251
+      \tbusybox:latest@sha256:bbc3a03235220b170ba48a157dd097dd1379299370e1ed99ce976df0355d24f0
+      \tbusybox:glibc@sha256:0b55a30394294ab23b9afd58fab94e61a923f5834fba7ddbae7f8e0c11ba85e6
+      \tdebian:jessie@sha256:287a20c5f73087ab406e6b364833e3fb7b3ae63ca0eb3486555dc27ed32c6e60
+      \thello-world:latest@sha256:be0cd392e45be79ffeffa6b05338b98ebb16c87b255f48e297ec7f98e123905c"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: frozen-images
+  Platform: ""
+  SourceCode: FROM base AS frozen-images
+- As: cross-false
+  BaseName: base
+  Commands: null
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: cross-false
+  Platform: ""
+  SourceCode: FROM base AS cross-false
+- As: cross-true
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - dpkg --add-architecture armhf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dpkg --add-architecture arm64
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dpkg --add-architecture armel
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "if [ \"$(go env GOHOSTARCH)\" = \"amd64\" ]; then \tapt-get update \t&& apt-get
+      install -y --no-install-recommends \t\tcrossbuild-essential-armhf \t\tcrossbuild-essential-arm64
+      \t\tcrossbuild-essential-armel; \tfi"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: cross-true
+  Platform: ""
+  SourceCode: FROM base AS cross-true
+- As: dev-base
+  BaseName: cross-${CROSS}
+  Commands: null
+  From:
+    Image: cross-${CROSS}
+  Name: dev-base
+  Platform: ""
+  SourceCode: FROM cross-${CROSS} as dev-base
+- As: runtime-dev-cross-false
+  BaseName: dev-base
+  Commands:
+  - CmdLine:
+    - "apt-get update && apt-get install -y \tlibapparmor-dev \tlibseccomp-dev"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 8
+      Named: dev-base
+  Name: runtime-dev-cross-false
+  Platform: ""
+  SourceCode: FROM dev-base AS runtime-dev-cross-false
+- As: runtime-dev-cross-true
+  BaseName: cross-true
+  Commands:
+  - CmdLine:
+    - "if [ \"$(go env GOHOSTARCH)\" = \"amd64\" ]; then \tapt-get update \t&& apt-get
+      install -y \t\tlibseccomp-dev:armhf \t\tlibseccomp-dev:arm64 \t\tlibseccomp-dev:armel
+      \t\tlibapparmor-dev:armhf \t\tlibapparmor-dev:arm64 \t\tlibapparmor-dev:armel
+      \t\tlibapparmor-dev \t\tlibseccomp-dev; \tfi"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 7
+      Named: cross-true
+  Name: runtime-dev-cross-true
+  Platform: ""
+  SourceCode: FROM cross-true AS runtime-dev-cross-true
+- As: runtime-dev
+  BaseName: runtime-dev-cross-${CROSS}
+  Commands: null
+  From:
+    Image: runtime-dev-cross-${CROSS}
+  Name: runtime-dev
+  Platform: ""
+  SourceCode: FROM runtime-dev-cross-${CROSS} AS runtime-dev
+- As: tomlv
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: INSTALL_BINARY_NAME
+      Value: tomlv
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/install.sh
+    - ./install.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/$INSTALL_BINARY_NAME.installer
+    - ./
+  - CmdLine:
+    - PREFIX=/build ./install.sh $INSTALL_BINARY_NAME
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: tomlv
+  Platform: ""
+  SourceCode: FROM base AS tomlv
+- As: vndr
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: INSTALL_BINARY_NAME
+      Value: vndr
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/install.sh
+    - ./install.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/$INSTALL_BINARY_NAME.installer
+    - ./
+  - CmdLine:
+    - PREFIX=/build ./install.sh $INSTALL_BINARY_NAME
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: vndr
+  Platform: ""
+  SourceCode: FROM base AS vndr
+- As: containerd
+  BaseName: dev-base
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y btrfs-tools
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: INSTALL_BINARY_NAME
+      Value: containerd
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/install.sh
+    - ./install.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/$INSTALL_BINARY_NAME.installer
+    - ./
+  - CmdLine:
+    - PREFIX=/build ./install.sh $INSTALL_BINARY_NAME
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 8
+      Named: dev-base
+  Name: containerd
+  Platform: ""
+  SourceCode: FROM dev-base AS containerd
+- As: proxy
+  BaseName: dev-base
+  Commands:
+  - Env:
+    - Key: INSTALL_BINARY_NAME
+      Value: proxy
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/install.sh
+    - ./install.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/$INSTALL_BINARY_NAME.installer
+    - ./
+  - CmdLine:
+    - PREFIX=/build ./install.sh $INSTALL_BINARY_NAME
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 8
+      Named: dev-base
+  Name: proxy
+  Platform: ""
+  SourceCode: FROM dev-base AS proxy
+- As: gometalinter
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: INSTALL_BINARY_NAME
+      Value: gometalinter
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/install.sh
+    - ./install.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/$INSTALL_BINARY_NAME.installer
+    - ./
+  - CmdLine:
+    - PREFIX=/build ./install.sh $INSTALL_BINARY_NAME
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: gometalinter
+  Platform: ""
+  SourceCode: FROM base AS gometalinter
+- As: dockercli
+  BaseName: dev-base
+  Commands:
+  - Env:
+    - Key: INSTALL_BINARY_NAME
+      Value: dockercli
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/install.sh
+    - ./install.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/$INSTALL_BINARY_NAME.installer
+    - ./
+  - CmdLine:
+    - PREFIX=/build ./install.sh $INSTALL_BINARY_NAME
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 8
+      Named: dev-base
+  Name: dockercli
+  Platform: ""
+  SourceCode: FROM dev-base AS dockercli
+- As: runc
+  BaseName: runtime-dev
+  Commands:
+  - Env:
+    - Key: INSTALL_BINARY_NAME
+      Value: runc
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/install.sh
+    - ./install.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/$INSTALL_BINARY_NAME.installer
+    - ./
+  - CmdLine:
+    - PREFIX=/build ./install.sh $INSTALL_BINARY_NAME
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 11
+      Named: runtime-dev
+  Name: runc
+  Platform: ""
+  SourceCode: FROM runtime-dev AS runc
+- As: tini
+  BaseName: dev-base
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y cmake vim-common
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/install.sh
+    - ./install.sh
+  - Env:
+    - Key: INSTALL_BINARY_NAME
+      Value: tini
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/$INSTALL_BINARY_NAME.installer
+    - ./
+  - CmdLine:
+    - PREFIX=/build ./install.sh $INSTALL_BINARY_NAME
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 8
+      Named: dev-base
+  Name: tini
+  Platform: ""
+  SourceCode: FROM dev-base AS tini
+- As: rootlesskit
+  BaseName: dev-base
+  Commands:
+  - Env:
+    - Key: INSTALL_BINARY_NAME
+      Value: rootlesskit
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/install.sh
+    - ./install.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/dockerfile/install/$INSTALL_BINARY_NAME.installer
+    - ./
+  - CmdLine:
+    - PREFIX=/build/ ./install.sh $INSTALL_BINARY_NAME
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./contrib/dockerd-rootless.sh
+    - /build
+  From:
+    Stage:
+      Index: 8
+      Named: dev-base
+  Name: rootlesskit
+  Platform: ""
+  SourceCode: FROM dev-base AS rootlesskit
+- As: dev
+  BaseName: runtime-dev
+  Commands:
+  - CmdLine:
+    - groupadd -r docker
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd --create-home --gid docker unprivilegeduser
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sfv /go/src/github.com/docker/docker/.bashrc ~/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "source /usr/share/bash-completion/bash_completion" >> /etc/bash.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/local/completion/bash/docker /etc/bash_completion.d/docker
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ldconfig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get update && apt-get install -y \tapparmor \taufs-tools \tbash-completion
+      \tbtrfs-tools \tiptables \tjq \tlibcap2-bin \tlibdevmapper-dev \tlibffi-dev
+      \tlibssl-dev \tlibudev-dev \tlibsystemd-dev \tbinutils-mingw-w64 \tg++-mingw-w64-x86-64
+      \tnet-tools \tpigz \tpython-backports.ssl-match-hostname \tpython-dev \tpython-cffi
+      \tpython-mock \tpython-pip \tpython-requests \tpython-setuptools \tpython-websocket
+      \tpython-wheel \tthin-provisioning-tools \tvim \tvim-common \txfsprogs \tzip
+      \tbzip2 \txz-utils \tlibprotobuf-c1 \tlibnet1 \tlibnl-3-200 \t--no-install-recommends"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: swagger
+    Name: copy
+    SourcesAndDest:
+    - /build/swagger*
+    - /usr/local/bin/
+  - Chown: ""
+    From: frozen-images
+    Name: copy
+    SourcesAndDest:
+    - /build/
+    - /docker-frozen-images
+  - Chown: ""
+    From: gometalinter
+    Name: copy
+    SourcesAndDest:
+    - /build/
+    - /usr/local/bin/
+  - Chown: ""
+    From: tomlv
+    Name: copy
+    SourcesAndDest:
+    - /build/
+    - /usr/local/bin/
+  - Chown: ""
+    From: vndr
+    Name: copy
+    SourcesAndDest:
+    - /build/
+    - /usr/local/bin/
+  - Chown: ""
+    From: tini
+    Name: copy
+    SourcesAndDest:
+    - /build/
+    - /usr/local/bin/
+  - Chown: ""
+    From: runc
+    Name: copy
+    SourcesAndDest:
+    - /build/
+    - /usr/local/bin/
+  - Chown: ""
+    From: containerd
+    Name: copy
+    SourcesAndDest:
+    - /build/
+    - /usr/local/bin/
+  - Chown: ""
+    From: proxy
+    Name: copy
+    SourcesAndDest:
+    - /build/
+    - /usr/local/bin/
+  - Chown: ""
+    From: dockercli
+    Name: copy
+    SourcesAndDest:
+    - /build/
+    - /usr/local/cli
+  - Chown: ""
+    From: registry
+    Name: copy
+    SourcesAndDest:
+    - /build/registry*
+    - /usr/local/bin/
+  - Chown: ""
+    From: criu
+    Name: copy
+    SourcesAndDest:
+    - /build/
+    - /usr/local/
+  - Chown: ""
+    From: docker-py
+    Name: copy
+    SourcesAndDest:
+    - /build/
+    - /docker-py
+  - CmdLine:
+    - "cd /docker-py \t&& pip install docker-pycreds==0.4.0 \t&& pip install paramiko==2.4.2
+      \t&& pip install yamllint==1.5.0 \t&& pip install -r test-requirements.txt"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: rootlesskit
+    Name: copy
+    SourcesAndDest:
+    - /build/
+    - /usr/local/bin/
+  - Chown: ""
+    From: djs55/vpnkit@sha256:e508a17cfacc8fd39261d5b4e397df2b953690da577e2c987a47630cd0c42f8e
+    Name: copy
+    SourcesAndDest:
+    - /vpnkit
+    - /usr/local/bin/vpnkit.x86_64
+  - Env:
+    - Key: PATH
+      Value: /usr/local/cli:$PATH
+    Name: env
+  - Env:
+    - Key: DOCKER_BUILDTAGS
+      Value: apparmor seccomp selinux
+    Name: env
+  - Env:
+    - Key: GOMETALINTER_OPTS
+      Value: '"--deadline=2m"'
+    Name: env
+  - Name: workdir
+    Path: /go/src/github.com/docker/docker
+  - Name: volume
+    Volumes:
+    - /var/lib/docker
+  - CmdLine:
+    - hack/dind
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 11
+      Named: runtime-dev
+  Name: dev
+  Platform: ""
+  SourceCode: FROM runtime-dev AS dev
+- As: final
+  BaseName: dev
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/docker/docker
+  From:
+    Stage:
+      Index: 21
+      Named: dev
+  Name: final
+  Platform: ""
+  SourceCode: FROM dev AS final

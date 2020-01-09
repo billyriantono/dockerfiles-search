@@ -1,0 +1,105 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: ubuntu:18.04
+  Commands:
+  - Key: REPO
+    Name: arg
+    Value: Sudosups/NBX
+  - Env:
+    - Key: REPO
+      Value: ${REPO}
+    Name: env
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apt-get update &&     apt-get install -y       build-essential       curl       python-dev       gcc-8       g++-8       git       cmake       libboost-all-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /home/sups/Development
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'TAG=$(curl -L --silent "https://api.github.com/repos/$REPO/releases/latest"
+      | grep -Po ''"tag_name": "\K.*?(?=")'') &&     git clone --branch $TAG --single-branch
+      https://github.com/$REPO /home/sups/Development/NBX &&     cd /home/sups/Development/NBX
+      &&     mkdir build &&     cd build &&     cmake ..'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /home/sups/Development/NBX && make -j$(nproc)
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as builder
+- As: release
+  BaseName: ubuntu:18.04
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/funkypenguin/nbx.git"'
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.schema-version
+      Value: '"2.2-r1"'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/sups/Development/NBX/src/nibble-service
+    - /usr/local/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/sups/Development/NBX/src/Nibbled
+    - /usr/local/bin/
+  - CmdLine:
+    - mkdir /root/.NibbleClassic
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "17120"
+  - Name: expose
+    Ports:
+    - "17122"
+  - Name: volume
+    Volumes:
+    - /root/.NibbleClassic
+  - CmdLine:
+    - /usr/local/bin/Nibbled
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --no-console
+    - --rpc-bind-ip
+    - 0.0.0.0
+    - --rpc-bind-port
+    - "17122"
+    - --p2p-bind-port
+    - "171220"
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: release
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as release

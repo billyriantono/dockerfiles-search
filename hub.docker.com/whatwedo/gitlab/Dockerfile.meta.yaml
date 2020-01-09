@@ -1,0 +1,289 @@
+MetaArgs: null
+Stages:
+- BaseName: whatwedo/base:latest
+  Commands:
+  - CmdLine:
+    - apt-get update -y && apt-get update && apt-get install -y openssh-server &&
+      mkdir -p /var/run/sshd && echo "UseDNS no" >> /etc/ssh/sshd_config
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/supervisord/sshd.conf
+    - /etc/supervisor/conf.d/sshd.conf
+  - CmdLine:
+    - apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0x7BD9BF62
+      && add-apt-repository 'deb http://nginx.org/packages/mainline/ubuntu trusty
+      nginx' && apt-get update && apt-get install -y nginx && touch /var/log/nginx/access.log
+      && touch /var/log/nginx/error.log && mkdir /var/www && chown -R www-data:www-data
+      /var/www/ && chmod -R 2755 /var/www/ && rm -rf /etc/nginx/sites-available/ &&
+      rm -rf /etc/nginx/sites-enabled/ && rm -rf /etc/nginx/conf.d/ && rm /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/nginx-default
+    - /etc/nginx
+  - CmdLine:
+    - chown -R www-data /var/www/ && chmod -R 755 /var/www/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/supervisord/nginx.conf
+    - /etc/supervisor/conf.d/nginx.conf
+  - CmdLine:
+    - apt-get install -y build-essential libssl-dev libcurl4-gnutls-dev libexpat1-dev
+      gettext && mkdir /tmp/git && cd /tmp/git && curl -L https://github.com/git/git/archive/v2.10.1.tar.gz
+      -o git.tar.gz && echo 'f97b9a7bbe3f0b359adab08766d53aae2a9ce703  git.tar.gz'
+      | shasum -c - && tar xzf git.tar.gz && cd /tmp/git/git-* && make prefix=/usr
+      all && make prefix=/usr install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get purge -y libssl-dev libcurl4-gnutls-dev libexpat1-dev && apt-get update
+      && apt-get install --no-install-recommends -y ca-certificates curl mercurial
+      git-core
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /tmp/go && cd /tmp/go && curl -L https://storage.googleapis.com/golang/go1.7.3.linux-amd64.tar.gz
+      -o go.tar.gz && echo 'ead40e884ad4d6512bcf7b3c7420dd7fa4a96140  go.tar.gz' |
+      shasum -c - && tar -C /usr/local -xzf go.tar.gz
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Env:
+    - Key: GOROOT
+      Value: /usr/local/go
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:/usr/local/go/bin:/go/bin
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y build-essential zlib1g-dev libyaml-dev
+      libssl-dev libgdbm-dev libreadline-dev libncurses5-dev libffi-dev curl openssh-server
+      checkinstall libxml2-dev libxslt-dev libcurl4-openssl-dev libicu-dev logrotate
+      python-docutils pkg-config cmake nodejs libmysqlclient-dev mysql-client redis-tools
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir /tmp/ruby\r && cd /tmp/ruby\r && curl -L https://cache.ruby-lang.org/pub/ruby/2.3/ruby-2.3.3.tar.gz
+      -o ruby.tar.gz\r && echo '1014ee699071aa2ddd501907d18cbe15399c997d  ruby.tar.gz'
+      | shasum -c - && tar xzf ruby.tar.gz\r && ls -alh && cd ruby-2.3.3 && ./configure
+      --disable-install-rdoc && make && make install"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "gem install bundler --no-ri --no-rdoc\r && adduser --disabled-login --gecos
+      'GitLab' git\r && sudo -u git -H mkdir -p /home/git/.ssh\r && sudo -u git -H
+      touch /home/git/.ssh/authorized_keys\r && sudo -u git -H git config --global
+      core.autocrlf \"input\"\r && sudo -u git -H git config --global gc.auto 0\r
+      && sudo -u git -H git config --global repack.writeBitmaps true\r && sudo -u
+      git -H curl -L --progress https://github.com/gitlabhq/gitlabhq/archive/v8.14.2.zip
+      -o /home/git/gitlab.zip\r && sudo -u git -H echo '443c88b153237bd8166ec42794dc332e91b2c5fb
+      \ /home/git/gitlab.zip' | shasum -c -\r && sudo -u git -H unzip /home/git/gitlab.zip
+      -d /home/git\r && sudo -u git -H mv /home/git/gitlabhq-* /home/git/gitlab\r
+      && sudo -u git -H rm /home/git/gitlab.zip"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/gitlab/gitlab.yml
+    - /home/git/gitlab/config/
+  - CmdLine:
+    - "chown git /home/git/gitlab/config/\r && sudo -u git -H cp /home/git/gitlab/config/secrets.yml.example
+      /home/git/gitlab/config/secrets.yml\r && sudo -u git -H chmod 0600 /home/git/gitlab/config/secrets.yml\r
+      && chown -R git /home/git/gitlab/log/\r && chown -R git /home/git/gitlab/tmp/\r
+      && chmod -R u+rwX,go-w /home/git/gitlab/log/\r && chmod -R u+rwX /home/git/gitlab/tmp/\r
+      && sudo -u git -H mkdir -p /home/git/gitlab/tmp/pid\r && sudo -u git -H mkdir
+      -p /home/git/gitlab/tmp/sockets\r && sudo -u git -H mkdir -p /home/git/gitlab/tmp/backups\r
+      && sudo -u git -H mkdir -p /home/git/gitlab/tmp/sessions\r && chmod -R u+rwX
+      /home/git/gitlab/tmp/pids/\r && chmod -R u+rwX /home/git/gitlab/tmp/sockets/\r
+      && chmod -R u+rwX /home/git/gitlab/tmp/backups/\r && chmod -R u+rwX /home/git/gitlab/tmp/sessions/\r
+      && chmod -R u+rwX /home/git/gitlab/builds/\r && chmod -R u+rwX /home/git/gitlab/shared/artifacts/\r
+      && sudo -u git -H cp /home/git/gitlab/config/unicorn.rb.example /home/git/gitlab/config/unicorn.rb\r
+      && sudo -u git -H cp /home/git/gitlab/config/initializers/rack_attack.rb.example
+      /home/git/gitlab/config/initializers/rack_attack.rb\r && sudo -u git -H cp /home/git/gitlab/config/resque.yml.example
+      /home/git/gitlab/config/resque.yml\r && sudo -u git -H cp /home/git/gitlab/config/database.yml.mysql
+      /home/git/gitlab/config/database.yml\r && sudo -u git -H chmod o-rwx /home/git/gitlab/config/database.yml\r
+      && echo 'PATH=\"/home/git/gitlab-workhorse:$PATH\"' >> /home/git/.profile"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd /home/git/gitlab && sudo -u git -H bundle install --deployment --without
+      development test postgres aws kerberos\r && rm /etc/nginx/nginx.conf"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/gitlab/nginx.conf
+    - /etc/nginx/nginx.conf
+  - CmdLine:
+    - "sudo -u git -H git clone https://gitlab.com/gitlab-org/gitlab-workhorse.git
+      /home/git/gitlab-workhorse\r && cd /home/git/gitlab-workhorse && sudo -u git
+      -H git checkout v$(cat /home/git/gitlab/GITLAB_WORKHORSE_VERSION)\r && cd /home/git/gitlab-workhorse
+      && PATH=$PATH:/usr/local/go/bin:/go/bin make && chown -R git:git /home/git/gitlab-workhorse\r
+      && ln -s /home/git/gitlab-workhorse/gitlab-zip-cat /usr/local/bin/gitlab-zip-cat"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "ln -s /home/git/gitlab-workhorse/gitlab-zip-metadata /usr/local/bin/gitlab-zip-metadata\r
+      && echo 'echo \"checking data directories\"' >> /bin/everyboot\r && echo 'sudo
+      mkdir -p /data/artifacts' >> /bin/everyboot\r && echo 'sudo mkdir -p /data/lfs/lfs-objects'
+      >> /bin/everyboot\r && echo 'sudo mkdir -p /data/ci/builds/' >> /bin/everyboot\r
+      && echo 'sudo mkdir -p /data/shared' >> /bin/everyboot\r && echo 'sudo mkdir
+      -p /data/gitlab-satellites' >> /bin/everyboot\r && echo 'sudo mkdir -p /data/backups'
+      >> /bin/everyboot\r && echo 'sudo mkdir -p /data/repositories' >> /bin/everyboot\r
+      && echo 'sudo mkdir -p /data/gitlab-shell/hooks' >> /bin/everyboot\r && echo
+      'sudo mkdir -p /data/public/uploads' >> /bin/everyboot\r && echo 'chown -R git:git
+      /data' >> /bin/everyboot\r && sudo -u git -H mkdir -p /home/git/.ssh\r && echo
+      'chown -R git:git /home/git/.ssh' >> /bin/everyboot\r && sudo -u git -H touch
+      /home/git/.ssh/authorized_keys\r && echo 'echo \"symlink uploads directory\"'
+      >> /bin/everyboot\r && echo 'rm -rf /home/git/gitlab/public/uploads' >> /bin/everyboot\r
+      && echo 'sudo -u git -H ln -sf /data/public/uploads /home/git/gitlab/public/uploads'
+      >> /bin/everyboot\r && echo 'cd /home/git/gitlab' >> /bin/everyboot\r && echo
+      'echo \"configuring GitLab\"' >> /bin/everyboot\r && echo 'sed -i s/^worker_processes.*/worker_processes\\
+      ${UNICORN_WORKER_PROCESSES}/g config/unicorn.rb' >> /bin/everyboot\r && echo
+      'sed -i s/{{GITLAB_HOST}}/${GITLAB_HOST}/g config/gitlab.yml' >> /bin/everyboot\r
+      && echo 'sed -i s/{{GITLAB_PORT}}/${GITLAB_PORT}/g config/gitlab.yml' >> /bin/everyboot\r
+      && echo 'sed -i s/{{GITLAB_HTTPS}}/${GITLAB_HTTPS}/g config/gitlab.yml' >> /bin/everyboot\r
+      && echo 'sed -i s/{{GITLAB_EMAIL_FROM}}/${GITLAB_EMAIL_FROM}/g config/gitlab.yml'
+      >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_EMAIL_DISPLAY_NAME}}/${GITLAB_EMAIL_DISPLAY_NAME}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_EMAIL_REPLY_TO}}/${GITLAB_EMAIL_REPLY_TO}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_DEFAULT_THEME}}/${GITLAB_DEFAULT_THEME}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_PROJECT_FEATURES_ISSUES}}/${GITLAB_PROJECT_FEATURES_ISSUES}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_PROJECT_FEATURES_MERGE_REQUEST}}/${GITLAB_PROJECT_FEATURES_MERGE_REQUEST}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_PROJECT_FEATURES_WIKI}}/${GITLAB_PROJECT_FEATURES_WIKI}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_PROJECT_FEATURES_SNIPPETS}}/${GITLAB_PROJECT_FEATURES_SNIPPETS}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_PROJECT_FEATURES_BUILDS}}/${GITLAB_PROJECT_FEATURES_BUILDS}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_PROJECT_FEATURES_CONTAINER_REGISTRY}}/${GITLAB_PROJECT_FEATURES_CONTAINER_REGISTRY}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_BACKUP_KEEP_TIME}}/${GITLAB_BACKUP_KEEP_TIME}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_INCOMING_EMAIL_ENABLED}}/${GITLAB_INCOMING_EMAIL_ENABLED}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_INCOMING_EMAIL_ADDRESS}}/${GITLAB_INCOMING_EMAIL_ADDRESS}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_INCOMING_EMAIL_USER}}/${GITLAB_INCOMING_EMAIL_USER}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_INCOMING_EMAIL_PASSWORD}}/${GITLAB_INCOMING_EMAIL_PASSWORD}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_INCOMING_EMAIL_IMAP_HOST}}/${GITLAB_INCOMING_EMAIL_IMAP_HOST}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_INCOMING_EMAIL_IMAP_PORT}}/${GITLAB_INCOMING_EMAIL_IMAP_PORT}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_INCOMING_EMAIL_IMAP_SSL}}/${GITLAB_INCOMING_EMAIL_IMAP_SSL}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_INCOMING_EMAIL_IMAP_STARTTLS}}/${GITLAB_INCOMING_EMAIL_IMAP_STARTTLS}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{GITLAB_INCOMING_EMAIL_IMAP_MAILBOX}}/${GITLAB_INCOMING_EMAIL_IMAP_MAILBOX}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{CONTAINER_REGISTRY_HOST}}/${CONTAINER_REGISTRY_HOST}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{CONTAINER_REGISTRY_PORT}}/${CONTAINER_REGISTRY_PORT}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s@{{CONTAINER_REGISTRY_API_URL}}@${CONTAINER_REGISTRY_API_URL}@g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/{{CONTAINER_REGISTRY_ISSUER}}/${CONTAINER_REGISTRY_ISSUER}/g
+      config/gitlab.yml' >> /bin/everyboot\r && echo 'sed -i s/#\\ db_key_base\\:$/db_key_base:\\
+      ${GITLAB_DATABASE_SECRET_KEY}/g config/secrets.yml' >> /bin/everyboot\r && echo
+      'sed -i s/#\\ secret_key_base\\:$/secret_key_base:\\ ${GITLAB_SECRET_KEY_BASE}/g
+      config/secrets.yml' >> /bin/everyboot\r && echo 'sed -i s/#\\ otp_key_base\\:$/otp_key_base:\\
+      ${GITLAB_DATABASE_OTP_KEY_BASE}/g config/secrets.yml' >> /bin/everyboot\r &&
+      echo 'sed -i s@url\\:.*@url\\:\\ ${REDIS_URL}@g config/resque.yml' >> /bin/everyboot\r
+      && echo 'sed -i s/username\\:.*/username\\:\\ ${DATABASE_USER}/g config/database.yml'
+      >> /bin/everyboot\r && echo 'sed -i s/password\\:.*/password\\:\\ \"${DATABASE_PASSWORD}\"/g
+      config/database.yml' >> /bin/everyboot\r && echo 'sed -i s/database\\:.*/database\\:\\
+      ${DATABASE_NAME}/g config/database.yml' >> /bin/everyboot\r && echo 'sed -i
+      s/#\\ host\\:.*/host\\:\\ ${DATABASE_HOST}/g config/database.yml' >> /bin/everyboot\r
+      && echo 'sed -i s/config.action_mailer.delivery_method\\ =\\ :sendmail/config.action_mailer.delivery_method\\
+      =\\ :smtp/g config/environments/production.rb' >> /bin/everyboot\r && echo 'cp
+      config/initializers/smtp_settings.rb.sample config/initializers/smtp_settings.rb'
+      >> /bin/everyboot\r && echo 'sed -i s/address\\:.*/address\\:\\ \\\"${GITLAB_EMAIL_SMTP_ADDRESS}\\\",/g
+      config/initializers/smtp_settings.rb' >> /bin/everyboot\r && echo 'sed -i s/port\\:.*/port\\:\\
+      ${GITLAB_EMAIL_SMTP_PORT},/g config/initializers/smtp_settings.rb' >> /bin/everyboot\r
+      && echo 'sed -i s/authentication\\:.*/authentication\\:\\ \\:${GITLAB_EMAIL_SMTP_AUTHENTICATION},/g
+      config/initializers/smtp_settings.rb' >> /bin/everyboot\r && echo 'sed -i s/user_name\\:.*/user_name\\:\\
+      \\\"${GITLAB_EMAIL_SMTP_USERNAME}\\\",/g config/initializers/smtp_settings.rb'
+      >> /bin/everyboot\r && echo 'sed -i s/password\\:.*/password\\:\\ \\\"${GITLAB_EMAIL_SMTP_PASSWORD}\\\",/g
+      config/initializers/smtp_settings.rb' >> /bin/everyboot\r && echo 'sed -i s/domain\\:.*/domain\\:\\
+      \\\"${GITLAB_EMAIL_SMTP_DOMAIN}\\\",/g config/initializers/smtp_settings.rb'
+      >> /bin/everyboot\r && echo 'sed -i s/openssl_verify_mode\\:.*/openssl_verify_mode\\:\\
+      \\\"${GITLAB_EMAIL_SMTP_VERIFY_MODE}\\\",\\\\\\\\n\\ \\ \\ \\ tls:\\ true,/g
+      config/initializers/smtp_settings.rb' >> /bin/everyboot\r && echo 'echo \"Wait
+      for MySQL to boot...\"' >> /bin/everyboot\r && echo 'echo \"while ! nc -z ${DATABASE_HOST}
+      3306; do sleep 3; done\"' >> /bin/everyboot\r && echo 'echo \"Installing GitLab
+      Shell\"' >> /bin/everyboot\r && echo 'sudo -u git -H bundle exec rake gitlab:shell:install
+      REDIS_URL=${REDIS_URL} RAILS_ENV=production' >> /bin/everyboot\r && echo 'sed
+      -i s@gitlab_url\\:.*@gitlab_url\\:\\ http\\://127.0.0.1\\:8080@g /home/git/gitlab-shell/config.yml'
+      >> /bin/everyboot\r && echo 'if [ ! -f /etc/firstboot/gitlab-flag ];' >> /bin/everyboot\r
+      && echo 'then' >> /bin/everyboot\r && echo '  echo \"Creating SSH Keys\"' >>
+      /bin/everyboot\r && echo '  echo -e \"y\\n\"|sudo -u git -H ssh-keygen -q -t
+      rsa -N \"\" -f /home/git/.ssh/id_rsa' >> /bin/everyboot\r && echo '  echo \"Installing
+      GitLab\"' >> /bin/everyboot\r && echo '  sudo -u git -H force=yes bundle exec
+      rake gitlab:setup RAILS_ENV=production GITLAB_ROOT_PASSWORD=${GITLAB_ROOT_PASSWORD}'
+      >> /bin/everyboot\r && echo '  echo \"Installing Backup CronJob\"' >> /bin/everyboot\r
+      && echo '  sudo -u git -H crontab -l > /home/git/gitlab/tmp/cron' >> /bin/everyboot\r
+      && echo '  echo \"${GITLAB_BACKUP_CRON} cd /home/git/gitlab && bundle exec rake
+      gitlab:backup:create RAILS_ENV=production\" >> /home/git/gitlab/tmp/cron' >>
+      /bin/everyboot\r && echo '  sudo -u git -H crontab /home/git/gitlab/tmp/cron'
+      >> /bin/everyboot\r && echo '  sudo -u git -H rm /home/git/gitlab/tmp/cron'
+      >> /bin/everyboot\r && echo '  date > /etc/firstboot/gitlab-flag' >> /bin/everyboot\r
+      && echo 'chmod 600 /home/git/.ssh/id_rsa' >> /bin/everyboot\r && echo 'chmod
+      644 /home/git/.ssh/id_rsa.pub' >> /bin/everyboot\r && echo '  echo \"\"' >>
+      /bin/everyboot\r && echo '  echo \"#########################\"' >> /bin/everyboot\r
+      && echo '  echo \"# GitLab Setup finished #\"' >> /bin/everyboot\r && echo '
+      \ echo \"#########################\"' >> /bin/everyboot\r && echo '  echo \"\"'
+      >> /bin/everyboot\r && echo 'fi' >> /bin/everyboot\r && echo 'echo \"Migrate
+      database\"' >> /bin/everyboot\r && echo 'sudo -u git -H bundle exec rake db:migrate
+      RAILS_ENV=production' >> /bin/everyboot\r && echo 'echo \"Precompiling assets
+      in the background\"' >> /bin/everyboot\r && echo 'sudo -u git -H bundle exec
+      rake assets:precompile RAILS_ENV=production &' >> /bin/everyboot\r && echo 'echo
+      \"Rebuild authorized_keys file\"' >> /bin/everyboot\r && echo 'sudo -u git -H
+      bundle exec rake gitlab:shell:setup RAILS_ENV=production force=yes' >> /bin/everyboot\r
+      && echo 'touch /home/git/gitlab/log/gitlab-workhorse.log' >> /bin/everyboot\r
+      && echo 'touch /home/git/gitlab/log/mail_room.log' >> /bin/everyboot\r && echo
+      'touch /home/git/gitlab/log/production.log' >> /bin/everyboot\r && echo 'touch
+      /home/git/gitlab/log/sidekiq.log' >> /bin/everyboot\r && echo 'touch /home/git/gitlab/log/unicorn.stderr.log'
+      >> /bin/everyboot\r && echo 'touch /home/git/gitlab/log/unicorn.stdout.log'
+      >> /bin/everyboot\r && echo 'chown -R git:git /home/git/gitlab/log' >> /bin/everyboot\r
+      && echo 'echo \"\"' >> /bin/everyboot\r && echo 'echo \"######################\"'
+      >> /bin/everyboot\r && echo 'echo \"# GitLab initialized #\"' >> /bin/everyboot\r
+      && echo 'echo \"######################\"' >> /bin/everyboot"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'echo ""' >> /bin/everyboot
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/supervisord/gitlab.conf
+    - /etc/supervisor/conf.d/gitlab.conf
+  - CmdLine:
+    - apt-get autoremove -y && apt-get clean -y && rm -rf /var/lib/apt/lists/* /tmp/*
+      /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "22"
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: volume
+    Volumes:
+    - /home/git/.ssh
+  - Labels:
+    - Key: ch.whatwedo.image.base
+      Value: '"whatwedo/gitlab"'
+    Name: label
+  From:
+    Image: whatwedo/base:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM whatwedo/base:latest

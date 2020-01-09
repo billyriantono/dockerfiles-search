@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- As: git
+  BaseName: alpine/git
+  Commands:
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ENV
+    - /build/
+  - CmdLine:
+    - ls
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - . /build/ENV  && echo $RELEASE_TAG  && git clone --branch $RELEASE_TAG --depth
+      1 https://github.com/magefree/mage.git
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine/git
+  Name: git
+  Platform: ""
+  SourceCode: FROM alpine/git as git
+- As: builder
+  BaseName: maven:3-jdk-8
+  Commands:
+  - Name: workdir
+    Path: /mage/src
+  - Chown: ""
+    From: git
+    Name: copy
+    SourcesAndDest:
+    - /build/mage
+    - .
+  - CmdLine:
+    - mvn clean install -DskipTests  && cd Mage.Server  && mvn assembly:assembly  &&
+      unzip target/mage-server.zip -d xmage-server
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3-jdk-8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM maven:3-jdk-8 as builder
+- BaseName: openjdk:8-jre-alpine
+  Commands:
+  - Env:
+    - Key: XMAGE_DOCKER_SERVER_ADDRESS
+      Value: '"0.0.0.0"'
+    - Key: XMAGE_DOCKER_PORT
+      Value: '"17171"'
+    - Key: XMAGE_DOCKER_SEONDARY_BIND_PORT
+      Value: '"17179"'
+    - Key: XMAGE_DOCKER_MAX_SECONDS_IDLE
+      Value: '"600"'
+    - Key: XMAGE_DOCKER_AUTHENTICATION_ACTIVATED
+      Value: '"false"'
+    - Key: XMAGE_DOCKER_SERVER_NAME
+      Value: '"mage-server"'
+    Name: env
+  - Name: expose
+    Ports:
+    - "17171"
+    - "17179"
+  - Name: workdir
+    Path: /xmage
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /mage/src/Mage.Server/xmage-server
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dockerStartServer.sh
+    - /xmage/
+  - CmdLine:
+    - chmod +x     /xmage/startServer.sh     /xmage/dockerStartServer.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./dockerStartServer.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jre-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre-alpine

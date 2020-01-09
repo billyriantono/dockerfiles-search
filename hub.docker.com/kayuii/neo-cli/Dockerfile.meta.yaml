@@ -1,0 +1,72 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:9-slim
+  Commands:
+  - CmdLine:
+    - apt-get update   && apt-get install -y curl unzip   && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NEO_VER
+      Value: 3.0.0-preview1
+    Name: env
+  - CmdLine:
+    - curl -vLO https://github.com/neo-project/neo-cli/releases/download/v${NEO_VER}/neo-cli-linux-x64.zip     &&
+      curl -vLO https://github.com/neo-project/neo-plugins/releases/download/v${NEO_VER}/ApplicationLogs.zip     &&
+      curl -vLO https://github.com/neo-project/neo-plugins/releases/download/v${NEO_VER}/ImportBlocks.zip     &&
+      curl -vLO https://github.com/neo-project/neo-plugins/releases/download/v${NEO_VER}/RpcWallet.zip     &&
+      curl -vLO https://github.com/neo-project/neo-plugins/releases/download/v${NEO_VER}/RpcNep5Tracker.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip neo-cli-linux-x64.zip && rm neo-cli-linux-x64.zip   && unzip ApplicationLogs.zip
+      -d neo-cli && rm ApplicationLogs.zip   && unzip ImportBlocks.zip -d neo-cli
+      && rm ImportBlocks.zip   && unzip RpcWallet.zip -d neo-cli && rm RpcWallet.zip   &&
+      unzip RpcNep5Tracker.zip -d neo-cli && rm RpcNep5Tracker.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'sed -i'''' ''s/"Chain": .*/"Chain": "Chain",/'' ./neo-cli/*.json   && sed -i''''
+      ''s/"ApplicationLogs_{0}"/"ApplicationLogs"/g'' ./neo-cli/Plugins/ApplicationLogs/*.json'
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:9-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:9-slim as builder
+- As: final
+  BaseName: mcr.microsoft.com/dotnet/core/runtime:3.0
+  Commands:
+  - CmdLine:
+    - apt-get update   && apt-get install -y libleveldb-dev sqlite3 libsqlite3-dev
+      libunwind8-dev unzip   && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /neo-cli
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /neo-cli
+    - .
+  - Name: expose
+    Ports:
+    - "10332"
+    - "20332"
+  - CmdLine:
+    - screen
+    - -DmS
+    - node
+    - dotnet
+    - neo-cli.dll
+    - -r
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: mcr.microsoft.com/dotnet/core/runtime:3.0
+  Name: final
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/runtime:3.0 AS Final

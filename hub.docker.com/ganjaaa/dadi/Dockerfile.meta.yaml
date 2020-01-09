@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- As: composer
+  BaseName: composer:1.7.3
+  Commands:
+  - CmdLine:
+    - composer global require hirak/prestissimo
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - composer.json
+    - .
+  - CmdLine:
+    - composer install --ignore-platform-reqs --no-scripts && composer clearcache
+    Name: run
+    PrependShell: true
+  From:
+    Image: composer:1.7.3
+  Name: composer
+  Platform: ""
+  SourceCode: FROM composer:1.7.3 AS composer
+- As: nodejs
+  BaseName: node:11.10-alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - .
+  - CmdLine:
+    - yarn install && yarn autoclean
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:11.10-alpine
+  Name: nodejs
+  Platform: ""
+  SourceCode: FROM node:11.10-alpine AS nodejs
+- BaseName: php:7.3-fpm-alpine
+  Commands:
+  - CmdLine:
+    - apk add -U --no-cache libpng-dev libmcrypt-dev unixodbc-dev libxml2-dev build-base
+      autoconf     && docker-php-ext-configure pdo_odbc --with-pdo-odbc=unixODBC,/usr     &&
+      docker-php-ext-install -j$(nproc) gd pdo pdo_mysql pdo_odbc xml json     &&
+      pecl install mcrypt-1.0.2     && docker-php-ext-enable mcrypt     && pecl clear-cache     &&
+      apk del --purge autoconf g++ make build-base     && rm -rf /var/cache/apk/*
+      /usr/src/* /tmp/* /usr/lib/php/build
+    Name: run
+    PrependShell: true
+  - Chown: www-data:www-data
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./htdocs
+    - .
+  - Chown: www-data:www-data
+    From: nodejs
+    Name: copy
+    SourcesAndDest:
+    - /node_modules
+    - /var/www/html/webroot/lib
+  - Chown: www-data:www-data
+    From: composer
+    Name: copy
+    SourcesAndDest:
+    - /app/vendor
+    - /var/www/html/vendor
+  - Chown: www-data:www-data
+    From: composer
+    Name: copy
+    SourcesAndDest:
+    - /app/composer.lock
+    - /var/www/html/composer.lock
+  - Name: user
+    User: www-data
+  From:
+    Image: php:7.3-fpm-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.3-fpm-alpine

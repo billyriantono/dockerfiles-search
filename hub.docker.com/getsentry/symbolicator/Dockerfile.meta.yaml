@@ -1,0 +1,135 @@
+MetaArgs: null
+Stages:
+- As: sentry-cli
+  BaseName: getsentry/sentry-cli:1
+  Commands: null
+  From:
+    Image: getsentry/sentry-cli:1
+  Name: sentry-cli
+  Platform: ""
+  SourceCode: FROM getsentry/sentry-cli:1 AS sentry-cli
+- As: symbolicator-build
+  BaseName: rust:slim-stretch
+  Commands:
+  - Name: workdir
+    Path: /work
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends build-essential
+      libssl-dev pkg-config git zip     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Cargo.toml
+    - Cargo.lock
+    - build.rs
+    - ./
+  - CmdLine:
+    - mkdir -p src     && echo "fn main() {}" > src/main.rs     && RUSTFLAGS=-g cargo
+      build --release --locked
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - ./src/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .git
+    - ./.git/
+  - CmdLine:
+    - git update-index --skip-worktree $(git status | grep deleted | awk '{print $2}')
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - RUSTFLAGS=-g cargo build --release --locked
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - objcopy --only-keep-debug target/release/symbolicator target/release/symbolicator.debug     &&
+      objcopy --strip-debug --strip-unneeded target/release/symbolicator     && objcopy
+      --add-gnu-debuglink target/release/symbolicator target/release/symbolicator.debug     &&
+      cp ./target/release/symbolicator /usr/local/bin     && zip /opt/symbolicator-debug.zip
+      target/release/symbolicator.debug
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: sentry-cli
+    Name: copy
+    SourcesAndDest:
+    - /bin/sentry-cli
+    - /bin/sentry-cli
+  - CmdLine:
+    - sentry-cli --version     && SOURCE_BUNDLE="$(sentry-cli difutil bundle-sources
+      ./target/release/symbolicator.debug)"     && mv "$SOURCE_BUNDLE" /opt/symbolicator.src.zip
+    Name: run
+    PrependShell: true
+  From:
+    Image: rust:slim-stretch
+  Name: symbolicator-build
+  Platform: ""
+  SourceCode: FROM rust:slim-stretch AS symbolicator-build
+- BaseName: debian:stretch-slim
+  Commands:
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends openssl ca-certificates
+      gosu cabextract     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SYMBOLICATOR_UID
+      Value: "10021"
+    - Key: SYMBOLICATOR_GID
+      Value: "10021"
+    Name: env
+  - CmdLine:
+    - groupadd --system symbolicator --gid $SYMBOLICATOR_GID     && useradd --system
+      --gid symbolicator --uid $SYMBOLICATOR_UID symbolicator
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - CmdLine:
+    - mkdir /etc/symbolicator &&     chown symbolicator:symbolicator /etc/symbolicator
+      /data
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3021"
+  - Chown: ""
+    From: symbolicator-build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/symbolicator
+    - /bin
+  - Chown: ""
+    From: symbolicator-build
+    Name: copy
+    SourcesAndDest:
+    - /opt/symbolicator-debug.zip
+    - /opt/symbolicator.src.zip
+    - /opt/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - /bin/bash
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

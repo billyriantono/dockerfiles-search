@@ -1,0 +1,94 @@
+MetaArgs: null
+Stages:
+- BaseName: fedora:28
+  Commands:
+  - Name: expose
+    Ports:
+    - "389"
+    - "636"
+  - Env:
+    - Key: container
+      Value: docker
+    Name: env
+  - Key: VERSION
+    Name: arg
+    Value: 1.4.1.2
+  - CmdLine:
+    - mkdir -p /usr/local/src
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dnf upgrade -y &&    dnf install -y wget git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://pagure.io/389-ds-base/archive/389-ds-base-${VERSION}/389-ds-base-389-ds-base-${VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xf 389-ds-base-389-ds-base-${VERSION}.tar.gz -C /usr/local/src
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /usr/local/src/389-ds-base-389-ds-base-${VERSION} /usr/local/src/389-ds-base
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/local/src
+  - CmdLine:
+    - ls -alh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - grep -E "^(Build)?Requires" 389-ds-base/rpm/389-ds-base.spec.in | grep -v -E
+      '(name|MODULE)' | awk '{ print $2 }' | sed 's/%{python3_pkgversion}/3/g' | grep
+      -v "^/" | grep -v pkgversion | sort | uniq | tr '\n' ' '
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dnf upgrade -y &&     dnf install --setopt=strict=False -y         @buildsys-build
+      rpm-build make bzip2 git wget rsync         `grep -E "^(Build)?Requires" 389-ds-base/rpm/389-ds-base.spec.in
+      | grep -v -E '(name|MODULE)' | awk '{ print $2 }' | sed 's/%{python3_pkgversion}/3/g'
+      | grep -v "^/" | grep -v pkgversion | sort | uniq | tr '\n' ' '` &&     dnf
+      clean all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd 389-ds-base &&     PERL_ON=0 RUST_ON=1 make -f rpm.mk rpms
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dnf install -y 389-ds-base/dist/rpms/*389*.rpm &&     dnf clean all
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dscontainer
+    - /usr/sbin/dscontainer
+  - Name: expose
+    Ports:
+    - "3389"
+    - "3636"
+  - CmdLine:
+    - mkdir -p /data/config &&     mkdir -p /data/ssca &&     mkdir -p /data/var/run
+      &&     ln -s /data/var/run /var/run/dirsrv &&     ln -s /data/config /etc/dirsrv/slapd-localhost
+      &&     ln -s /data/ssca /etc/dirsrv/ssca &&     chown -R dirsrv /data
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/sbin/ns-slapd
+    - -d
+    - "0"
+    - -D
+    - /etc/dirsrv/slapd-localhost
+    - -i
+    - /var/run/dirsrv/slapd-localhost.pid
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: fedora:28
+  Name: ""
+  Platform: ""
+  SourceCode: FROM fedora:28

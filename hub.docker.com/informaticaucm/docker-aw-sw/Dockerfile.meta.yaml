@@ -1,0 +1,209 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:bionic
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Ivan Martinez-Ortiz <imartinez@fdi.ucm.es>"'
+    Name: label
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Key: USE_APT_CACHE
+    Name: arg
+    Value: null
+  - Env:
+    - Key: USE_APT_CACHE
+      Value: ${USE_APT_CACHE}
+    Name: env
+  - CmdLine:
+    - ([ ! -z $USE_APT_CACHE ] && echo 'Acquire::http { Proxy "http://172.17.0.1:3142";
+      };' >> /etc/apt/apt.conf.d/01proxy     && echo 'Acquire::HTTPS::Proxy "false";'
+      >> /etc/apt/apt.conf.d/01proxy) || true
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TINI_VERSION
+      Value: v0.18.0
+    Name: env
+  - CmdLine:
+    - "apt-get update && apt-get install -y --no-install-recommends \tcurl gpg dirmngr
+      \t&& curl -k -fSL \"https://github.com/krallin/tini/releases/download/$TINI_VERSION/tini\"
+      -o /usr/local/bin/tini \t&& curl -k -fSL \"https://github.com/krallin/tini/releases/download/$TINI_VERSION/tini.asc\"
+      -o /usr/local/bin/tini.asc \t&& export GNUPGHOME=\"$(mktemp -d)\" \t&& for server
+      in $(shuf -e ha.pool.sks-keyservers.net                             hkp://p80.pool.sks-keyservers.net:80
+      \                            keyserver.ubuntu.com                             hkp://keyserver.ubuntu.com:80
+      \                            pgp.mit.edu) ; do         gpg --keyserver \"$server\"
+      --recv-keys  595E85A6B1B4779EA4DAAEC70B588DFF0527A9B7 && break || : ;     done
+      \t&& gpg --batch --verify /usr/local/bin/tini.asc /usr/local/bin/tini \t&& rm
+      -r \"$GNUPGHOME\" /usr/local/bin/tini.asc && unset GNUPGHOME \t&& chmod +x /usr/local/bin/tini
+      \t&& apt-get remove --purge -y curl         && apt-get clean         && rm -fr
+      /var/lib/apt/lists/* /tmp/* /var/tmp/*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisor/*.conf
+    - /etc/supervisor/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisor/start_*.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - "apt-get update && apt-get install -y --no-install-recommends \tsupervisor \t&&
+      chmod +x /usr/local/bin/start*.sh         && apt-get clean         && rm -fr
+      /var/lib/apt/lists/* /tmp/* /var/tmp/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SSH_PASS
+      Value: default
+    Name: env
+  - CmdLine:
+    - "apt-get update && apt-get install -y --no-install-recommends \topenssh-server
+      \t&& sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+      \t&& sed 's@session\\s*required\\s*pam_loginuid.so@session optional pam_loginuid.so@g'
+      -i /etc/pam.d/sshd \t&& mkdir /var/run/sshd && chmod 0755 /var/run/sshd \t&&
+      apt-get clean \t&& rm -fr /var/lib/apt/lists/* /tmp/* /var/tmp/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MYSQL_PASS
+      Value: default
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mysql/configure_mysql.sh
+    - /usr/local/bin
+  - CmdLine:
+    - "{\techo mysql-server-5.7 mysql-server/root_password password ''; \techo mysql-server-5.7
+      mysql-server/root_password_again password ''; \t} | debconf-set-selections \t&&
+      apt-get update && apt-get install -y --no-install-recommends \tmysql-server-5.7
+      \t&& rm -fr /var/lib/mysql \t&& mkdir -p /var/lib/mysql /var/run/mysqld \t&&
+      chown -R mysql:mysql /var/lib/mysql /var/run/mysqld \t&& chmod 777 /var/run/mysqld
+      \t&& sed -i 's/127\\.0\\.0\\.1/0\\.0\\.0\\.0/g' /etc/mysql/my.cnf \t&& sed -Ei
+      's/^(bind-address|log)/#&/' /etc/mysql/mysql.conf.d/mysqld.cnf \t&& echo '[mysqld]\\nskip-host-cache\\nskip-name-resolve'
+      > /etc/mysql/conf.d/docker.cnf \t&& chmod +x /usr/local/bin/configure_mysql.sh
+      \t&& apt-get clean \t&& rm -fr /var/lib/apt/lists/* /tmp/* /var/tmp/*"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/lib/mysql
+  - Env:
+    - Key: PHP_UPLOAD_MAX_FILESIZE
+      Value: 10M
+    Name: env
+  - Env:
+    - Key: PHP_POST_MAX_SIZE
+      Value: 10M
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - apache/fix_acl.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - "apt-get update && apt-get install -y --no-install-recommends \tapache2 libapache2-mod-php7.2
+      php7.2-mysqli php7.2-mbstring php7.2-xml php7.2-gd php7.2-bz2 php7.2-zip php7.2-curl
+      php7.2-opcache php7.2-json php-apcu \t&& echo \"ServerName localhost\" >> /etc/apache2/apache2.conf
+      \t&& a2enmod rewrite \t&& chmod +x /usr/local/bin/fix_acl.sh \t&& apt-get clean
+      \t&& rm -fr /var/lib/apt/lists/* /tmp/* /var/tmp/*"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/www
+    - /etc/apache2
+    - /etc/php/
+  - Env:
+    - Key: PHP_MY_ADMIN_VERSION
+      Value: 4.8.3
+    Name: env
+  - Env:
+    - Key: PHP_MY_ADMIN_HOME
+      Value: /opt/phpmyadmin
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - phpmyadmin/configure_phpmyadmin.sh
+    - /usr/local/bin
+  - CmdLine:
+    - "apt-get update && apt-get install -y --no-install-recommends         curl         &&
+      curl -k -fSL \"https://files.phpmyadmin.net/phpMyAdmin/${PHP_MY_ADMIN_VERSION}/phpMyAdmin-${PHP_MY_ADMIN_VERSION}-all-languages.tar.gz\"
+      -o /opt/phpmyadmin.tar.gz         && curl -k -fSL \"https://files.phpmyadmin.net/phpMyAdmin/${PHP_MY_ADMIN_VERSION}/phpMyAdmin-${PHP_MY_ADMIN_VERSION}-all-languages.tar.gz.asc\"
+      -o /opt/phpmyadmin.tar.gz.asc         && export GNUPGHOME=\"$(mktemp -d)\" \t&&
+      for server in $(shuf -e ha.pool.sks-keyservers.net                             hkp://p80.pool.sks-keyservers.net:80
+      \                            keyserver.ubuntu.com                             hkp://keyserver.ubuntu.com:80
+      \                            pgp.mit.edu) ; do         gpg --keyserver \"$server\"
+      --recv-keys 3D06A59ECE730EB71B511C17CE752F178259BD92 && break || : ;     done
+      \        && gpg --batch --verify /opt/phpmyadmin.tar.gz.asc /opt/phpmyadmin.tar.gz
+      \        && rm -r \"$GNUPGHOME\" && unset GNUPGHOME \t&& tar xzf /opt/phpmyadmin.tar.gz
+      -C /opt \t&& mv \"/opt/phpMyAdmin-${PHP_MY_ADMIN_VERSION}-all-languages\" \"$PHP_MY_ADMIN_HOME\"
+      \t&& rm -rf \"$PHP_MY_ADMIN_HOME/setup/\" \"$PHP_MY_ADMIN_HOME/examples/\" \"$PHP_MY_ADMIN_HOME/test/\"
+      \"$PHP_MY_ADMIN_HOME/po/\" \"$PHP_MY_ADMIN_HOME/composer.json\" \"$PHP_MY_ADMIN_HOME/RELEASE-DATE-${PHP_MY_ADMIN_VERSION}\"
+      \t&& sed -i \"s@define('CONFIG_DIR'.*@define('CONFIG_DIR', '/etc/phpmyadmin/');@\"
+      \"$PHP_MY_ADMIN_HOME/libraries/vendor_config.php\" \t&& chown -R www-data:www-data
+      \"$PHP_MY_ADMIN_HOME\" \t&& find \"$PHP_MY_ADMIN_HOME\" -type d -exec chmod
+      750 {} \\; \t&& find \"$PHP_MY_ADMIN_HOME\" -type f -exec chmod 640 {} \\; \t&&
+      chmod +x /usr/local/bin/configure_phpmyadmin.sh \t&& mkdir /etc/phpmyadmin \t&&
+      apt-get remove --purge -y curl \t&& apt-get clean \t&& rm -fr /var/lib/apt/lists/*
+      /tmp/* /var/tmp/* /opt/phpmyadmin.tar.gz /opt/phpmyadmin.tar.gz.asc"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - phpmyadmin/config.inc.php
+    - /etc/phpmyadmin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - phpmyadmin/apache.conf
+    - /etc/phpmyadmin
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends         pwgen         &&
+      apt-get remove --purge -y curl         && apt-get clean         && rm -fr /var/lib/apt/lists/*
+      /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - /usr/local/bin
+  - CmdLine:
+    - chmod +x /usr/local/bin/run.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "22"
+    - "80"
+  - CmdLine:
+    - /usr/local/bin/run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:bionic
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic

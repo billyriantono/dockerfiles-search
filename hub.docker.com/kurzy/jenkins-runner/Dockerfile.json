@@ -1,0 +1,219 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "JENKINS_VERSION",
+      "DefaultValue": "2.121.1",
+      "ProvidedValue": null,
+      "Value": "2.121.1"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "maven",
+      "BaseName": "maven:3.5.2",
+      "SourceCode": "FROM maven:3.5.2 as maven",
+      "Platform": "",
+      "As": "maven",
+      "From": {
+        "Image": "maven:3.5.2"
+      },
+      "Commands": null
+    },
+    {
+      "Name": "jenkinsfilerunner-mvncache",
+      "BaseName": "maven",
+      "SourceCode": "FROM maven as jenkinsfilerunner-mvncache",
+      "Platform": "",
+      "As": "jenkinsfilerunner-mvncache",
+      "From": {
+        "Stage": {
+          "Named": "maven",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "pom.xml",
+            "/src/pom.xml"
+          ]
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "app/pom.xml",
+            "/src/app/pom.xml"
+          ]
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "bootstrap/pom.xml",
+            "/src/bootstrap/pom.xml"
+          ]
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "setup/pom.xml",
+            "/src/setup/pom.xml"
+          ]
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "payload/pom.xml",
+            "/src/payload/pom.xml"
+          ]
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "payload-dependencies/pom.xml",
+            "/src/payload-dependencies/pom.xml"
+          ]
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "test/pom.xml",
+            "/src/test/pom.xml"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/src"
+        },
+        {
+          "Env": [
+            {
+              "Key": "MAVEN_OPTS",
+              "Value": "-Dmaven.repo.local=/mavenrepo"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "mvn compile dependency:resolve dependency:resolve-plugins"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "jenkinsfilerunner-build",
+      "BaseName": "maven",
+      "SourceCode": "FROM maven as jenkinsfilerunner-build",
+      "Platform": "",
+      "As": "jenkinsfilerunner-build",
+      "From": {
+        "Stage": {
+          "Named": "maven",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "MAVEN_OPTS",
+              "Value": "-Dmaven.repo.local=/mavenrepo"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "jenkinsfilerunner-mvncache",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/mavenrepo",
+            "/mavenrepo"
+          ]
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            ".",
+            "/jenkinsfile-runner"
+          ]
+        },
+        {
+          "CmdLine": [
+            "cd /jenkinsfile-runner \u0026\u0026 mvn package"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "s4sdk/jenkins-master",
+      "SourceCode": "FROM s4sdk/jenkins-master",
+      "Platform": "",
+      "From": {
+        "Image": "s4sdk/jenkins-master"
+      },
+      "Commands": [
+        {
+          "Name": "user",
+          "User": "root"
+        },
+        {
+          "CmdLine": [
+            "mkdir /app \u0026\u0026 unzip /usr/share/jenkins/jenkins.war -d /app/jenkins"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "/usr/local/bin/install-plugins.sh \u003c /usr/share/jenkins/ref/plugins.txt"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "jenkinsfilerunner-build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/jenkinsfile-runner/app/target/appassembler",
+            "/app"
+          ]
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/tmp"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/app/bin/jenkinsfile-runner",
+            "-w",
+            "/app/jenkins",
+            "-p",
+            "/usr/share/jenkins/ref/plugins",
+            "-f",
+            "/workspace"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

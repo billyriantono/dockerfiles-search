@@ -1,0 +1,87 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: ruby:2.6-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache --update         build-base         nodejs         libpq         postgresql         libxml2-dev         postgresql-dev         postgresql-client
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gemfile*
+    - ./
+  - CmdLine:
+    - gem install bundler:2.0.1   && bundle install -j4 --retry 3   && rm -rf /usr/local/bundle/cache/*.gem   &&
+      find /usr/local/bundle/gems/ -name "*.c" -delete   && find /usr/local/bundle/gems/
+      -name "*.o" -delete
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - ./
+  - CmdLine:
+    - mkdir -p ./tmp/cache ./log
+    Name: run
+    PrependShell: true
+  From:
+    Image: ruby:2.6-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ruby:2.6-alpine as builder
+- As: prod
+  BaseName: ruby:2.6-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache --update         nodejs         postgresql-client         tzdata   &&
+      addgroup -g 1000 -S app   && adduser -u 1000 -S app -G app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/mpb
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bundle/
+    - /usr/local/bundle/
+  - Chown: app:app
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src
+    - ./
+  - CmdLine:
+    - echo -e '#!/bin/sh\ncd /usr/src/mpb\nrake run_payroll' > /etc/periodic/hourly/mpb   &&
+      chmod 777 /etc/periodic/hourly/mpb
+    Name: run
+    PrependShell: true
+  - Health:
+      Interval: 30000000000
+      Test:
+      - CMD-SHELL
+      - echo -e 'require "net/http"\nNet::HTTP.get(URI("http://127.0.0.1:3000/"))'
+        | ruby
+      Timeout: 3000000000
+    Name: healthcheck
+  - Name: user
+    User: app
+  - CmdLine:
+    - /bin/sh
+    - /usr/src/mpb/docker-entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "3000"
+  From:
+    Image: ruby:2.6-alpine
+  Name: prod
+  Platform: ""
+  SourceCode: FROM ruby:2.6-alpine as prod

@@ -1,0 +1,119 @@
+MetaArgs: null
+Stages:
+- BaseName: tekintian/php:7.0.30
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"TekinTian tekintian@gmail.com"'
+    Name: label
+  - Env:
+    - Key: TENGINE_INSTALL_DIR
+      Value: /usr/local/tengine
+    - Key: TENGINE_VERSION
+      Value: 2.2.3
+    - Key: PCRE_VERSION
+      Value: "8.42"
+    - Key: OPENSSL_VERSION
+      Value: 1.1.0j
+    - Key: LuaJIT_VERSION
+      Value: 2.0.5
+    - Key: LNM_VERSION
+      Value: 0.10.14rc3
+    - Key: NDK_VERSION
+      Value: 0.3.1rc1
+    - Key: RUN_USER
+      Value: www
+    - Key: WWWROOT_DIR
+      Value: /home/wwwroot
+    - Key: WWWLOGS_DIR
+      Value: /home/wwwlogs
+    - Key: REMOTE_SRC_PATH
+      Value: https://github.com/tekintian/tengine-php/raw/master
+    Name: env
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - buildDeps='                gcc                 g++                 make                 cmake                 autoconf                 libssl-dev                 libcurl4-openssl-dev                 libxslt-dev                 libicu-dev                 libxml2-dev                 libjpeg-dev                 libpng-dev                 libfreetype6-dev                 libsasl2-dev                 libevent-dev                 libpcre3-dev                 libgpgme11-dev                 pkg-config                 patch                 libgpgme11-dev                 --no-install-recommends
+      '         && apt-get update && apt-get install -y ${buildDeps} && rm -rf /var/lib/apt/lists/*  &&     wget
+      -c --no-check-certificate http://luajit.org/download/LuaJIT-$LuaJIT_VERSION.tar.gz
+      &&     tar xzf LuaJIT-$LuaJIT_VERSION.tar.gz &&     cd LuaJIT-$LuaJIT_VERSION
+      && make &&     make install PREFIX=/usr/local/luajit &&     export LUAJIT_LIB=/usr/local/luajit/lib
+      && export LUAJIT_INC=/usr/local/luajit/include/luajit-2.0 &&     cd /tmp/ &&     wget
+      -c --no-check-certificate https://ftp.pcre.org/pub/pcre/pcre-${PCRE_VERSION}.tar.gz
+      &&     wget --no-check-certificate https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz
+      &&     wget -c --no-check-certificate https://github.com/openresty/lua-nginx-module/archive/v${LNM_VERSION}.tar.gz
+      -O  lua-nginx-module-${LNM_VERSION}.tar.gz &&     wget -c --no-check-certificate
+      https://github.com/simplresty/ngx_devel_kit/archive/v${NDK_VERSION}.tar.gz -O
+      ngx_devel_kit-${NDK_VERSION}.tar.gz &&     wget -c --no-check-certificate http://tengine.taobao.org/download/tengine-${TENGINE_VERSION}.tar.gz
+      &&     tar xzf pcre-${PCRE_VERSION}.tar.gz &&     tar xzf openssl-${OPENSSL_VERSION}.tar.gz
+      &&     tar xzf lua-nginx-module-${LNM_VERSION}.tar.gz &&     tar xzf ngx_devel_kit-${NDK_VERSION}.tar.gz
+      &&     tar xzf tengine-${TENGINE_VERSION}.tar.gz &&     cd tengine-${TENGINE_VERSION}
+      &&     sed -i 's@CFLAGS="$CFLAGS -g"@#CFLAGS="$CFLAGS -g"@' auto/cc/gcc &&     ./configure         --prefix=${TENGINE_INSTALL_DIR}         --user=${RUN_USER}
+      --group=${RUN_USER}         --add-module=/tmp/ngx_devel_kit-${NDK_VERSION}         --add-module=/tmp/lua-nginx-module-${LNM_VERSION}         --with-http_v2_module         --with-http_ssl_module         --with-ipv6         --with-http_gzip_static_module         --with-http_realip_module         --with-http_flv_module         --with-http_mp4_module         --with-http_concat_module=shared         --with-http_sysguard_module=shared         --with-openssl=/tmp/openssl-${OPENSSL_VERSION}         --with-pcre=/tmp/pcre-${PCRE_VERSION}         --with-pcre-jit         --with-luajit-lib=/usr/local/luajit/lib/          --with-luajit-inc=/usr/local/luajit/include/luajit-2.0/          --with-ld-opt=-Wl,-rpath,/usr/local/luajit/lib          --with-jemalloc
+      &&     make && make install &&     mkdir -p ${TENGINE_INSTALL_DIR}/conf/rewrite
+      &&     mkdir -p ${TENGINE_INSTALL_DIR}/logs/hack &&     cp -a ${TENGINE_INSTALL_DIR}/conf/nginx.conf
+      ${TENGINE_INSTALL_DIR}/conf/nginx.conf.bak &&      cd /tmp/ && rm -rf /tmp/*
+      &&     apt-get purge -y --auto-remove ${buildDeps}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ${REMOTE_SRC_PATH}/nginx_waf.conf
+    - ${TENGINE_INSTALL_DIR}/conf/nginx.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ${REMOTE_SRC_PATH}/nginx-init
+    - /etc/init.d/nginx
+  - CmdLine:
+    - sed -i "s@worker_connections 51200;@worker_connections 51200;\n    reuse_port
+      on;@" ${TENGINE_INSTALL_DIR}/conf/nginx.conf &&     sed -i "s@^worker_processes.*@worker_processes
+      auto;\nworker_cpu_affinity auto;\ndso {\n\tload ngx_http_concat_module.so;\n\tload
+      ngx_http_sysguard_module.so;\n}@" ${TENGINE_INSTALL_DIR}/conf/nginx.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ${REMOTE_SRC_PATH}/install_waf.sh
+    - /tmp/install_waf.sh
+  - CmdLine:
+    - chmod 777 install_waf.sh &&     bash install_waf.sh &&     rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${WWWROOT_DIR}
+  - CmdLine:
+    - mkdir -p ${WWWLOGS_DIR} &&     mkdir -p ${WWWROOT_DIR}/default &&     echo "<?php
+      phpinfo();" > /${WWWROOT_DIR}/default/index.php
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ${REMOTE_SRC_PATH}/entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - chmod 777 /entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - nginx
+    - -g
+    - daemon off;
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: tekintian/php:7.0.30
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tekintian/php:7.0.30

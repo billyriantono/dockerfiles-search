@@ -1,0 +1,119 @@
+MetaArgs: null
+Stages:
+- As: assignment-api-builder
+  BaseName: microsoft/dotnet:2.2.104-sdk
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.sln'
+    - src/*/*.csproj
+    - tests/*/*.csproj
+    - ./
+  - CmdLine:
+    - for file in *Test.csproj; do mkdir -p tests/${file%.*}/ && mv $file tests/${file%.*}/;
+      done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - for file in *.csproj; do mkdir -p src/${file%.*}/ && mv $file src/${file%.*}/;
+      done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dotnet restore ./Api.sln
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/.
+    - ./src/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tests/.
+    - ./tests/
+  - CmdLine:
+    - dotnet build Api.sln --no-restore
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/tests/BlogTest
+  - CmdLine:
+    - dotnet
+    - test
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - dotnet test
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/src/Data
+  - CmdLine:
+    - dotnet ef migrations script -i -o migrations.sql -c ApplicationDbContext
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/src/Api
+  - CmdLine:
+    - dotnet publish -o out /p:PublishWithAspNetCoreTargetManifest="false"
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.2.104-sdk
+  Name: assignment-api-builder
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2.104-sdk AS assignment-api-builder
+- As: assignment-api-runtime
+  BaseName: microsoft/dotnet:2.2.2-aspnetcore-runtime
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: assignment-api-builder
+    Name: copy
+    SourcesAndDest:
+    - /app/src/Api/out
+    - ./
+  - Env:
+    - Key: ASPNETCORE_URLS
+      Value: '"http://*:5000"'
+    Name: env
+  - Env:
+    - Key: ASPNETCORE_ENVIRONMENT
+      Value: '"Production"'
+    Name: env
+  - Name: expose
+    Ports:
+    - 5000/tcp
+  - CmdLine:
+    - dotnet
+    - Assignment.Api.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: microsoft/dotnet:2.2.2-aspnetcore-runtime
+  Name: assignment-api-runtime
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2.2-aspnetcore-runtime AS assignment-api-runtime
+- As: assignment-database
+  BaseName: postgres:11
+  Commands:
+  - Chown: ""
+    From: assignment-api-builder
+    Name: copy
+    SourcesAndDest:
+    - /app/src/Data/migrations.sql
+    - /docker-entrypoint-initdb.d/
+  From:
+    Image: postgres:11
+  Name: assignment-database
+  Platform: ""
+  SourceCode: FROM postgres:11 AS assignment-database

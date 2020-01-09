@@ -1,0 +1,75 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: golang:1.13-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git upx   && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/foomo/neosproxy
+  From:
+    Image: golang:1.13-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM golang:1.13-alpine as base
+- As: builder
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - CmdLine:
+    - go mod vendor
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 go build -o /go/bin/neosproxy cmd/neosproxy/main.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - upx /go/bin/neosproxy
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base as builder
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk add --no-cache     tzdata ca-certificates   && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo "hosts: files dns" > /etc/nsswitch.conf'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/neosproxy
+    - /usr/local/bin/neosproxy
+  - Name: volume
+    Volumes:
+    - /var/data/neosproxy
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /usr/local/bin/neosproxy
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

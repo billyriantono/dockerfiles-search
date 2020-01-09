@@ -1,0 +1,149 @@
+MetaArgs:
+- DefaultValue: 2.2.3
+  Key: BEANCOUNT_VERSION
+  ProvidedValue: null
+  Value: 2.2.3
+- DefaultValue: 10.17.0-buster
+  Key: NODE_BUILD_IMAGE
+  ProvidedValue: null
+  Value: 10.17.0-buster
+Stages:
+- As: node_build_env
+  BaseName: node:${NODE_BUILD_IMAGE}
+  Commands:
+  - Key: SOURCE_BRANCH
+    Name: arg
+    Value: null
+  - Env:
+    - Key: FAVA_VERSION
+      Value: ${SOURCE_BRANCH:-v1.12}
+    Name: env
+  - Name: workdir
+    Path: /tmp/build
+  - CmdLine:
+    - git clone https://github.com/beancount/fava
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build/fava
+  - CmdLine:
+    - git checkout ${FAVA_VERSION}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make mostlyclean
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:${NODE_BUILD_IMAGE}
+  Name: node_build_env
+  Platform: ""
+  SourceCode: FROM node:${NODE_BUILD_IMAGE} as node_build_env
+- As: build_env
+  BaseName: debian:buster
+  Commands:
+  - Key: BEANCOUNT_VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: BEANCOUNT_URL
+      Value: https://bitbucket.org/blais/beancount/get/${BEANCOUNT_VERSION}.tar.gz
+    Name: env
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y build-essential libxml2-dev libxslt-dev curl         python3
+      libpython3-dev python3-pip git python3-venv
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build
+  - Env:
+    - Key: PATH
+      Value: '"/app/bin:$PATH"'
+    Name: env
+  - CmdLine:
+    - python3 -mvenv /app
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip3 install -U pip setuptools
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -J -L ${BEANCOUNT_URL} -o beancount-${BEANCOUNT_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xvf beancount-${BEANCOUNT_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CFLAGS=-s pip3 install -U ./beancount-*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: node_build_env
+    Name: copy
+    SourcesAndDest:
+    - /tmp/build/fava
+    - /tmp/build/fava
+  - CmdLine:
+    - pip3 install -U ./fava
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /app -name __pycache__ -exec rm -rf -v {} +
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:buster
+  Name: build_env
+  Platform: ""
+  SourceCode: FROM debian:buster as build_env
+- BaseName: gcr.io/distroless/python3-debian10
+  Commands:
+  - Chown: ""
+    From: build_env
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /app
+  - Name: expose
+    Ports:
+    - "5000"
+  - Env:
+    - Key: BEANCOUNT_FILE
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: LC_ALL
+      Value: '"C.UTF-8"'
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: '"C.UTF-8"'
+    Name: env
+  - Env:
+    - Key: FAVA_HOST
+      Value: '"0.0.0.0"'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"/app/bin:$PATH"'
+    Name: env
+  - CmdLine:
+    - fava
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: gcr.io/distroless/python3-debian10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM gcr.io/distroless/python3-debian10

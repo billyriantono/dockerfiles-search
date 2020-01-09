@@ -1,0 +1,253 @@
+MetaArgs: null
+Stages:
+- As: caddybuild
+  BaseName: golang:1.12.8
+  Commands:
+  - Key: CADDY_VERSION
+    Name: arg
+    Value: '"v1.0.3"'
+  - Key: CADDY_JWT_VERSION
+    Name: arg
+    Value: '"v3.7.2"'
+  - Key: LOGINSRV_VERSION
+    Name: arg
+    Value: '"v1.3.1"'
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - CmdLine:
+    - mkdir -p /caddy
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /caddy
+  - CmdLine:
+    - go mod init caddy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -v github.com/caddyserver/caddy@$CADDY_VERSION
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - caddy.go
+    - .
+  - CmdLine:
+    - go get -v github.com/BTBurke/caddy-jwt@$CADDY_JWT_VERSION
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -v github.com/tarent/loginsrv/caddy@$LOGINSRV_VERSION
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GO111MODULE=on go build -o caddy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /dist/app && mkdir -p /dist/usr/local/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp caddy /dist/usr/local/bin/
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.8
+  Name: caddybuild
+  Platform: ""
+  SourceCode: FROM golang:1.12.8 as caddybuild
+- As: gollum-ruby
+  BaseName: ruby:2.6.3-alpine3.10
+  Commands: null
+  From:
+    Image: ruby:2.6.3-alpine3.10
+  Name: gollum-ruby
+  Platform: ""
+  SourceCode: FROM ruby:2.6.3-alpine3.10 as gollum-ruby
+- As: gollum-build
+  BaseName: gollum-ruby
+  Commands:
+  - Key: ALPINE_SDK_VERSION
+    Name: arg
+    Value: 1.0-r0
+  - Key: ICU_DEV_VERSION
+    Name: arg
+    Value: 64.2-r0
+  - Key: GOLLUM_VERSION
+    Name: arg
+    Value: 4.1.4
+  - Chown: 1000:1000
+    From: caddybuild
+    Name: copy
+    SourcesAndDest:
+    - /dist
+    - /dist
+  - CmdLine:
+    - apk add  alpine-sdk=$ALPINE_SDK_VERSION icu-dev=$ICU_DEV_VERSION
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gem install gollum -v $GOLLUM_VERSION
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gem install github-markdown
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /usr/local/bundle /dist/usr/local/bundle
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /dist/usr/lib
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /usr/lib/libicuuc.so* /dist/usr/lib/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /usr/lib/libicui18n.so* /dist/usr/lib/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /usr/lib/libicudata.so* /dist/usr/lib/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - startup.sh
+    - /dist/startup.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Caddyfile
+    - /dist/app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.rb
+    - /dist/app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .git
+    - /gollum-galore/.git
+  - CmdLine:
+    - set -x; cd /gollum-galore &&      POTENTIAL_TAG="$(git name-rev --name-only
+      --tags HEAD)"      COMMIT="commit $(git rev-parse --short HEAD)";      (if [
+      "${POTENTIAL_TAG}" != "undefined" ]; then echo "${POTENTIAL_TAG} (${COMMIT})";       else
+      echo "${COMMIT}"; fi) > /dist/app/version
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: gollum-ruby
+  Name: gollum-build
+  Platform: ""
+  SourceCode: FROM gollum-ruby as gollum-build
+- BaseName: gollum-ruby
+  Commands:
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: SOURCE_REPOSITORY_URL
+    Name: arg
+    Value: null
+  - Key: GIT_TAG
+    Name: arg
+    Value: null
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: GIT_VERSION
+    Name: arg
+    Value: 2.22.0-r0
+  - Key: LIBCAP_VERSION
+    Name: arg
+    Value: 2.27-r0
+  - Labels:
+    - Key: org.opencontainers.image.created
+      Value: '"${BUILD_DATE}"'
+    - Key: org.opencontainers.image.authors
+      Value: '"schnatterer"'
+    - Key: org.opencontainers.image.url
+      Value: '"https://hub.docker.com/r/schnatterer/gollum-galore/"'
+    - Key: org.opencontainers.image.documentation
+      Value: '"https://hub.docker.com/r/schnatterer/gollum-galore/"'
+    - Key: org.opencontainers.image.source
+      Value: '"${SOURCE_REPOSITORY_URL}"'
+    - Key: org.opencontainers.image.version
+      Value: '"${GIT_TAG}"'
+    - Key: org.opencontainers.image.revision
+      Value: '"${VCS_REF}"'
+    - Key: org.opencontainers.image.vendor
+      Value: '"schnatterer"'
+    - Key: org.opencontainers.image.licenses
+      Value: '"MIT"'
+    - Key: org.opencontainers.image.title
+      Value: '"gollum-galore"'
+    - Key: org.opencontainers.image.description
+      Value: "\"\U0001F36C Gollum wiki with lots of sugar \U0001F36C\""
+    Name: label
+  - Env:
+    - Key: GOLLUM_PARAMS
+      Value: ''''''
+    - Key: CADDY_PARAMS
+      Value: ''''''
+    - Key: HOST
+      Value: ''':80'''
+    Name: env
+  - Chown: 1000:1000
+    From: gollum-build
+    Name: copy
+    SourcesAndDest:
+    - /dist
+    - /
+  - Name: volume
+    Volumes:
+    - /tmp
+  - CmdLine:
+    - set -x    && apk --update add git=$GIT_VERSION   libcap=$LIBCAP_VERSION   &&
+      rm -rf /var/cache/apk/*   && mkdir -p /gollum/wiki && mkdir -p /gollum/config   &&
+      touch /gollum/config/Caddyfile   && chmod a+rw /app   && chmod -R a+rw /gollum/   &&
+      setcap cap_net_bind_service=+ep $(which caddy)   && chmod +rx /startup.sh   &&
+      addgroup -g 1000 gollum && adduser -u 1000 -G gollum -s /bin/sh -D gollum   &&
+      chown -R gollum:gollum /app   && chown -R gollum:gollum /gollum   && chown gollum:gollum
+      /startup.sh   && chown gollum:gollum /tmp   && chmod 700 /tmp
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /gollum/wiki
+  - Name: user
+    User: gollum
+  - Name: workdir
+    Path: app
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: expose
+    Ports:
+    - "443"
+  - CmdLine:
+    - /startup.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: gollum-ruby
+  Name: ""
+  Platform: ""
+  SourceCode: FROM gollum-ruby

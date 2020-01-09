@@ -1,0 +1,42 @@
+MetaArgs: null
+Stages:
+- BaseName: uroottest/test-image-amd64:v3.2.4
+  Commands:
+  - CmdLine:
+    - "sudo apt-get update &&                          \tsudo apt-get install -y --no-install-recommends
+      \t\t`# tools for creating bootable disk images` \t\tgdisk \t\te2fsprogs \t\tqemu-utils
+      \t\t&& \tsudo rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/u-root/u-root
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - linux-config
+    - .
+  - CmdLine:
+    - "set -x; \tgit clone -q --depth 1 -b v4.19 https://github.com/torvalds/linux.git
+      && \tmv linux-config linux/.config && \t(cd linux/ && exec make -j$(nproc))
+      && \tcp linux/arch/x86/boot/bzImage bzImage && \trm -r linux/"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -x; \tmkdir rootfs && \tcp bzImage rootfs/ && \tu-root -build=bb -o rootfs/ramfs.cpio
+      -initcmd shutdown  && \txz --check=crc32 --lzma2=dict=512KiB rootfs/ramfs.cpio
+      && \t{ \t\techo menuentry; \t\techo linux bzImage; \t\techo initrd ramfs.cpio.xz;
+      \t} > rootfs/grub2.cfg && \tdu -a rootfs/ && \tqemu-img create -f raw disk.img
+      20m && \tsgdisk --clear --new 1::-0 --typecode=1:8300 --change-name=1:'Linux
+      root filesystem' \t\tdisk.img && \tmkfs.ext2 -F -E 'offset=1048576' -d rootfs/
+      disk.img 18m && \tgdisk -l disk.img && \tqemu-img convert -f raw -O qcow2 disk.img
+      disk.qcow2 && \tmv disk.qcow2 disk.img && \trm -r rootfs/"
+    Name: run
+    PrependShell: true
+  From:
+    Image: uroottest/test-image-amd64:v3.2.4
+  Name: ""
+  Platform: ""
+  SourceCode: FROM uroottest/test-image-amd64:v3.2.4

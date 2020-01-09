@@ -1,0 +1,131 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: centos:7
+  Commands:
+  - Env:
+    - Key: PATH
+      Value: /usr/share/elasticsearch/bin:$PATH
+    Name: env
+  - CmdLine:
+    - yum install -y unzip which
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd -g 1000 elasticsearch &&     adduser -u 1000 -g 1000 -d /usr/share/elasticsearch
+      elasticsearch
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/share/elasticsearch
+  - CmdLine:
+    - cd /opt && curl --retry 8 -s -L -O https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.0.1-linux-x86_64.tar.gz
+      && cd -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar zxf /opt/elasticsearch-7.0.1-linux-x86_64.tar.gz --strip-components=1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - grep ES_DISTRIBUTION_TYPE=tar /usr/share/elasticsearch/bin/elasticsearch-env     &&
+      sed -ie 's/ES_DISTRIBUTION_TYPE=tar/ES_DISTRIBUTION_TYPE=docker/' /usr/share/elasticsearch/bin/elasticsearch-env
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p config data logs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 0775 config data logs
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/elasticsearch.yml
+    - config/log4j2.properties
+    - config/
+  From:
+    Image: centos:7
+  Name: builder
+  Platform: ""
+  SourceCode: FROM centos:7 AS builder
+- BaseName: centos:7
+  Commands:
+  - Env:
+    - Key: ELASTIC_CONTAINER
+      Value: "true"
+    Name: env
+  - CmdLine:
+    - 'for iter in {1..10}; do yum update -y &&     yum install -y nc unzip wget which
+      &&     yum clean all && exit_code=0 && break || exit_code=$? && echo "yum error:
+      retry $iter in 10s" && sleep 10; done;     (exit $exit_code)'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd -g 1000 elasticsearch &&     adduser -u 1000 -g 1000 -G 0 -d /usr/share/elasticsearch
+      elasticsearch &&     chmod 0775 /usr/share/elasticsearch &&     chgrp 0 /usr/share/elasticsearch
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/share/elasticsearch
+  - Chown: "1000:0"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/elasticsearch
+    - /usr/share/elasticsearch
+  - CmdLine:
+    - ln -sf /etc/pki/ca-trust/extracted/java/cacerts /usr/share/elasticsearch/jdk/lib/security/cacerts
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /usr/share/elasticsearch/bin:$PATH
+    Name: env
+  - Chown: "1000:0"
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/docker-entrypoint.sh
+    - /usr/local/bin/docker-entrypoint.sh
+  - CmdLine:
+    - chgrp 0 /usr/local/bin/docker-entrypoint.sh &&     chmod g=u /etc/passwd &&     chmod
+      0775 /usr/local/bin/docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9200"
+    - "9300"
+  - Labels:
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.vendor
+      Value: '"Elastic"'
+    - Key: org.label-schema.name
+      Value: '"elasticsearch"'
+    - Key: org.label-schema.version
+      Value: '"7.0.1"'
+    - Key: org.label-schema.url
+      Value: '"https://www.elastic.co/products/elasticsearch"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/elastic/elasticsearch"'
+    - Key: license
+      Value: '"Elastic License"'
+    Name: label
+  - CmdLine:
+    - /usr/local/bin/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - eswrapper
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos:7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:7

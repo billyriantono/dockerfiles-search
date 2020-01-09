@@ -1,0 +1,104 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.13
+  Commands:
+  - CmdLine:
+    - go get -u github.com/gobuffalo/packr/v2/packr2
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /fs
+  - CmdLine:
+    - mkdir -p etc/ssl/certs lib/x86_64-linux-gnu tmp bin data;     cp /etc/ssl/certs/ca-certificates.crt
+      etc/ssl/certs/ca-certificates.crt;     cp /lib/x86_64-linux-gnu/libc-* lib/x86_64-linux-gnu/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - go.sum
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cmd/download_ui/
+    - ./cmd/download_ui/
+  - CmdLine:
+    - go run cmd/download_ui/download_ui.go
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - packr2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - SHORT_SHA=$(git rev-parse --short=12 HEAD);     go build     -ldflags="-linkmode
+      external -extldflags -static -X github.com/cayleygraph/cayley/version.GitHash=$SHORT_SHA"     -a     -installsuffix
+      cgo     -o /fs/bin/cayley     -v     ./cmd/cayley
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv configurations/persisted.json /fs/etc/cayley.json
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /fs
+  - CmdLine:
+    - ./bin/cayley init --config etc/cayley.json
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.13 as builder
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /fs
+    - /
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: expose
+    Ports:
+    - "64210"
+  - Health:
+      Interval: 30000000000
+      Retries: 3
+      StartPeriod: 5000000000
+      Test:
+      - CMD
+      - cayley
+      - health
+      Timeout: 30000000000
+    Name: healthcheck
+  - CmdLine:
+    - cayley
+    - http
+    - --host=:64210
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

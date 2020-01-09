@@ -1,0 +1,168 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: docker.io/openshift/origin-release:golang-1.11
+  Commands:
+  - Env:
+    - Key: GOPATH
+      Value: '"/go/"'
+    - Key: SRCDIR
+      Value: '"/go/src/github.com/gluster/gluster-csi-driver/"'
+    - Key: SCRIPTSDIR
+      Value: '"${SRCDIR}scripts/"'
+    Name: env
+  - CmdLine:
+    - yum install -y     git
+    Name: run
+    PrependShell: true
+  - Key: GO_DEP_VERSION
+    Name: arg
+    Value: ""
+  - Key: GO_METALINTER_VERSION
+    Name: arg
+    Value: latest
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/install-go-tools.sh
+    - '"${SCRIPTSDIR}"'
+  - CmdLine:
+    - mkdir -p /go/bin; ${SCRIPTSDIR}/install-go-tools.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gopkg.lock
+    - Gopkg.toml
+    - '"${SRCDIR}"'
+  - Name: workdir
+    Path: '"${SRCDIR}"'
+  - CmdLine:
+    - /go/bin/dep ensure -v -vendor-only
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cmd/
+    - '"${SRCDIR}/cmd"'
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pkg/
+    - '"${SRCDIR}/pkg"'
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/
+    - '"${SCRIPTSDIR}"'
+  - Key: RUN_TESTS
+    Name: arg
+    Value: "1"
+  - Key: GO_METALINTER_THREADS
+    Name: arg
+    Value: "1"
+  - Env:
+    - Key: TEST_COVERAGE
+      Value: stdout
+    - Key: GO_COVER_DIR
+      Value: /build/
+    Name: env
+  - CmdLine:
+    - mkdir /build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '[ $RUN_TESTS -eq 0 ] || ${SCRIPTSDIR}/lint-go.sh'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '[ $RUN_TESTS -eq 0 ] || ${SCRIPTSDIR}/test-go.sh'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -ldflags '-extldflags "-static"' -o /build/glusterfs-csi-driver
+      cmd/glusterfs/main.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ldd /build/glusterfs-csi-driver | grep -q "not a dynamic executable"
+    Name: run
+    PrependShell: true
+  From:
+    Image: docker.io/openshift/origin-release:golang-1.11
+  Name: build
+  Platform: ""
+  SourceCode: FROM docker.io/openshift/origin-release:golang-1.11 as build
+- As: final
+  BaseName: docker.io/centos:7
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - http://artifacts.ci.centos.org/gluster/nightly/release-6.repo
+    - /etc/yum.repos.d/glusterfs-nightly.repo
+  - CmdLine:
+    - yum update -y &&     yum -y install glusterfs-fuse &&     yum clean all -y &&     rm
+      -rf /var/cache/yum &&     rpm -qa | grep gluster | tee /gluster-rpm-versions.txt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build
+    - /
+  - Key: version
+    Name: arg
+    Value: '"(unknown)"'
+  - Key: builddate
+    Name: arg
+    Value: '"(unknown)"'
+  - Labels:
+    - Key: build-date
+      Value: '"${builddate}"'
+    Name: label
+  - Labels:
+    - Key: io.k8s.description
+      Value: '"FUSE-based CSI driver for Gluster file access"'
+    Name: label
+  - Labels:
+    - Key: name
+      Value: '"glusterfs-csi-driver"'
+    Name: label
+  - Labels:
+    - Key: Summary
+      Value: '"FUSE-based CSI driver for Gluster file access"'
+    Name: label
+  - Labels:
+    - Key: vcs-type
+      Value: '"git"'
+    Name: label
+  - Labels:
+    - Key: vcs-url
+      Value: '"https://github.com/gluster/gluster-csi-driver"'
+    Name: label
+  - Labels:
+    - Key: vendor
+      Value: '"gluster.org"'
+    Name: label
+  - Labels:
+    - Key: version
+      Value: '"${version}"'
+    Name: label
+  - CmdLine:
+    - /glusterfs-csi-driver
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: docker.io/centos:7
+  Name: final
+  Platform: ""
+  SourceCode: FROM docker.io/centos:7 as final

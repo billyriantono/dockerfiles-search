@@ -1,0 +1,88 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/blacktop/ipsw
+  - Name: workdir
+    Path: /go/src/github.com/blacktop/ipsw
+  - CmdLine:
+    - apt-get update     && apt-get install -y cmake     && cd /tmp     && echo "===>
+      Installing lzfse..."     && git clone https://github.com/lzfse/lzfse.git     &&
+      cd lzfse     && mkdir build     && cd build     && cmake ..     && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "===> Installing capstone..."     && cd /tmp     && git clone -b next https://github.com/aquynh/capstone.git     &&
+      cd capstone     && CAPSTONE_ARCHS="arm aarch64 x86" ./make.sh     && ./make.sh
+      install
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: $LD_LIBRARY_PATH:/usr/local/lib
+    Name: env
+  - CmdLine:
+    - CGO_ENABLED=1 go build     -o /bin/ipsw     -a -tags netgo     -ldflags '-s
+      -w -extldflags "-static"'     -ldflags "-X github.com/blacktop/ipsw/cmd/ipsw/cmd.AppVersion=$(cat
+      VERSION)"     -ldflags "-X github.com/blacktop/ipsw/cmd/ipsw/cmd.AppBuildTime=$(date
+      -u +%Y%m%d)"     ./cmd/ipsw
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1 as builder
+- BaseName: ubuntu:19.04
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"https://github.com/blacktop"'
+    Name: label
+  - CmdLine:
+    - buildDeps='libfuse3-dev bzip2 libbz2-dev libz-dev cmake build-essential git
+      libattr1-dev'     && apt-get update     && apt-get install -y $buildDeps fuse3
+      unzip     && echo "===> Installing lzfse..."     && cd /tmp     && git clone
+      https://github.com/lzfse/lzfse.git     && cd lzfse     && mkdir build     &&
+      cd build     && cmake ..     && make install     && cd /tmp     && echo "===>
+      Installing capstone..."     && cd /tmp     && git clone -b next https://github.com/aquynh/capstone.git     &&
+      cd capstone     && CAPSTONE_ARCHS="arm aarch64 x86" ./make.sh     && ./make.sh
+      install      && echo "===> Installing apfs-fuse..."     && cd /tmp     && git
+      clone https://github.com/sgan81/apfs-fuse.git     && cd apfs-fuse     && git
+      submodule init     && git submodule update     && mkdir build     && cd build     &&
+      cmake ..     && make install     && echo "===> Clean up unnecessary files..."     &&
+      apt-get purge -y --auto-remove $buildDeps     && apt-get clean     && rm -rf
+      /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: $LD_LIBRARY_PATH:/usr/local/lib
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /bin/ipsw
+    - /bin/ipsw
+  - Name: workdir
+    Path: /data
+  - CmdLine:
+    - /bin/ipsw
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:19.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:19.04

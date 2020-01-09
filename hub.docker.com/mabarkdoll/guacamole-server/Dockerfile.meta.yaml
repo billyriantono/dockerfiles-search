@@ -1,0 +1,97 @@
+MetaArgs:
+- DefaultValue: stretch
+  Key: DEBIAN_VERSION
+  ProvidedValue: null
+  Value: stretch
+Stages:
+- As: builder
+  BaseName: debian:${DEBIAN_VERSION}
+  Commands:
+  - Key: PREFIX_DIR
+    Name: arg
+    Value: /usr/local/guacamole
+  - Key: BUILD_DIR
+    Name: arg
+    Value: /tmp/guacd-docker-BUILD
+  - Key: BUILD_DEPENDENCIES
+    Name: arg
+    Value: '"                      autoconf                              automake                              gcc                                   libcairo2-dev                         libfreerdp-dev                        libjpeg62-turbo-dev                   libossp-uuid-dev                      libpango1.0-dev                       libpulse-dev                          libssh2-1-dev                         libssl-dev                            libtelnet-dev                         libtool                               libvncserver-dev                      libwebsockets-dev                     libwebp-dev                           make"'
+  - CmdLine:
+    - apt-get update                         &&     apt-get install -y $BUILD_DEPENDENCIES
+      &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/guacd-docker/bin
+    - '"${PREFIX_DIR}/bin/"'
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - '"$BUILD_DIR"'
+  - CmdLine:
+    - ${PREFIX_DIR}/bin/build-guacd.sh "$BUILD_DIR" "$PREFIX_DIR"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ${PREFIX_DIR}/bin/list-dependencies.sh            ${PREFIX_DIR}/sbin/guacd                      ${PREFIX_DIR}/lib/libguac-client-*.so         ${PREFIX_DIR}/lib/freerdp/guac*.so            >
+      ${PREFIX_DIR}/DEPENDENCIES
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:${DEBIAN_VERSION}
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:${DEBIAN_VERSION} AS builder
+- BaseName: debian:${DEBIAN_VERSION}-slim
+  Commands:
+  - Key: PREFIX_DIR
+    Name: arg
+    Value: /usr/local/guacamole
+  - Env:
+    - Key: LC_ALL
+      Value: C.UTF-8
+    Name: env
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: ${PREFIX_DIR}/lib
+    Name: env
+  - Env:
+    - Key: GUACD_LOG_LEVEL
+      Value: info
+    Name: env
+  - Key: RUNTIME_DEPENDENCIES
+    Name: arg
+    Value: '"                    ca-certificates                       ghostscript                           libfreerdp-plugins-standard           fonts-liberation                      fonts-dejavu                          xfonts-terminus"'
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - ${PREFIX_DIR}
+    - ${PREFIX_DIR}
+  - CmdLine:
+    - apt-get update                                          &&     apt-get install
+      -y $RUNTIME_DEPENDENCIES                &&     apt-get install -y $(cat "${PREFIX_DIR}"/DEPENDENCIES)  &&     rm
+      -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ${PREFIX_DIR}/bin/link-freerdp-plugins.sh         ${PREFIX_DIR}/lib/freerdp/guac*.so
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "4822"
+  - CmdLine:
+    - /usr/local/guacamole/sbin/guacd -b 0.0.0.0 -L $GUACD_LOG_LEVEL -f
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: debian:${DEBIAN_VERSION}-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:${DEBIAN_VERSION}-slim

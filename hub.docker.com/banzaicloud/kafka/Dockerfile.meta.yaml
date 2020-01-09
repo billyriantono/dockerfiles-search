@@ -1,0 +1,104 @@
+MetaArgs: null
+Stages:
+- As: kafka_dist
+  BaseName: alpine:latest
+  Commands:
+  - Key: scala_version
+    Name: arg
+    Value: "2.13"
+  - Key: kafka_version
+    Name: arg
+    Value: 2.4.0
+  - Key: kafka_distro_base_url
+    Name: arg
+    Value: https://www-us.apache.org/dist/kafka
+  - Env:
+    - Key: kafka_distro
+      Value: kafka_$scala_version-$kafka_version.tgz
+    Name: env
+  - Env:
+    - Key: kafka_distro_asc
+      Value: $kafka_distro.asc
+    Name: env
+  - CmdLine:
+    - apk add --no-cache gnupg
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/tmp
+  - CmdLine:
+    - wget -q $kafka_distro_base_url/$kafka_version/$kafka_distro
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q $kafka_distro_base_url/$kafka_version/$kafka_distro_asc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q $kafka_distro_base_url/KEYS
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gpg --import KEYS
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gpg --verify $kafka_distro_asc $kafka_distro
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar -xzf $kafka_distro
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -r kafka_$scala_version-$kafka_version/bin/windows
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: kafka_dist
+  Platform: ""
+  SourceCode: FROM alpine:latest AS kafka_dist
+- BaseName: openjdk:11-jre-slim
+  Commands:
+  - Key: scala_version
+    Name: arg
+    Value: "2.13"
+  - Key: kafka_version
+    Name: arg
+    Value: 2.4.0
+  - Env:
+    - Key: KAFKA_VERSION
+      Value: $kafka_version
+    - Key: SCALA_VERSION
+      Value: $scala_version
+    - Key: KAFKA_HOME
+      Value: /opt/kafka
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: ${PATH}:${KAFKA_HOME}/bin
+    Name: env
+  - CmdLine:
+    - mkdir ${KAFKA_HOME}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: kafka_dist
+    Name: copy
+    SourcesAndDest:
+    - /var/tmp/kafka_$scala_version-$kafka_version
+    - ${KAFKA_HOME}
+  - CmdLine:
+    - chmod a+x ${KAFKA_HOME}/bin/*.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - kafka-server-start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:11-jre-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:11-jre-slim

@@ -1,0 +1,234 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "staticassets",
+      "BaseName": "node:9",
+      "SourceCode": "FROM node:9 AS staticassets",
+      "Platform": "",
+      "As": "staticassets",
+      "From": {
+        "Image": "node:9"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get install -y build-essential"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /db-pool/assets \u0026\u0026 mkdir -p /db-pool/priv"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/db-pool/assets"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./assets/package*.json",
+            "./"
+          ]
+        },
+        {
+          "CmdLine": [
+            "npm install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./assets",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "./node_modules/brunch/bin/brunch build --production"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "application",
+      "BaseName": "elixir:1.5.1-alpine",
+      "SourceCode": "FROM elixir:1.5.1-alpine AS application",
+      "Platform": "",
+      "As": "application",
+      "From": {
+        "Image": "elixir:1.5.1-alpine"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk --update upgrade \u0026\u0026 apk add --no-cache build-base"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mix local.hex --force \u0026\u0026 mix local.rebar --force"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /db-pool"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/db-pool"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "mix.exs",
+            "."
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "mix.lock",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "mix deps.get --force --only prod"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "./"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./config/prod.secret.exs.example",
+            "config/prod.secret.exs"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "staticassets",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/db-pool/priv/static",
+            "./priv/static"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "MIX_ENV",
+              "Value": "prod"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "mix deps.get --only prod \u0026\u0026     mix phx.digest \u0026\u0026     mix release --env prod"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "alpine:3.8",
+      "SourceCode": "FROM alpine:3.8",
+      "Platform": "",
+      "From": {
+        "Image": "alpine:3.8"
+      },
+      "Commands": [
+        {
+          "Maintainer": "Codemancers \u003cteam@codemancers.com\u003e",
+          "Name": "maintainer"
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache bash libssl1.0 openssh mysql-client postgresql postgresql-contrib"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "application",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/db-pool/_build",
+            "/db-pool/_build"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "MIX_ENV",
+              "Value": "prod"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PORT",
+              "Value": "4000"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "4000"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/db-pool/_build/prod/rel/db_pool/bin/db_pool foreground"
+          ],
+          "Name": "cmd",
+          "PrependShell": true
+        }
+      ]
+    }
+  ]
+}

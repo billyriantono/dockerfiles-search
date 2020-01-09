@@ -1,0 +1,57 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: cubeearth/java-build-tooling
+  Commands:
+  - CmdLine:
+    - git clone https://github.com/sonatype-nexus-community/nexus-repository-helm
+      &&     cd nexus-repository-helm &&     mvn clean package
+    Name: run
+    PrependShell: true
+  From:
+    Image: cubeearth/java-build-tooling
+  Name: build
+  Platform: ""
+  SourceCode: FROM cubeearth/java-build-tooling AS build
+- BaseName: sonatype/nexus3
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/nexus-repository-helm/target
+    - /tmp/bundle
+  - Name: user
+    User: root
+  - CmdLine:
+    - "yum install -y wget && \twget http://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+      && \trpm -Uvh epel-release*rpm && \tyum install -y xmlstarlet"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - h=/opt/sonatype/nexus &&     d=$h/system/org/sonatype/nexus/plugins/nexus-repository-helm/0.0.7
+      &&     mkdir -p $d &&     cp /tmp/bundle/nexus-repository-helm-0.0.7.jar $d
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "h=/opt/sonatype/nexus && \tf=$(ls $h/system/org/sonatype/nexus/assemblies/nexus-core-feature/*/nexus-core-feature-*-features.xml)
+      && \txmlstarlet ed --inplace -N x='http://karaf.apache.org/xmlns/features/v1.4.0'
+      \t-a '/x:features/x:feature[@name=\"nexus-core-feature\"]/x:feature[@version][position()=last()]'
+      -t elem -n 'featureTMP' -v \"nexus-repository-helm\" \t-i '//featureTMP' -t
+      attr -n prerequisite -v false \t-i '//featureTMP' -t attr -n dependency -v false
+      \t-r '//featureTMP' -v 'feature' \t-a '/x:features/x:feature[position()=last()]'
+      -t elem -n 'featureTMP' \t-i '//featureTMP' -t attr -n name -v nexus-repository-helm
+      \t-i '//featureTMP' -t attr -n description -v org.sonatype.nexus.plugins:nexus-repository-helm
+      \t-i '//featureTMP' -t attr -n version -v 0.0.7 \t-s '//featureTMP' -t elem
+      -n 'details' -v \"org.sonatype.nexus.plugins:nexus-repository-helm\" \t-s '//featureTMP'
+      -t elem -n 'bundle' -v \"mvn:org.sonatype.nexus.plugins/nexus-repository-helm/0.0.7\"
+      \t-r '//featureTMP' -v 'feature' \t\"$f\""
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: nexus
+  From:
+    Image: sonatype/nexus3
+  Name: ""
+  Platform: ""
+  SourceCode: FROM sonatype/nexus3

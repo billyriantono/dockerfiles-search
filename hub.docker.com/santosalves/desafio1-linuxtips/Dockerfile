@@ -1,0 +1,16 @@
+FROM debian
+
+RUN apt update && apt install apache2 -y && apt clean
+ENV APACHE_LOCK_DIR="/var/lock"
+ENV APACHE_PID_FILE="/var/run/apache2.pid"
+ENV APACHE_RUN_USER="www-data"
+ENV APACHE_RUN_GROUP="www-data"
+ENV APACHE_LOG_DIR="/var/log/apache2"
+
+VOLUME /var/www/html
+EXPOSE 80
+
+WORKDIR /var/www/html
+
+ENTRYPOINT [ "apachectl" ]
+CMD [ "-D", "FOREGROUND" ]

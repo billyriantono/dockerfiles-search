@@ -1,0 +1,77 @@
+MetaArgs: null
+Stages:
+- BaseName: resin/armv7hf-debian-qemu
+  Commands:
+  - CmdLine:
+    - cross-build-start
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: resin/armv7hf-debian-qemu
+  Name: ""
+  Platform: ""
+  SourceCode: FROM resin/armv7hf-debian-qemu
+- As: builder
+  BaseName: microsoft/dotnet:2-sdk
+  Commands:
+  - Name: workdir
+    Path: /repo
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Key: CONFIGURATION
+    Name: arg
+    Value: RELEASE
+  - CmdLine:
+    - export DOTNET_CLI_TELEMETRY_OPTOUT=1  && dotnet clean  && dotnet build --configuration
+      ${CONFIGURATION} $(pwd)/MediaBrowser.sln  && dotnet publish --configuration
+      ${CONFIGURATION} $(pwd)/MediaBrowser.sln --output /jellyfin
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2-sdk
+  Name: builder
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2-sdk as builder
+- BaseName: microsoft/dotnet:2-runtime
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /jellyfin
+    - /jellyfin
+  - CmdLine:
+    - apt update  && apt install -y ffmpeg gosu
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8096"
+  - Name: volume
+    Volumes:
+    - /config
+    - /media
+  - Env:
+    - Key: PUID
+      Value: "1000"
+    - Key: PGID
+      Value: "1000"
+    Name: env
+  - CmdLine:
+    - chown $PUID:$PGID /config /media  && gosu $PUID:$PGID dotnet /jellyfin/jellyfin.dll
+      -programdata /config
+    Name: entrypoint
+    PrependShell: true
+  - CmdLine:
+    - cross-build-end
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: microsoft/dotnet:2-runtime
+  Name: ""
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2-runtime

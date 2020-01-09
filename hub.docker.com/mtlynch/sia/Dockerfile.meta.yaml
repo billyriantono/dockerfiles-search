@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- As: zip_downloader
+  BaseName: debian:stretch-slim
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Michael Lynch <michael@mtlynch.io>"'
+    Name: label
+  - Key: SIA_VERSION
+    Name: arg
+    Value: '"1.4.2.0"'
+  - Key: SIA_PACKAGE
+    Name: arg
+    Value: '"Sia-v${SIA_VERSION}-linux-amd64"'
+  - Key: SIA_ZIP
+    Name: arg
+    Value: '"${SIA_PACKAGE}.zip"'
+  - Key: SIA_RELEASE
+    Name: arg
+    Value: '"https://sia.tech/static/releases/${SIA_ZIP}"'
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y       wget       unzip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget "$SIA_RELEASE" &&       mkdir /sia &&       unzip -j "$SIA_ZIP" "${SIA_PACKAGE}/siac"
+      -d /sia &&       unzip -j "$SIA_ZIP" "${SIA_PACKAGE}/siad" -d /sia
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch-slim
+  Name: zip_downloader
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim AS zip_downloader
+- BaseName: debian:stretch-slim
+  Commands:
+  - Key: SIA_DIR
+    Name: arg
+    Value: '"/sia"'
+  - Key: SIA_DATA_DIR
+    Name: arg
+    Value: '"/sia-data"'
+  - Chown: ""
+    From: zip_downloader
+    Name: copy
+    SourcesAndDest:
+    - /sia/siac
+    - '"${SIA_DIR}/siac"'
+  - Chown: ""
+    From: zip_downloader
+    Name: copy
+    SourcesAndDest:
+    - /sia/siad
+    - '"${SIA_DIR}/siad"'
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y socat
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln --symbolic "$SIA_DATA_DIR" /mnt/sia
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9980"
+    - "9981"
+    - "9982"
+  - Name: workdir
+    Path: '"$SIA_DIR"'
+  - Env:
+    - Key: SIA_DATA_DIR
+      Value: '"$SIA_DATA_DIR"'
+    Name: env
+  - Env:
+    - Key: SIA_MODULES
+      Value: gctwhr
+    Name: env
+  - CmdLine:
+    - socat tcp-listen:9980,reuseaddr,fork tcp:localhost:8000 &   ./siad     --modules
+      "$SIA_MODULES"     --sia-directory "$SIA_DATA_DIR"     --api-addr "localhost:8000"
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

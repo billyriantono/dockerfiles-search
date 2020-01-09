@@ -1,0 +1,56 @@
+MetaArgs:
+- DefaultValue: null
+  Key: RELEASE
+  ProvidedValue: null
+  Value: null
+Stages:
+- BaseName: gocd/gocd-agent-alpine-3.10:${RELEASE}
+  Commands:
+  - Env:
+    - Key: HELM_VERSION
+      Value: v2.16.1
+    - Key: HELM_SHA256
+      Value: 8be78ce2e7928103341123201455fb265724f957b1775558391aeccd5c49352d
+    - Key: HELMFILE_VERSION
+      Value: v0.90.8
+    - Key: HELMFILE_SHA256
+      Value: 03d07f7c4ceabb1592a5fdd1c9c97cf45618bc46f795f739232246131808d46b
+    - Key: SOPS_VERSION
+      Value: 3.4.0
+    - Key: SOPS_SHA256
+      Value: 369ceb213c6fd84d76d89d82f7a63e2226b00f5128c7bb84c7ebcfaffbde6139
+    Name: env
+  - Name: user
+    User: root
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps openssl &&   apk add --no-cache coreutils
+      sed make &&   ( cd /usr/local/bin && stable_version=$(curl -sL https://storage.googleapis.com/kubernetes-release/release/stable.txt)
+      &&     curl -sSLO https://storage.googleapis.com/kubernetes-release/release/${stable_version}/bin/linux/amd64/kubectl
+      && chmod 755 kubectl ) &&   ( curl -sSL https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get
+      |     DESIRED_VERSION="${HELM_VERSION}" HELM_INSTALL_DIR="/usr/local/bin" bash
+      -s &&     cd /usr/local/bin && printf "${HELM_SHA256}  helm" | sha256sum -c
+      && chmod 755 helm && rm tiller) &&   ( cd /usr/local/bin && curl -sSLo sops
+      https://github.com/mozilla/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.linux
+      &&       printf "${SOPS_SHA256}  sops" | sha256sum -c && chmod 755 sops ) &&   (
+      cd /usr/local/bin && curl -sSLo helmfile     "https://github.com/roboll/helmfile/releases/download/${HELMFILE_VERSION}/helmfile_linux_amd64"
+      &&       printf "${HELMFILE_SHA256}  helmfile" | sha256sum -c && chmod 755 helmfile
+      ) &&   apk del --purge .build-deps &&   rm -rf /tmp/*.apk
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo -e '#!/bin/bash\nexec /usr/bin/git "$@" | sed -E "s~(https?:\/\/).*@([^\s$.?#].[^\s]*)~\\1\\2~";
+      exit $PIPESTATUS' > /usr/local/bin/git &&     chmod 755 /usr/local/bin/git
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: go
+  - CmdLine:
+    - helm init --client-only &&   helm --debug plugin install https://github.com/futuresimple/helm-secrets
+      --version master
+    Name: run
+    PrependShell: true
+  From:
+    Image: gocd/gocd-agent-alpine-3.10:${RELEASE}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM gocd/gocd-agent-alpine-3.10:${RELEASE}

@@ -1,0 +1,158 @@
+MetaArgs: null
+Stages:
+- As: healthcheck
+  BaseName: golang:1.11-alpine
+  Commands:
+  - Env:
+    - Key: SRC
+      Value: healthcheck
+    Name: env
+  - CmdLine:
+    - apk update && apk add git make upx
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - $SRC/*.go
+    - $SRC/Makefile
+    - $GOPATH/src/
+  - Name: workdir
+    Path: $GOPATH/src
+  - CmdLine:
+    - make deps && make && make compress
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-alpine
+  Name: healthcheck
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine as healthcheck
+- As: builder
+  BaseName: maven:3-jdk-11-slim
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends       binutils     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pom.xml
+    - /usr/src/
+  - CmdLine:
+    - mvn dependency:resolve
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /usr/src/src/
+  - CmdLine:
+    - mvn package
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /tmp/fakeroot/opt     && tar xzf target/elmr-distribution.tar.gz -C
+      /tmp/fakeroot/opt     && chmod -R oug+r /tmp/fakeroot/opt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - jlink --compress=2 --output /tmp/fakeroot/opt/jre     --strip-debug --no-man-pages
+      --no-header-files     --add-modules $(jdeps --print-module-deps         $(find
+      /tmp/fakeroot/opt/elmr -type f -name \*.jar))     && find /tmp/fakeroot/opt/jre
+      -type f -execdir strip -p --strip-unneeded {} \;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - manifest
+    - /tmp
+  - CmdLine:
+    - ldd `cat /tmp/manifest` | grep -o '/.\+\.so[^ :]*' >> /tmp/manifest
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /tmp/fakeroot/opt/jre -type f -execdir ldd {} \; | grep -o '/.\+\.so[^
+      :]*' |     grep -v '^/tmp/fakeroot' >> /tmp/manifest
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sort -u /tmp/manifest -o /tmp/manifest
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar chf /tmp/root.tar -T /tmp/manifest
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -m 1777 /tmp/fakeroot/tmp     && mkdir -p /tmp/fakeroot/etc/shibboleth                 /tmp/fakeroot/opt/elmr/work/Catalina/localhost/auth#elmr                 /tmp/fakeroot/opt/elmr/conf/Catalina/localhost/auth#elmr
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xf /tmp/root.tar -C /tmp/fakeroot
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - attribute-map.xml
+    - /tmp/fakeroot/etc/shibboleth/
+  From:
+    Image: maven:3-jdk-11-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM maven:3-jdk-11-slim as builder
+- BaseName: scratch
+  Commands:
+  - Env:
+    - Key: REDIS_PORT
+      Value: "6379"
+    - Key: LOGOUT
+      Value: /auth/Shibboleth.sso/Logout
+    - Key: DISABLE_SECURE_COOKIES
+      Value: "false"
+    Name: env
+  - Maintainer: Technology Services, University of Illinois Urbana
+    Name: maintainer
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/fakeroot/
+    - /
+  - Chown: ""
+    From: healthcheck
+    Name: copy
+    SourcesAndDest:
+    - /go/src/healthcheck
+    - /bin/
+  - Name: user
+    User: nobody
+  - Name: expose
+    Ports:
+    - "8009"
+  - Health:
+      Test:
+      - CMD-SHELL
+      - /bin/healthcheck -c 200 http://127.0.0.1:8009/auth/elmr/config -c 302 http://127.0.0.1:8009/auth/elmr/attributes
+    Name: healthcheck
+  - CmdLine:
+    - exec /opt/jre/bin/java -cp /opt/elmr/bin/bootstrap.jar:/opt/elmr/bin/tomcat-juli.jar        --add-opens=java.base/java.lang=ALL-UNNAMED        --add-opens=java.base/java.io=ALL-UNNAMED        --add-opens=java.rmi/sun.rmi.transport=ALL-UNNAMED        -Djava.util.logging.config.file=/opt/elmr/conf/logging.properties        -Djava.util.logging.manager=org.apache.juli.ClassLoaderLogManager        -Djdk.tls.ephemeralDHKeySize=2048        -Djava.protocol.handler.pkgs=org.apache.catalina.webresources        -Dorg.apache.catalina.security.SecurityListener.UMASK=0027        -Djava.security.egd=file:/dev/./urandom        -Dignore.endorsed.dirs=        -Dcatalina.base=/opt/elmr        -Dcatalina.home=/opt/elmr        -Djava.io.tmpdir=/opt/elmr/temp        -Dedu.illinois.techservices.elmr.SessionData.hostname=$REDIS_HOSTNAME        -Dedu.illinois.techservices.elmr.SessionData.port=$REDIS_PORT        -Dedu.illinois.techservices.elmr.servlets.logoutUrl=$LOGOUT        -Dedu.illinois.techservices.elmr.servlets.DisableSecureCookies=$DISABLE_SECURE_COOKIES        org.apache.catalina.startup.Bootstrap        start
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - Maintainer: Yann Verry <docker@verry.org>
+    Name: maintainer
+  - CmdLine:
+    - apt-get update &&     apt-get dist-upgrade -y &&     apt-get -y install wget
+      git build-essential zlib1g-dev zlib1g zlibc locales ca-certificates libssl-dev
+      libreadline-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opt &&     git clone https://github.com/yanntech/cryptcheck-rails &&     git
+      clone https://github.com/yanntech/cryptcheck
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src
+  - Env:
+    - Key: OPENSSL_VERSION
+      Value: 1.0.2d
+    Name: env
+  - CmdLine:
+    - wget https://www.openssl.org/source/openssl-$OPENSSL_VERSION.tar.gz &&     tar
+      xf openssl-$OPENSSL_VERSION.tar.gz &&     cd openssl-$OPENSSL_VERSION &&     ./config
+      shared &&     make &&     make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /usr/local/share/ca-certificates/cacert.org &&     wget -P /usr/local/share/ca-certificates/cacert.org
+      http://www.cacert.org/certs/root.crt http://www.cacert.org/certs/class3.crt
+      &&     /usr/sbin/update-ca-certificates &&     rmdir /usr/local/ssl/certs &&     ln
+      -s /etc/ssl/certs /usr/local/ssl/certs
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: RUBY_MAJOR
+      Value: "2.2"
+    Name: env
+  - Env:
+    - Key: RUBY_VERSION
+      Value: 2.2.3
+    Name: env
+  - CmdLine:
+    - wget http://cache.ruby-lang.org/pub/ruby/$RUBY_MAJOR/ruby-$RUBY_VERSION.tar.gz
+      &&     tar xf ruby-$RUBY_VERSION.tar.gz &&     cd ruby-$RUBY_VERSION &&     patch
+      -p0 < /opt/cryptcheck/ruby-openssl-dh.patch &&     ./configure --prefix=/usr
+      --with-openssl=yes --with-openssl-dir=/usr/local/ssl &&     make &&     make
+      install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/cryptcheck
+  - CmdLine:
+    - "gem install bundler && \tbundle install"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/cryptcheck-rails
+  - CmdLine:
+    - "bundle install --without development && \tRAILS_ENV=staging bundle exec rake
+      assets:precompile && \tbundle install --without development test assets && \tbundle
+      clean --force && \tbundle install --deployment --without development test assets
+      && \tgem install puma && \techo \"production:\\n  secret_key_base: $(rake secret)\"
+      > config/secrets.yml"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y purge build-essential zlib1g-dev krb5-locales &&     apt-get -y autoremove
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LC_ALL
+      Value: C.UTF-8
+    Name: env
+  - Env:
+    - Key: REDIS_URL
+      Value: redis://redis:6379/
+    Name: env
+  - Env:
+    - Key: ES_URL
+      Value: http://elasticsearch:9200/
+    Name: env
+  - Env:
+    - Key: RAILS_SERVE_STATIC_FILES
+      Value: "true"
+    Name: env
+  - Name: expose
+    Ports:
+    - 9292:9292
+  - CmdLine:
+    - /opt/cryptcheck-rails/docker/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

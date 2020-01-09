@@ -1,0 +1,197 @@
+MetaArgs:
+- DefaultValue: "9.9"
+  Key: DEBIAN_VERSION
+  ProvidedValue: null
+  Value: "9.9"
+- DefaultValue: "5.2"
+  Key: KERNEL_VERSION
+  ProvidedValue: null
+  Value: "5.2"
+- DefaultValue: "1.12"
+  Key: GOLANG_VERSION
+  ProvidedValue: null
+  Value: "1.12"
+- DefaultValue: stable
+  Key: DOCKER_CHANNEL
+  ProvidedValue: null
+  Value: stable
+- DefaultValue: 5:18.09.7~3-0~debian-stretch
+  Key: DOCKER_VERSION
+  ProvidedValue: null
+  Value: 5:18.09.7~3-0~debian-stretch
+Stages:
+- As: kernel_build
+  BaseName: debian:$DEBIAN_VERSION
+  Commands:
+  - CmdLine:
+    - "apt-get update && \tapt-get install git fakeroot build-essential ncurses-dev
+      xz-utils libssl-dev bc wget flex bison libelf-dev -y && \tapt-get install -y
+      --no-install-recommends bsdtar"
+    Name: run
+    PrependShell: true
+  - Key: KERNEL_VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - "wget https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-$KERNEL_VERSION.tar.xz
+      && \ttar -xf linux-$KERNEL_VERSION.tar.xz && \trm linux-$KERNEL_VERSION.tar.xz"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: linux-$KERNEL_VERSION
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - KERNEL.config
+    - .config
+  - CmdLine:
+    - make ARCH=um oldconfig && make ARCH=um prepare
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make ARCH=um -j `nproc`
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /out && cp -f linux /out/linux
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp .config /KERNEL.config
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:$DEBIAN_VERSION
+  Name: kernel_build
+  Platform: ""
+  SourceCode: FROM debian:$DEBIAN_VERSION as kernel_build
+- As: print_config
+  BaseName: debian:$DEBIAN_VERSION
+  Commands:
+  - Chown: ""
+    From: kernel_build
+    Name: copy
+    SourcesAndDest:
+    - /KERNEL.config
+    - /KERNEL.CONFIG
+  - CmdLine:
+    - cat
+    - /KERNEL.CONFIG
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:$DEBIAN_VERSION
+  Name: print_config
+  Platform: ""
+  SourceCode: FROM debian:$DEBIAN_VERSION AS print_config
+- As: diuid-docker-proxy
+  BaseName: golang:$GOLANG_VERSION
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - diuid-docker-proxy
+    - /go/src/github.com/weber-software/diuid/diuid-docker-proxy
+  - CmdLine:
+    - go build -o /diuid-docker-proxy /go/src/github.com/weber-software/diuid/diuid-docker-proxy
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:$GOLANG_VERSION
+  Name: diuid-docker-proxy
+  Platform: ""
+  SourceCode: FROM golang:$GOLANG_VERSION AS diuid-docker-proxy
+- BaseName: debian:$DEBIAN_VERSION
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"weber@weber-software.com"'
+    Name: label
+  - CmdLine:
+    - "apt-get update && \tapt-get install -y wget slirp net-tools cgroupfs-mount
+      openssh-server psmisc rng-tools \tapt-transport-https ca-certificates gnupg2
+      software-properties-common"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir /root/.ssh && \tssh-keygen -b 2048 -t rsa -f /root/.ssh/id_rsa -q -N
+      \"\" && \tcp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys"
+    Name: run
+    PrependShell: true
+  - Key: DOCKER_CHANNEL
+    Name: arg
+    Value: null
+  - Key: DOCKER_VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - wget -O - https://download.docker.com/linux/debian/gpg | apt-key add - &&     add-apt-repository
+      "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs)
+      $DOCKER_CHANNEL" &&     apt-get update &&     apt-cache madison docker-ce &&     apt-get
+      install -y docker-ce=$DOCKER_VERSION docker-ce-cli=$DOCKER_VERSION containerd.io
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: diuid-docker-proxy
+    Name: copy
+    SourcesAndDest:
+    - /diuid-docker-proxy
+    - /usr/bin
+  - CmdLine:
+    - echo GatewayPorts=yes >> /etc/ssh/sshd_config
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: kernel_build
+    Name: copy
+    SourcesAndDest:
+    - /out/linux
+    - /linux/linux
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - kernel.sh
+    - kernel.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - entrypoint.sh
+    - entrypoint.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - init.sh
+    - init.sh
+  - Env:
+    - Key: MEM
+      Value: 2G
+    Name: env
+  - Env:
+    - Key: TMPDIR
+      Value: /umlshm
+    Name: env
+  - Name: volume
+    Volumes:
+    - /umlshm
+  - Env:
+    - Key: DISK
+      Value: 10G
+    Name: env
+  - Name: volume
+    Volumes:
+    - /persistent
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:$DEBIAN_VERSION
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:$DEBIAN_VERSION

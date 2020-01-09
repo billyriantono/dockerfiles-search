@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- As: build-php
+  BaseName: composer
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app
+  - CmdLine:
+    - cd /app && composer install -n --ignore-platform-reqs
+    Name: run
+    PrependShell: true
+  From:
+    Image: composer
+  Name: build-php
+  Platform: ""
+  SourceCode: FROM composer AS build-php
+- As: build-node
+  BaseName: node
+  Commands:
+  - Chown: ""
+    From: build-php
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /app
+  - CmdLine:
+    - cd /app &&     yarn install &&     yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node
+  Name: build-node
+  Platform: ""
+  SourceCode: FROM node AS build-node
+- BaseName: php:7.2-apache
+  Commands:
+  - Env:
+    - Key: TIMEZONE
+      Value: '"Europe/Moscow"'
+    Name: env
+  - Env:
+    - Key: SYMFONY_ENV
+      Value: '"prod"'
+    Name: env
+  - Env:
+    - Key: ICU_URL
+      Value: http://download.icu-project.org/files/icu4c/62.1/icu4c-62_1-src.tgz
+    Name: env
+  - CmdLine:
+    - "apt-get update && apt-get install --no-install-recommends --assume-yes \t\t\tlibpng-dev
+      \t&& rm -rf /var/lib/apt/lists/* \t&& curl -sS -o /usr/src/icu.tar.gz -L $ICU_URL
+      \t&& tar -zxf /usr/src/icu.tar.gz -C /usr/src/     && cd /usr/src/icu/source
+      \    && ./configure --prefix=/usr/local     && make     && make install     &&
+      rm -fr /usr/src/icu"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-ext-enable opcache     && export PHP_CPPFLAGS="$PHP_CPPFLAGS -std=c++11"     &&
+      docker-php-ext-configure intl --with-icu-dir=/usr/local     && docker-php-ext-install
+      -j$(nproc)         intl         exif         gd         pdo_mysql
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'date.timezone = ${TIMEZONE}' > /usr/local/etc/php/conf.d/date.ini
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - apache.conf
+    - /etc/apache2/sites-available/000-default.conf
+  - Chown: "33:33"
+    From: build-node
+    Name: copy
+    SourcesAndDest:
+    - /app/web/assets
+    - /var/www/html/web/assets
+  - Chown: "33:33"
+    From: build-php
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /var/www/html
+  - CmdLine:
+    - mv behat.yml.dist behat.yml &&     rm apache.conf yarn.lock gulpfile.babel.js
+      package.json
+    Name: run
+    PrependShell: true
+  From:
+    Image: php:7.2-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.2-apache

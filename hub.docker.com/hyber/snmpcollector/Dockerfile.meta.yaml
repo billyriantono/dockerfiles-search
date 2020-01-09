@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.11-alpine
+  Commands:
+  - CmdLine:
+    - apk add alpine-sdk git nodejs npm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -d github.com/toni-moreno/snmpcollector/...
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH/src/github.com/toni-moreno/snmpcollector
+  - CmdLine:
+    - go run build.go setup
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - godep restore -v
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build:static
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go run build.go pkg-min-tar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /data/dist
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp $GOPATH/src/github.com/toni-moreno/snmpcollector/dist/* /data/dist/
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine as builder
+- BaseName: alpine:latest
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /data/dist/*
+    - /
+  - CmdLine:
+    - tar xfz /*.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /*.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /opt/snmpcollector/conf/sample.config.toml /opt/snmpcollector/conf/config.toml
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/snmpcollector
+  - CmdLine:
+    - echo "#!/bin/sh" > /start.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "./bin/snmpcollector  > ./log/stdout.log 2> ./log/stderr.log" >> /start.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /start.sh
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /opt/snmpcollector/conf
+    - /opt/snmpcollector/log
+  - Name: expose
+    Ports:
+    - "8090"
+  - CmdLine:
+    - /start.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

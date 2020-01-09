@@ -1,0 +1,104 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:latest
+  Commands:
+  - Maintainer: Anton Zakharov hello@antonzakharov.ru
+    Name: maintainer
+  - Env:
+    - Key: ASTERISK_SOURCE
+      Value: https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-16.5.1.tar.gz
+    Name: env
+  - Env:
+    - Key: ASTERISK_MODULES_ENABLE
+      Value: format_mp3 chan_sip pbx_ael cdr_adaptive_odbc res_fax res_fax_spandsp
+    Name: env
+  - Env:
+    - Key: ASTERISK_MODULES_DISABLE
+      Value: BUILD_NATIVE
+    Name: env
+  - Env:
+    - Key: ASTERISK_CATEGORY_DISABLE
+      Value: MENUSELECT_CORE_SOUNDS MENUSELECT_MOH MENUSELECT_EXTRA_SOUNDS
+    Name: env
+  - Env:
+    - Key: DOCKERIZE_VERSION
+      Value: v0.6.1
+    Name: env
+  - Name: workdir
+    Path: /usr/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/patches/
+    - patches/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/lib/
+    - /usr/lib/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /docker-entrypoint.sh
+  - CmdLine:
+    - chmod 755 /docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz     &&
+      tar -C /usr/local/bin -xzvf dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz     &&
+      rm dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex; apk update     && apk add --no-cache --virtual .runtime-deps       ncurses-terminfo-base
+      ncurses-terminfo ncurses-libs       libuuid libblkid libfdisk libmount libsmartcols       jansson       libxml2       sqlite-libs       libressl
+      readline unixodbc psqlodbc       libjpeg-turbo tiff libtiffxx spandsp       libedit     &&
+      apk add --no-cache --virtual .build-deps       wget patch       build-base ncurses-dev
+      util-linux-dev jansson-dev libxml2-dev sqlite-dev bsd-compat-headers       libressl-dev
+      unixodbc-dev       libjpeg-turbo-dev tiff-dev spandsp-dev       libedit-dev     &&
+      wget -O asterisk.tar.gz $ASTERISK_SOURCE; tar vxfz asterisk.tar.gz; rm asterisk.tar.gz     &&
+      mv asterisk-* asterisk && cp patches/musl-astmm-fix.patch patches/musl-mutex-init.patch
+      asterisk/; cp patches/asterisk-addon-mp3-r201.patch asterisk/addons/     &&
+      cd asterisk && patch -p1 < ./musl-astmm-fix.patch && patch -p1 < ./musl-mutex-init.patch
+      && cd addons; patch -p1 < ./asterisk-addon-mp3-r201.patch && cd ..     && if
+      ! grep -q ASTMM_LIBC addons/mp3/interface.c; then sed -i -e '/#include "asterisk.h"/i#define
+      ASTMM_LIBC ASTMM_REDIRECT' addons/mp3/interface.c; fi     && ./configure --without-pjproject-bundled
+      --enable-permanent-dlopen && make menuselect.makeopts     && menuselect/menuselect            $(for
+      MODULE in $ASTERISK_MODULES_ENABLE; do echo --enable $MODULE; done;)            $(for
+      MODULE in $ASTERISK_MODULES_DISABLE; do echo --disable $MODULE; done;)            $(for
+      CATEGORY in $ASTERISK_CATEGORY_DISABLE; do echo --disable-category $CATEGORY;
+      done;) menuselect.makeopts     && make -j "$(nproc)" && make install     &&
+      mv configs/samples /usr/src/configs && cd /usr/src/configs     && find . -name
+      '*.sample' -type f | while read NAME ; do mv "${NAME}" "${NAME%.sample}" ; done     &&
+      tar cfz /usr/src/config-samples.tar.gz ./     && cd ..; rm -Rf /usr/src/asterisk;
+      rm -Rf /usr/src/patches     && apk del .build-deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/etc/
+    - /etc/
+  - Name: workdir
+    Path: /etc/asterisk
+  - Name: expose
+    Ports:
+    - 10000-10005/udp
+    - 5038/tcp
+    - 5060/tcp
+    - 5060/udp
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

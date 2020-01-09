@@ -1,0 +1,172 @@
+MetaArgs: null
+Stages:
+- BaseName: unidata/tomcat-docker:8.5
+  Commands:
+  - Maintainer: Unidata
+    Name: maintainer
+  - Name: user
+    User: root
+  - CmdLine:
+    - apt-get update &&     apt-get install -y unzip vim build-essential m4     libpthread-stubs0-dev
+      libcurl4-openssl-dev &&     apt-get clean &&     rm -rf /var/lib/apt/lists/*
+      /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /downloads
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /downloads
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: /usr/local/lib:${LD_LIBRARY_PATH}
+    Name: env
+  - Env:
+    - Key: HDF5_VERSION
+      Value: 1.10.5
+    Name: env
+  - Env:
+    - Key: ZLIB_VERSION
+      Value: 1.2.8
+    Name: env
+  - Env:
+    - Key: NETCDF_VERSION
+      Value: 4.7.2
+    Name: env
+  - Env:
+    - Key: ZDIR
+      Value: /usr/local
+    Name: env
+  - Env:
+    - Key: H5DIR
+      Value: /usr/local
+    Name: env
+  - Env:
+    - Key: PDIR
+      Value: /usr
+    Name: env
+  - CmdLine:
+    - curl ftp://ftp.unidata.ucar.edu/pub/netcdf/netcdf-4/zlib-${ZLIB_VERSION}.tar.gz
+      | tar xz &&     cd zlib-${ZLIB_VERSION} &&     ./configure --prefix=/usr/local
+      &&     make && make install
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HDF5_VER
+      Value: hdf5-${HDF5_VERSION}
+    Name: env
+  - Env:
+    - Key: HDF5_FILE
+      Value: ${HDF5_VER}.tar.gz
+    Name: env
+  - CmdLine:
+    - curl https://support.hdfgroup.org/ftp/HDF5/releases/${HDF5_VER%.*}/${HDF5_VER}/src/${HDF5_FILE}
+      | tar xz &&     cd hdf5-${HDF5_VERSION} &&     ./configure --with-zlib=${ZDIR}
+      --prefix=${H5DIR} --enable-threadsafe --with-pthread=${PDIR} --enable-unsupported
+      --prefix=/usr/local &&     make && make check && make install && make check-install
+      && ldconfig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - export CPPFLAGS=-I/usr/local/include     LDFLAGS=-L/usr/local/lib &&     curl
+      ftp://ftp.unidata.ucar.edu/pub/netcdf/netcdf-c-${NETCDF_VERSION}.tar.gz | tar
+      xz &&     cd netcdf-c-${NETCDF_VERSION} &&     ./configure --prefix=/usr/local
+      &&     make check && make install && ldconfig
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TDS_VERSION
+      Value: 5.0.0-beta7
+    Name: env
+  - Env:
+    - Key: TDS_CONTENT_ROOT_PATH
+      Value: /usr/local/tomcat/content
+    Name: env
+  - Env:
+    - Key: THREDDS_XMX_SIZE
+      Value: 4G
+    Name: env
+  - Env:
+    - Key: THREDDS_XMS_SIZE
+      Value: 4G
+    Name: env
+  - Env:
+    - Key: THREDDS_WAR_URL
+      Value: https://artifacts.unidata.ucar.edu/repository/unidata-releases/edu/ucar/tds/${TDS_VERSION}/tds-${TDS_VERSION}.war
+    Name: env
+  - CmdLine:
+    - curl -fSL "${THREDDS_WAR_URL}" -o thredds.war
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip thredds.war -d ${CATALINA_HOME}/webapps/thredds/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${CATALINA_HOME}/content/thredds
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/threddsConfig.xml
+    - ${CATALINA_HOME}/content/thredds/threddsConfig.xml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/tomcat-users.xml
+    - ${CATALINA_HOME}/conf/tomcat-users.xml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/setenv.sh
+    - $CATALINA_HOME/bin/setenv.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/javaopts.sh
+    - $CATALINA_HOME/bin/javaopts.sh
+  - CmdLine:
+    - chmod 755 $CATALINA_HOME/bin/*.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${CATALINA_HOME}/javaUtilPrefs/.systemPrefs
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+    - "8443"
+  - Name: workdir
+    Path: ${CATALINA_HOME}
+  - CmdLine:
+    - rm -rf /downloads
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - catalina.sh
+    - run
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 60000000000
+      Test:
+      - CMD-SHELL
+      - curl --fail 'http://localhost:8080/thredds/catalog.html' || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  From:
+    Image: unidata/tomcat-docker:8.5
+  Name: ""
+  Platform: ""
+  SourceCode: FROM unidata/tomcat-docker:8.5

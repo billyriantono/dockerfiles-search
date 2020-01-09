@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.11
+  Commands:
+  - CmdLine:
+    - wget http://storage.googleapis.com/kubernetes-release/release/v1.13.3/bin/linux/amd64/kubectl
+      -O /usr/bin/kubectl &&     chmod +x /usr/bin/kubectl
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - go get -d -v ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /go/src/github.com/nlopes/slack&&git checkout tags/v0.4.0&&cd -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -ldflags '-extldflags "-static"'
+      -o app -v ./...
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.11 as builder
+- As: alpine
+  BaseName: alpine:3.6
+  Commands:
+  - CmdLine:
+    - apk update && apk add -U --no-cache ca-certificates && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.6
+  Name: alpine
+  Platform: ""
+  SourceCode: FROM alpine:3.6 as alpine
+- BaseName: scratch
+  Commands:
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: alpine
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/kubectl
+    - /usr/bin/kubectl
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/app/app
+    - .
+  - CmdLine:
+    - /app
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "80"
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

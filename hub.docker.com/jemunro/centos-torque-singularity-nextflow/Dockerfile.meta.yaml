@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- BaseName: centos:7
+  Commands:
+  - CmdLine:
+    - yum update -y &&     yum install -y --setopt=tsflags=nodocs --setopt=override_install_langs=en_US.utf8     make     openssl-devel     libxml2-devel     libarchive-devel     boost-devel     gcc     gcc-c++     git     libtool     java-1.8.0-openjdk-headless     which     wget
+      &&     yum clean all -y
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/local
+  - CmdLine:
+    - git clone https://github.com/adaptivecomputing/torque.git -b 5.0.0 torque
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/local/torque
+  - CmdLine:
+    - ./autogen.sh &&     ./configure &&     make &&     make install &&     cp contrib/init.d/trqauthd
+      /etc/init.d/ &&     cp contrib/init.d/pbs_mom /etc/init.d/pbs_mom &&     cp
+      contrib/init.d/pbs_server /etc/init.d/pbs_server &&     cp contrib/init.d/pbs_sched
+      /etc/init.d/pbs_sched &&     ldconfig &&     echo "localhost" > /var/spool/torque/server_name
+      &&     echo '/usr/local/lib' > /etc/ld.so.conf.d/torque.conf &&     ldconfig
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HOSTNAME
+      Value: localhost
+    Name: env
+  - CmdLine:
+    - cat /etc/hosts
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - torque.setup
+    - /usr/local/torque/torque.setup
+  - CmdLine:
+    - trqauthd start &&     ./torque.setup root localhost &&     pbs_mom && pbs_sched
+      &&     qmgr -c "create queue debug queue_type=execution" &&     qmgr -c "set
+      queue debug enabled=true" &&     qmgr -c "set queue debug started=true" &&     qmgr
+      -c "set server scheduling=True" &&     qmgr -c 'set queue batch resources_default.walltime
+      = 48:00:00' &&     qmgr -c 'set queue batch resources_default.nodes = 1' &&     qmgr
+      -c 'set server default_queue = debug' &&     echo "localhost np=1" >> /var/spool/torque/server_priv/nodes
+      &&     echo "docker np=1" >> /var/spool/torque/server_priv/nodes &&     printf
+      "\$pbsserver localhost" >> /var/spool/torque/mom_priv/config
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/supervisord.conf
+  - CmdLine:
+    - mkdir /var/log/supervisor &&     chmod -R 777 /var/log/supervisor
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/singularity
+  - CmdLine:
+    - VERSION=2.6.0 &&     wget https://github.com/sylabs/singularity/releases/download/$VERSION/singularity-$VERSION.tar.gz
+      &&     tar xvf singularity-$VERSION.tar.gz &&     cd singularity-$VERSION &&     ./configure
+      --prefix=/usr/local &&     make && make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/nextflow
+  - CmdLine:
+    - VERSION=19.04.1 &&     wget https://github.com/nextflow-io/nextflow/releases/download/v19.04.1/nextflow-$VERSION-all
+      &&     chmod +x nextflow-$VERSION-all &&     ln -s /opt/nextflow/nextflow-$VERSION-all
+      /usr/local/bin/nextflow
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker_entrypoint.sh
+    - /docker_entrypoint.sh
+  - CmdLine:
+    - /docker_entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "10389"
+    - "22"
+    - "9618"
+  - CmdLine:
+    - /usr/bin/supervisord
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos:7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:7

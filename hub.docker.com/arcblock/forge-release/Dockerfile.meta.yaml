@@ -1,0 +1,201 @@
+MetaArgs:
+- DefaultValue: 1.8.0
+  Key: ELIXIR_VER
+  ProvidedValue: null
+  Value: 1.8.0
+- DefaultValue: "3.8"
+  Key: ALPINE_VER
+  ProvidedValue: null
+  Value: "3.8"
+Stages:
+- As: deps
+  BaseName: arcblock/forge_deps:latest
+  Commands: null
+  From:
+    Image: arcblock/forge_deps:latest
+  Name: deps
+  Platform: ""
+  SourceCode: FROM arcblock/forge_deps:latest as deps
+- As: builder
+  BaseName: elixir:$ELIXIR_VER-alpine
+  Commands:
+  - Key: GTK
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk update &&   apk upgrade --no-cache &&   apk add --no-cache   wget libbz2
+      libtool openssl-dev unzip binutils zlib  libstdc++ make cmake git g++   autoconf
+      bzip2-dev automake linux-headers  gmp-dev  python curl nodejs npm openssh sqlite-dev
+      zstd-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/arcblock
+  - CmdLine:
+    - git config --global url."https://${GTK}:@github.com/".insteadOf "git@github.com:"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Env:
+    - Key: ERLANG_ROCKSDB_OPTS
+      Value: '"-DWITH_ZSTD=ON"'
+    Name: env
+  - CmdLine:
+    - mix local.hex --force && mix local.rebar --force
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: deps
+    Name: copy
+    SourcesAndDest:
+    - /src
+    - /home/arcblock/mix_deps/
+  - CmdLine:
+    - MIX_ENV=staging make docker-builds &&   cd vendors/forge && ERLANG_ROCKSDB_OPTS="-DWITH_ZSTD=ON"
+      mix deps.compile rocksdb && cd ../../ &&   MIX_ENV=staging  make centos
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make copy-release
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /forge && mkdir /forge/$(cat version) && tar -xf "_build/releases/forge_centos_amd64.tgz"
+      -C /forge/$(cat version)
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /starter && tar -xf "_build/releases/forge_starter_centos_amd64.tgz" -C
+      /starter
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /forge_web && tar -xf "_build/releases/forge_web_centos_amd64.tgz" -C
+      /forge_web
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo "current: $(cat version)" > /forge/release.yml'
+    Name: run
+    PrependShell: true
+  From:
+    Image: elixir:$ELIXIR_VER-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM elixir:$ELIXIR_VER-alpine as builder
+- BaseName: alpine:$ALPINE_VER
+  Commands:
+  - Maintainer: Paper Huang <shan@arcblock.io>
+    Name: maintainer
+  - Env:
+    - Key: REPLACE_OS_VARS
+      Value: "true"
+    - Key: PORT
+      Value: "8211"
+    - Key: FORGE_CONFIG
+      Value: /opt/arcblock/forge_release.toml
+    - Key: FORGE_RELEASE
+      Value: /opt/arcblock/forge/
+    - Key: HOME
+      Value: /opt/arcblock
+    - Key: SHELL
+      Value: /bin/bash
+    Name: env
+  - CmdLine:
+    - mkdir /lib64 && ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk update &&   apk upgrade --no-cache &&   apk add --no-cache   bash openssl-dev   bzip2-dev  linux-headers  gmp-dev  zstd-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/arcblock
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /starter/
+    - ./starter/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /forge/
+    - ./forge/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /forge_web/
+    - ./forge_web
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/arcblock/vendors/forge/deps/forge_sdk/priv/forge_release.toml
+    - $HOME/forge_release.toml
+  - CmdLine:
+    - chmod -R 777 /opt/arcblock
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - addgroup -S arcblock && adduser -S -G arcblock arcblock
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: arcblock
+  - Name: expose
+    Ports:
+    - "8210"
+  - Name: expose
+    Ports:
+    - "28210"
+  - Name: expose
+    Ports:
+    - "37017"
+  - Name: expose
+    Ports:
+    - "4369"
+  - Name: expose
+    Ports:
+    - "28080"
+  - Name: expose
+    Ports:
+    - "24001"
+  - Name: expose
+    Ports:
+    - "25001"
+  - Name: expose
+    Ports:
+    - "28221"
+  - Name: expose
+    Ports:
+    - "28222"
+  - Name: expose
+    Ports:
+    - "26656"
+  - Name: expose
+    Ports:
+    - "26660"
+  - Env:
+    - Key: FORGE_SOCK_GRPC
+      Value: tcp://127.0.0.1:28210
+    Name: env
+  - CmdLine:
+    - /bin/bash
+    - -c
+    - /opt/arcblock/starter/bin/forge_starter start ;sleep 100; /opt/arcblock/forge_web/bin/forge_web
+      foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:$ALPINE_VER
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:$ALPINE_VER

@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: microsoft/dotnet:2.1-aspnetcore-runtime
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Name: expose
+    Ports:
+    - "80"
+  From:
+    Image: microsoft/dotnet:2.1-aspnetcore-runtime
+  Name: base
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1-aspnetcore-runtime AS base
+- As: build
+  BaseName: microsoft/dotnet:2.1-sdk
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - packages/
+    - /packages
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - NuGet.Docker.Config
+    - /root/.nuget/NuGet/NuGet.Config
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/AuthzProxy/AuthzProxy.csproj
+    - AuthzProxy/
+  - CmdLine:
+    - dotnet restore AuthzProxy/AuthzProxy.csproj
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/
+    - .
+  - Name: workdir
+    Path: /src/AuthzProxy
+  - CmdLine:
+    - dotnet build AuthzProxy.csproj -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.1-sdk
+  Name: build
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1-sdk AS build
+- As: publish
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - dotnet publish AuthzProxy.csproj -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build AS publish
+- As: final
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - CmdLine:
+    - dotnet
+    - AuthzProxy.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: final
+  Platform: ""
+  SourceCode: FROM base AS final

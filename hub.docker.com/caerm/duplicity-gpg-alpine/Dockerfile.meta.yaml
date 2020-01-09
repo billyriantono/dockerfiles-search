@@ -1,0 +1,98 @@
+MetaArgs:
+- DefaultValue: :3.9.2
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: :3.9.2
+Stages:
+- BaseName: alpine$ALPINE_VERSION
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Caerm a.k.a Tomasz Czarnecki"'
+    Name: label
+  - Key: S6_OVERLAY_VERSION
+    Name: arg
+    Value: v1.22.0.0
+  - CmdLine:
+    - apk add --no-cache --update curl     && curl -L -s https://github.com/just-containers/s6-overlay/releases/download/$S6_OVERLAY_VERSION/s6-overlay-amd64.tar.gz     |
+      tar xvzf - -C /     && apk del --no-cache curl
+    Name: run
+    PrependShell: true
+  - Key: DUPLICITY_VERSION
+    Name: arg
+    Value: =0.7.18.2-r0
+  - Key: GNUPG_VERSION
+    Name: arg
+    Value: =2.2.12-r0
+  - CmdLine:
+    - apk add --no-cache --update     duplicity$DUPLICITY_VERSION     gnupg$GNUPG_VERSION
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /statefull     && mkdir /statefull/gpg-keys     && mkdir /statefull/crontabs       &&
+      rm -r /etc/crontabs       && ln -s /statefull/crontabs /etc/crontabs
+    Name: run
+    PrependShell: true
+  - Key: DOCKER_USER
+    Name: arg
+    Value: null
+  - Env:
+    - Key: DOCKER_USER
+      Value: ${DOCKER_USER:-root}
+    Name: env
+  - Key: DOCKER_UID
+    Name: arg
+    Value: null
+  - Env:
+    - Key: DOCKER_UID
+      Value: ${DOCKER_UID:-0}
+    Name: env
+  - Key: INIT_TASK
+    Name: arg
+    Value: 00-add-user
+  - CmdLine:
+    - echo -e "#!/usr/bin/with-contenv /bin/sh\n\ncat /etc/passwd | grep -q \$DOCKER_USER\nif
+      [ \$? -ne 0 ]; then\n  adduser -D -u \$DOCKER_UID \$DOCKER_USER\n  adduser \$DOCKER_USER
+      tty\nfi\n" > /etc/cont-init.d/$INIT_TASK     && chmod +x /etc/cont-init.d/$INIT_TASK
+    Name: run
+    PrependShell: true
+  - Key: INIT_TASK
+    Name: arg
+    Value: 10-fix-crontabs
+  - CmdLine:
+    - echo -e "#!/usr/bin/with-contenv /bin/sh\n\nif [ -e /statefull/crontabs/\$DOCKER_USER
+      ]; then\n  chown root:\$DOCKER_USER /statefull/crontabs/\$DOCKER_USER\n  chmod
+      664 /statefull/crontabs/\$DOCKER_USER\nfi\n" > /etc/cont-init.d/$INIT_TASK     &&
+      chmod +x /etc/cont-init.d/$INIT_TASK
+    Name: run
+    PrependShell: true
+  - Key: INIT_TASK
+    Name: arg
+    Value: 20-gpg-keys-import
+  - CmdLine:
+    - echo -e "#!/usr/bin/with-contenv /bin/sh\n\nsu - \$DOCKER_USER -c \"gpg --import
+      /statefull/gpg-keys/*.pub\"\nsu - \$DOCKER_USER -c \"gpg --import-ownertrust
+      /statefull/gpg-keys/*.ownertrust\"\n" > /etc/cont-init.d/$INIT_TASK     && chmod
+      +x /etc/cont-init.d/$INIT_TASK
+    Name: run
+    PrependShell: true
+  - Key: SERVICE_NAME
+    Name: arg
+    Value: crond
+  - CmdLine:
+    - mkdir /etc/services.d/$SERVICE_NAME     && echo -e "#!/usr/bin/execlineb -P\ncrond
+      -f -L /dev/stdout" > /etc/services.d/$SERVICE_NAME/run     && chmod +x /etc/services.d/$SERVICE_NAME/run
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine: []
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine$ALPINE_VERSION
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine$ALPINE_VERSION

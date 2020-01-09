@@ -1,0 +1,146 @@
+MetaArgs: null
+Stages:
+- As: buildernode
+  BaseName: node:10.14.1-alpine
+  Commands:
+  - CmdLine:
+    - mkdir /webapp
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/
+    - /webapp/src/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./public/
+    - /webapp/public/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./*.json
+    - /webapp/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./*.js
+    - /webapp/
+  - Name: workdir
+    Path: /webapp
+  - CmdLine:
+    - npm set progress=false
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.14.1-alpine
+  Name: buildernode
+  Platform: ""
+  SourceCode: FROM node:10.14.1-alpine as builderNode
+- As: buildergo
+  BaseName: golang:1.13-alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk add --no-cache git ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -D -g '' appuser
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./*.go
+    - $GOPATH/src/github.com/stevenweathers/thunderdome-planning-poker/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./go.mod
+    - $GOPATH/src/github.com/stevenweathers/thunderdome-planning-poker/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./go.sum
+    - $GOPATH/src/github.com/stevenweathers/thunderdome-planning-poker/
+  - Chown: ""
+    From: builderNode
+    Name: copy
+    SourcesAndDest:
+    - /webapp/dist
+    - $GOPATH/src/github.com/stevenweathers/thunderdome-planning-poker/dist
+  - Name: workdir
+    Path: $GOPATH/src/github.com/stevenweathers/thunderdome-planning-poker/
+  - CmdLine:
+    - go get -d -v
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go install -v github.com/markbates/pkger/cmd/pkger
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pkger
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w
+      -s" -o /go/bin/thunderdome
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-alpine
+  Name: buildergo
+  Platform: ""
+  SourceCode: FROM golang:1.13-alpine as builderGo
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builderGo
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: builderGo
+    Name: copy
+    SourcesAndDest:
+    - /etc/passwd
+    - /etc/passwd
+  - Chown: ""
+    From: builderGo
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/thunderdome
+    - /go/bin/thunderdome
+  - Name: user
+    User: appuser
+  - CmdLine:
+    - /go/bin/thunderdome
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

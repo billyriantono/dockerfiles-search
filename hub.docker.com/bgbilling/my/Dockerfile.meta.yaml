@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- As: packager
+  BaseName: bgbilling/base-bgbilling:8.0
+  Commands:
+  - Env:
+    - Key: MYBGBILLING_VERSION
+      Value: "8.0"
+    Name: env
+  - Key: MYBGBILLING_FTP
+    Name: arg
+    Value: ftp://bgbilling.ru/pub/bgbilling/$MYBGBILLING_VERSION
+  - Env:
+    - Key: WILDFLY_HOME
+      Value: /opt/wildfly/current
+    Name: env
+  - Env:
+    - Key: WILDFLY_DEPLOYMENTS
+      Value: $WILDFLY_HOME/standalone/deployments
+    Name: env
+  - CmdLine:
+    - set -x   && rm -fr /tmp/bgb-install && mkdir -p /tmp/bgb-install     && echo
+      "Downloading MyBGBilling.zip..."   && wget -nv $MYBGBILLING_FTP/MyBGBilling_${MYBGBILLING_VERSION}_*.zip
+      -O /tmp/bgb-install/MyBGBilling.zip   && unzip -q /tmp/bgb-install/MyBGBilling.zip
+      -d /tmp/bgb-install/     && cp /tmp/bgb-install/MyBGBilling.war/WEB-INF/defaults/*.groovy
+      /tmp/bgb-install/MyBGBilling.war/WEB-INF/   && sed -i "s@user = 'customer'@user
+      = 'admin'@" /tmp/bgb-install/MyBGBilling.war/WEB-INF/mybgbilling-conf.groovy   &&
+      sed -i "s@password = '123456'@password = 'admin'@" /tmp/bgb-install/MyBGBilling.war/WEB-INF/mybgbilling-conf.groovy   &&
+      sed -i "s@127.0.0.1:8080@server:8080@" /tmp/bgb-install/MyBGBilling.war/WEB-INF/mybgbilling-conf.groovy     &&
+      chmod +x /tmp/bgb-install/MyBGBilling.war/WEB-INF/script/files/*.sh   && sed
+      -i 's@JAVA_HOME=@#JAVA_HOME=@' /tmp/bgb-install/MyBGBilling.war/WEB-INF/script/files/setenv.sh   &&
+      sed -i 's@MYBGBILLING_HOME=@#MYBGBILLING_HOME=@' /tmp/bgb-install/MyBGBilling.war/WEB-INF/script/files/setenv.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: bgbilling/base-bgbilling:8.0
+  Name: packager
+  Platform: ""
+  SourceCode: FROM bgbilling/base-bgbilling:8.0 as packager
+- BaseName: bgbilling/base-wildfly:14
+  Commands:
+  - Env:
+    - Key: MYBGBILLING_VERSION
+      Value: "8.0"
+    Name: env
+  - Env:
+    - Key: MYBGBILLING_HOME
+      Value: $JBOSS_HOME/standalone/deployments/MyBGBilling.war
+    Name: env
+  - Chown: ""
+    From: packager
+    Name: copy
+    SourcesAndDest:
+    - /tmp/bgb-install/MyBGBilling.war
+    - $MYBGBILLING_HOME
+  - Chown: ""
+    From: packager
+    Name: copy
+    SourcesAndDest:
+    - /tmp/bgb-install/MyBGBilling.war/WEB-INF/script/files
+    - $JBOSS_HOME/bin
+  - Chown: ""
+    From: packager
+    Name: copy
+    SourcesAndDest:
+    - /opt/bgbilling/BGBillingServer/script/wait-for.sh
+    - /wait-for.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - standalone.xml
+    - $JBOSS_HOME/standalone/configuration
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - /bin/bash
+    - entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /opt/wildfly/current/bin/standalone.sh
+    - -b
+    - 0.0.0.0
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: bgbilling/base-wildfly:14
+  Name: ""
+  Platform: ""
+  SourceCode: FROM bgbilling/base-wildfly:14

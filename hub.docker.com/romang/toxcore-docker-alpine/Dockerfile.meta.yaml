@@ -1,0 +1,65 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:latest
+  Commands:
+  - Labels:
+    - Key: Description
+      Value: '"This image is used to run Tox network node"'
+    - Key: Vendor
+      Value: '"n/a"'
+    - Key: Version
+      Value: '"0.0.0"'
+    Name: label
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/irungentoo/toxcore/archive/master.zip
+    - https://tox.0x10k.com/bootstrapd-conf-ipv64.txt
+    - /tmp/tox/
+  - Name: workdir
+    Path: /tmp/tox
+  - CmdLine:
+    - "set -x && \tsed -i 's/^root::/root:!:/' /etc/shadow && \taddgroup -S tox-bootstrapd
+      && \tadduser -h /var/lib/tox-bootstrapd -g \"Account to run Tox's DHT bootstrap
+      daemon\" -s /sbin/nologin -G tox-bootstrapd -S -D -H tox-bootstrapd && \tinstall
+      -d -o tox-bootstrapd -g tox-bootstrapd -m 700 /var/lib/tox-bootstrapd && \tfunction
+      su_wrapper () { su -s /bin/sh -c \"$@\" tox-bootstrapd; return $?; } && \tapk
+      --no-cache add libsodium libconfig && \tapk --no-cache add --virtual build-dependencies
+      \tautoconf \tautomake \tcheck-dev \tcurl \tbuild-base \tlibtool \tlibconfig-dev
+      \tlibsodium-dev \tlibvpx-dev \tlinux-headers \topus-dev \tunzip && \tchown tox-bootstrapd:tox-bootstrapd
+      /tmp/tox && \tchmod 644 /tmp/tox/master.zip && \tsu_wrapper \"unzip -tq master.zip\"
+      && \tsu_wrapper \"unzip -aq master.zip\" && \tcd toxcore-master && \tsu_wrapper
+      \"./autogen.sh\" && \tsu_wrapper \"./configure --prefix=/usr --enable-daemon
+      --disable-av --disable-ntox\" && \tsu_wrapper \"make\" && \tmake install &&
+      \tinstall -o root -g root -m 644 other/bootstrap_daemon/tox-bootstrapd.conf
+      /etc/tox-bootstrapd.conf && \tsed -i '/^bootstrap_nodes = /,$d' /etc/tox-bootstrapd.conf
+      && \tcat /tmp/tox/bootstrapd-conf-ipv64.txt >> /etc/tox-bootstrapd.conf && \tcd
+      / && \trm -rf /tmp/tox && \tapk del build-dependencies && \tsed -i 's/enable_lan_discovery
+      = true/enable_lan_discovery = false/' /etc/tox-bootstrapd.conf && \tsed -i 's/tcp_relay_ports
+      = \\[443, 3389, 33445\\]/tcp_relay_ports = \\[8080, 33445\\]/' /etc/tox-bootstrapd.conf
+      && \tsed -i 's/motd = \"tox-bootstrapd\"/motd = \"tox-bootstrapd docker\"/'
+      /etc/tox-bootstrapd.conf"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/lib/tox-bootstrapd
+  - Name: expose
+    Ports:
+    - 33445/tcp
+    - 33445/udp
+    - 8080/tcp
+    - 8080/udp
+  - Name: user
+    User: tox-bootstrapd
+  - CmdLine:
+    - /usr/bin/tox-bootstrapd
+    - --config=/etc/tox-bootstrapd.conf
+    - --foreground
+    - --log-backend=stdout
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

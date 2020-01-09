@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:stretch-slim
+  Commands:
+  - CmdLine:
+    - "set -ex \t&& apt-get update \t&& apt-get install -qq --no-install-recommends
+      ca-certificates dirmngr gpg wget \t&& rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LITECOIN_VERSION
+      Value: 0.17.1
+    Name: env
+  - Env:
+    - Key: LITECOIN_URL
+      Value: https://download.litecoin.org/litecoin-$LITECOIN_VERSION/linux/litecoin-$LITECOIN_VERSION-x86_64-linux-gnu.tar.gz
+    - Key: LITECOIN_SHA256
+      Value: 9cab11ba75ea4fb64474d4fea5c5b6851f9a25fe9b1d4f7fc9c12b9f190fed07
+    - Key: LITECOIN_ASC_URL
+      Value: https://download.litecoin.org/litecoin-$LITECOIN_VERSION/SHA256SUMS.asc
+    - Key: LITECOIN_PGP_KEY
+      Value: fe3348877809386c
+    Name: env
+  - CmdLine:
+    - "set -ex \t&& cd /tmp \t&& wget -qO litecoin.tar.gz \"$LITECOIN_URL\" \t&& echo
+      \"$LITECOIN_SHA256 litecoin.tar.gz\" | sha256sum -c - \t&& gpg --no-tty --keyserver
+      keyserver.ubuntu.com --recv-keys \"$LITECOIN_PGP_KEY\" \t&& wget -qO litecoin.asc
+      \"$LITECOIN_ASC_URL\" \t&& gpg --verify litecoin.asc \t&& tar -xzvf litecoin.tar.gz
+      -C /usr/local --strip-components=1 --exclude=*-qt"
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim as builder
+- BaseName: debian:stretch-slim
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/litecoind
+    - /usr/local/bin/litecoin-cli
+    - /usr/local/bin/
+  - CmdLine:
+    - "groupadd -r litecoin && useradd -r -m -g litecoin litecoin \t&& ln -s /usr/local/bin/litecoin-cli
+      /usr/local/bin/c"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LITECOIN_DATA
+      Value: /data
+    Name: env
+  - CmdLine:
+    - "mkdir \"$LITECOIN_DATA\" \t&& chown -R litecoin:litecoin \"$LITECOIN_DATA\"
+      \t&& ln -sfn \"$LITECOIN_DATA\" /home/litecoin/.litecoin \t&& chown -h litecoin:litecoin
+      /home/litecoin/.litecoin"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /entrypoint.sh
+  - Name: user
+    User: litecoin
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - litecoind
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

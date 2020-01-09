@@ -1,0 +1,75 @@
+MetaArgs: null
+Stages:
+- As: git
+  BaseName: alpine
+  Commands:
+  - Name: workdir
+    Path: /lanproxy
+  - CmdLine:
+    - apk update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/ffay/lanproxy.git ./
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: git
+  Platform: ""
+  SourceCode: FROM alpine as git
+- As: maven
+  BaseName: maven
+  Commands:
+  - Name: workdir
+    Path: /lanproxy
+  - Chown: ""
+    From: git
+    Name: copy
+    SourcesAndDest:
+    - /lanproxy
+    - ./
+  - CmdLine:
+    - mvn compile package -pl proxy-server -am
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd distribution && DIR_NAME=$(echo `ls` | awk '{print $NF}') && mv $DIR_NAME
+      /lanproxy/lanproxy-server
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven
+  Name: maven
+  Platform: ""
+  SourceCode: FROM maven as maven
+- BaseName: openjdk:8-jdk-alpine
+  Commands:
+  - Name: workdir
+    Path: /lanproxy-server
+  - Chown: ""
+    From: maven
+    Name: copy
+    SourcesAndDest:
+    - /lanproxy/lanproxy-server
+    - ./
+  - Name: expose
+    Ports:
+    - "4900"
+    - "4993"
+    - "8090"
+  - CmdLine:
+    - sh
+    - -c
+    - sh bin/startup.sh && tail -f logs/server.log
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jdk-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-alpine

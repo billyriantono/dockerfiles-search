@@ -1,0 +1,120 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk add --no-cache     fuse3-dev     gcc     gpgme-dev     libc-dev     make     pkgconf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -S build
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: build
+  - Chown: build:nogroup
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Makefile
+    - /rgpgfs/
+  - Chown: build:nogroup
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /rgpgfs/src
+  - Name: workdir
+    Path: /rgpgfs
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: build
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as build
+- As: test
+  BaseName: build
+  Commands:
+  - Chown: build:nogroup
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tests
+    - /rgpgfs/tests
+  - CmdLine:
+    - make tests/str && tests/str     && make tests/fs && tests/fs
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build
+  Name: test
+  Platform: ""
+  SourceCode: FROM build as test
+- As: runtime
+  BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk add --no-cache     fuse3     gpgme
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo user_allow_other >> /etc/fuse.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -S encrypt
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: encrypt
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /rgpgfs/rgpgfs
+    - /usr/local/bin/
+  - Chown: encrypt:nogroup
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/ash_history
+    - /home/encrypt/.ash_history
+  From:
+    Image: alpine:3.9
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as runtime
+- As: unattended
+  BaseName: runtime
+  Commands:
+  - Env:
+    - Key: RECIPIENT
+      Value: ""
+    - Key: SOURCE_DIR
+      Value: /plain
+    - Key: CIPHER_DIR
+      Value: /encrypted
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/rgpgfs_unattended.sh
+    - /
+  - CmdLine:
+    - /rgpgfs_unattended.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 2
+      Named: runtime
+  Name: unattended
+  Platform: ""
+  SourceCode: FROM runtime as unattended

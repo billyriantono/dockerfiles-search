@@ -1,0 +1,150 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "prep",
+      "BaseName": "alpine:3.9",
+      "SourceCode": "FROM alpine:3.9 as prep",
+      "Platform": "",
+      "As": "prep",
+      "From": {
+        "Image": "alpine:3.9"
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"Tomohisa Kusano \u003csiomiz@gmail.com\u003e\""
+            },
+            {
+              "Key": "contributors",
+              "Value": "\"See CONTRIBUTORS file \u003chttps://github.com/siomiz/SoftEtherVPN/blob/master/CONTRIBUTORS\u003e\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Env": [
+            {
+              "Key": "BUILD_VERSION",
+              "Value": "4.29-9680-rtm"
+            },
+            {
+              "Key": "SHA256_SUM",
+              "Value": "c19cd49835c613cb5551ce66c91f90da3d3496ab3e15e8c61e22b464dc55d9b0"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "wget https://github.com/SoftEtherVPN/SoftEtherVPN_Stable/archive/v${BUILD_VERSION}.tar.gz     \u0026\u0026 echo \"${SHA256_SUM}  v${BUILD_VERSION}.tar.gz\" | sha256sum -c     \u0026\u0026 mkdir -p /usr/local/src     \u0026\u0026 tar -x -C /usr/local/src/ -f v${BUILD_VERSION}.tar.gz     \u0026\u0026 rm v${BUILD_VERSION}.tar.gz"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "build",
+      "BaseName": "centos:7",
+      "SourceCode": "FROM centos:7 as build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Image": "centos:7"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "prep",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/src",
+            "/usr/local/src"
+          ]
+        },
+        {
+          "CmdLine": [
+            "yum -y update     \u0026\u0026 yum -y groupinstall \"Development Tools\"     \u0026\u0026 yum -y install ncurses-devel openssl-devel readline-devel     \u0026\u0026 cd /usr/local/src/SoftEtherVPN_Stable-*     \u0026\u0026 ./configure     \u0026\u0026 make     \u0026\u0026 make install     \u0026\u0026 touch /usr/vpnserver/vpn_server.config     \u0026\u0026 zip -r9 /artifacts.zip /usr/vpn* /usr/bin/vpn*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "centos:7",
+      "SourceCode": "FROM centos:7",
+      "Platform": "",
+      "From": {
+        "Image": "centos:7"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/artifacts.zip",
+            "/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "copyables",
+            "/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "yum -y update     \u0026\u0026 yum -y install unzip iptables sysvinit-tools     \u0026\u0026 rm -rf /var/log/* /var/cache/yum/* /var/lib/yum/*     \u0026\u0026 chmod +x /entrypoint.sh /gencert.sh     \u0026\u0026 unzip -o /artifacts.zip -d /     \u0026\u0026 rm /artifacts.zip     \u0026\u0026 rm -rf /opt     \u0026\u0026 ln -s /usr/vpnserver /opt     \u0026\u0026 find /usr/bin/vpn* -type f ! -name vpnserver        -exec sh -c 'ln -s {} /opt/$(basename {})' \\;"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/usr/vpnserver/"
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/usr/vpnserver/server_log/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/entrypoint.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "1194/udp",
+            "1701/tcp",
+            "443/tcp",
+            "4500/udp",
+            "500/udp",
+            "5555/tcp"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/usr/bin/vpnserver",
+            "execsvc"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

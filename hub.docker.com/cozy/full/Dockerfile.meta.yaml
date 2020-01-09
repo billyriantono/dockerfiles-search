@@ -1,0 +1,179 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:14.04
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - echo "deb http://ppa.launchpad.net/nginx/stable/ubuntu trusty main" >> /etc/apt/sources.list  &&
+      apt-key adv --keyserver keyserver.ubuntu.com --recv-keys C300EE8C  && apt-get
+      update --quiet  && apt-get install --quiet --yes   build-essential   couchdb   curl   git   imagemagick   language-pack-en   libffi6   libffi-dev   libssl-dev   libxml2-dev   libxslt1-dev   libjpeg-dev   lsof   nginx   postfix   pwgen   python-dev   python-pip   python-setuptools   python-software-properties   software-properties-common   sqlite3   wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - update-locale LANG=en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install   supervisor   virtualenv
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL https://deb.nodesource.com/setup_4.x | bash -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y nodejs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install -g   coffee-script   cozy-controller   cozy-monitor
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -M cozy  && useradd -M cozy-data-system  && useradd -M cozy-home
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /etc/cozy  && chown -hR cozy /etc/cozy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pwgen -1 > /etc/cozy/couchdb.login  && pwgen -1 >> /etc/cozy/couchdb.login  &&
+      chown cozy-data-system /etc/cozy/couchdb.login  && chmod 640 /etc/cozy/couchdb.login
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /var/run/couchdb  && chown -hR couchdb /var/run/couchdb  && su - couchdb
+      -c 'couchdb -b'  && sleep 5  && while ! curl -s 127.0.0.1:5984; do sleep 5;
+      done  && curl -s -X PUT 127.0.0.1:5984/_config/admins/$(head -n1 /etc/cozy/couchdb.login)
+      -d "\"$(tail -n1 /etc/cozy/couchdb.login)\""
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisor/supervisord.conf
+    - /etc/supervisord.conf
+  - CmdLine:
+    - mkdir -p /var/log/supervisor  && chmod 777 /var/log/supervisor  && /usr/local/bin/supervisord
+      -c /etc/supervisord.conf
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - CmdLine:
+    - 'su - couchdb -c ''couchdb -b''  && sleep 5  && while ! curl -s 127.0.0.1:5984;
+      do sleep 5; done  && cozy-controller & sleep 5  && while ! curl -s 127.0.0.1:9002;
+      do sleep 5; done  && cozy-monitor install data-system  && cozy-monitor install
+      home  && cozy-monitor install proxy  && curl -X POST http://localhost:9103/api/instance
+      -H "Content-Type: application/json" -d ''{"background":"background-07"}''  &&
+      for app in calendar contacts photos emails files sync; do    cozy-monitor install
+      $app;  done'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - nginx/nginx.conf
+    - /etc/nginx/nginx.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - nginx/cozy
+    - /etc/nginx/sites-available/cozy
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - nginx/cozy-ssl
+    - /etc/nginx/sites-available/cozy-ssl
+  - CmdLine:
+    - chmod 0644 /etc/nginx/sites-available/cozy /etc/nginx/sites-available/cozy-ssl  &&
+      rm /etc/nginx/sites-enabled/default  && ln -s /etc/nginx/sites-available/cozy
+      /etc/nginx/sites-enabled/cozy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - nginx -t
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DISABLE_SSL
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: POSTFIX_DOMAIN
+      Value: mydomain.net
+    Name: env
+  - CmdLine:
+    - echo "postfix postfix/mailname string $POSTFIX_DOMAIN" | debconf-set-selections  &&
+      echo "postfix postfix/main_mailer_type select Internet Site" | debconf-set-selections  &&
+      echo "postfix postfix/destinations string $POSTFIX_DOMAIN, localhost.localdomain,
+      localhost " | debconf-set-selections  && cp /etc/services /var/spool/postfix/etc/  &&
+      cp /etc/resolv.conf /var/spool/postfix/etc  && postfix check
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisor/cozy-controller.conf
+    - /etc/supervisor/conf.d/cozy-controller.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisor/cozy-init.conf
+    - /etc/supervisor/conf.d/cozy-init.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisor/couchdb.conf
+    - /etc/supervisor/conf.d/couchdb.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisor/nginx.conf
+    - /etc/supervisor/conf.d/nginx.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisor/postfix.conf
+    - /etc/supervisor/conf.d/postfix.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - cozy-init
+    - /etc/init.d/cozy-init
+  - CmdLine:
+    - chmod 0644 /etc/supervisor/conf.d/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get clean  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - Name: volume
+    Volumes:
+    - /var/lib/couchdb
+    - /etc/cozy
+    - /usr/local/cozy
+    - /usr/local/var/cozy/
+  - CmdLine:
+    - /usr/local/bin/supervisord
+    - -n
+    - -c
+    - /etc/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:14.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:14.04

@@ -1,0 +1,67 @@
+MetaArgs: null
+Stages:
+- As: buildsni
+  BaseName: ubuntu:16.04
+  Commands:
+  - CmdLine:
+    - apt-get update   && apt-get install -qqy   git   build-essential   autotools-dev   cdbs   debhelper   dh-autoreconf   dpkg-dev   gettext   libev-dev   libpcre3-dev   libudns-dev   pkg-config   fakeroot   devscripts   &&
+      apt-get clean
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: sni_ver
+      Value: 0.5.0
+    Name: env
+  - CmdLine:
+    - mkdir -p /root && cd /root   && git clone https://github.com/Neilpang/sniproxy.git   &&
+      cd sniproxy   && ./autogen.sh && dpkg-buildpackage   && cd ..   && rm -rf sniproxy
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.04
+  Name: buildsni
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04 AS buildsni
+- BaseName: ubuntu:16.04
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y   libev4   libudns0   && apt-get -y autoremove
+      && apt-get clean all && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: sni_ver
+      Value: 0.5.0
+    Name: env
+  - Chown: ""
+    From: buildsni
+    Name: copy
+    SourcesAndDest:
+    - /root/sniproxy_${sni_ver}_amd64.deb
+    - /sniproxy_${sni_ver}_amd64.deb
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - entry.sh
+    - /entry.sh
+  - CmdLine:
+    - chmod +x /entry.sh && dpkg -i /sniproxy_${sni_ver}_amd64.deb && mkdir -p /sniproxy/
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /sniproxy/
+  - CmdLine:
+    - /entry.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - for cmd in addhttp addssl add; do echo '#!'"/usr/bin/env sh\n/entry.sh $cmd
+      \"\$@\"" >/bin/$cmd && chmod +x /bin/$cmd;done;
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04

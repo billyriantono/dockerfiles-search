@@ -1,0 +1,108 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:stretch
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - echo "deb http://http.debian.net/debian stretch main\ndeb-src http://http.debian.net/debian
+      stretch main\ndeb http://http.debian.net/debian stretch-updates main\ndeb-src
+      http://http.debian.net/debian stretch-updates main\ndeb http://security.debian.org
+      stretch/updates main\ndeb-src http://security.debian.org stretch/updates main\n"
+      > /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get -y update && \tapt-get -y --force-yes --fix-missing install dpkg-dev
+      debhelper &&\tapt-get -y build-dep pure-ftpd"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir /tmp/pure-ftpd/ && \tcd /tmp/pure-ftpd/ && \tapt-get source pure-ftpd
+      && \tcd pure-ftpd-* && \t./configure --with-tls | grep -v '^checking' | grep
+      -v ': Entering directory' | grep -v ': Leaving directory' && \tsed -i '/CAP_SYS_NICE,/d;
+      /CAP_DAC_READ_SEARCH/d; s/CAP_SYS_CHROOT,/CAP_SYS_CHROOT/;' src/caps_p.h &&
+      \tdpkg-buildpackage -b -uc | grep -v '^checking' | grep -v ': Entering directory'
+      | grep -v ': Leaving directory'"
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:stretch as builder
+- BaseName: debian:stretch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Andrew Stilliard <andrew.stilliard@gmail.com>"'
+    Name: label
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - "apt-get -y update && \tapt-get  --no-install-recommends --yes install \topenbsd-inetd
+      \trsyslog \tlsb-base \tlibc6 \tlibcap2 \tlibpam0g \tlibssl1.1 \topenssl"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/pure-ftpd/*.deb
+    - /tmp/pure-ftpd/
+  - CmdLine:
+    - "dpkg -i /tmp/pure-ftpd/pure-ftpd-common*.deb &&\tdpkg -i /tmp/pure-ftpd/pure-ftpd_*.deb
+      && \trm -Rf /tmp/pure-ftpd"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-mark hold pure-ftpd pure-ftpd-common
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "groupadd ftpgroup &&\tuseradd -g ftpgroup -d /home/ftpusers -s /dev/null ftpuser"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "echo \"\" >> /etc/rsyslog.conf && \techo \"#PureFTP Custom Logging\" >> /etc/rsyslog.conf
+      && \techo \"ftp.* /var/log/pure-ftpd/pureftpd.log\" >> /etc/rsyslog.conf &&
+      \techo \"Updated /etc/rsyslog.conf with /var/log/pure-ftpd/pureftpd.log\""
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - /run.sh
+  - CmdLine:
+    - chmod u+x /run.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PUBLICHOST
+      Value: localhost
+    Name: env
+  - Name: volume
+    Volumes:
+    - /home/ftpusers
+    - /etc/pure-ftpd/passwd
+  - CmdLine:
+    - /run.sh -l puredb:/etc/pure-ftpd/pureftpd.pdb -E -j -R -P $PUBLICHOST -s -A
+      -j -Z -H -4 -E -R -G -X -x
+    Name: cmd
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "21"
+    - 30000-30009
+  From:
+    Image: debian:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch

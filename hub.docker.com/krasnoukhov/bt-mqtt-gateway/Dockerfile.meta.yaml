@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine
+  Commands:
+  - Env:
+    - Key: QEMU_URL
+      Value: https://github.com/balena-io/qemu/releases/download/v3.0.0%2Bresin/qemu-3.0.0+resin-arm.tar.gz
+    Name: env
+  - CmdLine:
+    - apk add curl && curl -L ${QEMU_URL} | tar zxvf - -C . --strip-components 1
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine AS builder
+- BaseName: arm32v7/alpine:3.9
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - qemu-arm-static
+    - /usr/bin
+  - CmdLine:
+    - mkdir application
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /application
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /application
+  - CmdLine:
+    - apk add --no-cache tzdata python3 git bluez glib-dev make bluez-dev bluez-libs
+      musl-dev linux-headers gcc grep &&     python3 -m ensurepip &&     rm -r /usr/lib/python*/ensurepip
+      &&     pip3 install --upgrade pip setuptools &&     if [ ! -e /usr/bin/pip ];
+      then       ln -s pip3 /usr/bin/pip ;     fi &&     if [[ ! -e /usr/bin/python
+      ]]; then       ln -sf /usr/bin/python3 /usr/bin/python;     fi &&     rm -r
+      /root/.cache &&     mkdir /config &&     pip install -r requirements.txt &&     ln
+      -s /config/config.yaml ./config.yaml &&     apk del --no-cache bluez-dev musl-dev
+      gcc make git glib-dev linux-headers grep python2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache tzdata python3 git bluez glib-dev make bluez-dev bluez-libs
+      musl-dev linux-headers gcc grep &&     grep -P "(?<=REQUIREMENTS).*" workers/*.py
+      | grep -Po "(?<=\[).*(?=\])" | tr ',' '\n' | tr "'" " "| tr "\"" " " > /tmp/requirements.txt
+      &&     cat /tmp/requirements.txt &&     pip install -r /tmp/requirements.txt
+      &&     rm /tmp/requirements.txt &&     apk del --no-cache bluez-dev musl-dev
+      gcc make git glib-dev linux-headers grep python2
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./start.sh
+    - /start.sh
+  - CmdLine:
+    - chmod +x /start.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DEBUG
+      Value: "false"
+    Name: env
+  - Name: volume
+    Volumes:
+    - /config
+  - CmdLine:
+    - /bin/sh
+    - -c
+    - /start.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: arm32v7/alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM arm32v7/alpine:3.9

@@ -1,0 +1,116 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: nginx:1.14
+  Commands:
+  - CmdLine:
+    - apt-get update     && apt-get upgrade -y     && apt-get install --no-install-recommends
+      --no-install-suggests -y         autoconf         automake         bash         bzip2         ca-certificates         curl         expat         fcgiwrap         g++         libexpat1-dev         liblz4-1         liblz4-dev         libtool         m4         make         osmium-tool         python3         python3-venv         supervisor         wget         zlib1g         zlib1g-dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - http://dev.overpass-api.de/releases/osm-3s_v0.7.55.6.tar.gz
+    - /app/src.tar.gz
+  - CmdLine:
+    - mkdir -p /app/src     && cd /app/src     && tar -x -z --strip-components 1 -f
+      ../src.tar.gz     && autoscan     && aclocal     && autoheader     && libtoolize     &&
+      automake --add-missing      && autoconf     && CXXFLAGS='-O2' CFLAGS='-O2' ./configure
+      --prefix=/app --enable-lz4     && make -j $(grep -c ^processor /proc/cpuinfo)
+      dist install clean     && mkdir -p /db/diffs /app/etc     && cp -r /app/src/rules
+      /app/etc/rules     && rm -rf /app/src /app/src.tar.gz
+    Name: run
+    PrependShell: true
+  From:
+    Image: nginx:1.14
+  Name: builder
+  Platform: ""
+  SourceCode: FROM nginx:1.14 AS builder
+- BaseName: nginx:1.14
+  Commands:
+  - CmdLine:
+    - apt-get update     && apt-get upgrade -y     && apt-get install --no-install-recommends
+      --no-install-suggests -y         bash         bzip2         ca-certificates         curl         expat         fcgiwrap         liblz4-1         osmium-tool         python3         python3-venv         supervisor         wget         zlib1g     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /app
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://raw.githubusercontent.com/geofabrik/sendfile_osm_oauth_protector/7a6e540734d36dce94aa6be5194c08af1eee2d3f/oauth_cookie_client.py
+    - /app/bin/
+  - CmdLine:
+    - addgroup overpass && adduser --home /db --disabled-password --gecos overpass
+      --ingroup overpass overpass
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - /app/
+  - CmdLine:
+    - python3 -m venv /app/venv     && /app/venv/bin/pip install -r /app/requirements.txt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /nginx /docker-entrypoint-initdb.d && chown nginx:nginx /nginx && chown
+      -R overpass:overpass /db
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/supervisord.conf
+    - /etc/supervisor/conf.d/supervisord.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/nginx-overpass.conf
+    - /etc/nginx/nginx.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/update_overpass.sh
+    - bin/update_overpass_loop.sh
+    - bin/rules_loop.sh
+    - bin/dispatcher_start.sh
+    - /app/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /app/
+  - CmdLine:
+    - chmod a+rx /app/docker-entrypoint.sh /app/bin/update_overpass.sh /app/bin/rules_loop.sh
+      /app/bin/dispatcher_start.sh     /app/bin/oauth_cookie_client.py
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: OVERPASS_RULES_LOAD
+      Value: "1"
+    Name: env
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /app/docker-entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginx:1.14
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx:1.14

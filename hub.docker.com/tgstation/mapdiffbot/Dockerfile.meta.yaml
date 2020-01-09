@@ -1,0 +1,121 @@
+MetaArgs: null
+Stages:
+- As: compiler
+  BaseName: rust
+  Commands:
+  - Name: workdir
+    Path: /src/SpacemanDMM
+  - CmdLine:
+    - "apt-get update && apt-get install -y --no-install-recommends \tlibc6 \tzlib1g-dev
+      \tlibcomerr2 \tlibc6-dev \tlibgcrypt20 \tlibkeyutils1 \tlibcurl3-gnutls \tlibsasl2-2
+      \tlibgpg-error0 \tcmake \t&& rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - SpacemanDMM/
+    - ./
+  - CmdLine:
+    - cargo build -p cli --release
+    Name: run
+    PrependShell: true
+  From:
+    Image: rust
+  Name: compiler
+  Platform: ""
+  SourceCode: FROM rust AS compiler
+- As: build
+  BaseName: microsoft/dotnet:2.1-sdk
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - MapDiffBot/MapDiffBot.csproj
+    - MapDiffBot/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - MapDiffBot.Tests/MapDiffBot.Tests.csproj
+    - MapDiffBot.Tests/
+  - CmdLine:
+    - cd MapDiffBot.Tests && dotnet restore
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - MapDiffBot/*
+    - MapDiffBot/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - MapDiffBot.Tests/*
+    - MapDiffBot.Tests/
+  - Name: workdir
+    Path: /src/MapDiffBot.Tests
+  - CmdLine:
+    - dotnet test -c Docker
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src/MapDiffBot
+  - CmdLine:
+    - dotnet publish -c Docker -o /app && cp entrypoint.sh /app/
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.1-sdk
+  Name: build
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1-sdk AS build
+- As: base
+  BaseName: microsoft/dotnet:2.1-aspnetcore-runtime
+  Commands:
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - "apt-get update && apt-get install -y --no-install-recommends \tlibc6 \tzlib1g-dev
+      \tlibcomerr2 \tlibc6-dev \tlibgcrypt20 \tlibkeyutils1 \tlibcurl3-gnutls \tlibsasl2-2
+      \tlibgpg-error0 \t&& rm -rf /var/lib/apt/lists/* \t&& mkdir /config_data"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: compiler
+    Name: copy
+    SourcesAndDest:
+    - /src/SpacemanDMM/target/release/dmm-tools
+    - dmm-tools.exe
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - CmdLine:
+    - mv appsettings.Docker.json /config_data/appsettings.Production.json
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /config_data
+    - /app/App_Data/Repositories
+  - CmdLine:
+    - ./entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: microsoft/dotnet:2.1-aspnetcore-runtime
+  Name: base
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1-aspnetcore-runtime AS base

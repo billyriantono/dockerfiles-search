@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: maven:3.6.1-jdk-8
+  Commands:
+  - Key: release
+    Name: arg
+    Value: master
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - lib/settings.xml
+    - /usr/share/maven/conf/settings.xml
+  - CmdLine:
+    - mkdir /deploy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/sakaiproject/sakai.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd sakai && git checkout ${release} && mvn clean install sakai:deploy
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.6.1-jdk-8
+  Name: build
+  Platform: ""
+  SourceCode: FROM maven:3.6.1-jdk-8 as build
+- BaseName: tomcat:9.0.20-jre8
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - lib/server.xml
+    - /usr/local/tomcat/conf/server.xml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - lib/context.xml
+    - /usr/local/tomcat/conf/context.xml
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /deploy/components
+    - /usr/local/tomcat/components/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /deploy/lib
+    - /usr/local/tomcat/sakai-lib/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /deploy/webapps
+    - /usr/local/tomcat/webapps/
+  - CmdLine:
+    - mkdir -p /usr/local/sakai/properties
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CATALINA_OPTS_MEMORY
+      Value: -Xms20000m -Xmx20000m
+    Name: env
+  - Env:
+    - Key: CATALINA_OPTS
+      Value: -server -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+UseConcMarkSweepGC
+        -XX:+UseParNewGC -XX:+CMSParallelRemarkEnabled -XX:+UseCompressedOops -XX:+UseCMSInitiatingOccupancyOnly
+        -XX:CMSInitiatingOccupancyFraction=80 -XX:TargetSurvivorRatio=90 -Djava.awt.headless=true
+        -Dsun.net.inetaddr.ttl=0 -Dsakai.component.shutdownonerror=true -Duser.language=en
+        -Duser.country=US -Dsakai.home=/usr/local/sakai/properties -Dsakai.security=/usr/local/tomcat/sakai
+        -Duser.timezone=US/Eastern -Dsun.net.client.defaultConnectTimeout=300000 -Dsun.net.client.defaultReadTimeout=1800000
+        -Dorg.apache.jasper.compiler.Parser.STRICT_QUOTE_ESCAPING=false -Dsun.lang.ClassLoader.allowArraySyntax=true
+        -Dhttp.agent=Sakai -Djava.util.Arrays.useLegacyMergeSort=true
+    Name: env
+  - CmdLine:
+    - sed -i.orig '/^common.loader=/s@$@,"${catalina.base}/sakai-lib/*.jar"@' /usr/local/tomcat/conf/catalina.properties
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L -o /usr/local/tomcat/lib/mysql-connector-java-5.1.47.jar https://repo1.maven.org/maven2/mysql/mysql-connector-java/5.1.47/mysql-connector-java-5.1.47.jar
+    Name: run
+    PrependShell: true
+  From:
+    Image: tomcat:9.0.20-jre8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tomcat:9.0.20-jre8

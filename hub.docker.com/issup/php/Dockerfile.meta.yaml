@@ -1,0 +1,158 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: php:7.2-fpm-buster
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends     libbz2-dev     libfreetype6-dev     libicu-dev     libjpeg-dev     libpng-dev     libxml2-dev     libzip-dev   &&
+      pecl install apcu   && pecl install igbinary   && pecl install redis-3.1.2   &&
+      pecl install xdebug   && docker-php-ext-configure gd --with-freetype-dir=/usr
+      --with-png-dir=/usr --with-jpeg-dir=/usr   && docker-php-ext-configure zip --with-libzip   &&
+      docker-php-ext-enable apcu   && docker-php-ext-enable igbinary   && docker-php-ext-enable
+      redis   && docker-php-ext-enable xdebug   && docker-php-ext-install     bcmath     bz2     calendar     exif     gd     mysqli     opcache     pdo_mysql     soap     zip     intl     gettext     pcntl   &&
+      rm -rf /var/lib/apt/lists/*   && rm -rf /tmp/*   && find "$(php -r 'echo ini_get("extension_dir");')"
+      -type f -executable -exec strip --strip-all '{}' +
+    Name: run
+    PrependShell: true
+  From:
+    Image: php:7.2-fpm-buster
+  Name: build
+  Platform: ""
+  SourceCode: FROM php:7.2-fpm-buster as build
+- BaseName: debian:buster-slim
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends     bzip2     ca-certificates     curl     default-mysql-client     git-core     libargon2-1     libedit2     libfreetype6     libicu63     libjpeg62-turbo     libpng16-16     libsodium23     libsqlite3-0     libssl1.1     libxml2     libzip4     openssh-client     patch     rsync     unzip     wget     xfonts-base     xfonts-75dpi     xz-utils   &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /etc/apt/preferences.d/no-debian-php
+    - /etc/apt/preferences.d/no-debian-php
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/php
+    - /usr/local/bin/php
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/sbin/php-fpm
+    - /usr/local/sbin/php-fpm
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/php
+    - /usr/local/lib/php
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/etc/php
+    - /usr/local/etc/php
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/etc/php-fpm.conf
+    - /usr/local/etc/php-fpm.conf
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/etc/php-fpm.d
+    - /usr/local/etc/php-fpm.d
+  - Env:
+    - Key: PHP_INI_DIR
+      Value: /usr/local/etc/php
+    Name: env
+  - CmdLine:
+    - docker-php-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - Name: stopsignal
+    Signal: SIGQUIT
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - php-fpm
+    Name: cmd
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-entrypoint
+    - /usr/local/bin/docker-php-entrypoint
+  - Name: workdir
+    Path: /usr/local/etc/php
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php-*.ini
+    - /tmp/
+  - CmdLine:
+    - cat php.ini-development /tmp/php-common.ini > php.ini   && cat php.ini /tmp/php-cli.ini
+      > php-cli.ini   && mkdir xdebug   && cat php.ini /tmp/php-xdebug.ini > xdebug/php.ini   &&
+      cat php-cli.ini /tmp/php-xdebug.ini > xdebug/php-cli.ini   && rm /tmp/php-*.ini   &&
+      rm /usr/local/etc/php/conf.d/docker-php-ext-opcache.ini   && rm /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini   &&
+      mkdir -p /var/cache/php   && chown -R www-data:www-data /var/cache/php
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - install_composer.sh
+    - /install_composer.sh
+  - CmdLine:
+    - /install_composer.sh; rm /install_composer.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chsh -s /bin/bash www-data   && mkdir -p /var/www/.composer   && chown -R www-data:www-data
+      /var/www   && su -c "composer global require hirak/prestissimo" -s /bin/sh www-data   &&
+      rm -rf /var/www/.composer/cache
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fsSL -o /usr/local/bin/mhsendmail https://github.com/mailhog/mhsendmail/releases/download/v0.2.0/mhsendmail_linux_amd64  &&
+      chmod +x /usr/local/bin/mhsendmail
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /app/private /app/web/files   && chown -R www-data:www-data /app
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: www-data
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - touch /var/www/.bashrc   && curl -sS https://platform.sh/cli/installer | php   &&
+      rm /var/www/.bashrc.cli.bak
+    Name: run
+    PrependShell: true
+  - Chown: www-data:www-data
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - platform-cli.config.yaml
+    - /var/www/.platformsh/config.yaml
+  - Env:
+    - Key: PATH
+      Value: /var/www/.platformsh/bin:/app/vendor/bin:$PATH
+    Name: env
+  From:
+    Image: debian:buster-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:buster-slim

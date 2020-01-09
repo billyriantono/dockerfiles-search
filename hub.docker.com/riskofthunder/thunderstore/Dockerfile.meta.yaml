@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: node:12.2.0-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./builder/package.json
+    - ./builder/package-lock.json
+    - /app/
+  - CmdLine:
+    - npm ci
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./builder
+    - /app
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12.2.0-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:12.2.0-alpine as builder
+- BaseName: python:3.8.1-slim-buster
+  Commands:
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apt-get update && apt-get install -y     curl build-essential  && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./django/pyproject.toml
+    - ./django/poetry.lock
+    - /app/
+  - CmdLine:
+    - pip install -U pip poetry==1.0.0 --no-cache-dir &&     poetry config virtualenvs.create
+      false &&     poetry install &&     rm -rf ~/.cache
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./django
+    - /app
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/build
+    - /app/static_built
+  - CmdLine:
+    - SECRET_KEY=x python manage.py collectstatic --noinput
+    Name: run
+    PrependShell: true
+  - Health:
+      Interval: 5000000000
+      Retries: 3
+      Test:
+      - CMD-SHELL
+      - 'curl --fail --header "Host: $SERVER_NAME" localhost:8000/healthcheck || exit
+        1'
+      Timeout: 8000000000
+    Name: healthcheck
+  - CmdLine:
+    - /app/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: python:3.8.1-slim-buster
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.8.1-slim-buster

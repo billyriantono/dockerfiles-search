@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- BaseName: nutshells/base
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '''Chao QU <mail@quchao.com>'''
+    Name: label
+  - Key: DNSCRYPT_SHA256
+    Name: arg
+    Value: '''6bd025d17411c2e220c3a70f8bcb3188f08a79b40020e51b1749b791269c7d77'''
+  - Key: DNSCRYPT_VERSION
+    Name: arg
+    Value: '''0.3'''
+  - Name: workdir
+    Path: /usr/local/src/
+  - CmdLine:
+    - set -ex;     apk add --no-cache --virtual .build-deps         build-base         linux-headers         autoconf         bsd-compat-headers         libsodium-dev         libevent-dev     ;     apk
+      add --no-cache --virtual .runtime-deps         libsodium         libevent     ;     curl
+      -sSLO "https://github.com/cofyc/dnscrypt-wrapper/archive/v${DNSCRYPT_VERSION}.tar.gz";     echo
+      "${DNSCRYPT_SHA256}  v${DNSCRYPT_VERSION}.tar.gz" | sha256sum -c -;     tar
+      xfz "v${DNSCRYPT_VERSION}.tar.gz";     cd "dnscrypt-wrapper-${DNSCRYPT_VERSION}";     sed
+      -i 's|HAVE_BACKTRACE|NO_BACKTRACE|' compat.h;     make configure;     env CFLAGS=-Ofast
+      ./configure;     make install;     cd ..;     rm -f "v${DNSCRYPT_VERSION}.tar.gz";     rm
+      -rf "dnscrypt-wrapper-${DNSCRYPT_VERSION}";     apk del --purge .build-deps;     rm
+      -rf /tmp/* /var/tmp/* /var/cache/apk/* /usr/local/src/*;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - set -ex;     chmod +x /usr/local/bin/docker-entrypoint.sh;     chown "${RUN_AS_USER}":"${RUN_AS_USER}"
+      /usr/local/sbin/dnscrypt-wrapper;
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LISTEN_PORT
+      Value: '''12345'''
+    - Key: RESOLVER_IP
+      Value: '''8.8.8.8'''
+    - Key: RESOLVER_PORT
+      Value: '''53'''
+    - Key: PROVIDER_BASENAME
+      Value: '''example.com'''
+    - Key: CRYPT_KEYS_LIFESPAN
+      Value: '''365'''
+    - Key: KEYS_DIR
+      Value: '''/usr/local/etc/dnscrypt-wrapper'''
+    Name: env
+  - Env:
+    - Key: CRYPT_KEYS_DIR
+      Value: '"${KEYS_DIR}/crypt"'
+    Name: env
+  - Health:
+      Interval: 60000000000
+      Test:
+      - CMD-SHELL
+      - '[[ "$(/usr/bin/find "${CRYPT_KEYS_DIR}" -maxdepth 1 -type f -name ''*.key''
+        -mmin -"$((CRYPT_KEYS_LIFESPAN * 1440 * 7 / 10))" -print | wc -l | sed ''s|[^0-9]||g'')"
+        -ne 0 ]] || exit 1'
+      Timeout: 3000000000
+    Name: healthcheck
+  - Name: stopsignal
+    Signal: SIGKILL
+  - Name: expose
+    Ports:
+    - ${LISTEN_PORT}/tcp
+    - ${LISTEN_PORT}/udp
+  - Name: volume
+    Volumes:
+    - ${KEYS_DIR}
+  - Name: workdir
+    Path: ${KEYS_DIR}
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: nutshells/base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nutshells/base

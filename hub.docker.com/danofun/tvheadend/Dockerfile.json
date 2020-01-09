@@ -1,0 +1,236 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "buildstage",
+      "BaseName": "lsiobase/alpine:3.8",
+      "SourceCode": "FROM lsiobase/alpine:3.8 as buildstage",
+      "Platform": "",
+      "As": "buildstage",
+      "From": {
+        "Image": "lsiobase/alpine:3.8"
+      },
+      "Commands": [
+        {
+          "Key": "ARGTABLE_VER",
+          "Name": "arg",
+          "Value": "\"2.13\""
+        },
+        {
+          "Key": "XMLTV_VER",
+          "Name": "arg",
+          "Value": "\"v0.5.70\""
+        },
+        {
+          "Key": "TZ",
+          "Name": "arg",
+          "Value": "\"Europe/Oslo\""
+        },
+        {
+          "Key": "TVHEADEND_COMMIT",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Env": [
+            {
+              "Key": "HOME",
+              "Value": "\"/config\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "patches/",
+            "/tmp/patches/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "echo \"**** install build packages ****\" \u0026\u0026  apk add --no-cache \tautoconf \tautomake \tbsd-compat-headers \tbzip2 \tcmake \tcurl \tffmpeg-dev \tfile \tfindutils \tg++ \tgcc \tgettext-dev \tgit \tgzip \tjq \tlibcurl \tlibdvbcsa-dev \tlibgcrypt-dev \tlibhdhomerun-dev \tlibtool \tlibva-dev \tlibvpx-dev \tlibxml2-dev \tlibxslt-dev \tlinux-headers \tmake \topenssl-dev \topus-dev \tpatch \tpcre2-dev \tperl-archive-zip \tperl-boolean \tperl-capture-tiny \tperl-cgi \tperl-compress-raw-zlib \tperl-data-dumper \tperl-date-manip \tperl-datetime \tperl-datetime-format-strptime \tperl-datetime-timezone \tperl-dbd-sqlite \tperl-dbi \tperl-dev \tperl-digest-sha1 \tperl-doc \tperl-file-slurp \tperl-file-temp \tperl-file-which \tperl-getopt-long \tperl-html-parser \tperl-html-tree \tperl-http-cookies \tperl-io \tperl-io-compress \tperl-io-html \tperl-io-socket-ssl \tperl-io-stringy \tperl-json \tperl-libwww \tperl-lingua-en-numbers-ordinate \tperl-lingua-preferred \tperl-list-moreutils \tperl-lwp-useragent-determined \tperl-module-build \tperl-module-pluggable \tperl-net-ssleay \tperl-parse-recdescent \tperl-path-class \tperl-scalar-list-utils \tperl-term-progressbar \tperl-term-readkey \tperl-test-exception \tperl-test-requires \tperl-timedate \tperl-try-tiny \tperl-unicode-string \tperl-xml-libxml \tperl-xml-libxslt \tperl-xml-parser \tperl-xml-sax \tperl-xml-treepp \tperl-xml-twig \tperl-xml-writer \tpkgconf \tpngquant \tpython \tsdl-dev \ttar \turiparser-dev \twget \tx264-dev \tx265-dev \tzlib-dev \u0026\u0026  apk add --no-cache \t--repository http://nl.alpinelinux.org/alpine/edge/testing \tgnu-libiconv-dev"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "echo \"**** remove musl iconv.h and replace with gnu-iconv.h ****\" \u0026\u0026  rm -rf /usr/include/iconv.h \u0026\u0026  cp /usr/include/gnu-libiconv/iconv.h /usr/include/iconv.h"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "echo \"**** install perl modules for xmltv ****\" \u0026\u0026  curl -L https://cpanmin.us | perl - App::cpanminus \u0026\u0026  cpanm --installdeps /tmp/patches"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "echo \"**** compile XMLTV ****\" \u0026\u0026  git clone https://github.com/XMLTV/xmltv.git /tmp/xmltv \u0026\u0026  cd /tmp/xmltv \u0026\u0026  git checkout ${XMLTV_VER} \u0026\u0026  echo \"**** Perl 5.26 fixes for XMTLV ****\" \u0026\u0026  sed \"s/use POSIX 'tmpnam';//\" -i filter/tv_to_latex \u0026\u0026  sed \"s/use POSIX 'tmpnam';//\" -i filter/tv_to_text \u0026\u0026  sed \"s/\\(lib\\/set_share_dir.pl';\\)/.\\/\\1/\" -i grab/it/tv_grab_it.PL \u0026\u0026  sed \"s/\\(filter\\/Grep.pm';\\)/.\\/\\1/\" -i filter/tv_grep.PL \u0026\u0026  sed \"s/\\(lib\\/XMLTV.pm.in';\\)/.\\/\\1/\" -i lib/XMLTV.pm.PL \u0026\u0026  sed \"s/\\(lib\\/Ask\\/Term.pm';\\)/.\\/\\1/\" -i Makefile.PL \u0026\u0026  PERL5LIB=`pwd` \u0026\u0026  echo -e \"yes\" | perl Makefile.PL PREFIX=/usr/ INSTALLDIRS=vendor \u0026\u0026  make \u0026\u0026  make test \u0026\u0026  make DESTDIR=/tmp/xmltv-build install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "echo \"**** compile tvheadend ****\" \u0026\u0026  if [ -z ${TVHEADEND_COMMIT+x} ]; then \tTVHEADEND_COMMIT=$(curl -sX GET https://api.github.com/repos/tvheadend/tvheadend/commits/master \t| jq -r '. | .sha');  fi \u0026\u0026  mkdir -p \t/tmp/tvheadend \u0026\u0026  git clone https://github.com/tvheadend/tvheadend.git /tmp/tvheadend \u0026\u0026  cd /tmp/tvheadend \u0026\u0026  git checkout ${TVHEADEND_COMMIT} \u0026\u0026  ./configure \t`#Encoding` \t--disable-ffmpeg_static \t--disable-libfdkaac_static \t--disable-libtheora_static \t--disable-libopus_static \t--disable-libvorbis_static \t--disable-libvpx_static \t--disable-libx264_static \t--disable-libx265_static \t--disable-libfdkaac \t--enable-libopus \t--enable-libvorbis \t--enable-libvpx \t--enable-libx264 \t--enable-libx265 \t\t`#Options` \t--disable-avahi \t--disable-dbus_1 \t--disable-bintray_cache \t--disable-hdhomerun_static \t--enable-hdhomerun_client \t--enable-libav \t--enable-pngquant \t--enable-trace \t--enable-vaapi \t--infodir=/usr/share/info \t--localstatedir=/var \t--mandir=/usr/share/man \t--prefix=/usr \t--sysconfdir=/config \u0026\u0026  make \u0026\u0026  make DESTDIR=/tmp/tvheadend-build install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "echo \"**** compile argtable2 ****\" \u0026\u0026  ARGTABLE_VER1=\"${ARGTABLE_VER//./-}\" \u0026\u0026  mkdir -p \t/tmp/argtable \u0026\u0026  curl -o  /tmp/argtable-src.tar.gz -L \t\"https://sourceforge.net/projects/argtable/files/argtable/argtable-${ARGTABLE_VER}/argtable${ARGTABLE_VER1}.tar.gz\" \u0026\u0026  tar xf  /tmp/argtable-src.tar.gz -C \t/tmp/argtable --strip-components=1 \u0026\u0026  cp /tmp/patches/config.* /tmp/argtable \u0026\u0026  cd /tmp/argtable \u0026\u0026  ./configure \t--prefix=/usr \u0026\u0026  make \u0026\u0026  make check \u0026\u0026  make DESTDIR=/tmp/argtable-build install \u0026\u0026  echo \"**** copy to /usr for comskip dependency ****\" \u0026\u0026  cp -pr /tmp/argtable-build/usr/* /usr/"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "echo \"***** compile comskip ****\" \u0026\u0026  git clone git://github.com/erikkaashoek/Comskip /tmp/comskip \u0026\u0026  cd /tmp/comskip \u0026\u0026  ./autogen.sh \u0026\u0026  ./configure \t--bindir=/usr/bin \t--sysconfdir=/config/comskip \u0026\u0026  make \u0026\u0026  make DESTDIR=/tmp/comskip-build install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "lsiobase/alpine:3.8",
+      "SourceCode": "FROM lsiobase/alpine:3.8",
+      "Platform": "",
+      "From": {
+        "Image": "lsiobase/alpine:3.8"
+      },
+      "Commands": [
+        {
+          "Key": "BUILD_DATE",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "VERSION",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Labels": [
+            {
+              "Key": "build_version",
+              "Value": "\"Linuxserver.io version:- ${VERSION} Build-date:- ${BUILD_DATE}\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"saarg\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Env": [
+            {
+              "Key": "HOME",
+              "Value": "\"/config\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "echo \"**** install runtime packages ****\" \u0026\u0026  apk add --no-cache \tbsd-compat-headers \tbzip2 \tcurl \tffmpeg \tffmpeg-libs \tgzip \tlibcrypto1.0 \tlibcurl \tlibdvbcsa \tlibhdhomerun-libs \tlibssl1.0 \tlibva \tlibva-intel-driver \tlibvpx \tlibxml2 \tlibxslt \tlinux-headers \topenssl \topus \tpcre2 \tperl \tperl-archive-zip \tperl-boolean \tperl-capture-tiny \tperl-cgi \tperl-compress-raw-zlib \tperl-data-dumper \tperl-date-manip \tperl-datetime \tperl-datetime-format-strptime \tperl-datetime-timezone \tperl-dbd-sqlite \tperl-dbi \tperl-digest-sha1 \tperl-doc \tperl-file-slurp \tperl-file-temp \tperl-file-which \tperl-getopt-long \tperl-html-parser \tperl-html-tree \tperl-http-cookies \tperl-io \tperl-io-compress \tperl-io-html \tperl-io-socket-ssl \tperl-io-stringy \tperl-json \tperl-libwww \tperl-lingua-en-numbers-ordinate \tperl-lingua-preferred \tperl-list-moreutils \tperl-lwp-useragent-determined \tperl-module-build \tperl-module-pluggable \tperl-net-ssleay \tperl-parse-recdescent \tperl-path-class \tperl-scalar-list-utils \tperl-term-progressbar \tperl-term-readkey \tperl-test-exception \tperl-test-requires \tperl-timedate \tperl-try-tiny \tperl-unicode-string \tperl-xml-libxml \tperl-xml-libxslt \tperl-xml-parser \tperl-xml-sax \tperl-xml-treepp \tperl-xml-twig \tperl-xml-writer \tpython \ttar \turiparser \twget \tx264 \tx265 \tzlib \u0026\u0026  apk add --no-cache \t--repository http://nl.alpinelinux.org/alpine/edge/testing \tgnu-libiconv \u0026\u0026  echo \"**** Add Picons ****\" \u0026\u0026  mkdir -p /picons \u0026\u0026  curl -o         /tmp/picons.tar.bz2 -L         https://lsio-ci.ams3.digitaloceanspaces.com/picons/picons.tar.bz2 \u0026\u0026  tar xf  /tmp/picons.tar.bz2 -C         /picons \u0026\u0026  echo \"**** cleanup ****\" \u0026\u0026  rm -rf         /tmp/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "buildstage",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/tmp/argtable-build/usr/",
+            "/usr/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "buildstage",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/tmp/comskip-build/usr/",
+            "/usr/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "buildstage",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/tmp/tvheadend-build/usr/",
+            "/usr/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "buildstage",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/tmp/xmltv-build/usr/",
+            "/usr/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "buildstage",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/share/man/",
+            "/usr/local/share/man/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "buildstage",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/share/perl5/",
+            "/usr/local/share/perl5/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "root/",
+            "/"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "9981",
+            "9982"
+          ]
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/config",
+            "/recordings"
+          ]
+        }
+      ]
+    }
+  ]
+}

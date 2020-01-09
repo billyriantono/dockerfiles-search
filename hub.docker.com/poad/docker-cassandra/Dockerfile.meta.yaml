@@ -1,0 +1,226 @@
+MetaArgs:
+- DefaultValue: '"3.11.5"'
+  Key: CASSANDRA_VERSION
+  ProvidedValue: null
+  Value: '"3.11.5"'
+- DefaultValue: '"d559d351309ab4b702975abffae0663ffe6378cf7402c4bcb2f9b2b2f42ac7d017d7aa05f89ee523cab72d89c79d9fbc5ef692dfbb3f56d3993acd1f34cf1285"'
+  Key: CASSANDRA_ESUM
+  ProvidedValue: null
+  Value: '"d559d351309ab4b702975abffae0663ffe6378cf7402c4bcb2f9b2b2f42ac7d017d7aa05f89ee523cab72d89c79d9fbc5ef692dfbb3f56d3993acd1f34cf1285"'
+- DefaultValue: '"11.35.15"'
+  Key: ZULU_VERSION
+  ProvidedValue: null
+  Value: '"11.35.15"'
+- DefaultValue: '"11.0.5"'
+  Key: JAVA_VERSION
+  ProvidedValue: null
+  Value: '"11.0.5"'
+- DefaultValue: '"fd82ffca6ee8f5a6de327ebc1bf98e326d9be2a7483ebafdc30eb126c712bd0e"'
+  Key: JAVA_SHA256SUM
+  ProvidedValue: null
+  Value: '"fd82ffca6ee8f5a6de327ebc1bf98e326d9be2a7483ebafdc30eb126c712bd0e"'
+- DefaultValue: '"/usr/local/cassandra"'
+  Key: CASSANDRA_HOME
+  ProvidedValue: null
+  Value: '"/usr/local/cassandra"'
+- DefaultValue: '"/usr/lib/jvm/java-${JAVA_VERSION}-openjdk-amd64"'
+  Key: JAVA_HOME
+  ProvidedValue: null
+  Value: '"/usr/lib/jvm/java-${JAVA_VERSION}-openjdk-amd64"'
+Stages:
+- As: downloader
+  BaseName: alpine:3
+  Commands:
+  - Key: CASSANDRA_VERSION
+    Name: arg
+    Value: null
+  - Key: CASSANDRA_ESUM
+    Name: arg
+    Value: null
+  - Key: JAVA_SHA256SUM
+    Name: arg
+    Value: null
+  - Key: ZULU_VERSION
+    Name: arg
+    Value: null
+  - Key: JAVA_VERSION
+    Name: arg
+    Value: null
+  - Key: ZULU_ARCH
+    Name: arg
+    Value: '"zulu${ZULU_VERSION}-ca-jre${JAVA_VERSION}-linux_musl_x64.tar.gz"'
+  - Key: JAVA_URL
+    Name: arg
+    Value: '"https://cdn.azul.com/zulu/bin/${ZULU_ARCH}"'
+  - Key: JAVA_HOME
+    Name: arg
+    Value: null
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - apk --update add --no-cache --virtual .build-deps     curl  && rm -rf /var/cache/apk/*  &&
+      curl -sSLo /tmp/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz https://archive.apache.org/dist/cassandra/${CASSANDRA_VERSION}/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz  &&
+      sha512sum /tmp/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz  && echo "${CASSANDRA_ESUM}  /tmp/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz"
+      | sha512sum -c -  && tar xf /tmp/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz  &&
+      rm -rf /tmp/apache-cassandra-${CASSANDRA_VERSION}/doc /tmp/apache-cassandra-${CASSANDRA_VERSION}/javadoc  &&
+      rm -rf /tmp/apache-cassandra-${CASSANDRA_VERSION}/NOTICE.txt /tmp/apache-cassandra-${CASSANDRA_VERSION}/NEWS.txt  &&
+      rm -rf /tmp/apache-cassandra-${CASSANDRA_VERSION}/CASSANDRA-14092.txt /tmp/apache-cassandra-${CASSANDRA_VERSION}/CHANGES.txt
+    Name: run
+    PrependShell: true
+  - Key: TMP_FILE
+    Name: arg
+    Value: /tmp/openjdk.tar.gz
+  - Env:
+    - Key: JAVA_HOME
+      Value: ${JAVA_HOME}
+    Name: env
+  - CmdLine:
+    - echo "Download from ${JAVA_URL}"  && INSTALL_DIR=$( dirname ${JAVA_HOME} )  &&
+      ZULU_DIR=$( basename ${ZULU_ARCH} .tar.gz )  && curl -sSLo ${ZULU_ARCH} ${JAVA_URL}  &&
+      mkdir -p ${INSTALL_DIR}  && echo "${JAVA_URL}"  && echo "${JAVA_SHA256SUM}  ${ZULU_ARCH}"
+      | sha256sum -c -  && tar -xf ./${ZULU_ARCH} -C ${INSTALL_DIR}  && rm -f ${ZULU_ARCH}  &&
+      mv ${INSTALL_DIR}/${ZULU_DIR} ${JAVA_HOME}
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3
+  Name: downloader
+  Platform: ""
+  SourceCode: FROM alpine:3 as Downloader
+- BaseName: python:3-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Kenji Saito<ken-yo@mbr.nifty.com>"'
+    Name: label
+  - Key: JAVA_HOME
+    Name: arg
+    Value: null
+  - Env:
+    - Key: LANGUAGE
+      Value: en_US:en
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    - Key: JAVA_HOME
+      Value: ${JAVA_HOME}
+    - Key: PATH
+      Value: /root/.local/bin:${PATH}:${JAVA_HOME}/bin
+    Name: env
+  - Key: BIN_DIR
+    Name: arg
+    Value: /usr/bin
+  - Key: MAN_DIR
+    Name: arg
+    Value: /usr/share/man/man1
+  - Key: CASSANDRA_VERSION
+    Name: arg
+    Value: null
+  - Key: CASSANDRA_HOME
+    Name: arg
+    Value: null
+  - Chown: ""
+    From: downloader
+    Name: copy
+    SourcesAndDest:
+    - ${JAVA_HOME}
+    - ${JAVA_HOME}
+  - Chown: ""
+    From: Downloader
+    Name: copy
+    SourcesAndDest:
+    - /tmp/apache-cassandra-${CASSANDRA_VERSION}
+    - ${CASSANDRA_HOME}
+  - CmdLine:
+    - rm -f ${CASSANDRA_HOME}/conf/jvm.options  && rm -f ${CASSANDRA_HOME}/conf/cassandra.yaml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - addgroup -g 1000 -S cassandra  && adduser -u 1000 -S  cassandra -G cassandra
+    Name: run
+    PrependShell: true
+  - Chown: cassandra:cassandra
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/conf/cassandra.yaml
+    - ${CASSANDRA_HOME}/conf/cassandra.yaml
+  - Chown: root:root
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/conf/jvm.options
+    - ${CASSANDRA_HOME}/conf/jvm.options
+  - Chown: cassandra:cassandra
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/docker-entrypoint.sh
+    - /docker-entrypoint.sh
+  - Chown: cassandra:cassandra
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/requirements.txt
+    - /tmp/requirements.txt
+  - Chown: cassandra:cassandra
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/create_keyspace.py
+    - /create_keyspace.py
+  - Env:
+    - Key: PATH
+      Value: ${CASSANDRA_HOME}/bin:${CASSANDRA_HOME}/tools/bin:${PATH}
+    Name: env
+  - Health:
+      Test:
+      - CMD
+      - java
+      - -version
+    Name: healthcheck
+  - CmdLine:
+    - cd ${BIN_DIR}  && find ${JAVA_HOME}/bin -type f -perm -a=x -exec ln -s {} .
+      \;  && mkdir -p ${MAN_DIR}  && cd ${MAN_DIR}  && find ${JAVA_HOME}/man/man1
+      -type f -name "*.1" -exec ln -s {} . \;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/lib/cassandra/  && mkdir -p ${CASSANDRA_HOME}/logs  && chown -R
+      cassandra:cassandra /var/lib/cassandra/  && chown -R cassandra:cassandra ${CASSANDRA_HOME}/logs/  &&
+      chmod 777 /var/lib/cassandra  && chmod 774 /docker-entrypoint.sh  && chmod 774
+      /create_keyspace.py
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "7000"
+    - "7001"
+    - "7199"
+    - "9042"
+    - "9160"
+  - CmdLine:
+    - pip3 install -U pip  && pip install -r /tmp/requirements.txt  && rm -f /tmp/requirements.txt
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: cassandra
+  - Env:
+    - Key: PATH
+      Value: /home/cassandra/.local/bin:${PATH}
+    Name: env
+  - Env:
+    - Key: CASSANDRA_HOME
+      Value: '"${CASSANDRA_HOME}"'
+    Name: env
+  - Name: volume
+    Volumes:
+    - /var/lib/cassandra
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: python:3-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3-alpine

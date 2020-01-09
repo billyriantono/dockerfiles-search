@@ -1,0 +1,78 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.11
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Chris Kankiewicz <Chris@ChrisKankiewicz.com>"'
+    Name: label
+  - Key: TD_VERSION
+    Name: arg
+    Value: 2.94-r3
+  - Env:
+    - Key: TR_AUTH
+      Value: '"transmission:transmission"'
+    Name: env
+  - Health:
+      Test:
+      - CMD-SHELL
+      - transmission-remote --authenv --session-info
+      Timeout: 5000000000
+    Name: healthcheck
+  - CmdLine:
+    - mkdir -pv /etc/transmission-daemon/blocklists /vol/downloads/.incomplete /vol/watchdir
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -DHs /sbin/nologin transmission
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/settings.json
+    - /etc/transmission-daemon/settings.json
+  - CmdLine:
+    - apk add --update curl transmission-cli=${TD_VERSION} transmission-daemon=${TD_VERSION}
+      tzdata     && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Key: BLOCKLIST_URL
+    Name: arg
+    Value: '"http://list.iblocklist.com/?list=bt_level1&fileformat=p2p&archiveformat=gz"'
+  - CmdLine:
+    - curl -sL ${BLOCKLIST_URL} | gunzip > /etc/transmission-daemon/blocklists/bt_level1     &&
+      chown -R transmission:transmission /etc/transmission-daemon
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/blocklist-update
+    - /etc/periodic/hourly/blocklist-update
+  - CmdLine:
+    - chmod +x /etc/periodic/hourly/blocklist-update
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "51413"
+    - "9091"
+  - Name: user
+    User: transmission
+  - Name: volume
+    Volumes:
+    - /etc/transmission-daemon
+  - CmdLine:
+    - transmission-daemon --foreground --log-info --config-dir /etc/transmission-daemon     --download-dir
+      /vol/downloads --incomplete-dir /vol/downloads/.incomplete     --watch-dir /vol/watchdir
+      --username ${TR_AUTH%:*} --password ${TR_AUTH#*:}
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:3.11
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.11

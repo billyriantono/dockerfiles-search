@@ -1,0 +1,137 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:18.04
+  Commands:
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - apt update && apt install --no-install-recommends -y build-essential
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - uname_wrapper.c
+    - /tmp/
+  - CmdLine:
+    - gcc -o /tmp/uname_wrapper.so /tmp/uname_wrapper.c -Wall -Werror -fPIC -shared
+      -ldl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip /tmp/uname_wrapper.so
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04
+- BaseName: jlesage/baseimage-gui:alpine-3.8-glibc-v3.5.2
+  Commands:
+  - Key: CRASHPLAN_VERSION
+    Name: arg
+    Value: 7.0.0
+  - Key: CRASHPLAN_TIMESTAMP
+    Name: arg
+    Value: "1525200006700"
+  - Key: CRASHPLAN_BUILD
+    Name: arg
+    Value: "585"
+  - Key: CRASHPLAN_URL
+    Name: arg
+    Value: https://web-eam-msp.crashplanpro.com/client/installers/CrashPlanSmb_${CRASHPLAN_VERSION}_${CRASHPLAN_TIMESTAMP}_${CRASHPLAN_BUILD}_Linux.tgz
+  - Key: TARGETDIR
+    Name: arg
+    Value: /usr/local/crashplan
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - add-pkg --virtual build-dependencies cpio curl &&     echo "Installing CrashPlan..."
+      &&     curl -# -L ${CRASHPLAN_URL} | tar -xz &&     mkdir -p ${TARGETDIR} &&     cat
+      $(ls crashplan-install/*.cpi) | gzip -d -c - | cpio -i --no-preserve-owner --directory=${TARGETDIR}
+      &&     mv "${TARGETDIR}"/*.asar "${TARGETDIR}/electron/resources" &&     chmod
+      755 "${TARGETDIR}/electron/crashplan" &&     chmod 755 "${TARGETDIR}/bin/CrashPlanService"
+      &&     chmod 755 "${TARGETDIR}/bin/restore-tool" &&     mv ${TARGETDIR}/conf
+      /defaults/conf &&     sed-patch '/<orgType>BUSINESS<\/orgType>/a \\t<serviceUIConfig>\n\t\t<serviceHost>127.0.0.1<\/serviceHost>\n\t<\/serviceUIConfig>'
+      /defaults/conf/default.service.xml &&     sed-patch "s|<backupConfig>|<backupConfig>\n\t\t\t<manifestPath>/usr/local/var/crashplan</manifestPath>|g"
+      /defaults/conf/default.service.xml &&     sed-patch '/<serviceUIConfig>/i\\t<javaMemoryHeapMax
+      nil="true"/>' /defaults/conf/default.service.xml &&     mkdir -p /usr/local/var/crashplan
+      &&     rm -r /usr/local/crashplan/upgrade &&     touch /usr/local/crashplan/upgrade
+      && chmod 400 /usr/local/crashplan/upgrade &&     ln -s /config/conf $TARGETDIR/conf
+      &&     ln -s /config/cache $TARGETDIR/cache &&     rm -r $TARGETDIR/log &&     ln
+      -s /config/log $TARGETDIR/log &&     ln -s /config/var /var/lib/crashplan &&     ln
+      -s /config/repository/metadata /usr/local/crashplan/metadata &&     del-pkg
+      build-dependencies &&     rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed-patch '/^nobody:/d' /defaults/passwd &&     sed-patch '/^nobody:/d' /defaults/group
+      &&     sed-patch '/^nobody:/d' /defaults/shadow &&     echo > /etc/fstab &&     echo
+      "${CRASHPLAN_VERSION}" > /defaults/cp_version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - add-pkg libselinux --repository http://dl-cdn.alpinelinux.org/alpine/edge/community
+      &&     add-pkg         gtk+3.0         libxscrnsaver         nss         eudev         gconf         xdotool         yad         bc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed-patch 's/<application type="normal">/<application type="normal" title="Code42">/'         /etc/xdg/openbox/rc.xml
+      &&     sed-patch '/<application type="normal" title="Code42">/a \    <layer>below</layer>'         /etc/xdg/openbox/rc.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed-patch 's|LOG_FILES=|LOG_FILES=/config/log/service.log|' /etc/logmonitor/logmonitor.conf
+      &&     sed-patch 's|STATUS_FILES=|STATUS_FILES=/config/log/app.log|' /etc/logmonitor/logmonitor.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - APP_ICON_URL=https://github.com/jlesage/docker-templates/raw/master/jlesage/images/crashplan-pro-icon.png
+      &&     install_app_icon.sh "$APP_ICON_URL"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs/
+    - /
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /tmp/uname_wrapper.so
+    - /usr/local/crashplan/
+  - Env:
+    - Key: S6_WAIT_FOR_SERVICE_MAXTIME
+      Value: "10000"
+    - Key: APP_NAME
+      Value: '"CrashPlan for Small Business"'
+    - Key: KEEP_APP_RUNNING
+      Value: "1"
+    Name: env
+  - Name: volume
+    Volumes:
+    - /config
+  - Name: volume
+    Volumes:
+    - /storage
+  - Labels:
+    - Key: org.label-schema.name
+      Value: '"crashplan-pro"'
+    - Key: org.label-schema.description
+      Value: '"Docker container for CrashPlan PRO"'
+    - Key: org.label-schema.version
+      Value: '"unknown"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/jlesage/docker-crashplan-pro"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  From:
+    Image: jlesage/baseimage-gui:alpine-3.8-glibc-v3.5.2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM jlesage/baseimage-gui:alpine-3.8-glibc-v3.5.2

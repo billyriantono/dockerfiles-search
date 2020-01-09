@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:3.5
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git curl &&   git clone https://github.com/oderwat/hubic2swiftgate
+      /tmp/hubic2swiftgate &&   sed -i "s#dirname(__FILE__).'/../cache'#'/config/cache'#"
+      /tmp/hubic2swiftgate/www/simple.php &&   sed -i "s#dirname(__FILE__).'/../config.php'#'/config/config.php'#"
+      /tmp/hubic2swiftgate/www/simple.php &&   curl -L -o /tmp/dumb-init.deb https://github.com/Yelp/dumb-init/releases/download/v1.2.1/dumb-init_1.2.1_amd64.deb
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.5
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.5 AS builder
+- BaseName: php:7.0-apache
+  Commands:
+  - Maintainer: Falk Reimann <falk.rei@gmail.com>
+    Name: maintainer
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/dumb-init.deb
+    - /tmp/dumb-init.deb
+  - CmdLine:
+    - dpkg -i /tmp/dumb-init.deb &&   rm /tmp/dumb-init.deb
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - setup_permissions
+    - /usr/local/bin/setup_permissions
+  - CmdLine:
+    - chmod +x /usr/local/bin/setup_permissions
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /config/apache/001-hubic2swiftgate.conf /etc/apache2/sites-enabled/001-hubic2swiftgate.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /var/www/hubic2swiftgate
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/hubic2swiftgate/www
+    - /var/www/hubic2swiftgate/
+  - CmdLine:
+    - chown -R www-data:www-data /var/www/hubic2swiftgate
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod rewrite &&   a2enmod ssl
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "443"
+  - Name: volume
+    Volumes:
+    - /config
+  - CmdLine:
+    - dumb-init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - bash
+    - -c
+    - setup_permissions && exec apache2-foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:7.0-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.0-apache

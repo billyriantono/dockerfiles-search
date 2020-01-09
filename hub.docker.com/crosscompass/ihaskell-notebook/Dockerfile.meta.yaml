@@ -1,0 +1,142 @@
+MetaArgs:
+- DefaultValue: jupyter/base-notebook:307ad2bb5fce
+  Key: BASE_CONTAINER
+  ProvidedValue: null
+  Value: jupyter/base-notebook:307ad2bb5fce
+Stages:
+- BaseName: $BASE_CONTAINER
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"James Brock <jamesbrock@gmail.com>"'
+    Name: label
+  - Key: STACK_ARGS
+    Name: arg
+    Value: ""
+  - Name: user
+    User: root
+  - Env:
+    - Key: STACK_ROOT
+      Value: /opt/stack
+    Name: env
+  - CmdLine:
+    - mkdir -p $STACK_ROOT
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - fix-permissions $STACK_ROOT
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -yq --no-install-recommends         python3-pip         git         libtinfo-dev         libzmq3-dev         libcairo2-dev         libpango1.0-dev         libmagic-dev         libblas-dev         liblapack-dev         libffi-dev         libgmp-dev         gnupg         netbase         graphviz         curl         g++         gcc         libc6-dev         libffi-dev         libgmp-dev         make         xz-utils         zlib1g-dev         git         gnupg         netbase
+      &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Key: STACK_VERSION
+    Name: arg
+    Value: '"2.1.3"'
+  - Key: STACK_BINDIST
+    Name: arg
+    Value: '"stack-${STACK_VERSION}-linux-x86_64"'
+  - CmdLine:
+    - cd /tmp     && curl -sSL --output ${STACK_BINDIST}.tar.gz https://github.com/commercialhaskell/stack/releases/download/v${STACK_VERSION}/${STACK_BINDIST}.tar.gz     &&
+      tar zxf ${STACK_BINDIST}.tar.gz     && cp ${STACK_BINDIST}/stack /usr/bin/stack     &&
+      rm -rf ${STACK_BINDIST}.tar.gz ${STACK_BINDIST}     && stack --version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /etc/stack
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - stack.config.yaml
+    - /etc/stack/config.yaml
+  - CmdLine:
+    - fix-permissions /etc/stack
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $STACK_ROOT/global-project
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - stack.stack.yaml
+    - $STACK_ROOT/global-project/stack.yaml
+  - CmdLine:
+    - chown --recursive $NB_UID:users $STACK_ROOT/global-project     && fix-permissions
+      $STACK_ROOT/global-project
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /usr/local/share/jupyter     && fix-permissions /usr/local/share/jupyter     &&
+      mkdir -p /usr/local/share/jupyter/kernels     && fix-permissions /usr/local/share/jupyter/kernels
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/bin     && fix-permissions /opt/bin
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: ${PATH}:/opt/bin
+    Name: env
+  - Name: user
+    User: $NB_UID
+  - Key: IHASKELL_COMMIT
+    Name: arg
+    Value: master
+  - Key: HVEGA_COMMIT
+    Name: arg
+    Value: master
+  - CmdLine:
+    - echo "build on 2019-10-16"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opt     && git clone --depth 1 --branch $IHASKELL_COMMIT https://github.com/gibiansky/IHaskell     &&
+      git clone --depth 1 --branch $HVEGA_COMMIT https://github.com/DougBurke/hvega.git     &&
+      grep 'resolver:' /opt/IHaskell/stack.yaml >> $STACK_ROOT/global-project/stack.yaml     &&
+      stack setup     && stack build $STACK_ARGS ihaskell     && stack build $STACK_ARGS
+      ghc-parser     && stack build $STACK_ARGS ipython-kernel     && stack build
+      $STACK_ARGS ihaskell-aeson     && stack build $STACK_ARGS ihaskell-blaze     &&
+      stack build $STACK_ARGS ihaskell-gnuplot     && stack build $STACK_ARGS ihaskell-juicypixels     &&
+      stack build $STACK_ARGS ihaskell-graphviz     && stack build $STACK_ARGS hvega     &&
+      stack build $STACK_ARGS ihaskell-hvega     && fix-permissions /opt/IHaskell     &&
+      fix-permissions $STACK_ROOT     && fix-permissions /opt/hvega     && stack exec
+      ihaskell -- install --stack --prefix=/usr/local     && npm install -g typescript     &&
+      cd IHaskell/ihaskell_labextension     && npm install     && npm run build     &&
+      jupyter labextension install .     && npm cache clean --force     && rm -rf
+      /home/$NB_USER/.cache/yarn     && rm -rf $(stack path --snapshot-doc-root)/*     &&
+      rm -rf /opt/IHaskell/ihaskell_labextensions/node_modules
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/ghc && ln -s `stack path --compiler-bin` /opt/ghc/bin
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: ${PATH}:/opt/ghc/bin
+    Name: env
+  - Key: EXAMPLES_PATH
+    Name: arg
+    Value: /home/$NB_USER/ihaskell_examples
+  - CmdLine:
+    - mkdir -p $EXAMPLES_PATH     && cd $EXAMPLES_PATH     && mkdir -p ihaskell     &&
+      cp --recursive /opt/IHaskell/notebooks/* ihaskell/     && mkdir -p ihaskell-juicypixels     &&
+      cp /opt/IHaskell/ihaskell-display/ihaskell-juicypixels/*.ipynb ihaskell-juicypixels/     &&
+      mkdir -p ihaskell-hvega     && cp /opt/hvega/notebooks/*.ipynb ihaskell-hvega/     &&
+      cp /opt/hvega/notebooks/*.tsv ihaskell-hvega/     && fix-permissions $EXAMPLES_PATH
+    Name: run
+    PrependShell: true
+  From:
+    Image: $BASE_CONTAINER
+  Name: ""
+  Platform: ""
+  SourceCode: FROM $BASE_CONTAINER

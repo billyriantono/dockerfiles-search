@@ -1,0 +1,179 @@
+MetaArgs: null
+Stages:
+- As: downloader
+  BaseName: debian:stretch-slim
+  Commands:
+  - CmdLine:
+    - "set -ex \t&& apt-get update \t&& apt-get install -qq --no-install-recommends
+      ca-certificates dirmngr wget gnupg"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt
+  - CmdLine:
+    - wget -qO /opt/tini "https://github.com/krallin/tini/releases/download/v0.18.0/tini"     &&
+      echo "12d20136605531b09a2c2dac02ccee85e1b874eb322ef6baf7561cd93f93c855 /opt/tini"
+      | sha256sum -c -     && chmod +x /opt/tini
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GROESTLCOIN_VERSION
+      Value: 2.17.2
+    Name: env
+  - Env:
+    - Key: GROESTLCOIN_TARBALL
+      Value: groestlcoin-${GROESTLCOIN_VERSION}-x86_64-linux-gnu.tar.gz
+    Name: env
+  - Env:
+    - Key: GROESTLCOIN_URL
+      Value: https://github.com/Groestlcoin/groestlcoin/releases/download/v$GROESTLCOIN_VERSION/$GROESTLCOIN_TARBALL
+    Name: env
+  - Env:
+    - Key: GROESTLCOIN_ASC_URL
+      Value: https://github.com/Groestlcoin/groestlcoin/releases/download/v$GROESTLCOIN_VERSION/SHA256SUMS.asc
+    Name: env
+  - Env:
+    - Key: GROESTLCOIN_PGP_KEY
+      Value: 287AE4CA1187C68C08B49CB2D11BD4F33F1DB499
+    Name: env
+  - CmdLine:
+    - 'mkdir /opt/groestlcoin && cd /opt/groestlcoin     && wget -qO $GROESTLCOIN_TARBALL
+      "$GROESTLCOIN_URL"     && for server in $(shuf -e ha.pool.sks-keyservers.net                              hkp://p80.pool.sks-keyservers.net:80                              keyserver.ubuntu.com                              hkp://keyserver.ubuntu.com:80                              pgp.mit.edu)
+      ; do          gpg --batch --keyserver "$server" --recv-keys "$GROESTLCOIN_PGP_KEY"
+      && break || : ;        done     && wget -qO groestlcoin.asc "$GROESTLCOIN_ASC_URL"     &&
+      gpg --verify groestlcoin.asc     && grep $GROESTLCOIN_TARBALL groestlcoin.asc
+      | tee SHA256SUMS.asc     && sha256sum -c SHA256SUMS.asc     && BD=groestlcoin-$GROESTLCOIN_VERSION/bin     &&
+      tar -xzvf $GROESTLCOIN_TARBALL $BD/groestlcoin-cli --strip-components=1     &&
+      rm $GROESTLCOIN_TARBALL'
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch-slim
+  Name: downloader
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim as downloader
+- As: builder
+  BaseName: debian:stretch-slim
+  Commands:
+  - Env:
+    - Key: LIGHTNINGD_VERSION
+      Value: master
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends ca-certificates
+      autoconf automake build-essential git libtool python python3 python3-mako wget
+      gnupg dirmngr git gettext
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q https://zlib.net/zlib-1.2.11.tar.gz && tar xvf zlib-1.2.11.tar.gz &&
+      cd zlib-1.2.11 && ./configure && make && make install && cd .. && rm zlib-1.2.11.tar.gz
+      && rm -rf zlib-1.2.11
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y --no-install-recommends unzip tclsh && wget -q https://www.sqlite.org/2018/sqlite-src-3260000.zip
+      && unzip sqlite-src-3260000.zip && cd sqlite-src-3260000 && ./configure --enable-static
+      --disable-readline --disable-threadsafe --disable-load-extension && make &&
+      make install && cd .. && rm sqlite-src-3260000.zip && rm -rf sqlite-src-3260000
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q https://gmplib.org/download/gmp/gmp-6.1.2.tar.xz && tar xvf gmp-6.1.2.tar.xz
+      && cd gmp-6.1.2 && ./configure --disable-assembly && make && make install &&
+      cd .. && rm gmp-6.1.2.tar.xz && rm -rf gmp-6.1.2
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/lightningd
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /tmp/lightning
+  - CmdLine:
+    - git clone --recursive /tmp/lightning . &&     git checkout $(git --work-tree=/tmp/lightning
+      --git-dir=/tmp/lightning/.git rev-parse HEAD)
+    Name: run
+    PrependShell: true
+  - Key: DEVELOPER
+    Name: arg
+    Value: "0"
+  - CmdLine:
+    - ./configure --prefix=/tmp/lightning_install --enable-static && make -j3 DEVELOPER=${DEVELOPER}
+      && make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim as builder
+- As: final
+  BaseName: debian:stretch-slim
+  Commands:
+  - Chown: ""
+    From: downloader
+    Name: copy
+    SourcesAndDest:
+    - /opt/tini
+    - /usr/bin/tini
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends socat inotify-tools     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LIGHTNINGD_DATA
+      Value: /root/.lightning
+    Name: env
+  - Env:
+    - Key: LIGHTNINGD_RPC_PORT
+      Value: "9835"
+    Name: env
+  - Env:
+    - Key: LIGHTNINGD_PORT
+      Value: "9735"
+    Name: env
+  - CmdLine:
+    - mkdir $LIGHTNINGD_DATA &&     touch $LIGHTNINGD_DATA/config
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /root/.lightning
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/lightning_install/
+    - /usr/local/
+  - Chown: ""
+    From: downloader
+    Name: copy
+    SourcesAndDest:
+    - /opt/groestlcoin/bin
+    - /usr/bin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tools/docker-entrypoint.sh
+    - entrypoint.sh
+  - Name: expose
+    Ports:
+    - "9735"
+    - "9835"
+  - CmdLine:
+    - /usr/bin/tini
+    - -g
+    - --
+    - ./entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: final
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim as final

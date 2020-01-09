@@ -1,0 +1,112 @@
+MetaArgs:
+- DefaultValue: golang
+  Key: BASE_IMAGE_BUILDER
+  ProvidedValue: null
+  Value: golang
+- DefaultValue: "3.10"
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: "3.10"
+- DefaultValue: "1.13"
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: "1.13"
+Stages:
+- As: builder
+  BaseName: ${BASE_IMAGE_BUILDER}:${GO_VERSION}-alpine${ALPINE_VERSION}
+  Commands:
+  - Key: GOARCH
+    Name: arg
+    Value: amd64
+  - Key: GOARM
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk --update add git build-base
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/gobuild
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - go.sum
+    - ./
+  - CmdLine:
+    - go mod download 2>&1
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - main.go
+    - .
+  - CmdLine:
+    - go test -v ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} GOARM=${GOARM} go build -ldflags="-s
+      -w" -o app
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${BASE_IMAGE_BUILDER}:${GO_VERSION}-alpine${ALPINE_VERSION}
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ${BASE_IMAGE_BUILDER}:${GO_VERSION}-alpine${ALPINE_VERSION} AS
+    builder
+- BaseName: scratch
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.opencontainers.image.authors
+      Value: '"quentin.mcgaw@gmail.com"'
+    - Key: org.opencontainers.image.created
+      Value: $BUILD_DATE
+    - Key: org.opencontainers.image.version
+      Value: '""'
+    - Key: org.opencontainers.image.revision
+      Value: $VCS_REF
+    - Key: org.opencontainers.image.url
+      Value: '"https://github.com/qdm12/qr"'
+    - Key: org.opencontainers.image.documentation
+      Value: '"https://github.com/qdm12/qr/blob/master/README.md"'
+    - Key: org.opencontainers.image.source
+      Value: '"https://github.com/qdm12/qr"'
+    - Key: org.opencontainers.image.title
+      Value: '"qr"'
+    - Key: org.opencontainers.image.description
+      Value: '"Generates QR code in your terminal"'
+    - Key: image-size
+      Value: '"1.56MB"'
+    Name: label
+  - CmdLine:
+    - /qr
+    Name: entrypoint
+    PrependShell: false
+  - Name: user
+    User: "1000"
+  - Chown: "1000"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/gobuild/app
+    - /qr
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

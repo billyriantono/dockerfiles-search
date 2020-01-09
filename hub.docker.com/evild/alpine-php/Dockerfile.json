@@ -1,0 +1,96 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "",
+      "BaseName": "evild/alpine-base:3.0.0",
+      "SourceCode": "FROM evild/alpine-base:3.0.0",
+      "Platform": "",
+      "From": {
+        "Image": "evild/alpine-base:3.0.0"
+      },
+      "Commands": [
+        {
+          "Maintainer": "Dominique HAAS \u003ccontact@dominique-haas.fr\u003e",
+          "Name": "maintainer"
+        },
+        {
+          "Key": "PHP_INI_DIR",
+          "Name": "arg",
+          "Value": "/usr/local/etc/php"
+        },
+        {
+          "Key": "PHP_EXTRA_CONFIGURE_ARGS",
+          "Name": "arg",
+          "Value": "\"--enable-fpm --with-fpm-user=www-data --with-fpm-group=www-data\""
+        },
+        {
+          "Key": "GPG_KEYS",
+          "Name": "arg",
+          "Value": "0BD78B5F97500D450838F95DFE857D9A90D90EC1"
+        },
+        {
+          "Key": "PHP_VERSION",
+          "Name": "arg",
+          "Value": "5.5.38"
+        },
+        {
+          "Key": "PHP_FILENAME",
+          "Name": "arg",
+          "Value": "php-5.5.38.tar.xz"
+        },
+        {
+          "Key": "PHP_SHA256",
+          "Name": "arg",
+          "Value": "cb527c44b48343c8557fe2446464ff1d4695155a95601083e5d1f175df95580f"
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache --virtual .phpize-deps \t\tautoconf \t\tfile \t\tg++ \t\tgcc \t\tlibc-dev \t\tmake \t\tpkgconf \t\tre2c     \u0026\u0026 apk add --no-cache --virtual .persistent-deps \t\tca-certificates \t\tcurl"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "set -x \t\u0026\u0026 addgroup -g 82 -S www-data \t\u0026\u0026 adduser -u 82 -D -S -G www-data www-data"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir -p $PHP_INI_DIR/conf.d \t\u0026\u0026 apk add --no-cache --virtual .build-deps \t\tcurl-dev \t\tgnupg \t\tlibedit-dev \t\tlibxml2-dev \t\topenssl-dev \t\tsqlite-dev \t\u0026\u0026 curl -fSL \"http://php.net/get/$PHP_FILENAME/from/this/mirror\" -o \"$PHP_FILENAME\" \t\u0026\u0026 echo \"$PHP_SHA256 *$PHP_FILENAME\" | sha256sum -c - \t\u0026\u0026 curl -fSL \"http://php.net/get/$PHP_FILENAME.asc/from/this/mirror\" -o \"$PHP_FILENAME.asc\" \t\u0026\u0026 export GNUPGHOME=\"$(mktemp -d)\" \t\u0026\u0026 for key in $GPG_KEYS; do \t\tgpg --keyserver ha.pool.sks-keyservers.net --recv-keys \"$key\"; \tdone \t\u0026\u0026 gpg --batch --verify \"$PHP_FILENAME.asc\" \"$PHP_FILENAME\" \t\u0026\u0026 rm -r \"$GNUPGHOME\" \"$PHP_FILENAME.asc\" \t\u0026\u0026 mkdir -p /usr/src \t\u0026\u0026 tar -Jxf \"$PHP_FILENAME\" -C /usr/src \t\u0026\u0026 mv \"/usr/src/php-$PHP_VERSION\" /usr/src/php \t\u0026\u0026 rm \"$PHP_FILENAME\" \t\u0026\u0026 cd /usr/src/php \t\u0026\u0026 ./configure \t\t--with-config-file-path=\"$PHP_INI_DIR\" \t\t--with-config-file-scan-dir=\"$PHP_INI_DIR/conf.d\" \t\t$PHP_EXTRA_CONFIGURE_ARGS \t\t--disable-cgi \t\t--enable-mysqlnd \t\t--enable-mbstring \t\t--with-curl \t\t--with-libedit \t\t--with-openssl \t\t--with-zlib \t\u0026\u0026 make -j\"$(getconf _NPROCESSORS_ONLN)\" \t\u0026\u0026 make install \t\u0026\u0026 { find /usr/local/bin /usr/local/sbin -type f -perm +0111 -exec strip --strip-all '{}' + || true; } \t\u0026\u0026 make clean \t\u0026\u0026 runDeps=\"$( \t\tscanelf --needed --nobanner --recursive /usr/local \t\t\t| awk '{ gsub(/,/, \"\\nso:\", $2); print \"so:\" $2 }' \t\t\t| sort -u \t\t\t| xargs -r apk info --installed \t\t\t| sort -u \t)\" \t\u0026\u0026 apk add --virtual .php-rundeps $runDeps \t\u0026\u0026 apk del .build-deps \t\u0026\u0026 rm -rf /var/cache/apk/* /tmp/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/var/www/html"
+        },
+        {
+          "CmdLine": [
+            "set -ex \t\u0026\u0026 cd /usr/local/etc \t\u0026\u0026 if [ -d php-fpm.d ]; then \t\tsed 's!=NONE/!=!g' php-fpm.conf.default | tee php-fpm.conf \u003e /dev/null; \t\tcp php-fpm.d/www.conf.default php-fpm.d/www.conf; \telse \t\tmkdir php-fpm.d; \t\tcp php-fpm.conf.default php-fpm.d/www.conf; \t\t{ \t\t\techo '[global]'; \t\t\techo 'include=etc/php-fpm.d/*.conf'; \t\t} | tee php-fpm.conf; \tfi \t\u0026\u0026 { \t\techo '[global]'; \t\techo 'error_log = /proc/self/fd/2'; \t\techo; \t\techo '[www]'; \t\techo '; if we send this to /proc/self/fd/1, it never appears'; \t\techo 'access.log = /proc/self/fd/2'; \t\techo; \t\techo 'clear_env = no'; \t\techo; \t\techo '; Ensure worker stdout and stderr are sent to the main error log.'; \t\techo 'catch_workers_output = yes'; \t} | tee php-fpm.d/docker.conf \t\u0026\u0026 { \t\techo '[global]'; \t\techo 'daemonize = no'; \t\techo; \t\techo '[www]'; \t\techo 'listen = [::]:9000'; \t} | tee php-fpm.d/zz-docker.conf"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "root",
+            "/"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "9000"
+          ]
+        }
+      ]
+    }
+  ]
+}

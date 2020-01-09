@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- As: apibuilder
+  BaseName: golang:1.13.3-alpine3.10
+  Commands:
+  - CmdLine:
+    - apk update && apk add --no-cache git dep
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - api
+    - $GOPATH/src/github.com/alexbrazier/go-url/api
+  - Name: workdir
+    Path: $GOPATH/src/github.com/alexbrazier/go-url/api
+  - CmdLine:
+    - dep ensure -vendor-only
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -o /go/bin/server
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13.3-alpine3.10
+  Name: apibuilder
+  Platform: ""
+  SourceCode: FROM golang:1.13.3-alpine3.10 AS apibuilder
+- As: frontendbuilder
+  BaseName: node:12.13.0-alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - frontend
+    - /app
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - yarn --frozen-lockfile --network-timeout 600000 &&     yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12.13.0-alpine
+  Name: frontendbuilder
+  Platform: ""
+  SourceCode: FROM node:12.13.0-alpine AS frontendbuilder
+- BaseName: alpine:3.10
+  Commands:
+  - CmdLine:
+    - apk update && apk add bash dumb-init ca-certificates && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: apibuilder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/server
+    - /go/bin/server
+  - Chown: ""
+    From: frontendbuilder
+    Name: copy
+    SourcesAndDest:
+    - /app/build
+    - /go/bin/public
+  - Name: workdir
+    Path: /go/bin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - .
+  - CmdLine:
+    - /usr/bin/dumb-init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /go/bin/entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10

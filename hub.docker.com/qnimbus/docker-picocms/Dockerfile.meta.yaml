@@ -1,0 +1,102 @@
+MetaArgs: null
+Stages:
+- As: picocms
+  BaseName: php:latest
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y git unzip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/picocms
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt
+  - CmdLine:
+    - php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" &&     php
+      -r "if (hash_file('SHA384', 'composer-setup.php') === '93b54496392c062774670ac18b134c3b3a95e5a5e5c8f1a9f115f203b75bf9a129d5daa8ba6a13e2cc8a1da0806388a8')
+      { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php');
+      } echo PHP_EOL;" &&     php composer-setup.php &&     php -r "unlink('composer-setup.php');"
+      &&     php composer.phar create-project picocms/pico-composer /opt/picocms &&     php
+      composer.phar require picoauth/picoauth-theme -d /opt/picocms
+    Name: run
+    PrependShell: true
+  From:
+    Image: php:latest
+  Name: picocms
+  Platform: ""
+  SourceCode: FROM php:latest as picocms
+- BaseName: alpine:latest
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"bas.van.wetten@gmail.com"'
+    Name: label
+  - CmdLine:
+    - apk add --no-cache --update     bash     nginx     php7 php7-fpm php7-iconv
+      php7-openssl php7-phar php7-json php7-dom php7-mbstring php7-session     gettext
+      &&     rm -f /etc/php/php-fpm.d/www.conf &&     deluser nginx &&     mkdir -p
+      /var/log/nginx &&     mkdir -p /tmp/nginx/body &&     ln -s /etc/php7 /etc/php
+      &&     ln -s /usr/sbin/php-fpm7 /usr/bin/php-fpm &&     ln -s /usr/lib/php7
+      /usr/lib/php &&     rm -rf /var/log/php7 &&     mkdir -p /var/log/php/ &&     rm
+      -f /etc/php/php-fpm.d/www.conf &&     rm -rf /var/www/localhost &&     rm -rf
+      /var/cache/apk/* &&     mkdir -p /var/www/nginx
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: picocms
+    Name: copy
+    SourcesAndDest:
+    - /opt/picocms
+    - /opt/picocms
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /files
+    - /
+  - Env:
+    - Key: NGINX_PID_FILE
+      Value: '"/var/run/nginx/nginx.pid"'
+    - Key: PORT
+      Value: '"80"'
+    - Key: WEB_ROOT
+      Value: '"/var/www/picocms/"'
+    - Key: WEB_USER
+      Value: '"picocms"'
+    - Key: WEB_GROUP
+      Value: '"web"'
+    - Key: NGINX_MAX_BODY_SIZE
+      Value: '"64M"'
+    - Key: NGINX_FASTCGI_TIMEOUT
+      Value: '"30"'
+    - Key: PHP_MEMORY_LIMIT
+      Value: '"256M"'
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/just-containers/s6-overlay/releases/download/v1.21.7.0/s6-overlay-amd64.tar.gz
+    - /tmp/
+  - CmdLine:
+    - tar xzf /tmp/s6-overlay-amd64.tar.gz -C /
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/www/picocms
+  - Name: workdir
+    Path: ${WEB_ROOT}
+  - Name: expose
+    Ports:
+    - ${PORT}
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

@@ -1,0 +1,124 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:8.10
+  Commands:
+  - Maintainer: Szabolcs Hegedus <szabolcs.hegedus@gmail.com>
+    Name: maintainer
+  - Env:
+    - Key: MAILSCAN_VERSION
+      Value: 5.0.6-5
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install --no-install-recommends --yes     runit     apache2     ca-certificates     libapache2-mod-fcgid     git     wget     curl     mc     nload     htop     exim4     libmysqlclient-dev     php5     php5-mysqlnd     nano     &&
+      rm -rf /var/lib/apt/lists/*     && rm -rf /usr/share/doc/*     && rm -rf /var/cache/debconf/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /home/mailscanner
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -o /home/mailscanner/MailScanner-$MAILSCAN_VERSION.deb.tar.gz  -L https://s3.amazonaws.com/msv5/release/MailScanner-$MAILSCAN_VERSION.deb.tar.gz     &&
+      cd /home/mailscanner && tar -xf /home/mailscanner/MailScanner-5.0.6-5.deb.tar.gz     &&
+      cd /home/mailscanner/MailScanner-5.0.6-5 && chmod 755 install.sh && ./install.sh
+      --MTA=none --ignoreDeps=N
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cpan cpan -i DBD::mysql
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cpan -i Encoding::FixLatin && cpan -i Digest::SHA1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /opt/mailwatch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opt/mailwatch \ && git clone --depth=1 https://github.com/mailwatch/MailWatch.git
+      .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /opt/mailwatch/MailScanner_perl_scripts/MailWatch.pm /usr/share/MailScanner/perl/custom     &&
+      ln -s /opt/mailwatch/MailScanner_perl_scripts/SQLBlackWhiteList.pm /usr/share/MailScanner/perl/custom     &&
+      ln -s /opt/mailwatch/MailScanner_perl_scripts/SQLSpamSettings.pm /usr/share/MailScanner/perl/custom     &&
+      cp /opt/mailwatch/MailScanner_perl_scripts/MailWatchConf.pm /usr/share/MailScanner/perl/custom/MailWatchConf.pm     &&
+      cp /opt/mailwatch/mailscanner/lib/pear/PEAR.php /opt/mailwatch/mailscanner/lib/pear/Mail/PEAR.php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /home
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/
+    - /
+  - CmdLine:
+    - a2enmod rewrite expires &&     chown -R www-data:www-data /opt/mailwatch/mailscanner
+      /var/www/fastcgidefs/php.wrapper &&     chmod 755 -R /var/www/fastcgidefs/*
+      /etc/service/*/run
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R clamav:clamav /var/run/clamav/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 755 -R /var/run/clamav/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install SpamAssassin --yes
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sa-update && spamassassin -D -p /etc/MailScanner/spamassassin.conf --lint
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /etc/cron.daily/mailwatch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -R /opt/mailwatch/tools/Cron_jobs /etc/cron.daily/ && chmod +x /etc/cron.daily/mailwatch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /opt/mailwatch/tools/Cron_jobs/mailwatch_db_clean.php /usr/local/bin/ &&
+      chmod +x /usr/local/bin/mailwatch_db_clean.php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /opt/mailwatch/tools/Cron_jobs/mailwatch_quarantine_maint.php /usr/local/bin/
+      && chmod +x /usr/local/bin/mailwatch_quarantine_maint.php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /opt/mailwatch/tools/Cron_jobs/mailwatch_quarantine_report.php /usr/local/bin/
+      && chmod +x /usr/local/bin/mailwatch_quarantine_report.php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - php /opt/mailwatch/upgrade.php --skip-user-confirm /opt/mailwatch/mailscanner/functions.php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/runsvdir
+    - -P
+    - /etc/service
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "80"
+  From:
+    Image: debian:8.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:8.10

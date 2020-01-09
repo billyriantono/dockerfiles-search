@@ -1,0 +1,233 @@
+MetaArgs: null
+Stages:
+- As: dependencies
+  BaseName: ruby:2.5.1
+  Commands:
+  - Key: RAILS_ENV
+    Name: arg
+    Value: production
+  - CmdLine:
+    - mkdir -p /tmp
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - curl -sL https://deb.nodesource.com/setup_10.x | bash -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y nodejs yarn cmake flex
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL https://github.com/graphql/libgraphqlparser/archive/v0.7.0.tar.gz >libgraphqlparser-0.7.0.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xfz libgraphqlparser-0.7.0.tar.gz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/libgraphqlparser-0.7.0
+  - CmdLine:
+    - cmake .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: ruby:2.5.1
+  Name: dependencies
+  Platform: ""
+  SourceCode: FROM ruby:2.5.1 as dependencies
+- As: build-common
+  BaseName: dependencies
+  Commands:
+  - CmdLine:
+    - mkdir -p /usr/src/build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/build
+  - Env:
+    - Key: RAILS_ENV
+      Value: $RAILS_ENV
+    Name: env
+  - Env:
+    - Key: AWS_ACCESS_KEY_ID
+      Value: dummy
+    Name: env
+  - Env:
+    - Key: AWS_SECRET_ACCESS_KEY
+      Value: dummy
+    Name: env
+  From:
+    Stage:
+      Index: 0
+      Named: dependencies
+  Name: build-common
+  Platform: ""
+  SourceCode: FROM dependencies as build-common
+- As: build-ruby
+  BaseName: build-common
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gemfile
+    - /usr/src/build/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gemfile.lock
+    - /usr/src/build/
+  - CmdLine:
+    - bundle config --global frozen 1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bundle install --deployment
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build-common
+  Name: build-ruby
+  Platform: ""
+  SourceCode: FROM build-common as build-ruby
+- As: build-js
+  BaseName: build-common
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - yarn.lock
+    - /usr/src/build/
+  - CmdLine:
+    - yarn install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build-common
+  Name: build-js
+  Platform: ""
+  SourceCode: FROM build-common as build-js
+- As: build-app
+  BaseName: build-common
+  Commands:
+  - Env:
+    - Key: RAILS_ENV
+      Value: $RAILS_ENV
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /usr/src/build
+  - Chown: ""
+    From: build-js
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/build
+    - .
+  - Chown: ""
+    From: build-ruby
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/build
+    - .
+  - CmdLine:
+    - bundle install --deployment
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv config/database.yml.docker config/database.yml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bundle exec rake assets:precompile
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build-common
+  Name: build-app
+  Platform: ""
+  SourceCode: FROM build-common as build-app
+- BaseName: dependencies
+  Commands:
+  - CmdLine:
+    - mkdir -p /usr/src/app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/app
+  - Env:
+    - Key: RAILS_ENV
+      Value: $RAILS_ENV
+    Name: env
+  - Env:
+    - Key: RAILS_SERVE_STATIC_FILES
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: RAILS_LOG_TO_STDOUT
+      Value: "true"
+    Name: env
+  - Chown: ""
+    From: build-app
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/build
+    - .
+  - CmdLine:
+    - bundle install --deployment
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn install
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - bundle
+    - exec
+    - rails
+    - server
+    - -b
+    - 0.0.0.0
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: dependencies
+  Name: ""
+  Platform: ""
+  SourceCode: FROM dependencies

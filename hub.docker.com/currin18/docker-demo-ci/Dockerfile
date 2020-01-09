@@ -1,0 +1,9 @@
+FROM alpine:3.10
+
+COPY README.md /app/README.md
+
+WORKDIR /app
+
+USER 1001
+
+ENTRYPOINT ["cat", "README.md"]

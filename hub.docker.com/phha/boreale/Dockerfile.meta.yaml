@@ -1,0 +1,71 @@
+MetaArgs:
+- DefaultValue: "3.9"
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: "3.9"
+Stages:
+- As: builder
+  BaseName: elixir:1.8-alpine
+  Commands:
+  - Key: APP_VSN
+    Name: arg
+    Value: null
+  - Key: MIX_ENV
+    Name: arg
+    Value: prod
+  - Env:
+    - Key: APP_VSN
+      Value: ${APP_VSN}
+    - Key: MIX_ENV
+      Value: ${MIX_ENV}
+    Name: env
+  - Name: workdir
+    Path: /opt/app
+  - CmdLine:
+    - apk update &&   apk upgrade --no-cache &&   apk add --no-cache     git     build-base
+      &&   mix local.rebar --force &&   mix local.hex --force
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - mix do deps.get, deps.compile, compile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/built &&   mix release --verbose &&   cp _build/${MIX_ENV}/rel/boreale/releases/${APP_VSN}/boreale.tar.gz
+      /opt/built &&   cd /opt/built &&   tar -xzf boreale.tar.gz &&   rm boreale.tar.gz
+    Name: run
+    PrependShell: true
+  From:
+    Image: elixir:1.8-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM elixir:1.8-alpine AS builder
+- BaseName: alpine:${ALPINE_VERSION}
+  Commands:
+  - CmdLine:
+    - apk update &&     apk add --no-cache       bash       openssl       openssl-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/app
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/built
+    - .
+  - CmdLine:
+    - trap 'exit' INT; /opt/app/bin/boreale foreground
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:${ALPINE_VERSION}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:${ALPINE_VERSION}

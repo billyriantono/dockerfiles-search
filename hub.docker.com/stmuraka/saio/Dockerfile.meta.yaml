@@ -1,0 +1,194 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:xenial
+  Commands:
+  - Maintainer: Shaun Murakami (stmuraka@us.ibm.com)
+    Name: maintainer
+  - Env:
+    - Key: SWIFT_USER
+      Value: '"swift"'
+    Name: env
+  - CmdLine:
+    - apt-get update --fix-missing  &&  apt-get install -y         sudo         rsyslog         software-properties-common         python-software-properties         build-essential         autoconf         automake         libtool         curl
+      gcc memcached rsync sqlite3 xfsprogs         git-core libffi-dev python-setuptools         libssl-dev         python-coverage
+      python-dev python-nose         python-xattr python-eventlet         python-greenlet
+      python-pastedeploy         python-netifaces python-pip python-dnspython         python-mock
+    Name: run
+    PrependShell: true
+  - Key: liberasurecode_release
+    Name: arg
+    Value: 1.4.0
+  - Name: workdir
+    Path: /opt
+  - CmdLine:
+    - git clone https://github.com/openstack/liberasurecode.git
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LIBERASURECODE_DIR
+      Value: '"/opt/liberasurecode"'
+    Name: env
+  - Name: workdir
+    Path: ${LIBERASURECODE_DIR}
+  - CmdLine:
+    - git checkout ${liberasurecode_release}  && ./autogen.sh  && ./configure  &&
+      make  && make test  && make install  && ldconfig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install pip setuptools ndg-httpsclient --upgrade
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'useradd -m -d /home/${SWIFT_USER} -s /bin/bash ${SWIFT_USER}  && adduser ${SWIFT_USER}
+      sudo  && adduser ${SWIFT_USER} adm  && echo "${SWIFT_USER} ALL=(ALL) NOPASSWD:
+      ALL" >> /etc/sudoers'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /srv
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /srv
+  - CmdLine:
+    - mv /etc/rc.local /etc/rc.local.orig
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rc.local
+    - /etc/rc.local
+  - Name: user
+    User: ${SWIFT_USER}
+  - Env:
+    - Key: USER
+      Value: ${SWIFT_USER}
+    Name: env
+  - Name: workdir
+    Path: /home/${SWIFT_USER}
+  - Key: swiftclient_release
+    Name: arg
+    Value: 3.3.0
+  - CmdLine:
+    - git clone https://github.com/openstack/python-swiftclient.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${HOME}/python-swiftclient  && git checkout ${swiftclient_release}  && sudo
+      python setup.py develop  && cd -
+    Name: run
+    PrependShell: true
+  - Key: swift_release
+    Name: arg
+    Value: 2.13.0
+  - CmdLine:
+    - git clone https://github.com/openstack/swift.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${HOME}/swift  && git checkout ${swift_release}  && sudo -H pip install -r
+      requirements.txt  && sudo python setup.py develop  && cd -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${HOME}/swift  && sudo -H pip install -r test-requirements.txt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo cp ${HOME}/swift/doc/saio/rsyncd.conf /etc/  && sudo sed -i -e "s/<your-user-name>/${SWIFT_USER}/"
+      /etc/rsyncd.conf  && sudo sed -i -e "/^RSYNC_ENABLE.*/ s/^/#/" /etc/default/rsync  &&
+      sudo sed -i -e "/^#RSYNC_ENABLE.*/a RSYNC_ENABLE=true" /etc/default/rsync
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo mkdir -p /etc/rsyslog.d  && sudo cp ${HOME}/swift/doc/saio/rsyslog.d/10-swift.conf
+      /etc/rsyslog.d/  && sudo sed -i -e "s/\$PrivDropToGroup.*/\$PrivDropToGroup
+      adm/" /etc/rsyslog.conf  && sudo mkdir -p /var/log/swift  && sudo chown -R syslog.adm
+      /var/log/swift  && sudo chmod -R g+w /var/log/swift
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo rm -rf /etc/swift  && cd ${HOME}/swift/doc  && sudo cp -r saio/swift /etc/swift  &&
+      cd -  && sudo chown -R ${SWIFT_USER}:${SWIFT_USER} /etc/swift  && find /etc/swift/
+      -name \*.conf | xargs sudo sed -i "s/<your-user-name>/${SWIFT_USER}/"  && grep
+      changeme /etc/swift/*.conf | cut -d ':' -f1 | uniq | xargs sudo sed -i "s/changeme/$(openssl
+      rand -hex 16)/"  && sed -i -e 's/^bind_ip =.*$/bind_ip = 0.0.0.0/' /etc/swift/proxy-server.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${HOME}/bin  && cd ${HOME}/swift/doc  && cp saio/bin/* ${HOME}/bin  &&
+      cd -  && chmod +x ${HOME}/bin/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e '/^find \/var\/cache\/swift/,$d' ${HOME}/bin/resetswift  && echo 'if
+      [ $(sudo find /var/cache -type d -name "swift*" 2>/dev/null | wc -l ) != "0"
+      ] ; then' >> ${HOME}/bin/resetswift  && echo '    sudo find /var/cache/swift*
+      -type f -name *.recon -exec rm -f {} \;' >> ${HOME}/bin/resetswift  && echo
+      'fi' >> ${HOME}/bin/resetswift  && echo 'sudo /etc/init.d/rsyslog restart' >>
+      ${HOME}/bin/resetswift  && echo 'sudo /etc/init.d/memcached restart' >> ${HOME}/bin/resetswift
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp ${HOME}/bin/startmain ${HOME}/bin/startall  && sed -i -e 's/main/all/' ${HOME}/bin/startall
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - test.conf
+    - /etc/swift/test.conf
+  - Env:
+    - Key: SWIFT_TEST_CONFIG_FILE
+      Value: '"/etc/swift/test.conf"'
+    - Key: PATH
+      Value: '"/home/${SWIFT_USER}/bin:${PATH}"'
+    Name: env
+  - CmdLine:
+    - echo "export PATH=${HOME}/bin:${PATH}" >> ${HOME}/.bashrc  && . ${HOME}/.bashrc
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - runTests.sh
+    - /home/${SWIFT_USER}
+  - Env:
+    - Key: SAIO_BLOCK_DEVICE
+      Value: '"/srv/swift-disk"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - /home/${SWIFT_USER}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - liberasurecodeCheck.sh
+    - /home/${SWIFT_USER}
+  - CmdLine:
+    - sudo chown ${SWIFT_USER}.${SWIFT_USER} /etc/swift/proxy-server.conf  && sudo
+      chown ${SWIFT_USER}.${SWIFT_USER} /home/${SWIFT_USER}/*.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - ./start.sh
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:xenial
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:xenial

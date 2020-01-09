@@ -1,0 +1,80 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: golang:1.12.5
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./go.mod
+    - ./go.sum
+    - ./
+  - CmdLine:
+    - go mod download && go mod vendor && go install -i ./vendor/...
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - ./
+  - CmdLine:
+    - GOARCH=amd64 GOOS=linux CGO_ENABLED=0  go build -o /contentserver
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.5
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM golang:1.12.5 AS build-env
+- BaseName: alpine
+  Commands:
+  - Env:
+    - Key: CONTENT_SERVER_ADDR
+      Value: 0.0.0.0:80
+    Name: env
+  - Env:
+    - Key: CONTENT_SERVER_VAR_DIR
+      Value: /var/lib/contentserver
+    Name: env
+  - Env:
+    - Key: LOG_JSON
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - apk add --update --no-cache ca-certificates curl bash && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /contentserver
+    - /usr/sbin/contentserver
+  - Name: volume
+    Volumes:
+    - $CONTENT_SERVER_VAR_DIR
+  - CmdLine:
+    - /usr/sbin/contentserver
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -address=$CONTENT_SERVER_ADDR
+    - -var-dir=$CONTENT_SERVER_VAR_DIR
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: expose
+    Ports:
+    - "9200"
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

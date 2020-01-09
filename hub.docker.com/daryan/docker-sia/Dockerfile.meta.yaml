@@ -1,0 +1,77 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Chirkov Dmitry <d@linux.technology>"'
+    Name: label
+  - Env:
+    - Key: GOOS
+      Value: linux
+    Name: env
+  - Env:
+    - Key: GOARCH
+      Value: amd64
+    Name: env
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - CmdLine:
+    - go get -d -u gitlab.com/NebulousLabs/Sia/... &&     cd $GOPATH/src/gitlab.com/NebulousLabs/Sia
+      &&     make release
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang AS builder
+- BaseName: alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Chirkov Dmitry <d@linux.technology>"'
+    Name: label
+  - Env:
+    - Key: SIA_DIR
+      Value: /sia
+    Name: env
+  - Env:
+    - Key: SIA_DATA_DIR
+      Value: '"/sia-data"'
+    Name: env
+  - Env:
+    - Key: SIA_MODULES
+      Value: gctwhr
+    Name: env
+  - CmdLine:
+    - apk --no-cache add socat
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: '"$SIA_DIR"'
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/siad
+    - ./
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - go/bin/siac
+    - ./
+  - CmdLine:
+    - socat tcp-listen:9980,reuseaddr,fork tcp:localhost:8000 &   ./siad     --modules
+      "$SIA_MODULES"     --sia-directory "$SIA_DATA_DIR"     --api-addr "localhost:8000"     --authenticate-api=false
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

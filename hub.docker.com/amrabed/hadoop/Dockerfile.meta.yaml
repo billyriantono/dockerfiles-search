@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu
+  Commands:
+  - Maintainer: Amr Abed
+    Name: maintainer
+  - Name: user
+    User: root
+  - CmdLine:
+    - apt-get install -y software-properties-common &&     add-apt-repository -y ppa:webupd8team/java
+      &&     apt-get update &&     echo debconf shared/accepted-oracle-license-v1-1
+      select true | sudo debconf-set-selections &&     echo debconf shared/accepted-oracle-license-v1-1
+      seen true | sudo debconf-set-selections &&     apt-get install -y oracle-java8-installer
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/local
+  - CmdLine:
+    - apt-get install -y curl &&     curl -s http://www.us.apache.org/dist/hadoop/common/current/hadoop-2.6.0.tar.gz
+      | tar -xz &&     mv hadoop-2.6.0 hadoop
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y openssh-server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ssh-keygen -t dsa -P '' -f ~/.ssh/id_dsa &&     cat ~/.ssh/id_dsa.pub >> ~/.ssh/authorized_keys
+      &&     echo 'Host *\n  UserKnownHostsFile /dev/null\n  StrictHostKeyChecking
+      no' > ~/.ssh/config
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: $PATH:/usr/local/hadoop/bin:/usr/local/hadoop/sbin
+    Name: env
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/java-8-oracle
+    Name: env
+  - Env:
+    - Key: HADOOP_HOME
+      Value: /usr/local/hadoop
+    Name: env
+  - Env:
+    - Key: HADOOP_PREFIX
+      Value: /usr/local/hadoop
+    Name: env
+  - Name: workdir
+    Path: hadoop
+  - CmdLine:
+    - sed -i '/^export JAVA_HOME/ s:.*:export JAVA_HOME=/usr/lib/jvm/java-8-oracle\nexport
+      HADOOP_PREFIX=/usr/local/hadoop\n:' etc/hadoop/hadoop-env.sh &&     sed -i '/<\/configuration>/i\\t<property>\n\t\t<name>fs.defaultFS<\/name>\n\t\t<value>hdfs://localhost:9000<\/value>\n\t</property>'
+      etc/hadoop/core-site.xml &&     sed -i '/<\/configuration>/i\\t<property>\n\t\t<name>dfs.replication</name>\n\t\t<value>1</value>\n\t</property>'
+      etc/hadoop/hdfs-site.xml  &&     sed -i '/<\/configuration>/i\\t<property>\n\t\t<name>yarn.nodemanager.aux-services</name>\n\t\t<value>mapreduce_shuffle</value>\n\t</property>'
+      etc/hadoop/yarn-site.xml &&     sed '/<\/configuration>/i\\t<property>\n\t\t<name>mapreduce.framework.name</name>\n\t\t<value>yarn</value>\n\t</property>'
+      etc/hadoop/mapred-site.xml.template > etc/hadoop/mapred-site.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - hdfs namenode -format && service ssh start && start-dfs.sh && hdfs dfs -mkdir
+      -p /user/root && hdfs dfs -put etc/hadoop input
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "22"
+    - "50070"
+    - "8032"
+    - "8088"
+    - "9000"
+  - CmdLine:
+    - service ssh start &&     start-dfs.sh && hdfs dfsadmin -safemode leave &&     start-yarn.sh
+      &&     hadoop jar share/hadoop/mapreduce/hadoop-mapreduce-examples-2.6.0.jar
+      grep input output 'dfs[a-z.]+' &&     hdfs dfs -cat output/* &&     stop-yarn.sh
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu

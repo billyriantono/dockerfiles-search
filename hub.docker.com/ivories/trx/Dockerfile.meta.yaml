@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: polfilm/tron-java
+  Commands:
+  - Key: trx_branch
+    Name: arg
+    Value: master
+  - CmdLine:
+    - git fetch --prune     && git fetch --tags     && git checkout $trx_branch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update     && apt-get install -qqy nginx supervisor     && mkdir /supervisor     &&
+      rm -rf /etc/nginx/sites-enabled/default     && cd /home/java-tron     && mkdir
+      fullnode     && mkdir soliditynode     && ./gradlew build -x test     && cp
+      build/libs/FullNode.jar ./fullnode/     && cp build/libs/SolidityNode.jar ./soliditynode/     &&
+      wget https://raw.githubusercontent.com/tronprotocol/tron-deployment/master/main_net_config.conf
+      -O config.conf
+    Name: run
+    PrependShell: true
+  From:
+    Image: polfilm/tron-java
+  Name: builder
+  Platform: ""
+  SourceCode: FROM polfilm/tron-java as builder
+- BaseName: polfilm/tron-java
+  Commands:
+  - CmdLine:
+    - apt-get update     && apt-get install -qqy nginx supervisor net-tools     &&
+      mkdir /supervisor     && rm -rf /etc/nginx/sites-enabled/default     && mkdir
+      fullnode     && mkdir soliditynode
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/java-tron/build/libs/FullNode.jar
+    - /home/java-tron/fullnode/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/java-tron/build/libs/SolidityNode.jar
+    - /home/java-tron/soliditynode/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/java-tron/config.conf
+    - /home/java-tron/fullnode/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/java-tron/config.conf
+    - /home/java-tron/soliditynode/
+  - CmdLine:
+    - sed 's/port = 50051/port = 50052/g' /home/java-tron/soliditynode/config.conf
+      > tmp     && mv tmp /home/java-tron/soliditynode/config.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisord.conf
+    - /supervisor/supervisord.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/
+    - /etc/nginx/conf.d/
+  - CmdLine:
+    - /usr/bin/supervisord -u root  -c /supervisor/supervisord.conf -n
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: polfilm/tron-java
+  Name: ""
+  Platform: ""
+  SourceCode: FROM polfilm/tron-java

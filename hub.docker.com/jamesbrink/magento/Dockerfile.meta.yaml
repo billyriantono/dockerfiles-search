@@ -1,0 +1,161 @@
+MetaArgs: null
+Stages:
+- BaseName: jamesbrink/php:7.0
+  Commands:
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: MAGENTO_VERSION
+    Name: arg
+    Value: 2.1.12
+  - Key: MAGERUN_VERSION
+    Name: arg
+    Value: 2.1.0
+  - Key: SASS_ENABLED
+    Name: arg
+    Value: "false"
+  - Key: ENABLE_SAMPLE_DATA
+    Name: arg
+    Value: '"false"'
+  - Labels:
+    - Key: maintainer
+      Value: '"James Brink, brink.james@gmail.com"'
+    - Key: decription
+      Value: '"Magento 2"'
+    - Key: version
+      Value: '"2.1.12"'
+    - Key: org.label-schema.name
+      Value: '"magento"'
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/jamesbrink/docker-magento"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0.0-rc1"'
+    Name: label
+  - CmdLine:
+    - addgroup -S magento && adduser -S -h /magento -s /bin/sh -G magento magento
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --no-cache --update --virtual runtime-deps add         bash         freetype         icu-libs         libcap         libjpeg         libmcrypt         libpng         libxslt     &&
+      apk --no-cache --virtual build-deps add         autoconf         binutils         binutils-libs         dpkg         dpkg-dev         file         freetype-dev         g++         gcc         gmp         icu-dev         isl         libatomic         libbz2         libc-dev         libgcc         libgomp         libjpeg-turbo-dev         libmagic         libmcrypt-dev         libpng-dev         libstdc++         libxslt-dev         m4         make         mpc1         mpfr3         musl-dev         pcre-dev         perl         pkgconf         pkgconfig         re2c     &&
+      pecl install xdebug     && docker-php-ext-install iconv mcrypt intl xsl zip
+      pdo_mysql soap     && docker-php-ext-configure gd --with-freetype-dir=/usr/include/
+      --with-jpeg-dir=/usr/include/     && docker-php-ext-install gd     && cd /var/tmp     &&
+      php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"     &&
+      php -r "if (hash_file('SHA384', 'composer-setup.php') === '48e3236262b34d30969dca3c37281b3b4bbe3221bda826ac6a9a62d6444cdb0dcd0615698a5cbe587c3f0fe57a54d8f5')
+      { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php');
+      } echo PHP_EOL;"     && php composer-setup.php     && php -r "unlink('composer-setup.php');"     &&
+      mv composer.phar /usr/local/bin/composer     && setcap cap_net_bind_service=+ep
+      /usr/sbin/httpd     && mkdir -p /magento/htdocs     && mkdir -p /magento/logs     &&
+      mkdir -p /magento/cgi-bin     && mkdir -p /magento/bin     && chown -R magento:magento
+      /magento     && su magento -c "composer create-project magento/community-edition:${MAGENTO_VERSION}
+      /magento/htdocs/"     && su magento -c "cd /magento/htdocs && composer install"     &&
+      su magento -c "cd /magento/htdocs && composer require --no-update n98/magerun2:${MAGERUN_VERSION}"     &&
+      su magento -c "cd /magento/htdocs && composer update"     && su magento -c "cd
+      /magento/htdocs && composer clear-cache"     && apk del build-deps     && chown
+      -R magento:magento /run/apache2     && chown -R magento:magento /etc/apache2     &&
+      echo -e "date.timezone=America/Chicago\nmemory_limit=2G\nasp_tags=off\n" > /usr/local/etc/php/php.ini     &&
+      if [ "$SASS_ENABLED" = "true" ]; then         apk --no-cache add nodejs libnotify         &&
+      cd /magento/htdocs         && su magento -c "composer require snowdog/theme-blank-sass"         &&
+      su magento -c "composer require snowdog/frontools"         && su magento -c
+      "composer clear-cache"         && cd vendor/snowdog/frontools         && su
+      magento -c "npm install"         && su magento -c "npm cache clean --force"         &&
+      su magento -c "npx gulp setup";     fi
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: magento
+  - Name: workdir
+    Path: /magento/
+  - CmdLine:
+    - if [ "${ENABLE_SAMPLE_DATA}" = "true" ]; then     cd /magento/     && curl -L
+      -O https://github.com/magento/magento2-sample-data/archive/${MAGENTO_VERSION}.tar.gz     &&
+      tar xfvz ${MAGENTO_VERSION}.tar.gz     && rm ${MAGENTO_VERSION}.tar.gz     &&
+      mv magento2-sample-data-${MAGENTO_VERSION} sample-data     && php -f /magento/sample-data/dev/tools/build-sample-data.php
+      -- --ce-source=/magento/htdocs/;     fi
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker-assets/
+    - /
+  - Env:
+    - Key: APACHE_HTTPS_PORT_NUMBER
+      Value: '"443"'
+    - Key: APACHE_HTTP_PORT_NUMBER
+      Value: '"80"'
+    - Key: MAGENTO_ADMINURI
+      Value: '"admin"'
+    - Key: MAGENTO_DATABASE_NAME
+      Value: '"magento"'
+    - Key: MAGENTO_DATABASE_PASSWORD
+      Value: '"password"'
+    - Key: MAGENTO_DATABASE_USER
+      Value: '"root"'
+    - Key: MAGENTO_EMAIL
+      Value: '"user@example.com"'
+    - Key: MAGENTO_FIRSTNAME
+      Value: '"FirstName"'
+    - Key: MAGENTO_HOST
+      Value: '"127.0.0.1"'
+    - Key: MAGENTO_LASTNAME
+      Value: '"LastName"'
+    - Key: MAGENTO_MODE
+      Value: '"developer"'
+    - Key: MAGENTO_PASSWORD
+      Value: '"password1"'
+    - Key: MAGENTO_USERNAME
+      Value: '"admin"'
+    - Key: MAGENTO_HOME
+      Value: '"/magento/htdocs"'
+    - Key: MARIADB_HOST
+      Value: '"mariadb"'
+    - Key: MARIADB_PORT_NUMBER
+      Value: '"3306"'
+    - Key: MARIADB_ROOT_PASSWORD
+      Value: '"password"'
+    - Key: MARIADB_ROOT_USER
+      Value: '"root"'
+    - Key: REDIS_HOST
+      Value: '""'
+    - Key: REDIS_PORT
+      Value: '"6379"'
+    - Key: VARNISH_HOST
+      Value: '""'
+    - Key: MOD_PAGESPEED_ENABLED
+      Value: '"true"'
+    - Key: ENABLE_SAMPLE_DATA
+      Value: '"false"'
+    - Key: PATH
+      Value: '"/magento/htdocs/bin:/magento/htdocs/vendor/bin/:/magento/htdocs/vendor/n98/magerun2/bin:$PATH"'
+    Name: env
+  - Name: user
+    User: root
+  - CmdLine:
+    - chown -R magento:magento /etc/apache2
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: magento
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: jamesbrink/php:7.0
+  Name: ""
+  Platform: ""
+  SourceCode: FROM jamesbrink/php:7.0

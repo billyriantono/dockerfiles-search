@@ -1,0 +1,131 @@
+MetaArgs: null
+Stages:
+- As: protoc_builder
+  BaseName: alpine:3.8
+  Commands:
+  - CmdLine:
+    - apk add --no-cache build-base curl automake autoconf libtool git zlib-dev
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GRPC_VERSION
+      Value: 1.16.0
+    - Key: PROTOBUF_VERSION
+      Value: 3.6.1
+    - Key: OUTDIR
+      Value: /out
+    - Key: PROTOC_GEN_GO_VERSION
+      Value: 1.3.1
+    - Key: GRPC_JAVA_VERSION
+      Value: 1.21.0
+    Name: env
+  - CmdLine:
+    - mkdir -p /protobuf &&         curl -L https://github.com/google/protobuf/archive/v${PROTOBUF_VERSION}.tar.gz
+      | tar xvz --strip-components=1 -C /protobuf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth 1 --recursive -b v${GRPC_VERSION} https://github.com/grpc/grpc.git
+      /grpc &&         rm -rf grpc/third_party/protobuf &&         ln -s /protobuf
+      /grpc/third_party/protobuf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /protobuf &&         autoreconf -f -i -Wall,no-obsolete &&         ./configure
+      --prefix=/usr --enable-static=no &&         make -j2 && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd grpc &&         make -j2 plugins
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /protobuf &&         make install DESTDIR=${OUTDIR}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /grpc &&         make install-plugins prefix=${OUTDIR}/usr
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find ${OUTDIR} -name "*.a" -delete -or -name "*.la" -delete
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache go
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    - Key: PATH
+      Value: /go/bin/:$PATH
+    Name: env
+  - CmdLine:
+    - mkdir -p ${GOPATH}/src/github.com/golang/protobuf &&     curl -sSL https://github.com/golang/protobuf/archive/v${PROTOC_GEN_GO_VERSION}.tar.gz
+      | tar -xz --strip 1 -C ${GOPATH}/src/github.com/golang/protobuf &&    cd ${GOPATH}/src/github.com/golang/protobuf
+      &&     go build -ldflags '-w -s' -o /golang-protobuf-out/protoc-gen-go ./protoc-gen-go
+      &&     install -Ds /golang-protobuf-out/protoc-gen-go ${OUTDIR}/usr/bin/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /grpc-java &&     curl -sSL https://github.com/grpc/grpc-java/archive/v${GRPC_JAVA_VERSION}.tar.gz
+      | tar xz --strip 1 -C /grpc-java &&     cd /grpc-java &&     g++         -I.
+      -I/protobuf/src         /grpc-java/compiler/src/java_plugin/cpp/*.cpp         -L/protobuf/src/.libs         -lprotoc
+      -lprotobuf -lpthread --std=c++0x -s         -o protoc-gen-grpc-java &&     install
+      -Ds protoc-gen-grpc-java ${OUTDIR}/usr/bin/protoc-gen-grpc-java
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.8
+  Name: protoc_builder
+  Platform: ""
+  SourceCode: FROM alpine:3.8 as protoc_builder
+- As: packer
+  BaseName: znly/upx
+  Commands:
+  - Chown: ""
+    From: protoc_builder
+    Name: copy
+    SourcesAndDest:
+    - /out/
+    - /out/
+  - CmdLine:
+    - upx --lzma         /out/usr/bin/protoc         /out/usr/bin/grpc_*
+    Name: run
+    PrependShell: true
+  From:
+    Image: znly/upx
+  Name: packer
+  Platform: ""
+  SourceCode: FROM znly/upx as packer
+- BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - apk add --no-cache libstdc++
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: packer
+    Name: copy
+    SourcesAndDest:
+    - /out/
+    - /
+  - CmdLine:
+    - apk add --no-cache curl &&         mkdir -p /protobuf/google/protobuf &&         for
+      f in any duration descriptor empty struct timestamp wrappers; do         curl
+      -L -o /protobuf/google/protobuf/${f}.proto https://raw.githubusercontent.com/google/protobuf/master/src/google/protobuf/${f}.proto;         done
+      &&         mkdir -p /protobuf/google/api &&         for f in annotations http;
+      do         curl -L -o /protobuf/google/api/${f}.proto https://raw.githubusercontent.com/grpc-ecosystem/grpc-gateway/master/third_party/googleapis/google/api/${f}.proto;         done
+      &&         apk del curl &&         chmod a+x /usr/bin/protoc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - protoc
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

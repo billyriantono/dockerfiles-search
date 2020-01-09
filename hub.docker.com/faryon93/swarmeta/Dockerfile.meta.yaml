@@ -1,0 +1,79 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Env:
+    - Key: TZ
+      Value: Europe/Berlin
+    Name: env
+  - CmdLine:
+    - apk --update --no-cache add git gcc musl-dev tzdata
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /work
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./
+    - ./
+  - CmdLine:
+    - go build -ldflags         '-X "main.BuildTime='$(date -Iminutes)'"          -X
+      "main.GitCommit='$(git rev-parse --short HEAD)'"          -X "main.GitBranch='$(git
+      rev-parse --abbrev-ref HEAD)'"          -X "main.BuildNumber='$CI_BUILDNR'"          -s
+      -w'          -v -o /tmp/swarmeta .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- BaseName: alpine:latest
+  Commands:
+  - Maintainer: Maximilian Pachl <m@ximilian.info>
+    Name: maintainer
+  - Env:
+    - Key: TZ
+      Value: Europe/Berlin
+    Name: env
+  - CmdLine:
+    - apk --update --no-cache add ca-certificates tzdata bash su-exec curl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/swarmeta
+    - /usr/sbin/swarmeta
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - swarmeta.hcl
+    - ./
+  - CmdLine:
+    - chown nobody:nobody /usr/sbin/swarmeta &&     chmod +x /usr/sbin/swarmeta
+    Name: run
+    PrependShell: true
+  - Health:
+      Interval: 1000000000
+      StartPeriod: 1000000000
+      Test:
+      - CMD-SHELL
+      - curl -f http://127.0.0.1:8000/api/v1/health || exit 1
+      Timeout: 2000000000
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - /usr/sbin/swarmeta
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

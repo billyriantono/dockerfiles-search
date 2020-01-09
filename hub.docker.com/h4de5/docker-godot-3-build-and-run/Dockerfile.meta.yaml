@@ -1,0 +1,172 @@
+MetaArgs: null
+Stages:
+- As: build-image
+  BaseName: debian:stable-slim
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"h4de5@users.noreply.github.com"'
+    - Key: version
+      Value: '"3.0.6"'
+    - Key: description
+      Value: '"Docker image for a basic build environment"'
+    Name: label
+  - CmdLine:
+    - "apt-get --yes update &&   apt-get --yes install     build-essential scons pkg-config
+      libx11-dev libxcursor-dev libxinerama-dev \t  libgl1-mesa-dev libglu-dev libasound2-dev
+      libpulse-dev libfreetype6-dev libssl-dev libudev-dev \t  libxi-dev libxrandr-dev
+      mingw-w64 \t  git unzip upx vim wget ca-certificates &&     rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:stable-slim
+  Name: build-image
+  Platform: ""
+  SourceCode: FROM debian:stable-slim AS build-image
+- As: godot-image
+  BaseName: build-image
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"h4de5@users.noreply.github.com"'
+    - Key: version
+      Value: '"3.0.6"'
+    - Key: description
+      Value: '"Docker image that sets up emscripten and the docker github repository
+        on top of the build-image."'
+    Name: label
+  - Env:
+    - Key: DOCKER_WORKING_DIR
+      Value: '"/root/workspace/"'
+    - Key: DOCKER_BUILD_SCRIPT
+      Value: '"/root/workspace/build-scripts/"'
+    - Key: DOCKER_GODOT_SOURCE
+      Value: '"/root/workspace/godot/"'
+    - Key: DOCKER_GODOT_EMSCRIPTEN
+      Value: '"/root/workspace/emscripten/"'
+    - Key: EMSCRIPTEN_ROOT
+      Value: '"/root/workspace/emscripten/"'
+    Name: env
+  - CmdLine:
+    - mkdir -p "$DOCKER_WORKING_DIR"     "$DOCKER_BUILD_SCRIPT"     "$DOCKER_GODOT_EMSCRIPTEN"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $DOCKER_WORKING_DIR
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/*.sh
+    - $DOCKER_BUILD_SCRIPT
+  - CmdLine:
+    - chmod +x ${DOCKER_BUILD_SCRIPT}*.sh &&   git clone -b master --single-branch
+      https://github.com/godotengine/godot.git $DOCKER_GODOT_SOURCE &&   ${DOCKER_BUILD_SCRIPT}install-emscripten.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: build-image
+  Name: godot-image
+  Platform: ""
+  SourceCode: FROM build-image as godot-image
+- As: godot-game-image
+  BaseName: godot-image
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"h4de5@users.noreply.github.com"'
+    - Key: version
+      Value: '"3.0.6"'
+    - Key: description
+      Value: '"Docker image to build a godot v3.0.6 from source, export your game
+        as binary and run your game on a linux server."'
+    Name: label
+  - Name: expose
+    Ports:
+    - "8910"
+  - Key: godot_version
+    Name: arg
+    Value: '"${DOCKER_GODOT_VERSION}"'
+  - Key: godot_suffix
+    Name: arg
+    Value: '"${DOCKER_GODOT_VERSION_SUFFIX}"'
+  - Name: volume
+    Volumes:
+    - /root/workspace/game/
+  - Name: volume
+    Volumes:
+    - /root/workspace/editor/
+  - Name: volume
+    Volumes:
+    - /root/workspace/exports/
+  - Name: volume
+    Volumes:
+    - /root/workspace/templates/
+  - Env:
+    - Key: DOCKER_GODOT_VERSION
+      Value: $godot_version
+    - Key: DOCKER_GODOT_VERSION_SUFFIX
+      Value: $godot_suffix
+    - Key: DOCKER_GODOT_EXPORT_TEMPLATES
+      Value: '"/root/workspace/templates/"'
+    - Key: DOCKER_GODOT_EDITOR
+      Value: '"/root/workspace/editor/"'
+    - Key: DOCKER_GODOT_GAME_SOURCE
+      Value: '"/root/workspace/game/"'
+    - Key: DOCKER_GODOT_EXPORT_GAME
+      Value: '"/root/workspace/exports/"'
+    - Key: DOCKER_GODOT_SERVER_BINARY
+      Value: '"/root/workspace/editor/linux_server"'
+    - Key: DOCKER_GODOT_HEADLESS_BINARY
+      Value: '"/root/workspace/editor/linux_headless"'
+    - Key: DOCKER_TAG_NAME
+      Value: '"docker-godot-3-build-and-run:latest"'
+    - Key: GODOT_HOME
+      Value: '"${HOME}/.godot/"'
+    - Key: XDG_CACHE_HOME
+      Value: '"${HOME}/.cache/"'
+    - Key: XDG_DATA_HOME
+      Value: '"${HOME}/.local/share/"'
+    - Key: XDG_CONFIG_HOME
+      Value: '"${HOME}/.config/"'
+    - Key: GAME_PORT
+      Value: "8910"
+    Name: env
+  - CmdLine:
+    - mkdir -p "$DOCKER_GODOT_EDITOR"     "$DOCKER_GODOT_GAME_SOURCE"     "$DOCKER_GODOT_EXPORT_GAME"     "$GODOT_HOME"     "$XDG_CACHE_HOME"     "$XDG_DATA_HOME"     "$XDG_CONFIG_HOME"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $DOCKER_WORKING_DIR
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/*.sh
+    - $DOCKER_BUILD_SCRIPT
+  - CmdLine:
+    - chmod +x ${DOCKER_BUILD_SCRIPT}*.sh &&   ${DOCKER_BUILD_SCRIPT}download-godot.sh
+      all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: godot-image
+  Name: godot-game-image
+  Platform: ""
+  SourceCode: FROM godot-image as godot-game-image

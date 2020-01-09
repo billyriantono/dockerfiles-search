@@ -1,0 +1,158 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: alpine:latest
+  Commands:
+  - Name: workdir
+    Path: /root/build
+  - CmdLine:
+    - "apk update && \tapk add \t\tbuild-base \t\tmake && \twget http://download.oracle.com/berkeley-db/db-4.8.30.tar.gz
+      && \ttar xf db-4.8.30.tar.gz && \tcd db-4.8.30/build_unix && \t../dist/configure
+      \t\t--enable-cxx \t\t--with-pic \t\t--enable-shared \t\t--disable-static \t\t--prefix=/usr
+      && \tmake -j $(nproc) && \tmake install"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apk add \t\tgit \t\tboost-dev \t\tautoconf \t\tautomake \t\tlibtool \t\tlibevent-dev
+      \t\tzeromq-dev \t\tlibressl-dev && \tgit clone https://github.com/vivocoin/vivo
+      && \tcd vivo && \tchmod +x share/genbuild.sh && \tsh autogen.sh && \t./configure
+      \t\t--disable-static \t\t--disable-shared \t\t--disable-tests \t\t--disable-bench
+      \t\t--without-miniupnpc \t\t--without-libs \t\t--without-utils \t\t--with-gui=no
+      \t\t--with-daemon \t\t--prefix=/root/build/vivo/install && \tmake -j $(nproc)
+      && \tmake install && \tstrip \t\t--strip-unneeded \t\t-R .comment \t\t-R .GCC.command.line
+      \t\t-R .note.gnu.gold-version \t\t/root/build/vivo/install/bin/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apk add \t\tgit \t\tpy2-pip && \tpip install \t\tinflection==0.3.1 \t\tpeewee==2.8.3
+      \t\tpython-bitcoinrpc==1.0 && \tgit clone https://github.com/vivocoin/sentinel
+      && \tcd sentinel && \trm -rf \t\ttest \t\tshare \t\t.git \t\t.gitattributes
+      \t\t.gitignore \t\t.travis.yml \t\tLICENSE \t\tREADME.md \t\trequirements.txt
+      \t\tsentinel.conf \t\tbin/dbtest.py \t\tbin/dehex.py \t\tbin/rehex.py"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: build
+  Platform: ""
+  SourceCode: FROM alpine:latest as build
+- As: assemble
+  BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - "apk update && \tapk --no-cache add \t\tlibevent \t\tzeromq \t\tlibressl \t\tpy2-py
+      \t\tpy2-simplejson && \tadduser -s /bin/false -D vivo"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/libboost_system.so.1.62.0
+    - /usr/lib/libboost_filesystem.so.1.62.0
+    - /usr/lib/libboost_program_options-mt.so.1.62.0
+    - /usr/lib/libboost_system-mt.so.1.62.0
+    - /usr/lib/libboost_thread-mt.so.1.62.0
+    - /usr/lib/libboost_chrono-mt.so.1.62.0
+    - /usr/lib/libdb-4.8.so
+    - /usr/lib/libdb_cxx-4.8.so
+    - /usr/lib/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/python2.7/site-packages/inflection.pyc
+    - /usr/lib/python2.7/site-packages/peewee.pyc
+    - /usr/lib/python2.7/site-packages/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/python2.7/site-packages/bitcoinrpc
+    - /usr/lib/python2.7/site-packages/bitcoinrpc
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/python2.7/site-packages/playhouse
+    - /usr/lib/python2.7/site-packages/playhouse
+  - Name: workdir
+    Path: /opt/wallet/vivo
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /root/build/vivo/install/bin/vivod
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - init.sh
+    - bootstrap.sh
+    - function.sh
+    - ./
+  - CmdLine:
+    - chmod 755 init.sh bootstrap.sh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/wallet/vivo/sentinel
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /root/build/sentinel
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - crontab
+    - ./
+  From:
+    Image: alpine:latest
+  Name: assemble
+  Platform: ""
+  SourceCode: FROM alpine:latest as assemble
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: assemble
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /
+  - CmdLine:
+    - chown vivo:vivo -R /home/vivo
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "12845"
+    - "9998"
+  - Name: volume
+    Volumes:
+    - /vivo
+  - Env:
+    - Key: SECRET_OVERRIDE
+      Value: "0"
+    - Key: VIVO_RPCUSER
+      Value: vivo
+    - Key: VIVO_RCPPASSWORD
+      Value: vivo
+    - Key: VIVO_MNPRIVKEY
+      Value: 7eJ7wzphM58uhEW8Uvcii6uweKf2pgZHiuHSiX41RRR6RctTiaS
+    - Key: VIVO_EXTERNALIP
+      Value: 0.0.0.0
+    Name: env
+  - CmdLine:
+    - /opt/wallet/vivo/init.sh
+    - -printtoconsole
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

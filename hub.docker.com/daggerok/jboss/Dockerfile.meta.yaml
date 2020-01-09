@@ -1,0 +1,99 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8u191-jdk-alpine3.8
+  Commands:
+  - Labels:
+    - Key: MAINTAINER
+      Value: '''Maksim Kostromin https://github.com/daggerok'''
+    Name: label
+  - Key: VERSION_ARG
+    Name: arg
+    Value: '''7.2'''
+  - Key: JBOSS_ADMIN_USER_ARG
+    Name: arg
+    Value: '''admin'''
+  - Key: JBOSS_ADMIN_PASSWORD_ARG
+    Name: arg
+    Value: '''Admin.123'''
+  - Env:
+    - Key: VERSION
+      Value: ${VERSION_ARG}
+    - Key: JBOSS_ADMIN_USER
+      Value: ${JBOSS_ADMIN_USER_ARG}
+    - Key: JBOSS_ADMIN_PASSWORD
+      Value: ${JBOSS_ADMIN_PASSWORD_ARG}
+    Name: env
+  - Env:
+    - Key: JBOSS_USER
+      Value: '''jboss'''
+    - Key: JBOSS_FOLDER
+      Value: '"jboss-eap-${VERSION}"'
+    Name: env
+  - Env:
+    - Key: JBOSS_FILE
+      Value: '"${JBOSS_FOLDER}.0.zip"'
+    - Key: JBOSS_USER_HOME
+      Value: '"/home/${JBOSS_USER}"'
+    Name: env
+  - Env:
+    - Key: JBOSS_URL
+      Value: '"https://github.com/daggerok/jboss/releases/download/eap/${JBOSS_FILE}"'
+    - Key: JBOSS_HOME
+      Value: '"${JBOSS_USER_HOME}/${JBOSS_FOLDER}"'
+    Name: env
+  - CmdLine:
+    - 'apk add --no-cache --update busybox-suid bash wget ca-certificates unzip sudo
+      openssh-client shadow  && addgroup ${JBOSS_USER}-group                                                                         &&
+      echo "${JBOSS_USER} ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers                                         &&
+      sed -i ''s/.*requiretty$/Defaults !requiretty/'' /etc/sudoers                                          &&
+      adduser -h ${JBOSS_USER_HOME} -s /bin/bash -D -u 1025 ${JBOSS_USER} ${JBOSS_USER}-group              &&
+      usermod -a -G wheel ${JBOSS_USER}                                                                    &&
+      wget --no-cookies                                                                                            --no-check-certificate                                                                                  --header
+      ''Cookie: oraclelicense=accept-securebackup-cookie''                                                      ''http://download.oracle.com/otn-pub/java/jce/8/jce_policy-8.zip''                               -O
+      /tmp/jce_policy-8.zip                                                                        &&
+      unzip -o /tmp/jce_policy-8.zip -d /tmp                                                               &&
+      mv -f ${JAVA_HOME}/lib/security ${JAVA_HOME}/lib/backup-security || true                             &&
+      mv -f /tmp/UnlimitedJCEPolicyJDK8 ${JAVA_HOME}/lib/security      || true'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${JBOSS_USER}
+  - Name: workdir
+    Path: ${JBOSS_USER_HOME}
+  - Key: JAVA_OPTS_ARGS
+    Name: arg
+    Value: '''  -Djava.net.preferIPv4Stack=true  -XX:+UnlockExperimentalVMOptions  -XX:+UseCGroupMemoryLimitForHeap  -XshowSettings:vm
+      '''
+  - Env:
+    - Key: JAVA_OPTS
+      Value: '"${JAVA_OPTS} ${JAVA_OPTS_ARGS}"'
+    Name: env
+  - CmdLine:
+    - /bin/ash
+    Name: cmd
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+    - "8443"
+    - "9990"
+  - CmdLine:
+    - /bin/bash ${JBOSS_HOME}/bin/standalone.sh
+    Name: entrypoint
+    PrependShell: true
+  - CmdLine:
+    - wget -q ${JBOSS_URL} -O ${JBOSS_USER_HOME}/${JBOSS_FILE}                                             &&
+      unzip ${JBOSS_USER_HOME}/${JBOSS_FILE} -d ${JBOSS_USER_HOME}                                         &&
+      rm -rf ${JBOSS_USER_HOME}/${JBOSS_FILE}                                                              &&
+      sudo apk del --no-cache --no-network --purge busybox-suid unzip shadow                               &&
+      ( sudo rm -rf /var/cache/apk/* /tmp/* || true )                                                      &&
+      ${JBOSS_HOME}/bin/add-user.sh ${JBOSS_ADMIN_USER} ${JBOSS_ADMIN_PASSWORD} --silent                   &&
+      echo "JAVA_OPTS=\"\$JAVA_OPTS -Djboss.bind.address=0.0.0.0 -Djboss.bind.address.management=0.0.0.0\""
+      >> ${JBOSS_HOME}/bin/standalone.conf
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8u191-jdk-alpine3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8u191-jdk-alpine3.8

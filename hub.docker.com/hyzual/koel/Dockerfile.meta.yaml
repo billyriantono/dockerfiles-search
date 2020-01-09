@@ -1,0 +1,141 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: php:7.2.0-apache-stretch
+  Commands:
+  - Key: KOEL_CLONE_SOURCE
+    Name: arg
+    Value: https://github.com/phanan/koel.git
+  - Key: KOEL_VERSION_REF
+    Name: arg
+    Value: v4.1.0
+  - Key: COMPOSER_VERSION
+    Name: arg
+    Value: 1.1.2
+  - Key: NODE_VERSION
+    Name: arg
+    Value: node_8.x
+  - CmdLine:
+    - apt-get update && apt-get install --yes   gnupg=2.1.18-8~deb9u4   apt-transport-https=1.4.9   libpng-dev=1.6.28-1+deb9u1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --silent https://deb.nodesource.com/gpgkey/nodesource.gpg.key     | apt-key
+      add - &&   echo "deb https://deb.nodesource.com/${NODE_VERSION} stretch main"     |
+      tee /etc/apt/sources.list.d/nodesource.list &&   echo "deb-src https://deb.nodesource.com/${NODE_VERSION}
+      stretch main"     | tee --append /etc/apt/sources.list.d/nodesource.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --silent --show-error https://dl.yarnpkg.com/debian/pubkey.gpg     | apt-key
+      add - &&   echo "deb https://dl.yarnpkg.com/debian/ stable main"     | tee /etc/apt/sources.list.d/yarn.list
+    Name: run
+    PrependShell: true
+  - Key: RUNTIME_DEPS
+    Name: arg
+    Value: '"  libxml2-dev   zlib1g-dev   libcurl4-openssl-dev"'
+  - CmdLine:
+    - apt-get update &&   apt-get install --yes   nodejs   yarn   git   ${RUNTIME_DEPS}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "curl -sS https://getcomposer.org/installer     | php --           --install-dir=/usr/local/bin
+      \          --filename=composer           --version=${COMPOSER_VERSION} && \tchmod
+      +x /usr/local/bin/composer &&   composer --version"
+    Name: run
+    PrependShell: true
+  - Key: PHP_BUILD_DEPS
+    Name: arg
+    Value: '"zip mbstring curl xml exif"'
+  - CmdLine:
+    - docker-php-ext-install ${PHP_BUILD_DEPS}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /var/www/.yarn && chown www-data:www-data /var/www/.yarn &&     mkdir
+      /var/www/.composer && chown www-data:www-data /var/www/.composer &&     mkdir
+      /var/www/.cache && chown www-data:www-data /var/www/.cache
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: www-data
+  - CmdLine:
+    - git clone ${KOEL_CLONE_SOURCE} -b ${KOEL_VERSION_REF} --recurse-submodules /tmp/koel
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/koel
+  - CmdLine:
+    - composer install --no-dev --optimize-autoloader
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp/koel/resources/assets && yarn install && cd /tmp/koel/ && yarn install
+      && yarn run production
+    Name: run
+    PrependShell: true
+  From:
+    Image: php:7.2.0-apache-stretch
+  Name: builder
+  Platform: ""
+  SourceCode: FROM php:7.2.0-apache-stretch as builder
+- BaseName: php:7.2.0-apache-stretch
+  Commands:
+  - Key: RUNTIME_DEPS
+    Name: arg
+    Value: '"  libcurl4-openssl-dev   libapache2-mod-xsendfile   zlib1g-dev   libxml2-dev   faad   ffmpeg"'
+  - Key: PHP_RUNTIME_DEPS
+    Name: arg
+    Value: '"  mbstring   curl   xml   zip   pdo   pdo_mysql   exif"'
+  - CmdLine:
+    - apt-get update &&   apt-get install --yes ${RUNTIME_DEPS} &&   docker-php-ext-install
+      ${PHP_RUNTIME_DEPS} &&   apt-get clean
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./apache.conf
+    - /etc/apache2/sites-available/000-default.conf
+  - CmdLine:
+    - a2enmod rewrite
+    Name: run
+    PrependShell: true
+  - Chown: www-data:www-data
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/koel
+    - /var/www/html
+  - Chown: www-data:www-data
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./.htaccess
+    - /var/www/html
+  - Name: volume
+    Volumes:
+    - /media
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - koel-entrypoint
+    - /usr/local/bin/
+  - CmdLine:
+    - koel-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - apache2-foreground
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "80"
+  From:
+    Image: php:7.2.0-apache-stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.2.0-apache-stretch

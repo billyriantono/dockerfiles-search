@@ -1,0 +1,80 @@
+MetaArgs: null
+Stages:
+- BaseName: fedora:latest
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '''Alex Chvatal <yith@yuggoth.space>'''
+    Name: label
+  - Env:
+    - Key: RAILS_ENV
+      Value: production
+    - Key: APPDIR
+      Value: /opt/personae
+    - Key: APPUSER
+      Value: personae
+    - Key: BUILD_DEPS
+      Value: '''ruby-devel redhat-rpm-config gcc patch libffi-devel'''
+    Name: env
+  - CmdLine:
+    - useradd -md ${APPDIR} ${APPUSER}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${APPDIR}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gemfile
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gemfile.lock
+    - .
+  - CmdLine:
+    - dnf -yq install ruby nodejs mariadb-devel ${BUILD_DEPS} &&     gem install --silent
+      bundler rake &&     su ${APPUSER} -c "bundle install --without development test
+      --deployment --quiet" &&     dnf -yq erase ${BUILD_DEPS} &&     dnf -q clean
+      all &&     rm -rf /var/cache/dnf/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/database.yml.example
+    - config/database.yml
+  - CmdLine:
+    - bundle exec rake assets:precompile &&     chown -R ${APPUSER}:${APPUSER} ${APPDIR}
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${APPUSER}
+  - Name: expose
+    Ports:
+    - "9292"
+  - CmdLine:
+    - ./script/personae.sh
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 10000000000
+      Test:
+      - CMD-SHELL
+      - curl -f http://localhost:9292/ || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  From:
+    Image: fedora:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM fedora:latest

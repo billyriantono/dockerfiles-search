@@ -1,0 +1,112 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: douglasconnect/safe-stack-build-container:latest
+  Commands:
+  - CmdLine:
+    - mkdir -p /root/build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root/build
+  - CmdLine:
+    - dotnet tool install -g paket
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dotnet tool install -g fake-cli
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: $PATH:/root/.dotnet/tools
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./paket.dependencies
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./paket.lock
+    - ./
+  - CmdLine:
+    - paket restore
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/
+    - ./src/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./package.json
+    - ./package.json
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./yarn.lock
+    - ./yarn.lock
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./build.fsx
+    - .
+  - Name: workdir
+    Path: /root/build
+  - CmdLine:
+    - fake build -f build.fsx --target Bundle
+    Name: run
+    PrependShell: true
+  From:
+    Image: douglasconnect/safe-stack-build-container:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM douglasconnect/safe-stack-build-container:latest as builder
+- BaseName: mcr.microsoft.com/dotnet/core/aspnet:3.0
+  Commands:
+  - Name: workdir
+    Path: /registry
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /root/build/deploy
+    - .
+  - Name: expose
+    Ports:
+    - 8085/tcp
+  - Name: workdir
+    Path: /registry/Server
+  - CmdLine:
+    - chgrp -R 0 /registry/Server &&     chmod -R g=u /registry/Server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dotnet
+    - Server.dll
+    Name: cmd
+    PrependShell: false
+  - Key: GIT_CHANGESET
+    Name: arg
+    Value: null
+  - CmdLine:
+    - echo "$GIT_CHANGESET" > /git_changeset_info
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: "1023"
+  From:
+    Image: mcr.microsoft.com/dotnet/core/aspnet:3.0
+  Name: ""
+  Platform: ""
+  SourceCode: FROM  mcr.microsoft.com/dotnet/core/aspnet:3.0

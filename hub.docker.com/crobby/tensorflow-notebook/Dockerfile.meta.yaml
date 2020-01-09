@@ -1,0 +1,186 @@
+MetaArgs:
+- DefaultValue: centos:7
+  Key: BASE_IMAGE
+  ProvidedValue: null
+  Value: centos:7
+Stages:
+- BaseName: $BASE_IMAGE
+  Commands:
+  - Key: INSTALL_TFMA
+    Name: arg
+    Value: "yes"
+  - Key: TF_PACKAGE
+    Name: arg
+    Value: https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-1.7.0-cp36-cp36m-linux_x86_64.whl
+  - Key: TF_PACKAGE_PY_27
+    Name: arg
+    Value: https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-1.7.0-cp27-none-linux_x86_64.whl
+  - Name: user
+    User: root
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: NB_USER
+      Value: jovyan
+    Name: env
+  - Env:
+    - Key: NB_UID
+      Value: "1000"
+    Name: env
+  - Env:
+    - Key: HOME
+      Value: /home/$NB_USER
+    Name: env
+  - Env:
+    - Key: CONDA_DIR
+      Value: $HOME/.conda
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $CONDA_DIR/bin:$PATH
+    Name: env
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -c
+  - Name: user
+    User: root
+  - CmdLine:
+    - yum --enablerepo=extras install -y epel-release &&     yum update -y && yum
+      install -y     bzip2     ca-certificates     curl     emacs     gcc     gcc-c++     git     inkscape     pandoc     python     python-devel     redhat-lsb     sudo     unzip     vim     wget     zip     &&
+      yum clean all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - localedef -c -i en_US -f UTF-8 en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: LANGUAGE
+      Value: en_US.UTF-8
+    Name: env
+  - CmdLine:
+    - useradd -m -s /bin/bash -N -u $NB_UID $NB_USER &&     chown -R ${NB_USER}:users
+      /usr/local/bin
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CLOUD_SDK_VERSION
+      Value: 168.0.0
+    Name: env
+  - CmdLine:
+    - export CLOUD_SDK_REPO="cloud-sdk-$(lsb_release -c -s)" &&     echo $'[google-cloud-sdk]\nname=Google
+      Cloud SDK\nbaseurl=https://packages.cloud.google.com/yum/repos/cloud-sdk-el7-x86_64\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=1\ngpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg\n       https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg'
+      > /etc/yum.repos.d/google-cloud-sdk.repo &&     yum --disablerepo="*" --enablerepo="google-cloud-sdk"
+      install -y google-cloud-sdk-${CLOUD_SDK_VERSION} &&     gcloud config set core/disable_usage_reporting
+      true &&     gcloud config set component_manager/disable_update_check true &&     gcloud
+      config set metrics/environment github_docker_image
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R ${NB_USER}:users /home/${NB_USER}
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $NB_USER
+  - Name: workdir
+    Path: $HOME
+  - CmdLine:
+    - mkdir /home/$NB_USER/work
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp &&     wget --quiet https://github.com/krallin/tini/releases/download/v0.10.0/tini
+      &&     echo "1361527f39190a7338a0b434bd8c88ff7233ce7b9a4876f3315c22fce7eca1b0
+      *tini" | sha256sum -c - &&     mv tini /usr/local/bin/tini &&     chmod +x /usr/local/bin/tini
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MINICONDA_VERSION
+      Value: 4.4.10
+    Name: env
+  - CmdLine:
+    - cd /tmp &&     mkdir -p $CONDA_DIR &&     wget --quiet https://repo.continuum.io/miniconda/Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh
+      &&     echo "bec6203dbb2f53011e974e9bf4d46e93 *Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh"
+      | md5sum -c - &&     /bin/bash Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh
+      -f -b -p ${CONDA_DIR} &&     rm Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh
+      &&     conda config --system --prepend channels conda-forge &&     conda config
+      --system --set auto_update_conda false &&     conda config --system --set show_channel_urls
+      true &&     conda update --all &&     conda update conda &&     conda clean
+      -tipsy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install --upgrade pip &&     pip --no-cache-dir install     ${TF_PACKAGE}     jupyter     jupyterhub     jupyterlab     &&
+      conda clean -tipsy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - conda create -n py2 python=2 &&     source activate py2 &&     pip install --upgrade
+      pip &&     pip --no-cache-dir install     ipykernel     ${TF_PACKAGE_PY_27}     tensorflow-transform     tensorflow-serving-api     &&     python
+      -m ipykernel install --user &&     if [[ $INSTALL_TFMA == "yes" ]]; then       pip
+      install --no-cache-dir tensorflow-model-analysis &&       jupyter nbextension
+      install --py --symlink tensorflow_model_analysis --user &&       jupyter nbextension
+      enable --py tensorflow_model_analysis --user;     fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - conda install --quiet --yes     nodejs &&     jupyter labextension install @jupyter-widgets/jupyterlab-manager
+    Name: run
+    PrependShell: true
+  - Chown: jovyan:users
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - $HOME/requirements.txt
+  - CmdLine:
+    - pip --no-cache-dir install -r $HOME/requirements.txt &&     source activate
+      py2 &&     pip --no-cache-dir install -r $HOME/requirements.txt
+    Name: run
+    PrependShell: true
+  - Chown: jovyan:users
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start-singleuser.sh
+    - start-notebook.sh
+    - start.sh
+    - /usr/local/bin/
+  - Chown: jovyan:users
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - jupyter_notebook_config.py
+    - $HOME/.jupyter/
+  - CmdLine:
+    - chmod a+rx /usr/local/bin/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8888"
+  - CmdLine:
+    - tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - start-notebook.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: $BASE_IMAGE
+  Name: ""
+  Platform: ""
+  SourceCode: FROM $BASE_IMAGE

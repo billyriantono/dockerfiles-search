@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- As: shell
+  BaseName: erlang:alpine
+  Commands:
+  - Name: workdir
+    Path: /home
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .env
+    - ./
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps git   && source .env   && git clone
+      --depth=1 --branch ${REPO_BRANCH} --progress ${REPO_URI}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/xqerl
+  - CmdLine:
+    - rebar3
+    - shell
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: erlang:alpine
+  Name: shell
+  Platform: ""
+  SourceCode: FROM erlang:alpine as shell
+- As: rel
+  BaseName: erlang:alpine
+  Commands:
+  - Chown: ""
+    From: shell
+    Name: copy
+    SourcesAndDest:
+    - /home/xqerl
+    - /home/xqerl
+  - Name: workdir
+    Path: /home/xqerl
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps git  && sed -i '/dev_mode/a  {include_src,
+      false},' rebar.config  && rebar3 release -o /usr/local  && rm -rf /home/xqerl  &&
+      apk del .build-deps
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/local/
+  - CmdLine:
+    - /bin/ash
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: erlang:alpine
+  Name: rel
+  Platform: ""
+  SourceCode: FROM erlang:alpine as rel
+- As: min
+  BaseName: alpine:3.9
+  Commands:
+  - Chown: ""
+    From: rel
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/xqerl
+    - /usr/local/xqerl
+  - CmdLine:
+    - apk add --no-cache openssl &&     apk add --no-cache ncurses-libs     && ln
+      -sf /dev/stdout /usr/local/xqerl/log/erl.log
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: XQERL_HOME
+      Value: /usr/local/xqerl
+    Name: env
+  - Name: workdir
+    Path: /usr/local/xqerl
+  - Name: expose
+    Ports:
+    - "8081"
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Name: stopsignal
+    Signal: SIGQUIT
+  - CmdLine:
+    - ./bin/xqerl
+    - foreground
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: min
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as min

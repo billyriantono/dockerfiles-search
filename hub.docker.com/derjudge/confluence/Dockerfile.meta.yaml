@@ -1,0 +1,125 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stretch
+  Commands:
+  - Maintainer: Marc Richter <mail@marc-richter.info>
+    Name: maintainer
+  - Env:
+    - Key: CONF_VERSION
+      Value: 6.11.0
+    Name: env
+  - Env:
+    - Key: CONF_INST
+      Value: /usr/local/atlassian/confluence
+    Name: env
+  - Env:
+    - Key: CONF_HOME
+      Value: ${CONF_INST}-data
+    Name: env
+  - Env:
+    - Key: CONF_SETENV
+      Value: ${CONF_INST}/bin/setenv.sh
+    Name: env
+  - Env:
+    - Key: PG_VERSION
+      Value: "9.6"
+    Name: env
+  - Env:
+    - Key: JAVA_MINOR
+      Value: "8"
+    Name: env
+  - Env:
+    - Key: JAVA_UPDATE
+      Value: "181"
+    Name: env
+  - Env:
+    - Key: JAVA_VERSION
+      Value: 1.${JAVA_MINOR}.0_${JAVA_UPDATE}
+    Name: env
+  - Env:
+    - Key: JAVA_VERSION_FULL
+      Value: ${JAVA_MINOR}u${JAVA_UPDATE}-b13
+    Name: env
+  - Env:
+    - Key: JAVA_MD5
+      Value: 96a7b8442fe848ef90c96a2fad6ed6d1
+    Name: env
+  - Env:
+    - Key: JAVA_HOME
+      Value: /opt/jdk/jdk${JAVA_VERSION}
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - set -x     && apt-get update -q     && apt-get dist-upgrade -y -q     && apt-get
+      install -y -q apt-utils     && apt-get install -y -q postgresql-${PG_VERSION}
+      postgresql-client wget curl locales-all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && mkdir -p "${CONF_HOME}" "${CONF_INST}"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && pg_dropcluster ${PG_VERSION} main     && pg_createcluster --locale='en_US.UTF-8'
+      ${PG_VERSION} main     && sed -i'' 's/peer/trust/g' /etc/postgresql/${PG_VERSION}/main/pg_hba.conf     &&
+      sed -i'' 's/md5/trust/g' /etc/postgresql/${PG_VERSION}/main/pg_hba.conf     &&
+      pg_ctlcluster ${PG_VERSION} main start -- -w     && /usr/bin/psql -U postgres
+      -c "CREATE DATABASE confluence ENCODING = 'UTF8';"     && pg_ctlcluster ${PG_VERSION}
+      main stop -- -m fast
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - startup.sh
+    - /startup.sh
+  - CmdLine:
+    - chmod +x /startup.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && curl -Ls "https://www.atlassian.com/software/confluence/downloads/binary/atlassian-confluence-${CONF_VERSION}.tar.gz"     |
+      tar -xz --directory "${CONF_INST}/" --strip-components=1     && chmod -R 777
+      "${CONF_INST}/temp"     && chmod -R 777 "${CONF_INST}/logs"     && chmod -R
+      777 "${CONF_INST}/work"     && echo -e "\nconfluence.home=${CONF_HOME}" >> "${CONF_INST}/confluence/WEB-INF/classes/confluence-init.properties"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && sed -i'' 's#Xmx1024m#Xmx2048m#g' ${CONF_SETENV}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'mkdir -p /opt/jdk     && wget --no-cookies --no-check-certificate -q --header
+      "Cookie: oraclelicense=accept-securebackup-cookie"         http://download.oracle.com/otn-pub/java/jdk/${JAVA_VERSION_FULL}/${JAVA_MD5}/jdk-${JAVA_MINOR}u${JAVA_UPDATE}-linux-x64.tar.gz
+      -O -         | tar xfz - -C /opt/jdk'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - update-alternatives --install /usr/bin/java java /opt/jdk/jdk${JAVA_VERSION}/bin/java
+      100
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - update-alternatives --install /usr/bin/javac javac /opt/jdk/jdk${JAVA_VERSION}/bin/javac
+      100
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8090"
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - /startup.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch

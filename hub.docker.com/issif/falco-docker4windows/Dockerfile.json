@@ -1,0 +1,106 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "kernelsrc",
+      "BaseName": "linuxkit/kernel:4.9.184",
+      "SourceCode": "FROM linuxkit/kernel:4.9.184 AS kernelsrc",
+      "Platform": "",
+      "As": "kernelsrc",
+      "From": {
+        "Image": "linuxkit/kernel:4.9.184"
+      },
+      "Commands": null
+    },
+    {
+      "Name": "modulesrc",
+      "BaseName": "alpine:latest",
+      "SourceCode": "FROM alpine:latest AS modulesrc",
+      "Platform": "",
+      "As": "modulesrc",
+      "From": {
+        "Image": "alpine:latest"
+      },
+      "Commands": [
+        {
+          "Maintainer": "Thomas Labarussias \u003cissif+falco@gadz.org\u003e",
+          "Name": "maintainer"
+        },
+        {
+          "Key": "SYSDIGVER",
+          "Name": "arg",
+          "Value": "0.26.4"
+        },
+        {
+          "Key": "FALCOVER",
+          "Name": "arg",
+          "Value": "0.17.0"
+        },
+        {
+          "Key": "KERNELVER",
+          "Name": "arg",
+          "Value": "4.9.184"
+        },
+        {
+          "Chown": "",
+          "From": "kernelsrc",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/kernel-dev.tar",
+            "/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache --update wget ca-certificates    build-base gcc abuild binutils    bc    cmake    git    autoconf \u0026\u0026    export KERNELDIR=/usr/src/linux-headers-$KERNELVER-linuxkit/ \u0026\u0026    tar xf /kernel-dev.tar \u0026\u0026    cd $KERNELDIR \u0026\u0026    find /proc -type f -name \"config.gz\" -exec cp {} . \\; \u0026\u0026    make olddefconfig \u0026\u0026    mkdir -p /falco/build \u0026\u0026    mkdir /src \u0026\u0026    cd /src \u0026\u0026    wget https://github.com/falcosecurity/falco/archive/$FALCOVER.tar.gz \u0026\u0026    tar zxf $FALCOVER.tar.gz \u0026\u0026    wget https://github.com/draios/sysdig/archive/$SYSDIGVER.tar.gz \u0026\u0026    tar zxf $SYSDIGVER.tar.gz \u0026\u0026    mv sysdig-$SYSDIGVER sysdig \u0026\u0026    cd /falco/build \u0026\u0026    cmake /src/falco-$FALCOVER \u0026\u0026    make driver \u0026\u0026    apk del wget ca-certificates    build-base gcc abuild binutils    bc    cmake    git    autoconf"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "falcosecurity/falco:0.17.0",
+      "SourceCode": "FROM falcosecurity/falco:0.17.0",
+      "Platform": "",
+      "From": {
+        "Image": "falcosecurity/falco:0.17.0"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "modulesrc",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/falco/build/driver/falco-probe.ko",
+            "/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./docker-entrypoint.sh",
+            "/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/docker-entrypoint.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "CmdLine": [
+            "/usr/bin/falco"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

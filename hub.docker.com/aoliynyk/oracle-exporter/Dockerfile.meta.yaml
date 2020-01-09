@@ -1,0 +1,101 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:stretch
+  Commands:
+  - CmdLine:
+    - apt-get -qq update &&     apt-get install --no-install-recommends --allow-unauthenticated
+      -qq libaio1 rpm wget &&     wget --no-check-certificate https://raw.githubusercontent.com/bumpx/oracle-instantclient/master/oracle-instantclient12.2-basic-12.2.0.1.0-1.x86_64.rpm
+      &&     wget --no-check-certificate https://raw.githubusercontent.com/bumpx/oracle-instantclient/master/oracle-instantclient12.2-devel-12.2.0.1.0-1.x86_64.rpm
+      &&     rpm -Uvh --nodeps oracle*rpm &&     echo /usr/lib/oracle/12.2/client64/lib
+      | tee /etc/ld.so.conf.d/oracle.conf &&     ldconfig
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - oci8.pc
+    - /usr/share/pkgconfig/oci8.pc
+  - CmdLine:
+    - go get -d github.com/freenetdigital/prometheus_oracle_exporter
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd $GOPATH/src/github.com/freenetdigital/prometheus_oracle_exporter/ && GOOS=linux
+      go build -ldflags "-s -w" -o /app .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:stretch
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:stretch AS builder
+- BaseName: ubuntu:18.04
+  Commands:
+  - Maintainer: Seth Miller <seth@sethmiller.me>
+    Name: maintainer
+  - CmdLine:
+    - apt-get -qq update &&     apt-get install --no-install-recommends -qq libaio1
+      rpm wget -y &&     wget --no-check-certificate https://raw.githubusercontent.com/bumpx/oracle-instantclient/master/oracle-instantclient12.2-basic-12.2.0.1.0-1.x86_64.rpm
+      &&     rpm -Uvh --nodeps oracle*rpm &&     rm -f oracle*rpm &&     apt-get remove
+      -y rpm &&     apt-get -y autoremove && apt-get -y autoclean && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: /usr/lib/oracle/12.2/client64/lib
+    Name: env
+  - Env:
+    - Key: NLS_LANG
+      Value: AMERICAN_AMERICA.UTF8
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /
+  - Key: CONFD_VERSION
+    Name: arg
+    Value: '"0.15.0"'
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/kelseyhightower/confd/releases/download/v${CONFD_VERSION}/confd-${CONFD_VERSION}-linux-amd64
+    - /usr/bin/confd
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - entrypoint.sh
+    - /
+  - CmdLine:
+    - chmod +x /usr/bin/confd /entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /etc/confd/conf.d && mkdir -p /etc/confd/templates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./conf.d
+    - /etc/confd/conf.d
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./templates
+    - /etc/confd/templates
+  - Name: expose
+    Ports:
+    - "9161"
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

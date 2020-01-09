@@ -1,0 +1,173 @@
+MetaArgs: null
+Stages:
+- BaseName: alexcheng/apache2-php7:7.1.11
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"pzimmerman@bargreen.com"'
+    Name: label
+  - Labels:
+    - Key: version
+      Value: '"2.2.5"'
+    Name: label
+  - Labels:
+    - Key: description
+      Value: '"Magento 2.3, forked from docker-magento2 - alexcheng1982"'
+    Name: label
+  - Env:
+    - Key: MAGENTO_VERSION
+      Value: "2.3"
+    Name: env
+  - Env:
+    - Key: INSTALL_DIR
+      Value: /var/www/html
+    Name: env
+  - Env:
+    - Key: COMPOSER_HOME
+      Value: /var/www/.composer/
+    Name: env
+  - CmdLine:
+    - curl -sS https://getcomposer.org/installer | php     && mv composer.phar /usr/local/bin/composer
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./auth.json
+    - $COMPOSER_HOME
+  - CmdLine:
+    - requirements="libpng12-dev libmcrypt-dev libmcrypt4 libcurl3-dev libfreetype6
+      libjpeg-turbo8 libjpeg-turbo8-dev libpng12-dev libfreetype6-dev libicu-dev libxslt1-dev"     &&
+      apt-get update     && apt-get install -y $requirements     && apt-get install
+      -y git     && apt-get install -y acl     && rm -rf /var/lib/apt/lists/*     &&
+      docker-php-ext-install pdo_mysql     && docker-php-ext-configure gd --with-freetype-dir=/usr/include/
+      --with-jpeg-dir=/usr/include/     && docker-php-ext-install gd     && docker-php-ext-install
+      mcrypt     && docker-php-ext-install mbstring     && docker-php-ext-install
+      zip     && docker-php-ext-install intl     && docker-php-ext-install xsl     &&
+      docker-php-ext-install soap     && docker-php-ext-install bcmath     && requirementsToRemove="libpng12-dev
+      libmcrypt-dev libcurl3-dev libpng12-dev libfreetype6-dev libjpeg-turbo8-dev"     &&
+      apt-get purge --auto-remove -y $requirementsToRemove
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chsh -s /bin/bash www-data
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R www-data:www-data /var/www
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod g+s /var/www
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - setfacl -d -m g::rwx /var/www/html
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - su www-data -c "cd $INSTALL_DIR && git clone -b 2.3-develop https://github.com/magento/magento2.git
+      --depth 1 ."
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - su www-data -c "cd $INSTALL_DIR && composer install"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - su www-data -c "cd $INSTALL_DIR && composer config repositories.magento composer
+      https://repo.magento.com/"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./install-magento
+    - /usr/local/bin/install-magento
+  - CmdLine:
+    - chmod +x /usr/local/bin/install-magento
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./install-venia
+    - /usr/local/bin/install-venia
+  - CmdLine:
+    - chmod +x /usr/local/bin/install-venia
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./install-sampledata
+    - /usr/local/bin/install-sampledata
+  - CmdLine:
+    - chmod +x /usr/local/bin/install-sampledata
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./composer.json
+    - $INSTALL_DIR
+  - CmdLine:
+    - chown www-data:www-data $INSTALL_DIR/composer.json
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod rewrite
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod ssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /etc/apache2/ssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /etc/apache2/ssl && openssl req -subj "/C=US/ST=WA/L=WA/O=Dockertest/OU=IT/CN=local.magento"
+      -x509 -nodes -days 1095 -newkey rsa:2048 -out server.crt -keyout server.key
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./ssl-config.conf
+    - /etc/apache2/sites-enabled/ssl-config.conf
+  - CmdLine:
+    - echo "memory_limit=2048M" > /usr/local/etc/php/conf.d/memory-limit.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $INSTALL_DIR
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - crontab
+    - /etc/cron.d/magento2-cron
+  - CmdLine:
+    - chmod 0644 /etc/cron.d/magento2-cron     && crontab -u www-data /etc/cron.d/magento2-cron
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/sbin/apache2ctl -D FOREGROUND
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alexcheng/apache2-php7:7.1.11
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alexcheng/apache2-php7:7.1.11

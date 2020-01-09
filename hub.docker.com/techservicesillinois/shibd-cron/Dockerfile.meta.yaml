@@ -1,0 +1,126 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.11-alpine
+  Commands:
+  - Env:
+    - Key: SRC
+      Value: get-sealer-keys
+    Name: env
+  - CmdLine:
+    - apk update && apk add git ca-certificates make upx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - addgroup -g 998 shibd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -h /var/run/shibboleth -g "Shibboleth SP daemon" -u 999 -S -G shibd
+      shibd
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - $SRC/*.go
+    - $SRC/Makefile
+    - $GOPATH/src/
+  - Name: workdir
+    Path: $GOPATH/src
+  - CmdLine:
+    - make deps && make && make compress
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine as builder
+- As: healthcheck-builder
+  BaseName: golang:1.11-alpine
+  Commands:
+  - Env:
+    - Key: SRC
+      Value: healthcheck
+    Name: env
+  - CmdLine:
+    - apk update && apk add git make upx
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - $SRC/*.go
+    - $SRC/Makefile
+    - $GOPATH/src/
+  - Name: workdir
+    Path: $GOPATH/src
+  - CmdLine:
+    - make deps && make && make compress
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-alpine
+  Name: healthcheck-builder
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine as healthcheck-builder
+- BaseName: scratch
+  Commands:
+  - Env:
+    - Key: KEYS
+      Value: /var/shib-keys/keys
+    - Key: SCHEDULE
+      Value: '"@midnight"'
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - cron.tar.gz
+    - /
+  - Name: volume
+    Volumes:
+    - /var/shib-keys/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/passwd
+    - /etc/group
+    - /etc/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/get-sealer-keys
+    - /
+  - Chown: ""
+    From: healthcheck-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/healthcheck
+    - /
+  - Name: user
+    User: shibd
+  - Health:
+      Test:
+      - CMD
+      - /healthcheck
+    Name: healthcheck
+  - CmdLine:
+    - /get-sealer-keys
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

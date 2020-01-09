@@ -1,0 +1,141 @@
+MetaArgs: null
+Stages:
+- As: bootstrap
+  BaseName: alpine
+  Commands:
+  - Maintainer: root@slach.eu
+    Name: maintainer
+  - Key: archlinux_mirror_url
+    Name: arg
+    Value: https://mirror.rackspace.com/archlinux
+  - Key: archlinux_bootstrap_filename
+    Name: arg
+    Value: archlinux-bootstrap-2019.10.01-x86_64.tar.gz
+  - Key: archlinux_bootstrap_uri
+    Name: arg
+    Value: iso/2019.10.01/${archlinux_bootstrap_filename}
+  - Key: archlinux_bootstrap_url
+    Name: arg
+    Value: ${archlinux_mirror_url}/${archlinux_bootstrap_uri}
+  - CmdLine:
+    - apk add --no-cache gnupg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -O ${archlinux_bootstrap_filename}.sig ${archlinux_bootstrap_url}.sig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -O ${archlinux_bootstrap_filename} ${archlinux_bootstrap_url}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - key
+    - /root/key
+  - CmdLine:
+    - gpg --import /root/key/*.gpg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gpg --keyserver-options auto-key-retrieve --verify ${archlinux_bootstrap_filename}.sig
+      ${archlinux_bootstrap_filename}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - md5sum ${archlinux_bootstrap_filename}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sha1sum ${archlinux_bootstrap_filename}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar zxf ${archlinux_bootstrap_filename}
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: bootstrap
+  Platform: ""
+  SourceCode: FROM alpine as bootstrap
+- BaseName: scratch
+  Commands:
+  - Maintainer: root@slach.eu
+    Name: maintainer
+  - Key: user_login
+    Name: arg
+    Value: archstrap
+  - Chown: ""
+    From: bootstrap
+    Name: copy
+    SourcesAndDest:
+    - /root.x86_64
+    - .
+  - CmdLine:
+    - cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.bck
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cat /etc/pacman.d/mirrorlist.bck | awk -F# '{ print $2 }' > /etc/pacman.d/mirrorlist
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pacman-key --init && pacman-key --populate archlinux
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pacman -Syu --noconfirm && pacman -Sy --noconfirm git reflector
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - reflector --latest 16 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /etc
+  - CmdLine:
+    - git clone --no-checkout https://github.com/sebastianlach/archstrap-etc.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv archstrap-etc/.git .git && rmdir archstrap-etc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git checkout HEAD /etc/pacman.d/pkglist
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - awk -F'[/ ]' '! /^local\// { print $2 }' /etc/pacman.d/pkglist |     xargs pacman
+      -Sy --noconfirm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -m -g users -G wheel,docker -s /bin/zsh ${user_login}
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${user_login}
+  - Name: workdir
+    Path: /home/${user_login}
+  - CmdLine:
+    - git clone --no-checkout https://github.com/sebastianlach/archstrap-home.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv archstrap-home/.git .git &&     rmdir archstrap-home &&     git reset --hard
+      HEAD &&     git submodule update --init --recursive
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - zsh
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

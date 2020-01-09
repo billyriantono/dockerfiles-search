@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- As: node_builder
+  BaseName: junxy/clash:res-ui
+  Commands: null
+  From:
+    Image: junxy/clash:res-ui
+  Name: node_builder
+  Platform: ""
+  SourceCode: FROM junxy/clash:res-ui as node_builder
+- As: go_builder
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache make git &&     wget http://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz
+      -O /tmp/GeoLite2-Country.tar.gz &&     tar zxvf /tmp/GeoLite2-Country.tar.gz
+      -C /tmp &&     mv /tmp/GeoLite2-Country_*/GeoLite2-Country.mmdb /Country.mmdb
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /clash-src
+  - CmdLine:
+    - git clone https://github.com/Dreamacro/clash.git -b dev /clash-src
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/$(VERSION)/$(VERSION)-containerd/' Makefile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - head -n 10 Makefile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go mod download &&     make linux-amd64 &&     mv ./bin/clash-linux-amd64 /clash
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /clash -v
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: go_builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as go_builder
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk add --no-cache tzdata ca-certificates     && cp /usr/share/zoneinfo/Asia/Taipei
+      /etc/localtime     && echo "Asia/Taipei" > /etc/timezone     && apk del tzdata
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: go_builder
+    Name: copy
+    SourcesAndDest:
+    - /Country.mmdb
+    - /root/.config/clash/
+  - Chown: ""
+    From: go_builder
+    Name: copy
+    SourcesAndDest:
+    - /clash
+    - /
+  - Chown: ""
+    From: node_builder
+    Name: copy
+    SourcesAndDest:
+    - /clash_ui
+    - /root/.config/clash/clash_ui
+  - CmdLine:
+    - ls -al /root/.config/clash/; ls -al /root/.config/clash/clash_ui
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /clash
+    - -d
+    - /root/.config/clash/
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

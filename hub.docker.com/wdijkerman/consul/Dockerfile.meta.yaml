@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.10
+  Commands:
+  - Key: CONSUL_USERID
+    Name: arg
+    Value: null
+  - Env:
+    - Key: CONSUL_VERSION
+      Value: 1.6.2
+    - Key: CONSUL_USERNAME
+      Value: '"consul"'
+    - Key: CONSUL_USERID
+      Value: ${CONSUL_USERID:-1050}
+    Name: env
+  - CmdLine:
+    - apk --update --no-cache add tini curl bash libcap python net-tools ca-certificates
+      &&     rm -rf /var/cache/apk/* &&     mkdir /consul
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/bin/start-consul.sh
+    - /bin/start-consul.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/etc/config.json
+    - /consul/config.json
+  - CmdLine:
+    - adduser -D -u $CONSUL_USERID $CONSUL_USERNAME &&     curl -sSLo /tmp/consul.zip
+      https://releases.hashicorp.com/consul/$CONSUL_VERSION/consul_${CONSUL_VERSION}_linux_amd64.zip
+      &&     unzip -d /bin /tmp/consul.zip &&     rm -f /tmp/consul.zip &&     mkdir
+      -p /consul/data /consul/ui /consul/config &&     chown -R consul /consul &&     chmod
+      644 /consul/config.json &&     setcap cap_ipc_lock=+ep $(readlink -f /bin/consul)
+      &&     setcap "cap_net_bind_service=+ep" /bin/consul &&     chmod +x /bin/start-consul.sh
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $CONSUL_USERNAME
+  - Name: expose
+    Ports:
+    - "53"
+    - 53/udp
+    - "8300"
+    - "8301"
+    - 8301/udp
+    - "8302"
+    - 8302/udp
+    - "8400"
+    - "8500"
+  - Name: volume
+    Volumes:
+    - /consul/data
+    - /consul/config
+  - Health:
+      Interval: 10000000000
+      Test:
+      - CMD-SHELL
+      - curl -sf http://localhost:8500/ || exit 1
+      Timeout: 5000000000
+    Name: healthcheck
+  - Env:
+    - Key: SHELL
+      Value: /bin/bash
+    Name: env
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /bin/start-consul.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine: []
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10

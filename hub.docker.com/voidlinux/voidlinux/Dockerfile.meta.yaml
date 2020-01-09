@@ -1,0 +1,87 @@
+MetaArgs: null
+Stages:
+- As: stage0
+  BaseName: alpine:3.9
+  Commands:
+  - Key: REPOSITORY
+    Name: arg
+    Value: https://alpha.de.repo.voidlinux.org
+  - Key: ARCH
+    Name: arg
+    Value: x86_64
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - keys/*
+    - /target/var/db/xbps/keys/
+  - CmdLine:
+    - apk add ca-certificates curl &&   curl ${REPOSITORY}/static/xbps-static-latest.$(uname
+      -m)-musl.tar.xz |     tar Jx &&   XBPS_ARCH=${ARCH} xbps-install.static -yMU     --repository=${REPOSITORY}/current     --repository=${REPOSITORY}/current/musl     -r
+      /target     base-minimal
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: stage0
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as stage0
+- As: stage1
+  BaseName: scratch
+  Commands:
+  - Key: REPOSITORY
+    Name: arg
+    Value: https://alpha.de.repo.voidlinux.org
+  - Key: ARCH
+    Name: arg
+    Value: x86_64
+  - Key: BASEPKG
+    Name: arg
+    Value: base-minimal
+  - Key: ADDINS
+    Name: arg
+    Value: ""
+  - Chown: ""
+    From: stage0
+    Name: copy
+    SourcesAndDest:
+    - /target
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - keys/*
+    - /target/var/db/xbps/keys/
+  - CmdLine:
+    - xbps-reconfigure -a &&   mkdir -p /target/var/cache && ln -s /var/cache/xbps
+      /target/var/cache/xbps &&   XBPS_ARCH=${ARCH} xbps-install -yMU     --repository=${REPOSITORY}/current     --repository=${REPOSITORY}/current/musl     -r
+      /target     ${BASEPKG} ${ADDINS}
+    Name: run
+    PrependShell: true
+  From:
+    Scratch: true
+  Name: stage1
+  Platform: ""
+  SourceCode: FROM scratch as stage1
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: stage1
+    Name: copy
+    SourcesAndDest:
+    - /target
+    - /
+  - CmdLine:
+    - xbps-reconfigure -a &&   rm -r /var/cache/xbps
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

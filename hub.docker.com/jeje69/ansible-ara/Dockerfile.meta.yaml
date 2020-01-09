@@ -1,0 +1,48 @@
+MetaArgs: null
+Stages:
+- BaseName: python:3-alpine
+  Commands:
+  - CmdLine:
+    - set -xe     && apk add --no-cache --purge -u sudo nodejs npm curl ca-certificates
+      openssh-client openssl     && apk --update add --virtual .build-dependencies
+      python-dev libffi-dev openssl-dev build-base git     && pip install --no-cache
+      --upgrade pyyaml ara[server]     && mkdir -p /workingdir/conf/server     &&
+      mkdir -p /workingdir/www/logs     && cd /workingdir && git clone https://github.com/ansible-community/ara-web
+      && cd ara-web     && npm install     && apk del --purge .build-dependencies     &&
+      rm -rf /var/cache/apk/* /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - settings.yaml
+    - /workingdir/conf/server/
+  - Name: expose
+    Ports:
+    - "3000"
+    - "8000"
+  - Name: volume
+    Volumes:
+    - /workingdir/conf
+  - Env:
+    - Key: ARA_SETTINGS
+      Value: '"/workingdir/conf/server/settings.yaml"'
+    Name: env
+  - Env:
+    - Key: ARA_WEB_PUBLIC_IP
+      Value: '"localhost"'
+    Name: env
+  - Name: workdir
+    Path: /workingdir/ara-web
+  - CmdLine:
+    - /usr/local/bin/ara-manage migrate && sed -i "s/.*apiURL.*/\ \"apiURL\"\:\ \"http\:\/\/${ARA_WEB_PUBLIC_IP}\:8000\"/g"
+      /workingdir/ara-web/public/config.json && /usr/local/bin/ara-manage runserver
+      0.0.0.0:8000 & npm start
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: python:3-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3-alpine

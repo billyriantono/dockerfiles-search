@@ -1,0 +1,151 @@
+MetaArgs: null
+Stages:
+- As: cpp-builddeps
+  BaseName: debian:buster
+  Commands:
+  - CmdLine:
+    - true       && apt-get update       && apt-get install -y           autoconf           bison           build-essential           cmake           curl           flex           g++           gnupg           libboost-dev           libboost-filesystem-dev           libboost-regex-dev           libboost-system-dev           libstdc++6-8-dbg           pkg-config           python           tar       &&
+      true
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - true       && mkdir -p /src       && cd /src       && curl -Oapache-arrow-0.15.1.tar.gz
+      --location http://archive.apache.org/dist/arrow/arrow-0.15.1/apache-arrow-0.15.1.tar.gz       &&
+      tar zxf apache-arrow-0.15.1.tar.gz       && cd apache-arrow-0.15.1/cpp       &&
+      cmake -DARROW_COMPUTE=ON -DARROW_OPTIONAL_INSTALL=ON -DARROW_BUILD_STATIC=ON
+      -DARROW_BUILD_SHARED=OFF -DCMAKE_BUILD_TYPE=Release .       && make -j4 arrow       &&
+      make install
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PKG_CONFIG_PATH
+      Value: '"/src/apache-arrow-0.15.1/cpp/jemalloc_ep-prefix/src/jemalloc_ep/dist/lib/pkgconfig:/src/apache-arrow-0.15.1/cpp/gflags_ep-prefix/src/gflags_ep/lib/pkgconfig"'
+    Name: env
+  - Env:
+    - Key: CMAKE_PREFIX_PATH
+      Value: '"/src/apache-arrow-0.15.1/cpp/double-conversion_ep/src/double-conversion_ep"'
+    Name: env
+  From:
+    Image: debian:buster
+  Name: cpp-builddeps
+  Platform: ""
+  SourceCode: FROM debian:buster AS cpp-builddeps
+- As: python-dev
+  BaseName: python:3.7.4-buster
+  Commands:
+  - CmdLine:
+    - pip install pyarrow==0.15.1 pytest pandas==0.25.3
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  From:
+    Image: python:3.7.4-buster
+  Name: python-dev
+  Platform: ""
+  SourceCode: FROM python:3.7.4-buster AS python-dev
+- As: cpp-build
+  BaseName: cpp-builddeps
+  Commands:
+  - CmdLine:
+    - mkdir -p /app/src
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - vendor/
+    - /app/vendor/
+  - CmdLine:
+    - touch /app/src/csv-to-arrow.cc /app/src/json-to-arrow.cc /app/src/json-warnings.cc
+      /app/src/json-table-builder.cc /app/src/common.cc
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - CMakeLists.txt
+    - /app
+  - CmdLine:
+    - cmake -DCMAKE_BUILD_TYPE=Release .
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/
+    - /app/src/
+  - CmdLine:
+    - make -j4
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: cpp-builddeps
+  Name: cpp-build
+  Platform: ""
+  SourceCode: FROM cpp-builddeps AS cpp-build
+- As: test
+  BaseName: python-dev
+  Commands:
+  - Chown: ""
+    From: cpp-build
+    Name: copy
+    SourcesAndDest:
+    - /app/csv-to-arrow
+    - /usr/bin/csv-to-arrow
+  - Chown: ""
+    From: cpp-build
+    Name: copy
+    SourcesAndDest:
+    - /app/json-to-arrow
+    - /usr/bin/json-to-arrow
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tests/
+    - /app/tests/
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - pytest -vv
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: python-dev
+  Name: test
+  Platform: ""
+  SourceCode: FROM python-dev AS test
+- As: dist
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: cpp-build
+    Name: copy
+    SourcesAndDest:
+    - /app/csv-to-arrow
+    - /usr/bin/csv-to-arrow
+  - Chown: ""
+    From: cpp-build
+    Name: copy
+    SourcesAndDest:
+    - /app/json-to-arrow
+    - /usr/bin/json-to-arrow
+  From:
+    Scratch: true
+  Name: dist
+  Platform: ""
+  SourceCode: FROM scratch AS dist

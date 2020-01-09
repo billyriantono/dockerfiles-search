@@ -1,0 +1,112 @@
+MetaArgs:
+- DefaultValue: xebialabs/xl-release:9.0.6
+  Key: XLR_BASE
+  ProvidedValue: null
+  Value: xebialabs/xl-release:9.0.6
+Stages:
+- As: source
+  BaseName: $XLR_BASE
+  Commands: null
+  From:
+    Image: $XLR_BASE
+  Name: source
+  Platform: ""
+  SourceCode: FROM $XLR_BASE as source
+- As: builder
+  BaseName: groovy:2.5.8-jdk8
+  Commands:
+  - Name: user
+    User: root
+  - Env:
+    - Key: APP_ROOT
+      Value: /opt/xebialabs
+    - Key: APP_HOME
+      Value: /opt/xebialabs/xl-release-server
+    Name: env
+  - Name: workdir
+    Path: $APP_ROOT
+  - Chown: ""
+    From: source
+    Name: copy
+    SourcesAndDest:
+    - $APP_HOME
+    - $APP_HOME
+  - Chown: ""
+    From: source
+    Name: copy
+    SourcesAndDest:
+    - $APP_ROOT/db-libs
+    - dblibs
+  - Chown: ""
+    From: source
+    Name: copy
+    SourcesAndDest:
+    - ${APP_ROOT}/tini
+    - ${APP_HOME}/bin/tini
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - resources/reset.groovy
+    - reset.groovy
+  - CmdLine:
+    - chmod ugo+x ${APP_HOME}/bin/tini &&     groovy reset.groovy
+    Name: run
+    PrependShell: true
+  From:
+    Image: groovy:2.5.8-jdk8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM groovy:2.5.8-jdk8 AS builder
+- BaseName: openjdk:8-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"rnaidoo@xebialabs.com"'
+    Name: label
+  - Env:
+    - Key: USER_ID
+      Value: xebialabs
+    - Key: APP_ROOT
+      Value: /opt/xebialabs
+    - Key: APP_HOME
+      Value: /opt/xebialabs/xl-release-server
+    - Key: GROOVY_HOME
+      Value: /opt/groovy
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - ${APP_HOME}
+    - ${APP_HOME}
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - ${GROOVY_HOME}
+    - ${GROOVY_HOME}
+  - CmdLine:
+    - apk --no-cache add curl &&     ln -s "${GROOVY_HOME}/bin/groovy" /usr/bin/groovy
+      &&     addgroup -S ${USER_ID} && adduser -S -G ${USER_ID} ${USER_ID}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${APP_HOME}
+  - Name: expose
+    Ports:
+    - "5516"
+  - CmdLine: null
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /opt/xebialabs/xl-release-server/bin/tini
+    - --
+    - /opt/xebialabs/xl-release-server/bin/run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-alpine

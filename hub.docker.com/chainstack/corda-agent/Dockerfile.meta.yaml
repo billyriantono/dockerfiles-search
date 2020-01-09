@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- BaseName: python:3.7-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache openssl-dev libffi-dev gcc musl-dev python3-dev make libevent
+      curl git
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: POETRY_VERSION
+      Value: 0.12.17
+    Name: env
+  - Key: ENVIRONMENT
+    Name: arg
+    Value: prod
+  - Key: user
+    Name: arg
+    Value: corda
+  - Key: group
+    Name: arg
+    Value: corda
+  - Key: uid
+    Name: arg
+    Value: "1000"
+  - Key: gid
+    Name: arg
+    Value: "1000"
+  - Key: HOME
+    Name: arg
+    Value: /app/
+  - Key: CODE_DIR
+    Name: arg
+    Value: ${HOME}code/
+  - Name: workdir
+    Path: $CODE_DIR
+  - CmdLine:
+    - addgroup -g ${gid} ${group}   && adduser -h "$HOME" -u ${uid} -G ${group} -s
+      /bin/bash -D ${user}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - poetry.lock
+    - pyproject.toml
+    - $CODE_DIR
+  - CmdLine:
+    - set -o pipefail    && curl -sSL https://raw.githubusercontent.com/sdispater/poetry/${POETRY_VERSION}/get-poetry.py
+      |    python /dev/stdin --version ${POETRY_VERSION}    && . $HOME/.poetry/env    &&
+      poetry config settings.virtualenvs.create false    && (if [ "${ENVIRONMENT}"
+      = "prod" ];         then poetry install --no-dev;         else poetry install;        fi)
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $CODE_DIR
+  - CmdLine:
+    - chown -R corda:corda $HOME
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: corda
+  - Name: expose
+    Ports:
+    - "5000"
+  - CmdLine:
+    - gunicorn
+    - --bind
+    - 0.0.0.0:5000
+    - src.agent:init()
+    - -k gevent
+    - --access-logfile=-
+    - --error-logfile=-
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3.7-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.7-alpine

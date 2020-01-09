@@ -1,0 +1,156 @@
+MetaArgs: null
+Stages:
+- As: knot-dns-build
+  BaseName: debian:stable
+  Commands:
+  - Key: KNOT_DNS_VERSION
+    Name: arg
+    Value: v2.8.0
+  - Env:
+    - Key: KNOT_DNS_BUILD_DEPS
+      Value: "git-core build-essential libtool autoconf pkg-config \tlibgnutls28-dev\tlibprotobuf-dev
+        libprotobuf-c-dev libfstrm-dev"
+    Name: env
+  - Env:
+    - Key: KNOT_RESOLVER_BUILD_DEPS
+      Value: "build-essential pkg-config bsdmainutils liblmdb-dev \tlibluajit-5.1-dev
+        libuv1-dev libprotobuf-dev libprotobuf-c-dev \tlibfstrm-dev luajit lua-sec
+        lua-socket"
+    Name: env
+  - Env:
+    - Key: BUILDENV_DEPS
+      Value: ${KNOT_DNS_BUILD_DEPS} ${KNOT_RESOLVER_BUILD_DEPS}
+    Name: env
+  - CmdLine:
+    - echo "deb http://deb.debian.org/debian stretch-backports main" > /etc/apt/sources.list.d/backports.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get update -qq && \tapt-get -y -qqq install ${BUILDENV_DEPS} && \tapt-get
+      -y -qqq install -t stretch-backports meson"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "git clone -b $KNOT_DNS_VERSION --depth=1 https://gitlab.labs.nic.cz/knot/knot-dns.git
+      /tmp/knot-dns && \tcd /tmp/knot-dns && \tautoreconf -if && \t./configure --disable-static
+      --disable-fastparser --disable-documentation \t\t--disable-daemon --disable-utilities
+      --with-lmdb=no && \tmake -j4 install && \tldconfig"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir -p /tmp/root/usr/local/include /tmp/root/usr/local/lib /tmp/root/usr/local/lib/pkgconfig
+      && \tcp -rt /tmp/root/usr/local/include /usr/local/include/libknot /usr/local/include/libdnssec
+      /usr/local/include/libzscanner && \tcp -rt /tmp/root/usr/local/lib /usr/local/lib/libknot*
+      /usr/local/lib/libdnssec* /usr/local/lib/libzscanner* && \tcp -rt /tmp/root/usr/local/lib/pkgconfig
+      /usr/local/lib/pkgconfig/libknot.pc /usr/local/lib/pkgconfig/libdnssec.pc /usr/local/lib/pkgconfig/libzscanner.pc"
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stable
+  Name: knot-dns-build
+  Platform: ""
+  SourceCode: FROM debian:stable AS knot-dns-build
+- As: runtime
+  BaseName: debian:stable-slim
+  Commands:
+  - Env:
+    - Key: KNOT_DNS_RUNTIME_DEPS
+      Value: libgnutls30
+    Name: env
+  - Env:
+    - Key: KNOT_RESOLVER_RUNTIME_DEPS
+      Value: liblmdb0 luajit libluajit-5.1-2 libuv1 lua-sec lua-socket
+    Name: env
+  - Env:
+    - Key: KNOT_RESOLVER_RUNTIME_DEPS_HTTP
+      Value: lua-http lua-mmdb
+    Name: env
+  - Env:
+    - Key: KNOT_RESOLVER_RUNTIME_DEPS_EXTRA
+      Value: libfstrm0 lua-cqueues
+    Name: env
+  - Env:
+    - Key: KNOT_RESOLVER_RUNTIME_DEPS_SSL
+      Value: ca-certificates
+    Name: env
+  - Env:
+    - Key: RUNTIME_DEPS
+      Value: ${KNOT_DNS_RUNTIME_DEPS} ${KNOT_RESOLVER_RUNTIME_DEPS}     ${KNOT_RESOLVER_RUNTIME_DEPS_HTTP}
+        ${KNOT_RESOLVER_RUNTIME_DEPS_EXTRA}     ${KNOT_RESOLVER_RUNTIME_DEPS_SSL}
+    Name: env
+  - CmdLine:
+    - "apt-get update -qq && \tapt-get install -y -qqq ${RUNTIME_DEPS} && \tapt-get
+      clean && \trm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stable-slim
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM debian:stable-slim AS runtime
+- As: build
+  BaseName: knot-dns-build
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /tmp/knot-resolver
+  - CmdLine:
+    - "cd /tmp/knot-resolver && \tmeson build_docker --buildtype=plain --prefix=/usr
+      --libdir=lib -Dc_args=\"-O2 -fstack-protector -g\" && \tDESTDIR=/tmp/root ninja
+      -C build_docker install && \tcp /tmp/root/usr/share/doc/knot-resolver/examples/config.docker
+      /tmp/root/etc/knot-resolver/kresd.conf"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: knot-dns-build
+  Name: build
+  Platform: ""
+  SourceCode: FROM knot-dns-build AS build
+- BaseName: runtime
+  Commands:
+  - Labels:
+    - Key: cz.knot-resolver.vendor
+      Value: '"CZ.NIC"'
+    Name: label
+  - Labels:
+    - Key: maintainer
+      Value: '"knot-resolver-users@lists.nic.cz"'
+    Name: label
+  - Name: expose
+    Ports:
+    - 443/TCP
+    - 53/TCP
+    - 53/UDP
+    - 8453/TCP
+    - 853/TCP
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/root/
+    - /
+  - CmdLine:
+    - ldconfig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/sbin/kresd
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -c
+    - /etc/knot-resolver/kresd.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: runtime
+  Name: ""
+  Platform: ""
+  SourceCode: FROM runtime

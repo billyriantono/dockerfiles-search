@@ -1,0 +1,199 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "wget",
+      "BaseName": "alpine:3.6",
+      "SourceCode": "FROM alpine:3.6 AS wget",
+      "Platform": "",
+      "As": "wget",
+      "From": {
+        "Image": "alpine:3.6"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add --no-cache ca-certificates wget tar"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "docker",
+      "BaseName": "wget",
+      "SourceCode": "FROM wget AS docker",
+      "Platform": "",
+      "As": "docker",
+      "From": {
+        "Stage": {
+          "Named": "wget",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Key": "DOCKER_VERSION",
+          "Name": "arg",
+          "Value": "17.09.0-ce"
+        },
+        {
+          "CmdLine": [
+            "wget -qO- https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz |   tar -xvz --strip-components=1 -C /bin"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "cuberite",
+      "BaseName": "wget",
+      "SourceCode": "FROM wget AS cuberite",
+      "Platform": "",
+      "As": "cuberite",
+      "From": {
+        "Stage": {
+          "Named": "wget",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Key": "CUBERITE_BUILD",
+          "Name": "arg",
+          "Value": "905"
+        },
+        {
+          "Name": "workdir",
+          "Path": "/srv"
+        },
+        {
+          "CmdLine": [
+            "wget -qO- \"https://builds.cuberite.org/job/Cuberite Linux x64 Master/${CUBERITE_BUILD}/artifact/Cuberite.tar.gz\" |  tar -xzf -"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "dockercraft",
+      "BaseName": "golang:1.9",
+      "SourceCode": "FROM golang:1.9 AS dockercraft",
+      "Platform": "",
+      "As": "dockercraft",
+      "From": {
+        "Image": "golang:1.9"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/go/src/github.com/docker/dockercraft"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "go install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "debian:jessie",
+      "SourceCode": "FROM debian:jessie",
+      "Platform": "",
+      "From": {
+        "Image": "debian:jessie"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update; apt-get install -y ca-certificates"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "dockercraft",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/go/bin/dockercraft",
+            "/bin"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "docker",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/bin/docker",
+            "/bin"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "cuberite",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/srv",
+            "/srv"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./config",
+            "/srv/Server"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./docs/img/logo64x64.png",
+            "/srv/Server/favicon.png"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./Docker",
+            "/srv/Server/Plugins/Docker"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "25565"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/srv/Server/start.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

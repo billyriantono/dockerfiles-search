@@ -1,0 +1,132 @@
+MetaArgs: null
+Stages:
+- As: binarybuilder
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache --no-progress add --virtual build-deps build-base git linux-pam-dev
+      python py-pip
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/G-Node/gogs
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - make build TAGS="sqlite cert pam"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: binarybuilder
+  Platform: ""
+  SourceCode: FROM golang:alpine AS binarybuilder
+- BaseName: alpine:latest
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/tianon/gosu/releases/download/1.10/gosu-amd64
+    - /usr/sbin/gosu
+  - CmdLine:
+    - chmod +x /usr/sbin/gosu   && echo http://dl-2.alpinelinux.org/alpine/edge/community/
+      >> /etc/apk/repositories   && apk --no-cache --no-progress add     bash     ca-certificates     curl     git     linux-pam     openssh     s6     shadow     socat     tzdata     python     py-pip     rsync
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install supervisor pyyaml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /git-annex
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: '"${PATH}:/git-annex/git-annex.linux"'
+    Name: env
+  - CmdLine:
+    - apk add --no-cache git openssh curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -Lo /git-annex/git-annex-standalone-amd64.tar.gz https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /git-annex && tar -xzf git-annex-standalone-amd64.tar.gz && rm git-annex-standalone-amd64.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk del --no-cache curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /git-annex/git-annex.linux/git-annex-shell /bin/git-annex-shell
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOGS_CUSTOM
+      Value: /data/gogs
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/nsswitch.conf
+    - /etc/nsswitch.conf
+  - Name: workdir
+    Path: /app/gogs
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker
+    - ./docker
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates
+    - ./templates
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - public
+    - ./public
+  - Chown: ""
+    From: binarybuilder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/G-Node/gogs/gogs
+    - .
+  - CmdLine:
+    - ./docker/finalize.sh
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: expose
+    Ports:
+    - "22"
+    - "3000"
+  - CmdLine:
+    - /app/gogs/docker/start.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /bin/s6-svscan
+    - /app/gogs/docker/s6/
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

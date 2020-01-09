@@ -1,0 +1,15 @@
+FROM ubuntu:xenial
+
+RUN apt-get update && \
+    apt-get install -y git curl && \
+    curl https://cmake.org/files/v3.12/cmake-3.12.0-Linux-x86_64.tar.gz -o cmake-3.12.0-Linux-x86_64.tar.gz && \
+    tar zxvf cmake-3.12.0-Linux-x86_64.tar.gz -C /usr/local && rm cmake-3.12.0-Linux-x86_64.tar.gz && \
+    export PATH="$PATH:/usr/local/cmake-3.12.0-Linux-x86_64/bin" && \
+    git clone https://github.com/geniuscirno/unit-dmkit.git /usr/src/unit-dmkit && \
+    cd /usr/src/unit-dmkit && \
+    sh ./deps.sh ubuntu && \
+    mkdir _build && cd _build && cmake .. && make 
+
+WORKDIR /usr/src/unit-dmkit/_build
+
+CMD ["./dmkit"]

@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.10-alpine3.7
+  Commands:
+  - Env:
+    - Key: RCLONE_VERSION
+      Value: '"v1.45"'
+    Name: env
+  - Env:
+    - Key: RCLONE_BASEPATH
+      Value: '"/go/src/github.com/ncw"'
+    Name: env
+  - Name: workdir
+    Path: ${RCLONE_BASEPATH}
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/ncw/rclone/releases/download/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}.tar.gz
+    - .
+  - CmdLine:
+    - tar xvf rclone-${RCLONE_VERSION}.tar.gz &&     mv rclone-${RCLONE_VERSION} ${RCLONE_BASEPATH}/rclone
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - patches
+    - ${RCLONE_BASEPATH}/rclone/patches
+  - Name: workdir
+    Path: '"${RCLONE_BASEPATH}/rclone"'
+  - CmdLine:
+    - for file in patches/*.diff ; do         patch -p1 < "$file" || exit 1 ;     done
+      &&     CGO_ENABLED=0 go build -a -installsuffix cgo &&     mv rclone /bin/rclone
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10-alpine3.7
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.10-alpine3.7 AS build
+- As: dev
+  BaseName: golang:alpine
+  Commands:
+  - Env:
+    - Key: MOUNT_PATH
+      Value: /data
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /bin/rclone
+    - /bin
+  - Name: workdir
+    Path: ${MOUNT_PATH}
+  - CmdLine:
+    - tail -f /dev/null
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: golang:alpine
+  Name: dev
+  Platform: ""
+  SourceCode: FROM golang:alpine AS dev
+- BaseName: busybox
+  Commands:
+  - Env:
+    - Key: MOUNT_PATH
+      Value: /data
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /bin/rclone
+    - /bin
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs
+    - /etc/ssl/certs
+  - Name: workdir
+    Path: ${MOUNT_PATH}
+  - CmdLine:
+    - rclone
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: busybox
+  Name: ""
+  Platform: ""
+  SourceCode: FROM busybox

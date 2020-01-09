@@ -1,0 +1,150 @@
+MetaArgs: null
+Stages:
+- As: gobuild
+  BaseName: i386/golang:1.13-buster
+  Commands:
+  - Key: VERSION_ARG
+    Name: arg
+    Value: null
+  - Name: workdir
+    Path: /go/src/app
+  - CmdLine:
+    - export GOPATH=/go/src/app &&     go get github.com/grafana/grafana; exit 0
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/app/src/github.com/grafana/grafana
+  - CmdLine:
+    - export GOPATH=/go/src/app &&     git checkout tags/$VERSION_ARG &&     go run
+      build.go setup &&     go run build.go build
+    Name: run
+    PrependShell: true
+  From:
+    Image: i386/golang:1.13-buster
+  Name: gobuild
+  Platform: ""
+  SourceCode: FROM i386/golang:1.13-buster as gobuild
+- As: nodebuild
+  BaseName: i386/node:10-alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache add --virtual native-deps g++ gcc libgcc libstdc++ linux-headers
+      make python
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: gobuild
+    Name: copy
+    SourcesAndDest:
+    - /go/src/app/src/github.com/grafana/grafana
+    - /node/grafana
+  - Name: workdir
+    Path: /node/grafana
+  - CmdLine:
+    - yarn install --pure-lockfile
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /node/grafana
+  - CmdLine:
+    - yarn run dev &&     apk del native-deps
+    Name: run
+    PrependShell: true
+  From:
+    Image: i386/node:10-alpine
+  Name: nodebuild
+  Platform: ""
+  SourceCode: FROM i386/node:10-alpine as nodebuild
+- BaseName: i386/debian:buster-slim
+  Commands:
+  - Key: GF_UID
+    Name: arg
+    Value: '"472"'
+  - Key: GF_GID
+    Name: arg
+    Value: '"472"'
+  - Env:
+    - Key: PATH
+      Value: /usr/share/grafana/bin/linux-386:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    - Key: GF_PATHS_CONFIG
+      Value: '"/etc/grafana/grafana.ini"'
+    - Key: GF_PATHS_DATA
+      Value: '"/var/lib/grafana"'
+    - Key: GF_PATHS_HOME
+      Value: '"/usr/share/grafana"'
+    - Key: GF_PATHS_LOGS
+      Value: '"/var/log/grafana"'
+    - Key: GF_PATHS_PLUGINS
+      Value: '"/var/lib/grafana/plugins"'
+    - Key: GF_PATHS_PROVISIONING
+      Value: '"/etc/grafana/provisioning"'
+    Name: env
+  - Chown: ""
+    From: nodebuild
+    Name: copy
+    SourcesAndDest:
+    - /node/grafana/bin
+    - ${GF_PATHS_HOME}/bin
+  - Chown: ""
+    From: nodebuild
+    Name: copy
+    SourcesAndDest:
+    - /node/grafana/conf
+    - ${GF_PATHS_HOME}/conf
+  - Chown: ""
+    From: nodebuild
+    Name: copy
+    SourcesAndDest:
+    - /node/grafana/public
+    - ${GF_PATHS_HOME}/public
+  - Chown: ""
+    From: nodebuild
+    Name: copy
+    SourcesAndDest:
+    - /node/grafana/scripts
+    - ${GF_PATHS_HOME}/scripts
+  - Chown: ""
+    From: nodebuild
+    Name: copy
+    SourcesAndDest:
+    - /node/grafana/tools
+    - ${GF_PATHS_HOME}/tools
+  - Chown: ""
+    From: nodebuild
+    Name: copy
+    SourcesAndDest:
+    - /node/grafana/*.md
+    - ${GF_PATHS_HOME}/
+  - CmdLine:
+    - apt-get update && apt-get install -qq -y bash libfontconfig ca-certificates
+      &&     apt-get autoremove -y &&     rm -rf /var/lib/apt/lists/* &&     groupadd
+      -r -g $GF_GID grafana &&     useradd -r -u $GF_UID -g grafana grafana &&     mkdir
+      -p "$GF_PATHS_PROVISIONING/datasources"              "$GF_PATHS_PROVISIONING/dashboards"              "$GF_PATHS_LOGS"              "$GF_PATHS_PLUGINS"              "$GF_PATHS_HOME/.aws"              "$GF_PATHS_DATA"
+      &&     cp "$GF_PATHS_HOME/conf/sample.ini" "$GF_PATHS_CONFIG" &&     cp "$GF_PATHS_HOME/conf/ldap.toml"
+      /etc/grafana/ldap.toml &&     chown -R grafana:grafana "$GF_PATHS_DATA" "$GF_PATHS_HOME/.aws"
+      "$GF_PATHS_LOGS" "$GF_PATHS_PLUGINS" &&     chmod 777 "$GF_PATHS_DATA" "$GF_PATHS_HOME/.aws"
+      "$GF_PATHS_LOGS" "$GF_PATHS_PLUGINS"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3000"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./run.sh
+    - /run.sh
+  - Name: user
+    User: grafana
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - /run.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: i386/debian:buster-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM i386/debian:buster-slim

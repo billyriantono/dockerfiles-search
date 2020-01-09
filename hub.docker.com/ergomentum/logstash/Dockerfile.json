@@ -1,0 +1,262 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "centos:7.4.1708",
+      "SourceCode": "FROM centos:7.4.1708 as builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "centos:7.4.1708"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "LANG",
+              "Value": "'C'"
+            },
+            {
+              "Key": "LANGUAGE",
+              "Value": "'C'"
+            },
+            {
+              "Key": "LC_ALL",
+              "Value": "'C'"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /target"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "yum --installroot=/target --releasever=/ install -y bash"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "rm -rf /target/usr/share/{man,doc,info,gnome/help} /target/var/cache/yum"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "localedef --prefix=/target --list-archive|xargs localedef --prefix=/target --delete-from-archive"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mv /target/usr/lib/locale/locale-archive{,.tmpl}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "chroot /target build-locale-archive"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /target/usr/java \u0026\u0026 curl -jksSLH \"Cookie: oraclelicense=accept-securebackup-cookie\"   http://download.oracle.com/otn-pub/java/jdk/8u162-b12/0da788060d494f5095bf8624735fa2f1/server-jre-8u162-linux-x64.tar.gz |   tar   xz   -C /target/usr/java   --strip-components=1   --exclude='man'   --exclude='release'"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "logstash",
+      "BaseName": "centos:7.4.1708",
+      "SourceCode": "FROM centos:7.4.1708 as logstash",
+      "Platform": "",
+      "As": "logstash",
+      "From": {
+        "Image": "centos:7.4.1708"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "mkdir -p /target \u0026\u0026   curl -Lo - https://artifacts.elastic.co/downloads/logstash/logstash-6.2.3.tar.gz |   tar   xz   -C /target   --strip-components=1   --exclude='config/jvm.options'   --exclude='bin'"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "config",
+            "/target/config"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "pipeline",
+            "/target/pipeline"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "scratch",
+      "SourceCode": "FROM scratch",
+      "Platform": "",
+      "From": {
+        "Scratch": true
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "LANG",
+              "Value": "'C'"
+            },
+            {
+              "Key": "LANGUAGE",
+              "Value": "'C'"
+            },
+            {
+              "Key": "LC_ALL",
+              "Value": "'C'"
+            },
+            {
+              "Key": "LOGSTASH_HOME",
+              "Value": "\"/usr/share/logstash\""
+            },
+            {
+              "Key": "LS_HOME",
+              "Value": "\"/usr/share/logstash\""
+            },
+            {
+              "Key": "JAVACMD",
+              "Value": "'/usr/java/bin/java'"
+            },
+            {
+              "Key": "JAVA_OPTS",
+              "Value": "\"    -Xms1g     -Xmx1g     -XX:+UseParNewGC     -XX:+UseConcMarkSweepGC     -XX:CMSInitiatingOccupancyFraction=75     -XX:+UseCMSInitiatingOccupancyOnly     -Djava.awt.headless=true     -Dfile.encoding=UTF-8     -Djruby.compile.invokedynamic=true     -Djruby.jit.threshold=0     -XX:+HeapDumpOnOutOfMemoryError     -Djava.security.egd=file:/dev/urandom  \""
+            },
+            {
+              "Key": "GEM_HOME",
+              "Value": "\"/usr/share/logstash/vendor/bundle/jruby/2.3.0\""
+            },
+            {
+              "Key": "GEM_PATH",
+              "Value": "\"/usr/share/logstash/vendor/bundle/jruby/2.3.0\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/target",
+            "."
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/bin/chown",
+            "/usr/bin/rm",
+            "/usr/bin/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "logstash",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/target",
+            "/usr/share/logstash"
+          ]
+        },
+        {
+          "CmdLine": [
+            "chown 1000:1000 -R /usr/share/logstash \u0026\u0026 rm /usr/bin/{chown,rm}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/usr/share/logstash"
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/usr/share/logstash/config"
+          ]
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/usr/share/logstash/data"
+          ]
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/usr/share/logstash/pipeline"
+          ]
+        },
+        {
+          "Name": "user",
+          "User": "1000"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "12201/udp",
+            "9600"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/usr/java/bin/java",
+            "-Xms256m",
+            "-Xmx256m",
+            "-XX:+UseParNewGC",
+            "-XX:+UseConcMarkSweepGC",
+            "-XX:CMSInitiatingOccupancyFraction=75",
+            "-XX:+UseCMSInitiatingOccupancyOnly",
+            "-Djava.awt.headless=true",
+            "-Dfile.encoding=UTF-8",
+            "-Djruby.compile.invokedynamic=true",
+            "-Djruby.jit.threshold=0",
+            "-XX:+HeapDumpOnOutOfMemoryError",
+            "-Djava.security.egd=file:/dev/urandom",
+            "-cp",
+            "/usr/share/logstash/logstash-core/lib/jars/*",
+            "org.logstash.Logstash"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:9.3
+  Commands:
+  - CmdLine:
+    - apt-get -y update     && apt-get -y install     build-essential     python-setuptools     curl     wget     nano     cron     gettext-base     sudo     locales     supervisor     nginx     &&
+      apt-get autoremove --purge     && apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/auth       required   pam_shells.so/auth       sufficient   pam_shells.so/'
+      /etc/pam.d/chsh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen     &&
+      locale-gen
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    - Key: LC_CTYPE
+      Value: en_US.UTF-8
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: systemUser
+      Value: frappe
+    Name: env
+  - CmdLine:
+    - 'adduser --disabled-password --gecos "" $systemUser     && usermod -aG sudo
+      $systemUser     && echo "%sudo  ALL=(ALL)  NOPASSWD: ALL" > /etc/sudoers.d/sudoers'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $systemUser
+  - Name: workdir
+    Path: /home/$systemUser
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - custom.cnf
+    - /tmp/custom.cnf
+  - Env:
+    - Key: easyinstallRepo
+      Value: '''https://raw.githubusercontent.com/frappe/bench/master/playbooks/install.py'''
+    - Key: benchPath
+      Value: bench-repo
+    - Key: benchRepo
+      Value: '''https://github.com/frappe/bench'''
+    - Key: benchBranch
+      Value: master
+    - Key: frappeRepo
+      Value: '''https://github.com/frappe/frappe'''
+    - Key: frappeBranch
+      Value: master
+    - Key: pythonVersion
+      Value: python
+    - Key: benchFolderName
+      Value: bench
+    - Key: erpnextRepo
+      Value: '''https://github.com/frappe/erpnext'''
+    - Key: erpnextBranch
+      Value: master
+    - Key: siteName
+      Value: site1.local
+    - Key: branch
+      Value: master
+    - Key: adminPass
+      Value: "12345"
+    - Key: mysqlPass
+      Value: travis
+    - Key: remoteUser
+      Value: remote
+    - Key: remotePass
+      Value: "12345"
+    Name: env
+  - CmdLine:
+    - wget $easyinstallRepo     && python install.py     --without-bench-setup     &&
+      rm -rf bench     && git clone --branch $benchBranch --depth 1 --origin upstream
+      $benchRepo $benchPath      && sudo pip install -e $benchPath     && bench init
+      $benchFolderName --frappe-path $frappeRepo --frappe-branch $frappeBranch --python
+      $pythonVersion     && cd $benchFolderName     && sudo mv /tmp/custom.cnf /etc/mysql/mariadb.conf.d/custom.cnf     &&
+      sudo service mysql start     && bench new-site $siteName     --mariadb-root-password
+      $mysqlPass      --admin-password $adminPass     && bench get-app erpnext $erpnextRepo
+      --branch $erpnextBranch     && bench --site $siteName install-app erpnext     &&
+      bench update --patch     && mysql -u "root" "-p$mysqlPass" -e "CREATE USER '$remoteUser'@'%'
+      IDENTIFIED BY '$remotePass';"     && mysql -u "root" "-p$mysqlPass" -e "GRANT
+      ALL ON *.* TO '$remoteUser'@'%';"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo sed -i 's/auth       sufficient   pam_shells.so/auth       required   pam_shells.so/'
+      /etc/pam.d/chsh
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $systemUser
+  - Name: workdir
+    Path: /home/$systemUser/$benchFolderName
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - frappe-docker-conf
+    - /home/$systemUser/production_config
+  - CmdLine:
+    - sudo chmod +x /home/$systemUser/production_config/entrypoint_prd.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - sudo chmod +x /usr/local/bin/entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - 3306-3307
+    - 8000-8005
+    - 9000-9005
+  From:
+    Image: debian:9.3
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:9.3

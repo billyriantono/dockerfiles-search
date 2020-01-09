@@ -1,0 +1,81 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: python:3.6
+  Commands:
+  - CmdLine:
+    - mkdir -p /src/washer
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src/washer
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - ./
+  - CmdLine:
+    - pip install -r requirements.txt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - worker.py
+    - ./
+  - CmdLine:
+    - python -m nuitka --show-progress --recurse-all --remove-output --full-compat
+      --standalone -j5 --python-flag=-S worker.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv worker.dist /washer
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /washer/worker.exe /washer/buildbot-worker
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ldd /washer/buildbot-worker | awk '/=>/ && !/\/washer/ {print $3}' | xargs -I{}
+      cp -nv {} /washer/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /lib64/ld-linux-x86-64.so.2 /washer/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /washer
+  - CmdLine:
+    - chmod a+x /washer/entrypoint.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.6
+  Name: builder
+  Platform: ""
+  SourceCode: FROM python:3.6 as builder
+- BaseName: alpine
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /washer
+    - /washer
+  - CmdLine:
+    - /washer/entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

@@ -1,0 +1,165 @@
+MetaArgs:
+- DefaultValue: latest
+  Key: DOCKER_TAG
+  ProvidedValue: null
+  Value: latest
+Stages:
+- BaseName: docker.io/fermilabqc/quantum-full:${DOCKER_TAG}
+  Commands:
+  - Name: user
+    User: root
+  - CmdLine:
+    - 'rm -f /var/lib/rpm/__db.* # workaround for problems in Docker Cloud?'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rpm --import "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF"
+      && curl https://download.mono-project.com/repo/centos7-stable.repo > /etc/yum.repos.d/mono-centos7-stable.repo
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc"
+      > /etc/yum.repos.d/vscode.repo
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rpm -Uvh https://packages.microsoft.com/config/rhel/7/packages-microsoft-prod.rpm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rpm --import https://packages.microsoft.com/keys/microsoft.asc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dnf -y install mono-core mono-devel mono-winfxcore libmono-2_0-devel dotnet-sdk-2.1
+      code clang bzip2 tar which git libgomp
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $NB_USER
+  - Name: workdir
+    Path: $GITDIR
+  - Env:
+    - Key: DOTNET_CLI_TELEMETRY_OPTOUT
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - git clone https://github.com/holzman/Quantum.git
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - dnf -y install libX11-xcb compat-openssl10-devel
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $NB_USER
+  - CmdLine:
+    - cd Quantum && git checkout linux  && code . && cd Samples/Teleportation && dotnet
+      build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - conda install 'python==3.6.4' && conda clean -tipsy
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - dnf -y install glib2-devel
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $NB_USER
+  - CmdLine:
+    - source activate && pip install git+https://github.com/holzman/pythonnet
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - conda env create -f $GITDIR/Quantum/Samples/PythonInterop/environment.yml &&
+      conda clean -tipsy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - source activate qsharp-samples && conda install ipykernel
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd Quantum/Samples/PythonInterop && dotnet build && dotnet publish
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: $GITDIR/Quantum/Samples/PythonInterop/bin/Debug/netstandard2.0/publish/runtimes/linux-x64/native/
+    Name: env
+  - Env:
+    - Key: PYTHONPATH
+      Value: $PYTHONPATH:$GITDIR/Quantum/Interoperability/python
+    Name: env
+  From:
+    Image: docker.io/fermilabqc/quantum-full:${DOCKER_TAG}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM docker.io/fermilabqc/quantum-full:${DOCKER_TAG}
+- BaseName: docker.io/fermilabqc/base-notebook
+  Commands:
+  - Name: user
+    User: root
+  - Env:
+    - Key: GITDIR
+      Value: /srv/git
+    Name: env
+  - CmdLine:
+    - dnf -y install glibc-devel libgomp
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - $CONDA_DIR
+    - $CONDA_DIR
+  - CmdLine:
+    - chown -R $NB_UID:$NB_GID $CONDA_DIR/lib/python3.6/site-packages/openfermion/data
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - $GITDIR
+    - $GITDIR
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib64/libmonosgen-2.0.so.1.0.0
+    - /usr/lib64/libmonosgen-2.0.so.1.0.0
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/mono
+    - /usr/lib/mono
+  - CmdLine:
+    - ldconfig && chown -R $NB_UID:$NB_GID $GITDIR
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $NB_USER
+  - Env:
+    - Key: PYTHONPATH
+      Value: $GITDIR/Quantum/Interoperability/python
+    Name: env
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: $GITDIR/Quantum/Samples/PythonInterop/bin/Debug/netstandard2.0/publish/runtimes/linux-x64/native/
+    Name: env
+  - Name: workdir
+    Path: $GITDIR
+  From:
+    Image: docker.io/fermilabqc/base-notebook
+  Name: ""
+  Platform: ""
+  SourceCode: FROM docker.io/fermilabqc/base-notebook

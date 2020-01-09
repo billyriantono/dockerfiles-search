@@ -1,0 +1,185 @@
+MetaArgs: null
+Stages:
+- BaseName: centos:centos7
+  Commands:
+  - Maintainer: David Lawrence <dkl@mozilla.com>
+    Name: maintainer
+  - Env:
+    - Key: BUGS_DB_DRIVER
+      Value: mysql
+    Name: env
+  - Env:
+    - Key: BUGS_DB_NAME
+      Value: bugs
+    Name: env
+  - Env:
+    - Key: BUGS_DB_PASS
+      Value: bugs
+    Name: env
+  - Env:
+    - Key: BUGS_DB_HOST
+      Value: localhost
+    Name: env
+  - Env:
+    - Key: BUGZILLA_USER
+      Value: bugzilla
+    Name: env
+  - Env:
+    - Key: BUGZILLA_HOME
+      Value: /home/$BUGZILLA_USER
+    Name: env
+  - Env:
+    - Key: BUGZILLA_ROOT
+      Value: $BUGZILLA_HOME/devel/htdocs/bmo
+    Name: env
+  - Env:
+    - Key: BUGZILLA_URL
+      Value: http://localhost/bmo
+    Name: env
+  - Env:
+    - Key: GITHUB_BASE_GIT
+      Value: https://github.com/mozilla/webtools-bmo-bugzilla
+    Name: env
+  - Env:
+    - Key: GITHUB_BASE_BRANCH
+      Value: master
+    Name: env
+  - Env:
+    - Key: GITHUB_QA_GIT
+      Value: https://github.com/mozilla/webtools-bmo-qa
+    Name: env
+  - Env:
+    - Key: ADMIN_EMAIL
+      Value: admin@mozilla.bugs
+    Name: env
+  - Env:
+    - Key: ADMIN_PASS
+      Value: password
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rpm_list
+    - /rpm_list
+  - CmdLine:
+    - yum -y -q install https://dev.mysql.com/get/mysql-community-release-el7-5.noarch.rpm     epel-release
+      && yum clean all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum -y -q install `cat /rpm_list` && yum clean all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -m -G wheel -u 1000 -s /bin/bash $BUGZILLA_USER     && passwd -u -f
+      $BUGZILLA_USER     && echo "bugzilla:bugzilla" | chpasswd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/run/sshd     && chmod -rx /var/run/sshd     && ssh-keygen -t rsa
+      -f /etc/ssh/ssh_host_rsa_key -N ''     && ssh-keygen -t dsa -f /etc/ssh/ssh_host_dsa_key
+      -N ''     && ssh-keygen -t ecdsa -f /etc/ssh/ssh_host_ecdsa_key -N ''     &&
+      sed -ri 's/#UseDNS yes/UseDNS no/'g /etc/ssh/sshd_config
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bugzilla.conf
+    - /etc/httpd/conf.d/bugzilla.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - my.cnf
+    - /etc/my.cnf
+  - CmdLine:
+    - chmod 644 /etc/my.cnf     && chown root.root /etc/my.cnf     && rm -rf /etc/mysql     &&
+      rm -rf /var/lib/mysql/*     && /usr/bin/mysql_install_db --user=$BUGZILLA_USER
+      --basedir=/usr --datadir=/var/lib/mysql
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sudoers
+    - /etc/sudoers
+  - CmdLine:
+    - chown root.root /etc/sudoers && chmod 440 /etc/sudoers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - su $BUGZILLA_USER -c "git clone $GITHUB_BASE_GIT -b $GITHUB_BASE_BRANCH $BUGZILLA_ROOT"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.sh'
+    - buildbot_step
+    - generate_bmo_data.pl
+    - checksetup_answers.txt
+    - /
+  - CmdLine:
+    - chmod 755 /*.sh /buildbot_step
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /install_deps.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bugzilla_config.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /my_config.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R $BUGZILLA_USER.$BUGZILLA_USER $BUGZILLA_HOME
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "NETWORKING=yes" > /etc/sysconfig/network
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: expose
+    Ports:
+    - "22"
+  - Name: expose
+    Ports:
+    - "5900"
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://selenium-release.storage.googleapis.com/2.45/selenium-server-standalone-2.45.0.jar
+    - /selenium-server.jar
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/supervisord.conf
+  - CmdLine:
+    - chmod 700 /etc/supervisord.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/supervisord
+    - -c
+    - /etc/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos:centos7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:centos7

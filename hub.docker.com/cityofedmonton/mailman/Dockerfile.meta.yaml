@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: microsoft/dotnet:2.1-sdk
+  Commands:
+  - Key: Configuration
+    Name: arg
+    Value: Debug
+  - Key: TlsPrivateKey
+    Name: arg
+    Value: Str0ngPassw0rd!!
+  - CmdLine:
+    - dotnet dev-certs https -ep /usr/aspnetapp.pfx -p $TlsPrivateKey
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NODE_VERSION
+      Value: 11.1.0
+    Name: env
+  - Env:
+    - Key: NODE_DOWNLOAD_SHA
+      Value: 52289a646a27511f5808290357798c7ebd4b5132a8fc3bf7d5bf53183b89c668
+    Name: env
+  - CmdLine:
+    - curl -SL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz"
+      --output nodejs.tar.gz     && echo "$NODE_DOWNLOAD_SHA nodejs.tar.gz" | sha256sum
+      -c -     && tar -xzf "nodejs.tar.gz" -C /usr/local --strip-components=1     &&
+      rm nodejs.tar.gz     && ln -s /usr/local/bin/node /usr/local/bin/nodejs
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/mailman
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/
+    - .
+  - Name: workdir
+    Path: /usr/src/mailman/Mailman.Server
+  - CmdLine:
+    - dotnet publish --configuration $Configuration
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.1-sdk
+  Name: builder
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1-sdk AS builder
+- BaseName: microsoft/dotnet:2.1.5-aspnetcore-runtime-alpine
+  Commands:
+  - Key: Configuration
+    Name: arg
+    Value: Debug
+  - Key: TlsPrivateKey
+    Name: arg
+    Value: Str0ngPassw0rd!!
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/mailman/Mailman.Server/bin/$Configuration/netcoreapp2.1/publish
+    - .
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/aspnetapp.pfx
+    - /https/aspnetapp.pfx
+  - Env:
+    - Key: ASPNETCORE_URLS
+      Value: '"http://+"'
+    Name: env
+  - Env:
+    - Key: ASPNETCORE_Kestrel__Certificates__Default__Password
+      Value: $TlsPrivateKey
+    Name: env
+  - Env:
+    - Key: ASPNETCORE_Kestrel__Certificates__Default__Path
+      Value: /https/aspnetapp.pfx
+    Name: env
+  - Name: expose
+    Ports:
+    - 80/tcp
+  - Name: expose
+    Ports:
+    - 443/tcp
+  - CmdLine:
+    - dotnet Mailman.Server.dll
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.1.5-aspnetcore-runtime-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1.5-aspnetcore-runtime-alpine

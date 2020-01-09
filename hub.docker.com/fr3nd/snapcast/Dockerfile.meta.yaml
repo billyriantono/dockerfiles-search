@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- As: librespot-builder
+  BaseName: debian:buster-slim
+  Commands:
+  - Env:
+    - Key: LIBRESPOT_VERSION
+      Value: v0.1.0
+    Name: env
+  - CmdLine:
+    - apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y       alsa-utils       build-essential       libasound2-dev       libsdl2-dev       curl       git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://sh.rustup.rs -sSf | sh -s -- -y
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: '"/root/.cargo/bin/:${PATH}"'
+    Name: env
+  - CmdLine:
+    - git clone https://github.com/librespot-org/librespot.git &&     cd librespot
+      &&     git checkout $LIBRESPOT_VERSION &&     cargo build --release --no-default-features
+      --features alsa-backend
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:buster-slim
+  Name: librespot-builder
+  Platform: ""
+  SourceCode: FROM debian:buster-slim as librespot-builder
+- BaseName: debian:buster-slim
+  Commands:
+  - Env:
+    - Key: SNAPCAST_VERSION
+      Value: v0.17.1
+    Name: env
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y       alsa-utils       avahi-daemon       build-essential       git       libasound2-dev       libavahi-client-dev       libflac-dev       libopus-dev       libvorbis-dev       libvorbisidec-dev       wget   &&     wget
+      https://dl.bintray.com/boostorg/release/1.72.0/source/boost_1_72_0.tar.gz &&     tar
+      xvzf boost_1_72_0.tar.gz &&     cd boost_1_72_0 &&     ./bootstrap.sh &&     ./b2
+      install &&     cd ..   &&     git clone --recursive https://github.com/badaix/snapcast.git
+      &&     cd snapcast &&     git checkout $SNAPCAST_VERSION &&     git submodule
+      update &&     make &&     install -D -g root -o root server/snapserver /usr/bin/snapserver
+      &&     install -D -g root -o root client/snapclient /usr/bin/snapclient   &&     apt-get
+      -y purge       build-essential       git       wget       $(dpkg -l|grep --
+      -dev |awk ''{print $2}''|grep ^lib|awk -F: ''{print $1}'' )   &&     apt-get
+      clean all &&     rm -rf /usr/share/doc/* &&     rm -rf /usr/share/info/* &&     rm
+      -rf /tmp/* &&     rm -rf /var/tmp/* &&     rm -rf /var/lib/apt/lists/* &&     rm
+      -rf /src &&     mkdir /src &&     rm -rf /usr/local/include/boost &&     rm
+      -rf /usr/local/lib/libboost* &&     rm -rf /usr/local/lib/cmake'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: librespot-builder
+    Name: copy
+    SourcesAndDest:
+    - /librespot/target/release/librespot
+    - /usr/local/bin
+  - CmdLine:
+    - useradd --system --uid 666 -M --shell /usr/sbin/nologin snapcast &&     usermod
+      -G audio,sudo snapcast &&     mkdir -p /home/snapcast/.config &&     chown snapcast:snapcast
+      -R /home/snapcast
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: snapcast
+  - Name: expose
+    Ports:
+    - "1704"
+  - Name: workdir
+    Path: /home/snapcast
+  - CmdLine:
+    - /usr/bin/snapserver
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: debian:buster-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:buster-slim

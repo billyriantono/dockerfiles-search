@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: openjdk:jdk-slim
+  Commands:
+  - CmdLine:
+    - mkdir -p /build/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /build/
+  - CmdLine:
+    - apt-get update &&      apt-get install -y maven git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - path="$(pwd)" &&     cd .. &&     git clone --recursive https://github.com/kubernetes-client/java
+      &&     cd java &&     git checkout 8d6ab536f565ee951141b14bfd170629399d8c67
+      &&     mvn -q install -DskipTests &&     cd $path
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn package &&     cd target/ &&     mkdir -p bundle &&     cp ../api_sample.json
+      bundle/ &&     cp $(ls | grep dependencies.jar) bundle/ &&     cd bundle &&     mv
+      *.jar harbor.jar
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:jdk-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM openjdk:jdk-slim as builder
+- BaseName: openjdk:8-jre-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"poloniodavide@gmail.com"'
+    Name: label
+  - Labels:
+    - Key: license
+      Value: '"GPLv3+"'
+    Name: label
+  - Labels:
+    - Key: description
+      Value: '"Harbor Docker image"'
+    Name: label
+  - Env:
+    - Key: HARBOR_API_CONFIG
+      Value: api_sample.json
+    - Key: HARBOR_INFRASTRUCTURE_TOPOLOGY
+      Value: /config/topology/
+    Name: env
+  - CmdLine:
+    - mkdir -p /config/
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /config/
+  - Name: workdir
+    Path: /srv/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/target/bundle/harbor.jar
+    - /srv/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/target/bundle/api_sample.json
+    - /srv/
+  - CmdLine:
+    - java
+    - -jar
+    - harbor.jar
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:8-jre-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre-alpine

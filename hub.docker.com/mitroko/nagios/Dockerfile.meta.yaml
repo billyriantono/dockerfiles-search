@@ -1,0 +1,77 @@
+MetaArgs: null
+Stages:
+- BaseName: centos:7
+  Commands:
+  - Maintainer: Dzmitry Stremkouski mitroko@gmail.com
+    Name: maintainer
+  - CmdLine:
+    - yum -y install epel-release
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum -y install httpd nagios nagios-plugins supervisor cronie-noanacron
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /etc/httpd/conf.d/ -type f ! -name php.conf -a ! -name nagios.conf -delete
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /etc/httpd/conf.modules.d/ -type f ! -name 00-base.conf -a ! -name 00-mpm.conf
+      -a ! -name 01-cgi.conf -a ! -name 10-php.conf -delete
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'chown apache: /var/log/httpd/ -R'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown apache /run/httpd/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - usermod -G apache nagios
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s/Listen 80/Listen 9090/" /etc/httpd/conf/httpd.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo $'[unix_http_server]\nfile=/var/run/supervisor/supervisor.sock\n\n[supervisord]\nlogfile=/var/log/supervisor/supervisord.log\nlogfile_maxbytes=50MB\nlogfile_backups=1\nloglevel=info\npidfile=/var/run/supervisord.pid\nnodaemon=true\nminfds=1024\nminprocs=200\nuser=root\n\n[rpcinterface:supervisor]\nsupervisor.rpcinterface_factory
+      = supervisor.rpcinterface:make_main_rpcinterface\n\n[supervisorctl]\nserverurl=unix:///var/run/supervisor/supervisor.sock\n\n[program:nagios]\ncommand=/usr/sbin/nagios
+      /etc/nagios/nagios.cfg\nnumprocs=1\nautostart=true\nautorestart=true\nstartsecs=10\nstartretries=1\nuser=nagios\nstdout_logfile=/var/log/supervisor/nagios.stdout.log\nstdout_logfile_maxbytes=1MB\nstdout_logfile_backups=10\nstderr_logfile=/var/log/supervisor/nagios.stderr.log\nstderr_logfile_maxbytes=1MB\nstderr_logfile_backups=10\n\n[program:httpd]\ncommand=/usr/sbin/httpd
+      -DFOREGROUND\nnumprocs=1\nautostart=true\nautorestart=true\nstartsecs=10\nstartretries=1\nuser=apache\nstdout_logfile=/var/log/supervisor/httpd.stdout.log\nstdout_logfile_maxbytes=1MB\nstdout_logfile_backups=10\nstderr_logfile=/var/log/supervisor/httpd.stderr.log\nstderr_logfile_maxbytes=1MB\nstderr_logfile_backups=10\n\n[program:crond]\ncommand=/usr/sbin/crond
+      -m off -n -s\nnumprocs=1\nautostart=true\nautorestart=true\nstartsecs=10\nstartretries=1\nuser=root\nstdout_logfile=/var/log/supervisor/crond.stdout.log\nstdout_logfile_maxbytes=1MB\nstdout_logfile_backups=10\nstderr_logfile=/var/log/supervisor/crond.stderr.log\nstderr_logfile_maxbytes=1MB\nstderr_logfile_backups=10\n'
+      > /usr/local/etc/supervisord.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/htpasswd -b -d /etc/nagios/passwd nagiosadmin admin && cp -rp /etc/nagios
+      /usr/local/share/nagios
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo $''#!/bin/bash\n[ -f /etc/nagios/pre_start.sh ] && /etc/nagios/pre_start.sh\n[
+      ! -f /etc/nagios/nagios.cfg ] && cp /usr/local/share/nagios/* /etc/nagios/ -rp
+      && chown nagios: /etc/nagios -R\nfind /var/run/ -iname *.pid -delete\n/usr/bin/supervisord
+      -n -c /usr/local/etc/supervisord.conf\n'' > /usr/local/bin/entrypoint.sh &&
+      chmod 0755 /usr/local/bin/entrypoint.sh'
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - 9090/tcp
+  - Name: volume
+    Volumes:
+    - /etc/nagios
+    - /etc/cron.d
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: centos:7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:7

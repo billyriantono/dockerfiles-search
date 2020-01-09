@@ -1,0 +1,88 @@
+MetaArgs:
+- DefaultValue: "10"
+  Key: INPUT_PG_MAJOR
+  ProvidedValue: null
+  Value: "10"
+Stages:
+- As: postgres-no-volume
+  BaseName: andahme/debian:testing
+  Commands:
+  - Key: INPUT_PG_MAJOR
+    Name: arg
+    Value: null
+  - Name: expose
+    Ports:
+    - "5432"
+  - Env:
+    - Key: PG_MAJOR
+      Value: ${INPUT_PG_MAJOR}
+    Name: env
+  - Env:
+    - Key: PGHOST
+      Value: postgres
+    Name: env
+  - Env:
+    - Key: PGDATA
+      Value: /var/lib/postgresql/${PG_MAJOR}/main
+    Name: env
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: /usr/lib/postgresql/${PG_MAJOR}/lib
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /usr/lib/postgresql/${PG_MAJOR}/bin:${PATH}
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /docker-entrypoint.sh
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive     apt-get update &&     apt-get install --yes
+      --no-install-recommends locales &&     sed -i -r "s/^# (en_US.*)/\1/g" /etc/locale.gen
+      &&     locale-gen
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive     apt-get install --yes --no-install-recommends
+      postgresql-common &&     sed -i -r "s/^#?(create_main_cluster = ).*$/\1false/g"
+      /etc/postgresql-common/createcluster.conf &&     apt-get install --yes --no-install-recommends
+      postgresql-${PG_MAJOR} &&     sed -i -r "s/127\.0\.0\.1\/32/0.0.0.0\/0   /g"
+      /usr/share/postgresql/${PG_MAJOR}/pg_hba.conf.sample &&     sed -i -r -e "s/^#?(listen_addresses
+      = ).*/\1'0.0.0.0'/g" -e "s/^#?(unix_socket_directories = )'.*'/\1''/g" /usr/share/postgresql/${PG_MAJOR}/postgresql.conf.sample
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/lib/postgresql
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - postgres
+    Name: cmd
+    PrependShell: false
+  - Name: user
+    User: postgres
+  From:
+    Image: andahme/debian:testing
+  Name: postgres-no-volume
+  Platform: ""
+  SourceCode: FROM andahme/debian:testing AS postgres-no-volume
+- As: postgres
+  BaseName: andahme/postgres:${INPUT_PG_MAJOR}-no-volume
+  Commands:
+  - Name: volume
+    Volumes:
+    - /var/lib/postgresql
+  From:
+    Image: andahme/postgres:${INPUT_PG_MAJOR}-no-volume
+  Name: postgres
+  Platform: ""
+  SourceCode: FROM andahme/postgres:${INPUT_PG_MAJOR}-no-volume AS postgres

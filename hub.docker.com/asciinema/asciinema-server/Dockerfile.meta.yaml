@@ -1,0 +1,215 @@
+MetaArgs: null
+Stages:
+- As: vt
+  BaseName: clojure:alpine
+  Commands:
+  - CmdLine:
+    - mkdir /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - vt/project.clj
+    - /app/vt/
+  - CmdLine:
+    - cd vt && lein deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - vt/src
+    - /app/vt/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - vt/resources
+    - /app/vt/resources
+  - CmdLine:
+    - cd vt && lein cljsbuild once main
+    Name: run
+    PrependShell: true
+  From:
+    Image: clojure:alpine
+  Name: vt
+  Platform: ""
+  SourceCode: FROM clojure:alpine AS vt
+- As: builder
+  BaseName: elixir:1.7.3-alpine
+  Commands:
+  - Key: MIX_ENV
+    Name: arg
+    Value: prod
+  - Name: workdir
+    Path: /opt/app
+  - CmdLine:
+    - apk update &&   apk upgrade --no-cache &&   apk add --no-cache     nodejs     npm     build-base
+      &&   mix local.rebar --force &&   mix local.hex --force
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/package.json
+    - assets/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/package-lock.json
+    - assets/
+  - CmdLine:
+    - cd assets && npm install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mix.*
+    - ./
+  - CmdLine:
+    - mix do deps.get --only prod, deps.compile
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/
+    - assets/
+  - CmdLine:
+    - cd assets && npm run deploy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mix phx.digest
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/*.exs
+    - config/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - lib
+    - lib/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - priv
+    - priv/
+  - CmdLine:
+    - mix compile
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: vt
+    Name: copy
+    SourcesAndDest:
+    - /app/vt/main.js
+    - priv/vt/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - vt/liner.js
+    - priv/vt/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rel
+    - rel/
+  - CmdLine:
+    - mkdir -p /opt/built &&   mix release --verbose &&   cp _build/${MIX_ENV}/rel/asciinema/releases/0.0.1/asciinema.tar.gz
+      /opt/built &&   cd /opt/built &&   tar -xzf asciinema.tar.gz &&   rm asciinema.tar.gz
+    Name: run
+    PrependShell: true
+  From:
+    Image: elixir:1.7.3-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM elixir:1.7.3-alpine AS builder
+- BaseName: alpine:3.8
+  Commands:
+  - CmdLine:
+    - apk update &&   apk add --no-cache   bash   librsvg   ttf-dejavu   pngquant   nodejs
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/app
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/built
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/custom.exs.sample
+    - /opt/app/etc/custom.exs
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .iex.exs
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/bin/
+    - bin/
+  - Env:
+    - Key: PORT
+      Value: "4000"
+    Name: env
+  - Env:
+    - Key: DATABASE_URL
+      Value: '"postgresql://postgres@postgres/postgres"'
+    Name: env
+  - Env:
+    - Key: REDIS_URL
+      Value: '"redis://redis:6379"'
+    Name: env
+  - Env:
+    - Key: RSVG_FONT_FAMILY
+      Value: '"Dejavu Sans Mono"'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"/opt/app/bin:${PATH}"'
+    Name: env
+  - Name: volume
+    Volumes:
+    - /opt/app/uploads
+  - Name: volume
+    Volumes:
+    - /opt/app/cache
+  - CmdLine:
+    - trap 'exit' INT; /opt/app/bin/asciinema foreground
+    Name: cmd
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "4000"
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

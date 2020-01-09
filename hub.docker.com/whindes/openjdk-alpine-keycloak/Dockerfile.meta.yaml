@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8-jdk-alpine3.8
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"William Hindes <bhindes@hotmail.com>"'
+    Name: label
+  - CmdLine:
+    - apk update &&     apk --no-cache add wget bash  && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: KEYCLOAK_VERSION
+      Value: 4.5.0.Final
+    Name: env
+  - Env:
+    - Key: MSSQL_JDBC_VERSION
+      Value: 7.0.0.jre8
+    Name: env
+  - Env:
+    - Key: SAXON_VERSION
+      Value: "9.9"
+    Name: env
+  - Env:
+    - Key: SAXON_ZIP_VERSION
+      Value: 9-9-0-1J
+    Name: env
+  - Env:
+    - Key: JAVA_OPTS
+      Value: -Djava.net.preferIPv4Stack=true -Djava.net.preferIPv4Addresses=true -Djava.security.egd=file:/dev/./urandom
+    Name: env
+  - CmdLine:
+    - wget -nv https://downloads.jboss.org/keycloak/$KEYCLOAK_VERSION/keycloak-$KEYCLOAK_VERSION.tar.gz
+      && tar xfz keycloak-$KEYCLOAK_VERSION.tar.gz -C / && mv /keycloak-$KEYCLOAK_VERSION
+      /keycloak && rm -rf /keycloak-$KEYCLOAK_VERSION.tar.gz && addgroup -g 1000 keycloak
+      && adduser -u 1000 -D -h /keycloak -s /bin/bash -G keycloak keycloak && mkdir
+      -p /keycloak/modules/system/layers/base/com/microsoft/sqlserver/jdbc/main &&
+      wget -nv http://central.maven.org/maven2/com/microsoft/sqlserver/mssql-jdbc/$MSSQL_JDBC_VERSION/mssql-jdbc-$MSSQL_JDBC_VERSION.jar
+      && mv mssql-jdbc-$MSSQL_JDBC_VERSION.jar /keycloak/modules/system/layers/base/com/microsoft/sqlserver/jdbc/main/mssql-jdbc.jar
+      && mkdir -p /usr/share/java/saxon && wget -nv http://downloads.sourceforge.net/project/saxon/Saxon-HE/$SAXON_VERSION/SaxonHE$SAXON_ZIP_VERSION.zip
+      && mv SaxonHE$SAXON_ZIP_VERSION.zip /usr/share/java/saxon/saxon.zip && unzip
+      /usr/share/java/saxon/saxon.zip -d /usr/share/java/saxon && rm -rf /usr/share/java/saxon/noticies
+      /usr/share/java/saxon/doc /usr/share/java/saxon/saxon9-test.jar /usr/share/java/saxon/saxon9-unpack.jar
+      /usr/share/java/saxon/saxon.zip
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - configuration/changeDatabase.xsl
+    - /keycloak/
+  - CmdLine:
+    - java -jar /usr/share/java/saxon/saxon9he.jar -s:/keycloak/standalone/configuration/standalone.xml
+      -xsl:/keycloak/changeDatabase.xsl -o:/keycloak/standalone/configuration/standalone.xml
+      && java -jar /usr/share/java/saxon/saxon9he.jar -s:/keycloak/standalone/configuration/standalone-ha.xml
+      -xsl:/keycloak/changeDatabase.xsl -o:/keycloak/standalone/configuration/standalone-ha.xml
+      && rm /keycloak/changeDatabase.xsl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - databases/mssql/module.xml
+    - /keycloak/modules/system/layers/base/com/microsoft/sqlserver/jdbc/main
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /keycloak/
+  - CmdLine:
+    - chmod +x /keycloak/docker-entrypoint.sh && chmod -R 755 /keycloak
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /keycloak
+  - Name: user
+    User: keycloak
+  - Name: expose
+    Ports:
+    - "8080"
+  - Health:
+      Interval: 20000000000
+      Test:
+      - CMD-SHELL
+      - wget --quiet --tries=1 --spider http://localhost:8080/ || exit 1
+      Timeout: 5000000000
+    Name: healthcheck
+  - CmdLine:
+    - /bin/bash
+    - /keycloak/docker-entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jdk-alpine3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-alpine3.8

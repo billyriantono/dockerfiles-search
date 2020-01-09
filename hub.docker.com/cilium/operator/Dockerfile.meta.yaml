@@ -1,0 +1,77 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: docker.io/library/golang:1.13.5
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"maintainer@cilium.io"'
+    Name: label
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/cilium/cilium
+  - Name: workdir
+    Path: /go/src/github.com/cilium/cilium/operator
+  - Key: LOCKDEBUG
+    Name: arg
+    Value: null
+  - Key: V
+    Name: arg
+    Value: null
+  - CmdLine:
+    - make CGO_ENABLED=0 GOOS=linux LOCKDEBUG=$LOCKDEBUG PKG_BUILD=1 EXTRA_GOBUILD_FLAGS="-a
+      -installsuffix cgo"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip cilium-operator
+    Name: run
+    PrependShell: true
+  From:
+    Image: docker.io/library/golang:1.13.5
+  Name: builder
+  Platform: ""
+  SourceCode: FROM docker.io/library/golang:1.13.5 as builder
+- As: certs
+  BaseName: docker.io/library/alpine:3.9.3
+  Commands:
+  - CmdLine:
+    - apk --update add ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Image: docker.io/library/alpine:3.9.3
+  Name: certs
+  Platform: ""
+  SourceCode: FROM docker.io/library/alpine:3.9.3 as certs
+- BaseName: scratch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"maintainer@cilium.io"'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/cilium/cilium/operator/cilium-operator
+    - /usr/bin/cilium-operator
+  - Chown: ""
+    From: certs
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/ca-certificates.crt
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - /usr/bin/cilium-operator
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

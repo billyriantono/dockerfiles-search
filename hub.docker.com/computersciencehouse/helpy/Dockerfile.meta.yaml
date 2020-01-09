@@ -1,0 +1,88 @@
+MetaArgs: null
+Stages:
+- BaseName: ruby:2.2-alpine
+  Commands:
+  - Env:
+    - Key: RAILS_ENV
+      Value: production
+    - Key: HELPY_HOME
+      Value: /helpy
+    - Key: HELPY_USER
+      Value: helpyuser
+    - Key: HELPY_SLACK_INTEGRATION_ENABLED
+      Value: "true"
+    Name: env
+  - Name: workdir
+    Path: $HELPY_HOME
+  - CmdLine:
+    - apk --update --no-cache add     git     imagemagick     nodejs     postgresql-client     tzdata   &&
+      adduser -S $HELPY_USER   && mkdir -p $HELPY_HOME   && git clone --depth=1 https://github.com/helpyio/helpy.git
+      $HELPY_HOME
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - database.yml
+    - $HELPY_HOME/config/database.yml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - $HELPY_HOME/run.sh
+  - CmdLine:
+    - sed -i '/ruby "2.2.1"/d' $HELPY_HOME/Gemfile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'gem "activerecord-nulldb-adapter"' >> $HELPY_HOME/Gemfile   && echo 'gem
+      "rails_12factor"' >> $HELPY_HOME/Gemfile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'sed -i "s|gem ''griddler-mailin''|gem ''griddler-mailin'', git: ''https://github.com/ComputerScienceHouse/griddler-mailin'',
+      branch: ''master''|" $HELPY_HOME/Gemfile'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'test "$HELPY_SLACK_INTEGRATION_ENABLED" = "true" && sed -i ''$ a\gem "helpy_slack",
+      git: "https://github.com/helpyio/helpy_slack.git", branch: "master"'' $HELPY_HOME/Gemfile'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --update --no-cache add --virtual build-deps     g++     git     linux-headers     make     musl-dev     postgresql-dev     sqlite-dev   &&
+      bundle install   && DB_ADAPTER=nulldb bundle exec rake assets:precompile   &&
+      apk del build-deps
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +r /usr/local/bundle/gems/griddler-mandrill-1.1.3/lib/griddler/mandrill/adapter.rb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s|mount_griddler|post '/email/inbound' => 'griddler/emails#create'|"
+      $HELPY_HOME/config/routes.rb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sf /dev/stdout /helpy/log/production.log   && mkdir -p $HELPY_HOME/public/uploads
+      $HELPY_HOME/tmp   && chown -R $HELPY_USER $HELPY_HOME /usr/local/lib/ruby /usr/local/bundle   &&
+      chmod -R 777 $HELPY_HOME/public/uploads $HELPY_HOME/tmp   && chmod +x $HELPY_HOME/run.sh
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $HELPY_USER
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - ./run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ruby:2.2-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ruby:2.2-alpine

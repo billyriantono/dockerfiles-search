@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- As: frontend
+  BaseName: node
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./frontend
+    - /var/app
+  - Name: workdir
+    Path: /var/app/
+  - CmdLine:
+    - npm i -g parcel-bundler --unsafe-perm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install &&     parcel build index.html
+    Name: run
+    PrependShell: true
+  From:
+    Image: node
+  Name: frontend
+  Platform: ""
+  SourceCode: FROM node AS Frontend
+- As: backend
+  BaseName: golang
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - '*.go'
+    - /go/src/github.com/zottelchin/stundenzettel/
+  - Chown: ""
+    From: Frontend
+    Name: copy
+    SourcesAndDest:
+    - /var/app/dist
+    - /go/src/github.com/zottelchin/stundenzettel/frontend/dist
+  - Name: workdir
+    Path: /go/src/github.com/zottelchin/stundenzettel
+  - CmdLine:
+    - go get github.com/go-bindata/go-bindata/... &&     /go/bin/go-bindata ./frontend/dist/...
+      &&     go get
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=1 GOOS=linux go build -a -ldflags '-extldflags "-static" -s' -installsuffix
+      cgo -o Stundenzettel -v .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang
+  Name: backend
+  Platform: ""
+  SourceCode: FROM golang AS Backend
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: Backend
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/zottelchin/stundenzettel/Stundenzettel
+    - /Stundenzettel
+  - Env:
+    - Key: GIN_MODE
+      Value: release
+    Name: env
+  - Name: workdir
+    Path: /
+  - Name: expose
+    Ports:
+    - "8899"
+  - Name: volume
+    Volumes:
+    - /data
+  - CmdLine:
+    - /Stundenzettel
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

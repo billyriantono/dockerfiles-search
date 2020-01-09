@@ -1,0 +1,116 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: maven:3.6.0-jdk-8
+  Commands:
+  - CmdLine:
+    - git clone https://github.com/apache/servicecomb-pack.git   && cd servicecomb-pack   &&
+      mvn clean package -f alpha -DskipTests=true
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.6.0-jdk-8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM maven:3.6.0-jdk-8 as builder
+- BaseName: postgres:9.6-alpine
+  Commands:
+  - Labels:
+    - Key: description
+      Value: '"Apache ServiceComb Pack"'
+    Name: label
+  - Labels:
+    - Key: maintainer
+      Value: '"coolbeevip@gmail.com"'
+    Name: label
+  - Env:
+    - Key: ALPHA_VERSION
+      Value: 0.6.0-SNAPSHOT
+    Name: env
+  - Env:
+    - Key: POSTGRES_USER
+      Value: saga
+    Name: env
+  - Env:
+    - Key: POSTGRES_PASSWORD
+      Value: password
+    Name: env
+  - Env:
+    - Key: POSTGRES_DB
+      Value: saga
+    Name: env
+  - Env:
+    - Key: ELASTICSEARCH_VERSION
+      Value: 6.6.2
+    Name: env
+  - Env:
+    - Key: ALPHA_MODEL
+      Value: AKKA
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - startup.sh
+    - /
+  - CmdLine:
+    - mkdir /servicecomb-pack /servicecomb-pack/plugins /servicecomb-pack/logs
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /servicecomb-pack/alpha/alpha-server/target/saga/alpha-server-${ALPHA_VERSION}-exec.jar
+    - /servicecomb-pack/alpha-server-exec.jar
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /servicecomb-pack/alpha/alpha-benchmark/target/saga/alpha-benchmark-${ALPHA_VERSION}-exec.jar
+    - /servicecomb-pack/alpha-benchmark-exec.jar
+  - CmdLine:
+    - wget -O /elasticsearch-${ELASTICSEARCH_VERSION}.tar.gz https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-${ELASTICSEARCH_VERSION}.tar.gz   &&
+      tar -xzf elasticsearch-${ELASTICSEARCH_VERSION}.tar.gz   && rm elasticsearch-${ELASTICSEARCH_VERSION}.tar.gz   &&
+      mv elasticsearch-${ELASTICSEARCH_VERSION} elasticsearch   && mkdir -p /elasticsearch/data   &&
+      chown -R postgres:postgres /elasticsearch   && rm -rf /elasticsearch/modules/x-pack-ml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories   &&
+      apk add openjdk8-jre   && chmod +x /startup.sh   && chown -R postgres:postgres
+      /servicecomb-pack
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /servicecomb-pack
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: expose
+    Ports:
+    - "8090"
+  - Name: expose
+    Ports:
+    - "5432"
+  - Name: expose
+    Ports:
+    - "9200"
+  - Name: volume
+    Volumes:
+    - /servicecomb-pack/logs
+  - Name: volume
+    Volumes:
+    - /servicecomb-pack/plugins
+  - Name: volume
+    Volumes:
+    - /var/lib/postgresql/data
+  - CmdLine:
+    - /startup.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: postgres:9.6-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM postgres:9.6-alpine

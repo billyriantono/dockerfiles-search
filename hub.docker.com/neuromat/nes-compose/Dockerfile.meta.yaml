@@ -1,0 +1,129 @@
+MetaArgs: null
+Stages:
+- As: wheeler
+  BaseName: alpine:3.9
+  Commands:
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - "apk add --no-cache \t\tlibpng-dev \t\tfreetype-dev \t\tbuild-base \t\tgit \t\tpostgresql-dev
+      \t\topenblas-dev \t\tlibjpeg-turbo-dev \t\tpython3-dev && \tapk add --no-cache
+      \t\t--repository http://dl-cdn.alpinelinux.org/alpine/edge/testing \t\thdf5-dev
+      && \trm -rf /var/cache/apk/* && \tln -s /usr/include/locale.h /usr/include/xlocale.h"
+    Name: run
+    PrependShell: true
+  - Key: NES_TAG
+    Name: arg
+    Value: unset
+  - Key: NES_BRANCH
+    Name: arg
+    Value: unset
+  - Key: NES_DIR
+    Name: arg
+    Value: /nes
+  - Env:
+    - Key: NES_DIR
+      Value: $NES_DIR
+    Name: env
+  - CmdLine:
+    - "mkdir -p \"$NES_DIR\"  && \t\tif [ \"$NES_TAG\" != \"unset\" ]; then \t\t\twget
+      https://github.com/neuromat/nes/archive/TAG-\"${NES_TAG}\".tar.gz -qO - | \t\t\t\ttar
+      xzv --strip-components=1 -C \"$NES_DIR\" ;\t\t\tsed -i 's/\\(psycopg2==\\)[0-9.]\\+/\\12.7.5/'
+      /nes/patientregistrationsystem/qdc/requirements.txt ;\t\t\tsed -i '1isetuptools>=40.6.3'
+      /nes/patientregistrationsystem/qdc/requirements.txt ;\t\t\tsed -i '1ipip>=18.1'
+      /nes/patientregistrationsystem/qdc/requirements.txt ;\t\t\techo 'mne>=0.17.0'
+      >> /nes/patientregistrationsystem/qdc/requirements.txt ;\t\t\techo '-e \"git+https://github.com/AllenInstitute/nwb-api.git#egg=nwb&subdirectory=ainwb\"'
+      >> /nes/patientregistrationsystem/qdc/requirements.txt ;\t\telif [ \"$NES_BRANCH\"
+      != \"unset\" ]; then \t\t\tgit clone -j $(nproc) -b \"$NES_BRANCH\"  https://github.com/neuromat/nes.git
+      \"$NES_DIR\" ;\t\telse \t\t\tgit clone -j $(nproc) https://github.com/neuromat/nes.git
+      \"$NES_DIR\" ;\t\tfi"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir -p /wheels/requirement && \t\tcp /nes/patientregistrationsystem/qdc/requirements.txt
+      /wheels/requirement"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /wheels
+  - CmdLine:
+    - "pip3 install -r requirement/requirements.txt && \t\tpip3 install -U wheel &&
+      \t\tpip3 wheel -r requirement/requirements.txt"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: wheeler
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as wheeler
+- BaseName: alpine:3.9
+  Commands:
+  - Name: shell
+    Shell:
+    - /bin/sh
+    - -exc
+  - CmdLine:
+    - "apk update && \tapk add --no-cache \tgit \tlibpq \topenblas-dev \tpython3 &&
+      \tapk add --no-cache \t\t--repository http://dl-cdn.alpinelinux.org/alpine/edge/testing
+      \t\thdf5-dev"
+    Name: run
+    PrependShell: true
+  - Key: NES_DIR
+    Name: arg
+    Value: /nes
+  - Env:
+    - Key: NES_DIR
+      Value: $NES_DIR
+    Name: env
+  - Chown: ""
+    From: wheeler
+    Name: copy
+    SourcesAndDest:
+    - /wheels
+    - /wheels
+  - Chown: ""
+    From: wheeler
+    Name: copy
+    SourcesAndDest:
+    - $NES_DIR
+    - $NES_DIR
+  - CmdLine:
+    - "pip3 install -r /wheels/requirement/requirements.txt -f /wheels && \t\trm -rf
+      /wheels && \t\trm -rf /root/.cache/pip*"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - $NES_DIR
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./entrypoint.sh
+    - /
+  - Env:
+    - Key: NES_IP
+      Value: ${NES_IP:-0.0.0.0}
+    Name: env
+  - Env:
+    - Key: NES_PORT
+      Value: ${NES_PORT:-8000}
+    Name: env
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /bin/sh
+    - -c
+    - /usr/bin/python3 ${NES_DIR}/patientregistrationsystem/qdc/manage.py runserver
+      -v3 $NES_IP:$NES_PORT
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

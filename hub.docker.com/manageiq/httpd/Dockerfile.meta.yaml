@@ -1,0 +1,174 @@
+MetaArgs: null
+Stages:
+- BaseName: centos/httpd:latest
+  Commands:
+  - Maintainer: ManageIQ https://github.com/ManageIQ/manageiq-appliance-build
+    Name: maintainer
+  - Key: DBUS_API_REF
+    Name: arg
+    Value: master
+  - Env:
+    - Key: container
+      Value: oci
+    Name: env
+  - Labels:
+    - Key: name
+      Value: '"auth-httpd"'
+    - Key: vendor
+      Value: '"ManageIQ"'
+    - Key: url
+      Value: '"http://manageiq.org/"'
+    - Key: summary
+      Value: '"httpd image with external authentication"'
+    - Key: description
+      Value: '"An httpd image which includes packages and configuration necessary
+        for handling external authentication."'
+    - Key: io.k8s.display-name
+      Value: '"Httpd with Authentication"'
+    - Key: io.k8s.description
+      Value: '"An httpd image which includes packages and configuration necessary
+        for handling external authentication."'
+    - Key: io.openshift.expose-services
+      Value: '"80:http"'
+    - Key: io.openshift.tags
+      Value: '"httpd"'
+    Name: label
+  - Name: stopsignal
+    Signal: SIGRTMIN+3
+  - CmdLine:
+    - yum -y install centos-release-scl-rh &&     yum -y install --setopt=tsflags=nodocs
+      mod_ssl                                                                 &&     yum
+      -y install --setopt=tsflags=nodocs sssd                                                                    sssd-dbus                                                               &&     yum
+      -y install --setopt=tsflags=nodocs mod_auth_kerb                                                           mod_auth_gssapi                                                         mod_authnz_pam                                                          mod_intercept_form_submit                                               mod_lookup_identity                                                     mod_auth_mellon                                                         mod_auth_openidc                                                        &&     yum
+      -y install --setopt=tsflags=nodocs c-ares                                                                  certmonger                                                              ipa-client                                                              ipa-admintools                                                          &&     yum
+      -y install --setopt=tsflags=nodocs adcli                                                                   realmd                                                                  oddjob                                                                  oddjob-mkhomedir                                                        samba-common                                                            samba-common-tools                                                      &&     yum
+      clean all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - (cd /lib/systemd/system/sysinit.target.wants && for i in *; do [ $i == systemd-tmpfiles-setup.service
+      ] || rm -vf $i; done) &      rm -vf /lib/systemd/system/multi-user.target.wants/*
+      &&      rm -vf /etc/systemd/system/*.wants/* &&      rm -vf /lib/systemd/system/local-fs.target.wants/*
+      &&      rm -vf /lib/systemd/system/sockets.target.wants/*udev* &&      rm -vf
+      /lib/systemd/system/sockets.target.wants/*initctl* &&      rm -vf /lib/systemd/system/basic.target.wants/*
+      &&      rm -vf /lib/systemd/system/anaconda.target.wants/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -f /etc/httpd/conf.d/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: RUBY_GEMS_ROOT
+      Value: /usr/local/lib/ruby/gems/2.5.0
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - CmdLine:
+    - yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+      &&     curl -sL https://copr.fedorainfracloud.org/coprs/manageiq/ManageIQ-Master/repo/epel-7/manageiq-ManageIQ-Master-epel-7.repo
+      -o /etc/yum.repos.d/manageiq.repo
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum -y install --setopt=tsflags=nodocs ruby-install make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ruby-install --system ruby 2.5.7 -- --disable-install-doc --enable-shared &&
+      rm -rf /usr/local/src/* && yum clean all
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HTTPD_DBUS_API_SERVICE_DIRECTORY
+      Value: /opt/dbus_api_service
+    Name: env
+  - CmdLine:
+    - mkdir -p ${HTTPD_DBUS_API_SERVICE_DIRECTORY}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${HTTPD_DBUS_API_SERVICE_DIRECTORY} &&     curl -L https://github.com/ManageIQ/dbus_api_service/tarball/${DBUS_API_REF}
+      | tar vxz -C ${HTTPD_DBUS_API_SERVICE_DIRECTORY} --strip 1 &&     gem install
+      bundler &&     bundle install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - container-assets/dbus-api.service
+    - /usr/lib/systemd/system/dbus-api.service
+  - CmdLine:
+    - mkdir /etc/httpd/auth-conf.d
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - container-assets/save-container-environment
+    - /usr/bin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - container-assets/initialize-httpd-auth.sh
+    - /usr/bin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - container-assets/initialize-httpd-auth.service
+    - /usr/lib/systemd/system/initialize-httpd-auth.service
+  - CmdLine:
+    - mkdir -p /etc/systemd/system/sssd.service.d
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - container-assets/sssd-startup.conf
+    - /etc/systemd/system/sssd.service.d/startup.conf
+  - CmdLine:
+    - mkdir -p /etc/systemd/system/httpd.service.d
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - container-assets/httpd-environment.conf
+    - /etc/systemd/system/httpd.service.d/environment.conf
+  - CmdLine:
+    - mkdir -p /var/www/html/proxy_pages
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - container-assets/invalid_sso_credentials.js
+    - /var/www/html/proxy_pages/
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: workdir
+    Path: /etc/httpd
+  - CmdLine:
+    - systemctl enable initialize-httpd-auth sssd httpd dbus-api
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /sys/fs/cgroup
+  - CmdLine:
+    - /usr/sbin/init
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos/httpd:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos/httpd:latest

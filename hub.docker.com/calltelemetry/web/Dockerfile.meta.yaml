@@ -1,0 +1,239 @@
+MetaArgs: null
+Stages:
+- As: app_builder
+  BaseName: erlang:22.1
+  Commands:
+  - Key: phoenix_subdir
+    Name: arg
+    Value: .
+  - Key: build_env
+    Name: arg
+    Value: prod
+  - Env:
+    - Key: PATH
+      Value: /root/.asdf/bin:/root/.asdf/shims:$PATH
+    Name: env
+  - Env:
+    - Key: MIX_ENV
+      Value: ${build_env}
+    - Key: TERM
+      Value: xterm
+    Name: env
+  - Env:
+    - Key: DB_USER
+      Value: postgres
+    Name: env
+  - Env:
+    - Key: DB_PASSWORD
+      Value: postgres
+    Name: env
+  - Env:
+    - Key: DB_NAME
+      Value: calltelemetry_prod
+    Name: env
+  - Env:
+    - Key: DB_HOSTNAME
+      Value: localhost
+    Name: env
+  - Env:
+    - Key: ONPREM
+      Value: "TRUE"
+    Name: env
+  - CmdLine:
+    - apt-get clean && apt-get update && apt-get install -y locales
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - locale-gen en en_US en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - CmdLine:
+    - git clone https://github.com/asdf-vm/asdf.git ~/.asdf
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NODE_VERSION
+      Value: 10.16.3
+    Name: env
+  - CmdLine:
+    - asdf plugin-add nodejs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - asdf install nodejs ${NODE_VERSION}   && asdf global nodejs ${NODE_VERSION}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - asdf plugin-add elixir
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ELIXIR_VERSION
+      Value: 1.9.4
+    Name: env
+  - CmdLine:
+    - asdf install elixir ${ELIXIR_VERSION} && asdf global elixir ${ELIXIR_VERSION}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mix local.rebar --force && mix local.hex --force
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - mix deps.get
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mix deps.compile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${phoenix_subdir}/assets   && npm install   && npm run build   && cd ..   &&
+      mix phx.digest
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mix release
+    Name: run
+    PrependShell: true
+  From:
+    Image: erlang:22.1
+  Name: app_builder
+  Platform: ""
+  SourceCode: FROM erlang:22.1 as app_builder
+- As: app
+  BaseName: debian:stretch
+  Commands:
+  - CmdLine:
+    - apt-get clean && apt-get update && apt-get install -y locales
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - locale-gen
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: LANGUAGE
+      Value: en_US:en
+    Name: env
+  - Env:
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y openssl openssh-server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -f -y postgresql-client
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -f -y vim
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y dnsutils
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd --create-home app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/app
+  - Chown: ""
+    From: app_builder
+    Name: copy
+    SourcesAndDest:
+    - /app/_build
+    - .
+  - CmdLine:
+    - 'chown -R app: ./prod'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /cdr
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'chown -R app: /cdr'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir .sshd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ssh-keygen -A
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ssh-keygen -m PEM -N "" -b 2048 -t rsa -f .sshd/ssh_host_rsa_key
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'chown -R app: .sshd'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'chown -R app: /cdr'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  - Env:
+    - Key: PORT
+      Value: ${PORT}
+    Name: env
+  - Env:
+    - Key: ONPREM
+      Value: "TRUE"
+    Name: env
+  - Name: expose
+    Ports:
+    - ${PORT}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - onprem-start.sh
+    - .
+  - CmdLine:
+    - /bin/bash
+    - onprem-start.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: app
+  Platform: ""
+  SourceCode: FROM debian:stretch AS app

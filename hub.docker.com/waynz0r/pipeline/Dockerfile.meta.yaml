@@ -1,0 +1,111 @@
+MetaArgs:
+- DefaultValue: "1.12"
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: "1.12"
+Stages:
+- As: builder
+  BaseName: golang:${GO_VERSION}-alpine
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache bash ca-certificates make curl git mercurial bzr
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -d github.com/kubernetes-sigs/aws-iam-authenticator/cmd/aws-iam-authenticator
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd $GOPATH/src/github.com/kubernetes-sigs/aws-iam-authenticator &&     git checkout
+      981ecbe &&     go install ./cmd/aws-iam-authenticator
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOFLAGS
+      Value: '"-mod=readonly"'
+    Name: env
+  - Key: GOPROXY
+    Name: arg
+    Value: null
+  - CmdLine:
+    - mkdir -p /build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.*
+    - /build/
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /build
+  - CmdLine:
+    - make build-release
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:${GO_VERSION}-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:${GO_VERSION}-alpine AS builder
+- BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache ca-certificates tzdata
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/aws-iam-authenticator
+    - /usr/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/views
+    - /views/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/templates
+    - /templates/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/build/release/pipeline
+    - /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/build/release/worker
+    - /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/build/release/pipelinectl
+    - /
+  - CmdLine:
+    - /pipeline
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

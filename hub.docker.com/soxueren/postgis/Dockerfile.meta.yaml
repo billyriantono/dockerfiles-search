@@ -1,0 +1,103 @@
+MetaArgs: null
+Stages:
+- BaseName: postgres:12.1-alpine
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: 9.1.0
+  - Labels:
+    - Key: maintainer
+      Value: '"Citus Data https://citusdata.com"'
+    - Key: org.label-schema.name
+      Value: '"Citus"'
+    - Key: org.label-schema.description
+      Value: '"Scalable PostgreSQL for multi-tenant and real-time workloads"'
+    - Key: org.label-schema.url
+      Value: '"https://www.citusdata.com"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/citusdata/citus"'
+    - Key: org.label-schema.vendor
+      Value: '"Citus Data, Inc."'
+    - Key: org.label-schema.version
+      Value: ${VERSION}-alpine
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - CmdLine:
+    - apk add --no-cache             --virtual builddeps         build-base         curl         curl-dev         openssl-dev         ca-certificates         tar         clang         llvm         icu-dev
+      &&     apk add --no-cache libcurl &&     curl -sfLO "https://github.com/citusdata/citus/archive/v${VERSION}.tar.gz"
+      &&     tar xzf "v${VERSION}.tar.gz" &&     cd "citus-${VERSION}" &&     ./configure
+      &&     make install &&     cd .. &&     rm -rf "citus-${VERSION}" "v${VERSION}.tar.gz"
+      &&     apk del builddeps
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: POSTGIS_VERSION
+      Value: 2.5.2
+    Name: env
+  - Env:
+    - Key: POSTGIS_SHA256
+      Value: 225aeaece00a1a6a9af15526af81bef2af27f4c198de820af1367a792ee1d1a9
+    Name: env
+  - CmdLine:
+    - wget -O postgis.tar.gz  "https://github.com/postgis/postgis/archive/$POSTGIS_VERSION.tar.gz"      &&
+      echo "$POSTGIS_SHA256 *postgis.tar.gz" | sha256sum -c -     && mkdir -p /usr/src/postgis     &&
+      tar         --extract         --file postgis.tar.gz         --directory /usr/src/postgis         --strip-components
+      1 && rm postgis.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apk add \t--no-cache \t--virtual .build-deps \t\tautoconf \t\tautomake \t\tclang-dev
+      \t\tjson-c-dev \t\tlibtool \t\tlibxml2-dev \t\tllvm8 \t\tmake \t\tperl && apk
+      add \t--no-cache \t--virtual .build-deps-edge \t--repository http://dl-cdn.alpinelinux.org/alpine/edge/main
+      \t--repository http://dl-cdn.alpinelinux.org/alpine/edge/community \t\tg++ \t\tgdal-dev
+      \t\tgeos-dev \t\tproj-dev \t\tprotobuf-c-dev && cd /usr/src/postgis && ./autogen.sh
+      && ./configure && make && make install && cd / && rm -r /usr/src/postgis &&
+      apk del \t.build-deps \t.build-deps-edge && apk add \t--no-cache \t--virtual
+      .postgis-rundeps \t\tjson-c && apk add \t--no-cache \t--virtual .postgis-rundeps-edge
+      \t--repository http://dl-cdn.alpinelinux.org/alpine/edge/main \t--repository
+      http://dl-cdn.alpinelinux.org/alpine/edge/community \t\tgeos \t\tgdal \t\tproj
+      \t\tprotobuf-c"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./initdb-postgis.sh
+    - /docker-entrypoint-initdb.d/postgis.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./update-postgis.sh
+    - /usr/local/bin
+  - CmdLine:
+    - echo "shared_preload_libraries='citus'" >> /usr/local/share/postgresql/postgresql.conf.sample
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - 000-configure-stats.sh
+    - 001-create-citus-extension.sql
+    - /docker-entrypoint-initdb.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pg_healthcheck
+    - /
+  - Health:
+      Interval: 4000000000
+      StartPeriod: 6000000000
+      Test:
+      - CMD-SHELL
+      - ./pg_healthcheck
+    Name: healthcheck
+  From:
+    Image: postgres:12.1-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM postgres:12.1-alpine

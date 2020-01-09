@@ -1,0 +1,60 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:14.04
+  Commands:
+  - Maintainer: Rob Hasselbaum <rob@hasselbaum.net>
+    Name: maintainer
+  - Name: expose
+    Ports:
+    - "22"
+  - Name: volume
+    Volumes:
+    - /sftp-root
+    - /creds
+  - CmdLine:
+    - DEBIAN_FRONTEND=noninteractive  apt-get update &&  apt-get install -y --no-install-recommends
+      openssh-server supervisor python3 ssmtp rsync inotify-tools &&  mkdir -p /var/run/sshd
+      &&  groupadd sftp &&  useradd -d / -g sftp -M sftpadmin -s /bin/false    -p
+      '$6$RxQyRXO3$IBErDaNVy4uKXjazOFyLHm4jFdsPLCloR52bpT3KDyAdcKHV/HlX.vO3/8x22f5PTMWFP7e.aB.D4mu.7nWXW1'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -e 's|\(Subsystem sftp \).*|\1internal-sftp -l INFO|' -i /etc/ssh/sshd_config
+      &&  echo '\n# SFTP Jailed users' >>/etc/ssh/sshd_config &&  echo '\nMatch user
+      sftpadmin' >>/etc/ssh/sshd_config &&  echo '    ChrootDirectory /sftp-root'
+      >>/etc/ssh/sshd_config &&  echo '\nMatch group sftp' >>/etc/ssh/sshd_config
+      &&  echo '    X11Forwarding no' >>/etc/ssh/sshd_config &&  echo '    AllowTcpForwarding
+      no' >>/etc/ssh/sshd_config &&  echo '    ChrootDirectory /sftp-root/%u' >>/etc/ssh/sshd_config
+      &&  echo '    AuthorizedKeysFile /sftp-root/%u/.ssh/authorized_keys' >>/etc/ssh/sshd_config
+      &&  echo '    ForceCommand internal-sftp -l INFO' >>/etc/ssh/sshd_config &&  echo
+      '\n# UMask for chrooted SFTP users\nsession optional pam_umask.so umask=002'
+      >>/etc/pam.d/sshd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/sftpenv
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/bin/supervisord
+    - -c
+    - /etc/supervisor/conf.d/scrappysftp.conf
+    Name: cmd
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/supervisor/conf.d/scrappysftp.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/*
+    - /usr/local/bin/
+  From:
+    Image: ubuntu:14.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:14.04

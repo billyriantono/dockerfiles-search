@@ -1,0 +1,134 @@
+MetaArgs: null
+Stages:
+- BaseName: blitznote/debootstrap-amd64:16.04
+  Commands:
+  - Maintainer: Patrick Double <pat@patdouble.com>
+    Name: maintainer
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: SOURCE_COMMIT
+    Name: arg
+    Value: null
+  - Key: DOCKERFILE_PATH
+    Name: arg
+    Value: null
+  - Key: SOURCE_TYPE
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.docker.dockerfile
+      Value: '"$DOCKERFILE_PATH/Dockerfile"'
+    - Key: org.label-schema.license
+      Value: '"Apache-2.0"'
+    - Key: org.label-schema.name
+      Value: '"Container for DansGuardian, a web content filter"'
+    - Key: org.label-schema.url
+      Value: '"https://github.com/double16/dansguardian"'
+    - Key: org.label-schema.vcs-ref
+      Value: $SOURCE_COMMIT
+    - Key: org.label-schema.vcs-type
+      Value: '"$SOURCE_TYPE"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/double16/dansguardian.git"'
+    - Key: org.label-schema.vendor
+      Value: '"https://github.com/double16"'
+    Name: label
+  - CmdLine:
+    - rm -rf /var/lib/apt/lists/* && apt-get -q update &&  apt-get install -y --allow-downgrades
+      --fix-broken --no-upgrade squid dansguardian apache2 sarg wget cron psmisc netcat-openbsd
+      &&  apt-get clean &&  usermod -aG users dansguardian &&  usermod -aG users proxy
+      &&  rm -rf /var/lib/apt/lists/* &&  rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - blacklist-update.sh
+    - /
+  - CmdLine:
+    - chmod u+x /blacklist-update.sh && ln -s /blacklist-update.sh /etc/cron.weekly/blacklist-update.sh
+      && /bin/sh -x /blacklist-update.sh && cp /blacklists/banned*list /etc/dansguardian/lists/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - squid/*
+    - /etc/squid/
+  - CmdLine:
+    - sed -i -e 's/output_dir .*/output_dir \/log\/sarg/' -e 's/access_log .*/access_log
+      \/log\/squid3\/access.log/' -e 's/^resolve_ip.*/resolve_ip yes/' /etc/sarg/sarg.conf
+      && sed -i -e 's/HTMLOUT=.*/HTMLOUT=\/log\/sarg/' /etc/sarg/sarg-reports.conf
+      && ln -sf /log/sarg /var/www/html/reports
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/filterport.*/filterport = 3128/' -e 's/proxyport.*/proxyport =
+      8123/' -e 's/forwardedfor = .*/forwardedfor = on/' -e 's/#loglocation.*/loglocation
+      = \/log\/dansguardian\/access.log/' -e 's/UNCONFIGURED/#UNCONFIGURED/' /etc/dansguardian/dansguardian.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - logrotate.d/*
+    - /etc/logrotate.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - logrotate.conf
+    - /etc/logrotate.conf
+  - CmdLine:
+    - sed -i "s/Listen 80/Listen 8125/" /etc/apache2/ports.conf && sed -i "s/:80>/:8125>/"
+      /etc/apache2/sites-enabled/000-default.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /etc/apache2/mods-available/cgi.load /etc/apache2/mods-enabled/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./start.sh
+    - ./healthcheck.sh
+    - /
+  - CmdLine:
+    - chmod u+x /*.sh
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /blacklists
+    - /cache
+    - /log
+  - Name: expose
+    Ports:
+    - "3128"
+    - "8123"
+    - "8124"
+    - "8125"
+  - CmdLine:
+    - /start.sh
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 200000000000
+      Test:
+      - CMD-SHELL
+      - /healthcheck.sh || exit 1
+      Timeout: 100000000000
+    Name: healthcheck
+  From:
+    Image: blitznote/debootstrap-amd64:16.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM blitznote/debootstrap-amd64:16.04

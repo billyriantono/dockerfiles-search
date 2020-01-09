@@ -1,0 +1,93 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:16.04
+  Commands:
+  - Maintainer: '"Priyesh Kannan"'
+    Name: maintainer
+  - CmdLine:
+    - apt-get update --fix-missing     &&  apt-get install -y --no-install-recommends
+      curl grep sed dpkg bzip2 make ca-certificates     &&  apt-get install -y --no-install-recommends
+      libglib2.0-0 libxext6 libsm6 libxrender1 libav-tools    &&  apt-get install
+      -y --no-install-recommends libfreetype6-dev libpng-dev libopenblas-dev liblapack-dev
+      gfortran     &&  apt-get install -y --no-install-recommends texlive texlive-latex-extra
+      pandoc     &&  apt-get clean
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    - Key: LC_ALL
+      Value: C.UTF-8
+    - Key: ANACONDA_URL
+      Value: '"https://repo.continuum.io/archive/Anaconda2-4.2.0-Linux-x86_64.sh"'
+    - Key: TALIB_URL
+      Value: '"https://downloads.sourceforge.net/project/ta-lib/ta-lib/0.4.0/ta-lib-0.4.0-src.tar.gz"'
+    Name: env
+  - CmdLine:
+    - curl -s -L "${TALIB_URL}" | tar xvz     &&  cd ta-lib     &&  ./configure --prefix=/usr     &&  make     &&  make
+      install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - TINI_VERSION=`curl https://github.com/krallin/tini/releases/latest | grep -o
+      "/v.*\"" | sed 's:^..\(.*\).$:\1:'`     && curl -s -L "https://github.com/krallin/tini/releases/download/v${TINI_VERSION}/tini_${TINI_VERSION}.deb"
+      -o tini.deb     && dpkg -i tini.deb     && chmod +x /usr/bin/tini     && rm
+      tini.deb
+    Name: run
+    PrependShell: true
+  - Key: user
+    Name: arg
+    Value: developer
+  - Env:
+    - Key: PATH
+      Value: /home/$user/conda/bin:$PATH
+    Name: env
+  - CmdLine:
+    - useradd -ms /bin/bash $user -p $(openssl passwd -1 $user) -s /sbin/nologin     &&
+      mkdir /home/$user/profile.d     && chown -R $user:$user  /home/$user     &&
+      ANACONDA_URL="https://repo.continuum.io/archive/Anaconda2-4.2.0-Linux-x86_64.sh"     &&
+      curl -L "${ANACONDA_URL}" -o /tmp/anaconda.sh     && chown $user:$user /tmp/anaconda.sh
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $user
+  - CmdLine:
+    - /bin/bash /tmp/anaconda.sh -b -p /home/$user/conda     && rm /tmp/anaconda.sh      &&
+      conda update --quiet --yes anaconda     && conda update --quiet --yes --all     &&
+      conda update --quiet --yes numpy matplotlib statsmodels scikit-learn jupyter    &&
+      conda install --quiet --yes seaborn     && conda install --quiet --yes -c quantopian
+      ta-lib     && pip install pdfminer
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /home/$user/.jupyter     && echo "c.NotebookApp.open_browser=False" >  /home/$user/.jupyter/jupyter_notebook_config.py     &&
+      echo "c.NotebookApp.ip='0.0.0.0'"  >>  /home/$user/.jupyter/jupyter_notebook_config.py     &&
+      echo "c.NotebookApp.port=8888"  >>  /home/$user/.jupyter/jupyter_notebook_config.py     &&
+      echo "c.NotebookApp.password=u'"$(python -c "from IPython.lib import passwd
+      ; password = passwd('$user') ; print password")"'" >>  /home/$user/.jupyter/jupyter_notebook_config.py
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /home/$user/apps
+  - Name: workdir
+    Path: '"/home/$user/apps"'
+  - Name: expose
+    Ports:
+    - "8888"
+  - CmdLine:
+    - /usr/bin/tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - jupyter
+    - notebook
+    - --debug
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:16.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04

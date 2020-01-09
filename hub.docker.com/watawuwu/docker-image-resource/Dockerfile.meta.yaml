@@ -1,0 +1,103 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/concourse/docker-image-resource
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/
+    - /assets
+  - CmdLine:
+    - go build -o /assets/check github.com/concourse/docker-image-resource/cmd/check
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -o /assets/print-metadata github.com/concourse/docker-image-resource/cmd/print-metadata
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -o /assets/ecr-login github.com/concourse/docker-image-resource/vendor/github.com/awslabs/amazon-ecr-credential-helper/ecr-login/cmd
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - "set -e; for pkg in $(go list ./...); do \t\tgo test -o \"/tests/$(basename
+      $pkg).test\" -c $pkg; \tdone"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine AS builder
+- As: resource
+  BaseName: alpine:edge
+  Commands:
+  - CmdLine:
+    - apk --no-cache add bash docker jq ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /assets
+    - /opt/resource
+  - CmdLine:
+    - mv /opt/resource/ecr-login /usr/local/bin/docker-credential-ecr-login
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: resource
+  Platform: ""
+  SourceCode: FROM alpine:edge AS resource
+- As: tests
+  BaseName: resource
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tests
+    - /tests
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /docker-image-resource
+  - CmdLine:
+    - "set -e; for test in /tests/*.test; do \t\t$test -ginkgo.v; \tdone"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: resource
+  Name: tests
+  Platform: ""
+  SourceCode: FROM resource AS tests
+- BaseName: resource
+  Commands: null
+  From:
+    Stage:
+      Index: 1
+      Named: resource
+  Name: ""
+  Platform: ""
+  SourceCode: FROM resource

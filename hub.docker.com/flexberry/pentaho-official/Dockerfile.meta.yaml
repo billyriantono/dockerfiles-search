@@ -1,0 +1,112 @@
+MetaArgs: null
+Stages:
+- As: clickhouse
+  BaseName: flexberry/alt.p8-dev
+  Commands:
+  - CmdLine:
+    - cd /root;   git clone https://github.com/yandex/clickhouse-jdbc;   cd clickhouse-jdbc/;   mvn
+      -q package assembly:single -DskipTests=true;
+    Name: run
+    PrependShell: true
+  From:
+    Image: flexberry/alt.p8-dev
+  Name: clickhouse
+  Platform: ""
+  SourceCode: FROM flexberry/alt.p8-dev as clickhouse
+- BaseName: openjdk:8-slim
+  Commands:
+  - Labels:
+    - Key: description
+      Value: '" Pentaho Server 8.2  image with the ability to transfer administrative
+        tables to the Postgres database"'
+    Name: label
+  - Labels:
+    - Key: maintainer
+      Value: '"Oleg Matvienko <omatvienko@ics.perm.ru>, Alexey Kostarev <kaf@ics.perm.ru>"'
+    Name: label
+  - Env:
+    - Key: PENTAHO_HOME
+      Value: /opt/pentaho
+    Name: env
+  - CmdLine:
+    - mkdir ${PENTAHO_HOME};     useradd -s /bin/bash -d ${PENTAHO_HOME} pentaho;     chown
+      pentaho:pentaho ${PENTAHO_HOME}
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: BISERVER_VERSION
+      Value: "8.2"
+    Name: env
+  - Env:
+    - Key: BISERVER_TAG
+      Value: 8.2.0.0-342
+    Name: env
+  - CmdLine:
+    - sed -i -e 's/main/main contrib/' /etc/apt/sources.list;     apt-get update;     echo
+      "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true"
+      | debconf-set-selections;     apt-get install -y --no-install-recommends wget
+      unzip apt-transport-https sudo fontconfig ttf-mscorefonts-installer;     fc-cache
+      -f -v;     apt-get install -y --no-install-recommends xsltproc;     apt-get
+      clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget --progress=dot:giga http://downloads.sourceforge.net/project/pentaho/Pentaho%20${BISERVER_VERSION}/server/pentaho-server-ce-${BISERVER_TAG}.zip
+      -O /tmp/pentaho-server-ce-${BISERVER_TAG}.zip;     unzip -q /tmp/pentaho-server-ce-${BISERVER_TAG}.zip
+      -d $PENTAHO_HOME;     rm -f /tmp/pentaho-server-ce-${BISERVER_TAG}.zip $PENTAHO_HOME/pentaho-server/promptuser.sh;     sed
+      -i -e 's/\(exec ".*"\) start/\1 run/' $PENTAHO_HOME/pentaho-server/tomcat/bin/startup.sh;     chmod
+      +x $PENTAHO_HOME/pentaho-server/start-pentaho.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: POSTGRESQL_DRIVER_VERSION
+      Value: 42.2.5
+    Name: env
+  - CmdLine:
+    - apt-get update;   mkdir /usr/share/man/man7/;   apt-get install -y --no-install-recommends
+      postgresql-client;   apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*;   rm
+      -f $PENTAHO_HOME/pentaho-server/tomcat/lib/postgre*.jar &&     wget --progress=dot:giga
+      https://jdbc.postgresql.org/download/postgresql-${POSTGRESQL_DRIVER_VERSION}.jar
+      -O $PENTAHO_HOME/pentaho-server/tomcat/lib/postgresql-${POSTGRESQL_DRIVER_VERSION}.jar
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CLICKHOUSE_DRIVER_VERSION
+      Value: "0.1"
+    Name: env
+  - Chown: pentaho
+    From: clickhouse
+    Name: copy
+    SourcesAndDest:
+    - /root/clickhouse-jdbc/target/clickhouse-jdbc-${CLICKHOUSE_DRIVER_VERSION}-SNAPSHOT-jar-with-dependencies.jar
+    - /opt/pentaho/pentaho-server/pentaho-solutions/system;
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs
+    - $PENTAHO_HOME/configs
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /entrypoint.sh
+  - Name: workdir
+    Path: $PENTAHO_HOME/pentaho-server
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-slim

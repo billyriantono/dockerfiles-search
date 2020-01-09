@@ -1,0 +1,135 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: debian:9-slim
+  Commands:
+  - Env:
+    - Key: SHELL
+      Value: /bin/bash
+    - Key: GS_USER
+      Value: gemstone
+    - Key: GS_UID
+      Value: "1001"
+    - Key: GS_GID
+      Value: "100"
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    - Key: LANG
+      Value: en_US.UTF-8
+    - Key: LANGUAGE
+      Value: en_US.UTF-8
+    - Key: HOME
+      Value: /opt/gemstone
+    - Key: GEMSTONE
+      Value: /opt/gemstone/product
+    - Key: PATH
+      Value: /opt/gemstone/product/bin:$PATH
+    - Key: GS_FORCE_CLEAN_LOG_FILE_DELETE
+      Value: "true"
+    Name: env
+  - CmdLine:
+    - dpkg --add-architecture i386   && apt-get update   && apt-get install --assume-yes
+      --no-install-recommends     ca-certificates     libldap-2.4-2:i386     libstdc++6:i386     libx11-6:i386     locales   &&
+      echo "en_US.UTF-8 UTF-8" > /etc/locale.gen   && echo "en_US.ISO-8859-15 ISO-8859-15"
+      >> /etc/locale.gen   && locale-gen   && apt-get clean   && rm --recursive --force
+      /var/lib/apt/lists/* /tmp/* /var/tmp/*   && useradd --uid ${GS_UID} --gid ${GS_GID}
+      --home-dir ${HOME} --no-create-home --no-user-group ${GS_USER}   ;
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:9-slim
+  Name: base
+  Platform: ""
+  SourceCode: FROM debian:9-slim AS base
+- As: download
+  BaseName: alpine:3.10
+  Commands:
+  - Key: GS_ARCH
+    Name: arg
+    Value: null
+  - Key: GS_MAJOR_VERSION
+    Name: arg
+    Value: null
+  - Key: GS_VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: GEMSTONE
+      Value: /opt/gemstone/product
+    Name: env
+  - CmdLine:
+    - wget https://downloads.gemtalksystems.com/pub/GemStoneS/${GS_VERSION}/GemStone${GS_VERSION}-${GS_ARCH}.Linux.zip
+      -O /tmp/GemStone${GS_VERSION}-${GS_ARCH}.Linux.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/gemstone   && unzip -qq /tmp/GemStone${GS_VERSION}-${GS_ARCH}.Linux.zip
+      -d /tmp   && mv /tmp/GemStone${GS_VERSION}-${GS_ARCH}.Linux ${GEMSTONE}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - gemstone.sh
+    - /opt/gemstone/gemstone.sh
+  - CmdLine:
+    - 'true   && mkdir -p     /opt/gemstone/conf/     /opt/gemstone/data/     /opt/gemstone/locks/     /opt/gemstone/log/   &&
+      mv ${GEMSTONE}/data/system.conf /opt/gemstone/conf/system.conf   && rm -rf     ${GEMSTONE}/bin/obsolete/     ${GEMSTONE}/data/     ${GEMSTONE}/doc/     ${GEMSTONE}/examples/     ${GEMSTONE}/include/     ${GEMSTONE}/install/   &&
+      touch /opt/gemstone/conf/gemserver${GS_MAJOR_VERSION}.conf   && echo "netldi${GS_MAJOR_VERSION}
+      50384/tcp #GemStone" >> /etc/services   && echo "gemserver${GS_MAJOR_VERSION}
+      50385/tcp #GemStone" >> /etc/services   ;'
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: download
+  Platform: ""
+  SourceCode: FROM alpine:3.10 as download
+- BaseName: base
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"serpi90@gmail.com"'
+    Name: label
+  - Key: GS_MAJOR_VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: STONE
+      Value: gemserver${GS_MAJOR_VERSION}
+    Name: env
+  - Chown: gemstone:users
+    From: download
+    Name: copy
+    SourcesAndDest:
+    - /opt/gemstone
+    - /opt/gemstone
+  - Chown: ""
+    From: download
+    Name: copy
+    SourcesAndDest:
+    - /etc/services
+    - /etc/services
+  - CmdLine:
+    - ln -s ${GEMSTONE}/bin/gemsetup.sh /etc/profile.d/gemstone.sh
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${GS_UID}:${GS_GID}
+  - Name: workdir
+    Path: /opt/gemstone
+  - Name: volume
+    Volumes:
+    - /opt/gemstone/data/
+  - CmdLine:
+    - ./gemstone.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

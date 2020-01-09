@@ -1,0 +1,153 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:18.04
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"ChubbyCat"'
+    - Key: git
+      Value: '"https://github.com/raffi-ismail/lampodbc"'
+    - Key: dockerhub
+      Value: '"https://hub.docker.com/r/chubbycat/lampodbc"'
+    Name: label
+  - CmdLine:
+    - 'echo ''#!/bin/sh'' > /usr/sbin/policy-rc.d  &&     echo ''exit 101'' >> /usr/sbin/policy-rc.d  &&     chmod
+      +x /usr/sbin/policy-rc.d            &&     dpkg-divert --local --rename --add
+      /sbin/initctl  &&     cp -a /usr/sbin/policy-rc.d /sbin/initctl         &&     sed
+      -i ''s/^exit.*/exit 0/'' /sbin/initctl          &&     echo ''force-unsafe-io''
+      > /etc/dpkg/dpkg.cfg.d/docker-apt-speedup   &&     echo ''DPkg::Post-Invoke
+      { "rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*.deb
+      /var/cache/apt/*.bin || true"; };'' > /etc/apt/apt.conf.d/docker-clean  &&     echo
+      ''APT::Update::Post-Invoke { "rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*.deb
+      /var/cache/apt/*.bin || true"; };'' >> /etc/apt/apt.conf.d/docker-clean &&     echo
+      ''Dir::Cache::pkgcache ""; Dir::Cache::srcpkgcache "";'' >> /etc/apt/apt.conf.d/docker-clean   &&     echo
+      ''Acquire::Languages "none";'' > /etc/apt/apt.conf.d/docker-no-languages   &&     echo
+      ''Acquire::GzipIndexes "true"; Acquire::CompressionTypes::Order:: "gz";'' >
+      /etc/apt/apt.conf.d/docker-gzip-indexes   &&     echo ''Apt::AutoRemove::SuggestsImportant
+      "false";'' > /etc/apt/apt.conf.d/docker-autoremove-suggests'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /var/lib/apt/lists/* &&     mkdir -p /run/systemd && echo 'docker' >
+      /run/systemd/container &&     echo 'debconf debconf/frontend select Noninteractive'
+      | debconf-set-selections
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update -qq && apt-get upgrade -qqy &&     apt-get install -qq -y apt-utils
+      curl git             software-properties-common gcc make autoconf libc-dev pkg-config
+      libmcrypt-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -qqy nano apt-transport-https bash zip unzip jq apache2  php7.2
+      libapache2-mod-php7.2             php-xml php-pear php7.2-dev php-zip php-curl
+      php-gd             php-zip php-mysql php-mbstring php-gmp &&     apt-get update
+      -qqy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pecl install mcrypt-1.0.1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - &&     curl
+      https://packages.microsoft.com/config/ubuntu/18.04/prod.list > /etc/apt/sources.list.d/mssql-release.list
+      &&     curl https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb
+      -o /tmp/packages-microsoft-prod.deb &&     dpkg -i /tmp/packages-microsoft-prod.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update -qqy && ACCEPT_EULA=Y apt-get install -qqy msodbcsql17 mssql-tools
+      unixodbc-dev powershell
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo extension=sqlsrv.so > /etc/php/7.2/mods-available/sqlsrv.ini &&     echo
+      extension=pdo_sqlsrv.so > /etc/php/7.2/mods-available/pdo_sqlsrv.ini &&     ln
+      -s /etc/php/7.2/mods-available/sqlsrv.ini /etc/php/7.2/apache2/conf.d/30-sqlsrv.ini
+      &&     ln -s /etc/php/7.2/mods-available/pdo_sqlsrv.ini /etc/php/7.2/apache2/conf.d/30-pdo_sqlsrv.ini
+      &&     curl -sLo /tmp/tmp.deb http://mirrors.kernel.org/ubuntu/pool/multiverse/liba/libapache-mod-fastcgi/libapache2-mod-fastcgi_2.4.7~0910052141-1.2_amd64.deb
+      &&     dpkg -i /tmp/tmp.deb; apt-get install -f &&     a2enmod actions fastcgi
+      alias proxy_fcgi &&     pecl install sqlsrv pdo_sqlsrv
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends openssh-server  &&
+      echo "root:Docker!" | chpasswd
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/sshd_config
+    - /etc/ssh/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/apache2.conf
+    - /etc/apache2/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/000-default.conf
+    - /etc/apache2/sites-available/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/php.ini
+    - /etc/php/7.2/apache2/
+  - CmdLine:
+    - a2enmod rewrite
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/www
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/composer.json
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sh/setup-composer.sh
+    - /tmp/
+  - CmdLine:
+    - chmod +x /tmp/setup-composer.sh && /tmp/setup-composer.sh && ./composer.phar
+      install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - startup.sh
+    - /var/
+  - CmdLine:
+    - chmod +x /var/startup.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DEFAULT_LISTEN_PORT_HTTP
+      Value: "80"
+    Name: env
+  - Name: expose
+    Ports:
+    - $PORT
+    - "2222"
+  - CmdLine:
+    - /var/startup.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM    ubuntu:18.04

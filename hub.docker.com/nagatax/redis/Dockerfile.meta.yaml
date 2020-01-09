@@ -1,0 +1,94 @@
+MetaArgs: null
+Stages:
+- As: common
+  BaseName: nagatax/gcc:latest
+  Commands: null
+  From:
+    Image: nagatax/gcc:latest
+  Name: common
+  Platform: ""
+  SourceCode: FROM nagatax/gcc:latest AS common
+- As: build
+  BaseName: common
+  Commands:
+  - Env:
+    - Key: REDIS
+      Value: '"redis"'
+    Name: env
+  - Env:
+    - Key: REDIS_VERSION
+      Value: '"5.0.5"'
+    Name: env
+  - Env:
+    - Key: REDIS_PAKAGE
+      Value: '"${REDIS}-${REDIS_VERSION}"'
+    Name: env
+  - Env:
+    - Key: REDIS_PAKAGE_FILE
+      Value: '"${REDIS_PAKAGE}.tar.gz"'
+    Name: env
+  - Env:
+    - Key: REDIS_URL
+      Value: '"http://download.redis.io/releases/${REDIS_PAKAGE_FILE}"'
+    Name: env
+  - CmdLine:
+    - 'set -x;   . ~/.bashrc     && : "関連パッケージのインストール"   && yum install -y   make   tcl   tcl-devel   wget   which     &&
+      : "必要なフォルダの作成"   && mkdir -p "${INSTALL_DIR}/${REDIS}"     && : "redisのインストール"   &&
+      cd "${SRC_DIR}"   && wget "${REDIS_URL}"   && tar xvf "${REDIS_PAKAGE_FILE}"   &&
+      cd "${REDIS_PAKAGE}"   && export CC=gcc   && make distclean   && make -j`nproc`
+      |& tee make.log   && make PREFIX="${INSTALL_DIR}/${REDIS}" install |& tee make_install.log     &&
+      : "設定ファイルのコピーとパスの設定"   && cp -a redis.conf "${INSTALL_DIR}/${REDIS}"   && echo
+      "export PATH=${INSTALL_DIR}/${REDIS}/bin"'':${PATH}'' >> ~/.bashrc     && :
+      "不要なファイルの削除"   && rm -rf "${SRC_DIR}/${REDIS_PAKAGE_FILE}"'
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: common
+  Name: build
+  Platform: ""
+  SourceCode: FROM common AS  build
+- As: release
+  BaseName: common
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /usr/local
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /root/.bashrc
+    - /root/.bashrc
+  - CmdLine:
+    - 'set -x;   . ~/.bashrc     && : "redisユーザの作成"   && groupadd -r redis && useradd
+      -g redis -s /sbin/nologin -r redis     && : "関連パッケージのインストール"   && yum install
+      -y   tcl   tcl-devel   which     && : "データフォルダの作成と設定ファイルのコピー"   && mkdir /data   &&
+      cp -a /usr/local/redis/redis.conf /data   && chown redis:redis /data     &&
+      : "不要なファイルの削除"   && yum clean all'
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: workdir
+    Path: /data
+  - Name: expose
+    Ports:
+    - "6379"
+  - CmdLine:
+    - /usr/local/redis/bin/redis-server
+    - /data/redis.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: common
+  Name: release
+  Platform: ""
+  SourceCode: FROM common AS release

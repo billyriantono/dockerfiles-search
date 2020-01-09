@@ -1,0 +1,272 @@
+MetaArgs: null
+Stages:
+- As: sendfile
+  BaseName: alpine:3.11
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/mod_xsendfile.c
+    - /mod_xsendfile.c
+  - CmdLine:
+    - apk update && apk upgrade && apk add     gcc     musl-dev     apache2-dev     apache2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd / &&     apxs -cia mod_xsendfile.c
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.11
+  Name: sendfile
+  Platform: ""
+  SourceCode: FROM alpine:3.11 as sendfile
+- As: composer
+  BaseName: composer:1.6
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./composer.json
+    - /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./composer.lock
+    - /app
+  - CmdLine:
+    - composer install --no-interaction --no-dev --optimize-autoloader
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/vendor
+  - CmdLine:
+    - find -type d -name '.git' -exec rm -r {} + &&     find -path ./twig/twig/lib/Twig
+      -prune -type d -name 'Test' -exec rm -r {} + &&     find -type d -name 'tests'
+      -exec rm -r {} + &&     find -type d -name 'benchmarks' -exec rm -r {} + &&     find
+      -type d -name 'smoketests' -exec rm -r {} + &&     find -type d -name 'demo'
+      -exec rm -r {} + &&     find -type d -name 'doc' -exec rm -r {} + &&     find
+      -type d -name 'docs' -exec rm -r {} + &&     find -type d -name 'examples' -exec
+      rm -r {} + &&     find -type f -name 'phpunit.xml' -exec rm -r {} + &&     find
+      -type f -name '*.md' -exec rm -r {} +
+    Name: run
+    PrependShell: true
+  From:
+    Image: composer:1.6
+  Name: composer
+  Platform: ""
+  SourceCode: FROM composer:1.6 as composer
+- As: webpack
+  BaseName: node:12
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - npm install webpack -g
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - webpack.config.js
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package-lock.json
+    - .
+  - CmdLine:
+    - npm install --only=prod
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./ui
+    - ./ui
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12
+  Name: webpack
+  Platform: ""
+  SourceCode: FROM node:12 AS webpack
+- BaseName: alpine:3.11
+  Commands:
+  - Maintainer: Xibo Signage <support@xibosignage.com>
+    Name: maintainer
+  - CmdLine:
+    - apk update && apk upgrade && apk add tar     bash     curl     php7     php7-apache2     php7-zmq     php7-json     php7-gd     php7-dom     php7-pdo     php7-zip     php7-pdo_mysql     php7-gettext     php7-soap     php7-iconv     php7-curl     php7-session     php7-ctype     php7-fileinfo     php7-xml     php7-simplexml     php7-mbstring     php7-memcached     php7-zlib     mysql-client     ssmtp     apache2     ca-certificates     tzdata     &&
+      rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache build-base php7-dev php7-pear openssl-dev     && pecl install
+      mongodb     && apk del build-base php7-dev     && echo extension=mongodb.so
+      > /etc/php7/conf.d/51_mongodb.ini
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/
+    - /
+  - Chown: ""
+    From: sendfile
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/apache2/mod_xsendfile.so
+    - /usr/lib/apache2/mod_xsendfile.so
+  - CmdLine:
+    - sed -i "s/error_reporting = .*$/error_reporting = E_ERROR | E_WARNING | E_PARSE/"
+      /etc/php7/php.ini &&     sed -i "s/session.gc_probability = .*$/session.gc_probability
+      = 1/" /etc/php7/php.ini &&     sed -i "s/session.gc_divisor = .*$/session.gc_divisor
+      = 100/" /etc/php7/php.ini
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CMS_DEV_MODE
+      Value: "false"
+    - Key: XMR_HOST
+      Value: xmr
+    - Key: CMS_SERVER_NAME
+      Value: localhost
+    - Key: MYSQL_HOST
+      Value: mysql
+    - Key: MYSQL_USER
+      Value: cms
+    - Key: MYSQL_PASSWORD
+      Value: none
+    - Key: MYSQL_PORT
+      Value: "3306"
+    - Key: MYSQL_DATABASE
+      Value: cms
+    - Key: MYSQL_BACKUP_ENABLED
+      Value: "true"
+    - Key: CMS_SMTP_SERVER
+      Value: smtp.gmail.com:587
+    - Key: CMS_SMTP_USERNAME
+      Value: none
+    - Key: CMS_SMTP_PASSWORD
+      Value: none
+    - Key: CMS_SMTP_USE_TLS
+      Value: "YES"
+    - Key: CMS_SMTP_USE_STARTTLS
+      Value: "YES"
+    - Key: CMS_SMTP_REWRITE_DOMAIN
+      Value: gmail.com
+    - Key: CMS_SMTP_HOSTNAME
+      Value: none
+    - Key: CMS_SMTP_FROM_LINE_OVERRIDE
+      Value: "YES"
+    - Key: CMS_ALIAS
+      Value: none
+    - Key: CMS_PHP_SESSION_GC_MAXLIFETIME
+      Value: "1440"
+    - Key: CMS_PHP_POST_MAX_SIZE
+      Value: 2G
+    - Key: CMS_PHP_UPLOAD_MAX_FILESIZE
+      Value: 2G
+    - Key: CMS_PHP_MAX_EXECUTION_TIME
+      Value: "300"
+    - Key: CMS_PHP_MEMORY_LIMIT
+      Value: 256M
+    - Key: CMS_APACHE_START_SERVERS
+      Value: "2"
+    - Key: CMS_APACHE_MIN_SPARE_SERVERS
+      Value: "5"
+    - Key: CMS_APACHE_MAX_SPARE_SERVERS
+      Value: "10"
+    - Key: CMS_APACHE_MAX_REQUEST_WORKERS
+      Value: "60"
+    - Key: CMS_APACHE_MAX_CONNECTIONS_PER_CHILD
+      Value: "300"
+    - Key: CMS_APACHE_TIMEOUT
+      Value: "30"
+    - Key: CMS_QUICK_CHART_URL
+      Value: http://cms-quickchart:3400
+    - Key: XTR_ENABLED
+      Value: "true"
+    Name: env
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - mkdir -p /var/www/cms
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: composer
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /var/www/cms
+  - Chown: ""
+    From: webpack
+    Name: copy
+    SourcesAndDest:
+    - /app/web/dist
+    - /var/www/cms/web/dist
+  - Chown: apache:apache
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /var/www/cms
+  - CmdLine:
+    - rm /var/www/cms/composer.* &&     rm -r /var/www/cms/docker &&     rm -r /var/www/cms/tests
+      &&     rm /var/www/cms/.dockerignore &&     rm /var/www/cms/phpunit.xml &&     rm
+      /var/www/cms/package.json &&     rm /var/www/cms/package-lock.json &&     rm
+      /var/www/cms/cypress.json &&     rm -r /var/www/cms/cypress &&     rm -r /var/www/cms/ui
+      &&     rm /var/www/cms/webpack.config.js
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/www/cms/library/temp &&      mkdir -p /var/www/backup &&     mkdir
+      -p /var/www/cms/cache &&     mkdir -p /var/www/cms/web/userscripts &&     chown
+      -R apache:apache /var/www/cms &&     chmod +x /entrypoint.sh /usr/local/bin/httpd-foreground
+      /usr/local/bin/wait-for-command.sh     /etc/periodic/15min/cms-db-backup &&     mkdir
+      -p /run/apache2 &&     rm /etc/apache2/conf.d/info.conf &&     rm /etc/apache2/conf.d/userdir.conf
+      &&     addgroup ssmtp &&     chmod 777 /tmp
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/www/cms/library
+  - Name: volume
+    Volumes:
+    - /var/www/cms/custom
+  - Name: volume
+    Volumes:
+    - /var/www/cms/web/theme/custom
+  - Name: volume
+    Volumes:
+    - /var/www/backup
+  - Name: volume
+    Volumes:
+    - /var/www/cms/web/userscripts
+  - Name: volume
+    Volumes:
+    - /var/www/cms/ca-certs
+  - CmdLine:
+    - /entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.11
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.11

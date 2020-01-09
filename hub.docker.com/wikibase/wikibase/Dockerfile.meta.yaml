@@ -1,0 +1,121 @@
+MetaArgs: null
+Stages:
+- As: fetcher
+  BaseName: ubuntu
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install --yes --no-install-recommends unzip
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/wikimedia/mediawiki-extensions-Wikibase/archive/REL1_29.zip
+    - .
+  - CmdLine:
+    - unzip REL1_29.zip && rm *.zip
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu
+  Name: fetcher
+  Platform: ""
+  SourceCode: FROM ubuntu as fetcher
+- As: composer
+  BaseName: composer
+  Commands:
+  - Chown: ""
+    From: fetcher
+    Name: copy
+    SourcesAndDest:
+    - /mediawiki-extensions-Wikibase-REL1_29
+    - /Wikibase
+  - CmdLine:
+    - cd /Wikibase && composer install --no-dev
+    Name: run
+    PrependShell: true
+  From:
+    Image: composer
+  Name: composer
+  Platform: ""
+  SourceCode: FROM composer as composer
+- BaseName: mediawiki:1.29
+  Commands:
+  - CmdLine:
+    - apt-get update &&     DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends
+      gettext-base &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod rewrite
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - install -d /var/log/mediawiki -o www-data
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: composer
+    Name: copy
+    SourcesAndDest:
+    - /Wikibase
+    - /var/www/html/extensions/Wikibase
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - wait-for-it.sh
+    - /wait-for-it.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - LocalSettings.php.template
+    - /LocalSettings.php.template
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - htaccess
+    - /var/www/html/.htaccess
+  - CmdLine:
+    - ln -s /var/www/html/ /var/www/html/w
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DB_SERVER
+      Value: mysql.svc:3306
+    - Key: DB_USER
+      Value: wikiuser
+    - Key: DB_PASS
+      Value: sqlpass
+    - Key: DB_NAME
+      Value: my_wiki
+    - Key: MW_SITE_NAME
+      Value: wikibase-docker
+    - Key: MW_SITE_LANG
+      Value: en
+    - Key: MW_ADMIN_NAME
+      Value: admin
+    - Key: MW_ADMIN_PASS
+      Value: adminpass
+    Name: env
+  - CmdLine:
+    - /bin/sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: mediawiki:1.29
+  Name: ""
+  Platform: ""
+  SourceCode: FROM mediawiki:1.29

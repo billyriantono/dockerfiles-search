@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: alpine/git
+  Commands:
+  - CmdLine:
+    - cd /tmp && git init cello && cd cello                          &&     git remote
+      add origin https://github.com/hyperledger/cello.git &&     git config core.sparsecheckout
+      true                            &&     echo "src/agent/ansible/*" >> .git/info/sparse-checkout        &&     git
+      pull --depth=1 origin master
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine/git
+  Name: build
+  Platform: ""
+  SourceCode: FROM alpine/git AS BUILD
+- BaseName: ubuntu:xenial
+  Commands:
+  - Maintainer: Tong Li <litong01@us.ibm.com>
+    Name: maintainer
+  - Key: user
+    Name: arg
+    Value: ubuntu
+  - Key: uid
+    Name: arg
+    Value: "1000"
+  - Key: gid
+    Name: arg
+    Value: "1000"
+  - CmdLine:
+    - 'apt-get update                                                 &&     apt-get
+      install -y bash python-pip sudo curl                   &&     pip install --upgrade
+      pip ansible pyyaml                       &&     groupadd -g ${gid} ${user}                                     &&     useradd
+      -d /opt/agent -u ${uid} -g ${user} ${user}             &&     usermod -a -G
+      root ${user}                                     &&     echo "${user} ALL=(ALL)
+      NOPASSWD: ALL"|tee /etc/sudoers.d/${user} &&     mkdir -p /opt/agent/.ssh                                       &&     cd
+      /opt/agent/.ssh                                             &&     echo "host
+      *" > config                                         &&     echo "  StrictHostKeyChecking
+      no" >> config                    &&     echo "  UserKnownHostsFile /dev/null"
+      >> config'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/cello/src/agent/ansible
+    - /opt/agent
+  - CmdLine:
+    - curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s
+      https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+      &&     mv kubectl /usr/local/bin/kubectl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R ${uid}:${gid} /opt/agent                              &&     chmod
+      755 /usr/local/bin/kubectl
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HOME
+      Value: /opt/agent
+    Name: env
+  - Env:
+    - Key: WORKDIR
+      Value: /opt/agent
+    Name: env
+  - Name: workdir
+    Path: /opt/agent
+  - Name: user
+    User: ${user}
+  - CmdLine:
+    - ansible-playbook
+    - --version
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:xenial
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:xenial

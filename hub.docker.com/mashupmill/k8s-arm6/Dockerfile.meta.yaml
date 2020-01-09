@@ -1,0 +1,61 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:latest
+  Commands:
+  - Key: K8S_REF
+    Name: arg
+    Value: master
+  - Key: KUBE_VERBOSE
+    Name: arg
+    Value: "1"
+  - CmdLine:
+    - apt-get update     && apt-get install -y git gcc-arm-linux-gnueabi gcc-arm-linux-gnueabihf
+      make rsync     && git clone https://github.com/kubernetes/kubernetes.git /tmp/kubernetes
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/kubernetes
+  - CmdLine:
+    - git checkout $K8S_REF     && perl -pi -e '$_ .= qq(  export GOARM=6\n) if /export
+      GOARCH/' hack/lib/golang.sh     && make all WHAT=cmd/kube-proxy KUBE_VERBOSE=${KUBE_VERBOSE}
+      KUBE_BUILD_PLATFORMS=linux/arm     && make all WHAT=cmd/kubelet KUBE_VERBOSE=${KUBE_VERBOSE}
+      KUBE_BUILD_PLATFORMS=linux/arm     && make all WHAT=cmd/kubectl KUBE_VERBOSE=${KUBE_VERBOSE}
+      KUBE_BUILD_PLATFORMS=linux/arm     && make all WHAT=cmd/kubeadm KUBE_VERBOSE=${KUBE_VERBOSE}
+      KUBE_BUILD_PLATFORMS=linux/arm     && mkdir -p /build     && cp _output/local/bin/linux/arm/*
+      /build
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:latest AS build
+- BaseName: arm32v6/alpine:latest
+  Commands:
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - install.sh
+    - /
+  - Name: volume
+    Volumes:
+    - /dest
+  - CmdLine:
+    - /install.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: arm32v6/alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM arm32v6/alpine:latest

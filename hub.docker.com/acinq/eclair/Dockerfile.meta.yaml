@@ -1,0 +1,143 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: adoptopenjdk/openjdk11:jdk-11.0.3_7-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache curl tar bash
+    Name: run
+    PrependShell: true
+  - Key: MAVEN_VERSION
+    Name: arg
+    Value: 3.6.2
+  - Key: USER_HOME_DIR
+    Name: arg
+    Value: '"/root"'
+  - Key: SHA
+    Name: arg
+    Value: 3fbc92d1961482d6fbd57fbf3dd6d27a4de70778528ee3fb44aa7d27eb32dfdc
+  - Key: BASE_URL
+    Name: arg
+    Value: https://apache.osuosl.org/maven/maven-3/${MAVEN_VERSION}/binaries
+  - CmdLine:
+    - mkdir -p /usr/share/maven /usr/share/maven/ref   && curl -fsSL -o /tmp/apache-maven.tar.gz
+      ${BASE_URL}/apache-maven-${MAVEN_VERSION}-bin.tar.gz   && echo "${SHA}  /tmp/apache-maven.tar.gz"
+      | sha256sum -c -   && tar -xzf /tmp/apache-maven.tar.gz -C /usr/share/maven
+      --strip-components=1   && rm -f /tmp/apache-maven.tar.gz   && ln -s /usr/share/maven/bin/mvn
+      /usr/bin/mvn
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MAVEN_HOME
+      Value: /usr/share/maven
+    Name: env
+  - Env:
+    - Key: MAVEN_CONFIG
+      Value: '"$USER_HOME_DIR/.m2"'
+    Name: env
+  - Name: workdir
+    Path: /usr/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pom.xml
+    - pom.xml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - eclair-core/pom.xml
+    - eclair-core/pom.xml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - eclair-node/pom.xml
+    - eclair-node/pom.xml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - eclair-node-gui/pom.xml
+    - eclair-node-gui/pom.xml
+  - CmdLine:
+    - mkdir -p eclair-core/src/main/scala && touch eclair-core/src/main/scala/empty.scala
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn install -pl eclair-node -am
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn clean
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - mvn package -pl eclair-node -am -DskipTests -Dgit.commit.id=notag -Dgit.commit.id.abbrev=notag
+      -o
+    Name: run
+    PrependShell: true
+  From:
+    Image: adoptopenjdk/openjdk11:jdk-11.0.3_7-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM adoptopenjdk/openjdk11:jdk-11.0.3_7-alpine as BUILD
+- BaseName: openjdk:11.0.4-jre-slim
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apt-get update && apt-get install -y bash jq curl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: BUILD
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/eclair-core/eclair-cli
+    - .
+  - CmdLine:
+    - chmod +x eclair-cli && mv eclair-cli /sbin/eclair-cli
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: BUILD
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/eclair-node/target/eclair-node-*.jar
+    - .
+  - CmdLine:
+    - ln `ls` eclair-node.jar
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ECLAIR_DATADIR
+      Value: /data
+    Name: env
+  - Env:
+    - Key: JAVA_OPTS
+      Value: ""
+    Name: env
+  - CmdLine:
+    - mkdir -p "$ECLAIR_DATADIR"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - CmdLine:
+    - java $JAVA_OPTS -Declair.datadir=$ECLAIR_DATADIR -jar eclair-node.jar
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: openjdk:11.0.4-jre-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:11.0.4-jre-slim

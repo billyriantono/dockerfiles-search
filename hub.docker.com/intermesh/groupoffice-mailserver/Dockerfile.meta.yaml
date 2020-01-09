@@ -1,0 +1,151 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stretch-slim
+  Commands:
+  - Env:
+    - Key: MYSQL_USER
+      Value: groupoffice
+    Name: env
+  - Env:
+    - Key: MYSQL_PASSWORD
+      Value: groupoffice
+    Name: env
+  - Env:
+    - Key: MYSQL_DATABASE
+      Value: groupoffice
+    Name: env
+  - Env:
+    - Key: MYSQL_HOST
+      Value: db
+    Name: env
+  - Env:
+    - Key: POSTMASTER_EMAIL
+      Value: postmaster@example.com
+    Name: env
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y postfix postfix-mysql dovecot-imapd dovecot-mysql dovecot-lmtpd
+      dovecot-sieve dovecot-managesieved supervisor bash rsyslog
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -r -u 150 -g mail -d /var/mail/vhosts -m -s /sbin/nologin -c "Virtual
+      Mailbox" vmail
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./etc/dovecot/conf.d/99-groupoffice.conf
+    - /etc/dovecot/conf.d/99-groupoffice.conf
+  - CmdLine:
+    - sed -i 's/{postmaster}/'$POSTMASTER_EMAIL'/' /etc/dovecot/conf.d/99-groupoffice.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./etc/dovecot/dovecot-sql.conf.ext
+    - /etc/dovecot/dovecot-sql.conf.ext
+  - CmdLine:
+    - sed -i 's/{dbHost}/'$MYSQL_HOST'/' /etc/dovecot/dovecot-sql.conf.ext &&  sed
+      -i 's/{dbName}/'$MYSQL_DATABASE'/' /etc/dovecot/dovecot-sql.conf.ext &&  sed
+      -i 's/{dbUser}/'$MYSQL_PASSWORD'/' /etc/dovecot/dovecot-sql.conf.ext &&  sed
+      -i 's/{dbPass}/'$MYSQL_USER'/' /etc/dovecot/dovecot-sql.conf.ext
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/!include auth-system.conf.ext/#!include auth-system.conf.ext/' /etc/dovecot/conf.d/10-auth.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/lib/dovecot/db &&   touch /var/lib/dovecot/db/shared-mailboxes.db
+      &&   chown -R vmail:mail /var/lib/dovecot/db
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /etc/hostname /etc/mailname
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - postconf -e 'smtpd_sasl_auth_enable = yes' && postconf -e 'smtpd_sasl_type =
+      dovecot' && postconf -e 'smtpd_sasl_path = private/auth' && postconf -e 'smtpd_sasl_authenticated_header
+      = yes' && postconf -e 'smtpd_recipient_restrictions = permit_mynetworks, permit_sasl_authenticated,
+      reject_non_fqdn_sender, reject_non_fqdn_recipient, reject_unauth_destination,
+      reject_unauth_pipelining, reject_invalid_hostname, reject_unknown_sender_domain
+      permit' && postconf -e 'smtpd_data_restrictions = reject_unauth_pipelining,
+      reject_multi_recipient_bounce, permit' && postconf -e 'smtpd_relay_restrictions
+      = permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination' &&
+      postconf -e 'smtpd_sasl_path = private/auth' && postconf -e 'smtp_tls_security_level
+      = may' && postconf -e 'broken_sasl_auth_clients = yes' && postconf -e 'virtual_minimum_uid
+      = 150' && postconf -e 'virtual_uid_maps = static:150' && postconf -e 'virtual_gid_maps
+      = static:8' && postconf -e 'virtual_mailbox_base = /var/mail/vhosts' && postconf
+      -e 'virtual_alias_domains =' && postconf -e 'virtual_alias_maps = proxy:mysql:$config_directory/mysql_virtual_alias_maps.cf'
+      && postconf -e 'virtual_mailbox_domains = proxy:mysql:$config_directory/mysql_virtual_mailbox_domains.cf'
+      && postconf -e 'virtual_mailbox_maps = proxy:mysql:$config_directory/mysql_virtual_mailbox_maps.cf'
+      && postconf -e 'virtual_transport = lmtp:unix:private/dovecot-lmtp' && postconf
+      -e 'default_destination_concurrency_limit = 5' && postconf -e 'relay_destination_concurrency_limit
+      = 1' && postconf -e 'message_size_limit = 20480000' && postconf -M submission/inet="submission   inet   n   -   n   -   -   smtpd"
+      && postconf -P "submission/inet/syslog_name=postfix/submission" && postconf
+      -P "submission/inet/smtpd_tls_security_level=encrypt" && postconf -P "submission/inet/smtpd_etrn_restrictions=reject"
+      && postconf -P "submission/inet/smtpd_sasl_type=dovecot" && postconf -P "submission/inet/smtpd_sasl_path=private/auth"
+      && postconf -P "submission/inet/smtpd_sasl_security_options=noanonymous" &&
+      postconf -P "submission/inet/smtpd_sasl_local_domain=$myhostname" && postconf
+      -P "submission/inet/smtpd_sasl_auth_enable=yes" && postconf -P "submission/inet/milter_macro_daemon_name=ORIGINATING"
+      && postconf -P "submission/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject"
+      && postconf -P "submission/inet/smtpd_recipient_restrictions=permit_mynetworks,permit_sasl_authenticated,reject"
+      && echo "user = ${MYSQL_USER}\npassword = ${MYSQL_PASSWORD}\nhosts = ${MYSQL_HOST}\ndbname
+      = ${MYSQL_DATABASE}\ntable = pa_aliases\nselect_field = goto\nwhere_field =
+      address\nadditional_conditions = and active = '1'" > /etc/postfix/mysql_virtual_alias_maps.cf
+      && echo "user = ${MYSQL_USER}\npassword = ${MYSQL_PASSWORD}\nhosts = ${MYSQL_HOST}\ndbname
+      = ${MYSQL_DATABASE}\ntable = pa_domains\nselect_field = domain\nwhere_field
+      = domain\nadditional_conditions = and backupmx = '0' and active = '1'" > /etc/postfix/mysql_virtual_mailbox_domains.cf
+      && echo "user = ${MYSQL_USER}\npassword = ${MYSQL_PASSWORD}\nhosts = ${MYSQL_HOST}\ndbname
+      = ${MYSQL_DATABASE}\ntable = pa_mailboxes\nselect_field = maildir\nwhere_field
+      = username\nadditional_conditions = and active = '1'" > /etc/postfix/mysql_virtual_mailbox_maps.cf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./etc/supervisor/conf.d/supervisord.conf
+    - /etc/supervisor/conf.d/supervisord.conf
+  - Name: expose
+    Ports:
+    - "25"
+  - Name: expose
+    Ports:
+    - "143"
+  - Name: expose
+    Ports:
+    - "587"
+  - Name: expose
+    Ports:
+    - "993"
+  - Name: expose
+    Ports:
+    - "4190"
+  - CmdLine:
+    - mkdir -p /var/mail/vhosts && chown vmail:mail /var/mail/vhosts
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./var/mail/vhosts/default.sieve
+    - /var/mail/vhosts/default.sieve
+  - Name: volume
+    Volumes:
+    - /var/mail/vhosts
+  - CmdLine:
+    - /usr/bin/supervisord
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

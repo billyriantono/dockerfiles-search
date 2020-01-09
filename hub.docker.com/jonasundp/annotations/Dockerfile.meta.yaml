@@ -1,0 +1,156 @@
+MetaArgs:
+- DefaultValue: '"3.6"'
+  Key: PYTHON_VERSION
+  ProvidedValue: null
+  Value: '"3.6"'
+Stages:
+- As: builder
+  BaseName: python:${PYTHON_VERSION}-stretch
+  Commands:
+  - Key: NODE_VERSION
+    Name: arg
+    Value: '"8.x"'
+  - CmdLine:
+    - curl -sL "https://deb.nodesource.com/setup_${NODE_VERSION}" | bash -  && apt-get
+      install --no-install-recommends -y       nodejs
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tools/install-mssql.sh
+    - /doccano/tools/install-mssql.sh
+  - CmdLine:
+    - /doccano/tools/install-mssql.sh --dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - app/server/static/package*.json
+    - /doccano/app/server/static/
+  - CmdLine:
+    - cd /doccano/app/server/static  && npm ci
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - /
+  - CmdLine:
+    - pip install -r /requirements.txt  && pip wheel -r /requirements.txt -w /deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /doccano
+  - Name: workdir
+    Path: /doccano
+  - CmdLine:
+    - tools/ci.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:${PYTHON_VERSION}-stretch
+  Name: builder
+  Platform: ""
+  SourceCode: FROM python:${PYTHON_VERSION}-stretch AS builder
+- As: cleaner
+  BaseName: builder
+  Commands:
+  - CmdLine:
+    - cd /doccano/app/server/static  && SOURCE_MAP=False DEBUG=False npm run build  &&
+      rm -rf components pages node_modules .*rc package*.json webpack.config.js
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /doccano  && python app/manage.py collectstatic --noinput
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: builder
+  Name: cleaner
+  Platform: ""
+  SourceCode: FROM builder AS cleaner
+- As: runtime
+  BaseName: python:${PYTHON_VERSION}-slim-stretch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /doccano/tools/install-mssql.sh
+    - /doccano/tools/install-mssql.sh
+  - CmdLine:
+    - /doccano/tools/install-mssql.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -ms /bin/sh doccano
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /deps
+    - /deps
+  - CmdLine:
+    - pip install --no-cache-dir /deps/*.whl
+    Name: run
+    PrependShell: true
+  - Chown: doccano:doccano
+    From: cleaner
+    Name: copy
+    SourcesAndDest:
+    - /doccano
+    - /doccano
+  - Env:
+    - Key: DEBUG
+      Value: '"True"'
+    Name: env
+  - Env:
+    - Key: SECRET_KEY
+      Value: '"change-me-in-production"'
+    Name: env
+  - Env:
+    - Key: PORT
+      Value: '"8000"'
+    Name: env
+  - Env:
+    - Key: WORKERS
+      Value: '"2"'
+    Name: env
+  - Env:
+    - Key: GOOGLE_TRACKING_ID
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: AZURE_APPINSIGHTS_IKEY
+      Value: '""'
+    Name: env
+  - Name: user
+    User: doccano
+  - Name: workdir
+    Path: /doccano
+  - Name: expose
+    Ports:
+    - ${PORT}
+  - CmdLine:
+    - /doccano/tools/run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:${PYTHON_VERSION}-slim-stretch
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM python:${PYTHON_VERSION}-slim-stretch AS runtime

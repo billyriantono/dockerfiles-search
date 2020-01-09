@@ -1,0 +1,1 @@
+FROM parity/rust-arm:gitlab-ci

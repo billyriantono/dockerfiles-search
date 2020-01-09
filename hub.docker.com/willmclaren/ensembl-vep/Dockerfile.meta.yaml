@@ -1,0 +1,187 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get -y install     build-essential     git     libpng-dev     zlib1g-dev     libbz2-dev     liblzma-dev     perl     perl-base     unzip     wget
+      &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: OPT
+      Value: /opt/vep
+    Name: env
+  - Env:
+    - Key: OPT_SRC
+      Value: $OPT/src
+    Name: env
+  - Env:
+    - Key: HTSLIB_DIR
+      Value: $OPT_SRC/htslib
+    Name: env
+  - Env:
+    - Key: BRANCH
+      Value: master
+    Name: env
+  - Name: workdir
+    Path: $OPT_SRC
+  - CmdLine:
+    - if [ "$BRANCH" = "master" ];     then export BRANCH_OPT="";     else export
+      BRANCH_OPT="-b $BRANCH";     fi &&     wget -q "https://raw.githubusercontent.com/Ensembl/ensembl/$BRANCH/cpanfile"
+      -O "ensembl_cpanfile" &&     git clone $BRANCH_OPT --depth 1 https://github.com/Ensembl/ensembl-vep.git
+      && chmod u+x ensembl-vep/*.pl &&     git clone $BRANCH_OPT --depth 1 https://github.com/Ensembl/ensembl-variation.git
+      &&     mkdir var_c_code &&     cp ensembl-variation/C_code/*.c ensembl-variation/C_code/Makefile
+      var_c_code/ &&     rm -rf ensembl-variation &&     chmod u+x var_c_code/* &&     git
+      clone --depth 1 https://github.com/bioperl/bioperl-ext.git &&     wget https://github.com/Ensembl/ensembl-xs/archive/2.3.2.zip
+      -O ensembl-xs.zip &&     unzip -q ensembl-xs.zip && mv ensembl-xs-2.3.2 ensembl-xs
+      && rm -rf ensembl-xs.zip &&     ensembl-vep/travisci/get_dependencies.sh &&     mv
+      bioperl-live bioperl-live_bak && mkdir bioperl-live && mv bioperl-live_bak/Bio
+      bioperl-live/ && rm -rf bioperl-live_bak &&     rm -rf Bio-HTS/.??* Bio-HTS/Changes
+      Bio-HTS/DISCLAIMER Bio-HTS/MANIFEST* Bio-HTS/README Bio-HTS/scripts Bio-HTS/t
+      Bio-HTS/travisci            bioperl-ext/.??* bioperl-ext/Bio/SeqIO bioperl-ext/Bio/Tools
+      bioperl-ext/Makefile.PL bioperl-ext/README* bioperl-ext/t bioperl-ext/examples            ensembl-vep/.??*
+      ensembl-vep/docker            ensembl-xs/.??* ensembl-xs/TODO ensembl-xs/Changes
+      ensembl-xs/INSTALL ensembl-xs/MANIFEST ensembl-xs/README ensembl-xs/t ensembl-xs/travisci            htslib/.??*
+      htslib/INSTALL htslib/NEWS htslib/README* htslib/test &&     mv kent-335_base
+      kent-335_base_bak && mkdir -p kent-335_base/src &&     cp -R kent-335_base_bak/src/lib
+      kent-335_base_bak/src/inc kent-335_base_bak/src/jkOwnLib kent-335_base/src/
+      &&     cp kent-335_base_bak/src/*.sh kent-335_base/src/ &&     rm -rf kent-335_base_bak
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: bioperl-ext/Bio/Ext/Align/
+  - CmdLine:
+    - perl -pi -e"s|(cd libs.+)CFLAGS=\\\'|\$1CFLAGS=\\\'-fPIC |" Makefile.PL
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $HTSLIB_DIR
+  - CmdLine:
+    - make install && rm -f Makefile *.c
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $OPT_SRC/var_c_code
+  - CmdLine:
+    - make && rm -f Makefile *.c
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as builder
+- BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get -y install     build-essential     cpanminus     curl     libmysqlclient-dev     libpng-dev     libssl-dev     zlib1g-dev     libbz2-dev     liblzma-dev     locales     openssl     perl     perl-base     unzip     vim
+      &&     apt-get -y purge manpages-dev &&     apt-get clean &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: OPT
+      Value: /opt/vep
+    Name: env
+  - Env:
+    - Key: OPT_SRC
+      Value: $OPT/src
+    Name: env
+  - Env:
+    - Key: PERL5LIB_TMP
+      Value: $PERL5LIB:$OPT_SRC/ensembl-vep:$OPT_SRC/ensembl-vep/modules
+    Name: env
+  - Env:
+    - Key: PERL5LIB
+      Value: $PERL5LIB_TMP:$OPT_SRC/bioperl-live
+    Name: env
+  - Env:
+    - Key: KENT_SRC
+      Value: $OPT/src/kent-335_base/src
+    Name: env
+  - Env:
+    - Key: HTSLIB_DIR
+      Value: $OPT_SRC/htslib
+    Name: env
+  - Env:
+    - Key: MACHTYPE
+      Value: x86_64
+    Name: env
+  - Env:
+    - Key: DEPS
+      Value: $OPT_SRC
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $OPT_SRC/ensembl-vep:$OPT_SRC/var_c_code:$PATH
+    Name: env
+  - Env:
+    - Key: LANG_VAR
+      Value: en_US.UTF-8
+    Name: env
+  - CmdLine:
+    - useradd -r -m -U -d "$OPT" -s /bin/bash -c "VEP User" -p '' vep && usermod -a
+      -G sudo vep && mkdir -p $OPT_SRC
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: vep
+  - Chown: vep:vep
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $OPT_SRC
+    - $OPT_SRC
+  - Name: user
+    User: root
+  - Name: workdir
+    Path: $OPT_SRC/bioperl-ext/Bio/Ext/Align/
+  - CmdLine:
+    - perl Makefile.PL && make && make install && rm -f Makefile*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $OPT_SRC/ensembl-xs
+  - CmdLine:
+    - perl Makefile.PL && make && make install && rm -f Makefile* cpanfile
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $OPT_SRC
+  - CmdLine:
+    - ensembl-vep/travisci/build_c.sh &&     rm -rf Bio-HTS/cpanfile Bio-HTS/Build.PL
+      Bio-HTS/Build Bio-HTS/_build Bio-HTS/INSTALL.pl &&     cpanm --installdeps --with-recommends
+      --notest --cpanfile ensembl_cpanfile . &&     cpanm --installdeps --with-recommends
+      --notest --cpanfile ensembl-vep/cpanfile . &&     rm -rf bioperl-live ensembl_cpanfile
+      ensembl-vep/cpanfile &&     echo "$LANG_VAR UTF-8" >> /etc/locale.gen && locale-gen
+      en_US.utf8 &&     /usr/sbin/update-locale LANG=$LANG_VAR &&     cp $HTSLIB_DIR/bgzip
+      $HTSLIB_DIR/tabix $HTSLIB_DIR/htsfile /usr/local/bin/
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LC_ALL
+      Value: $LANG_VAR
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: $LANG_VAR
+    Name: env
+  - Name: user
+    User: vep
+  - Env:
+    - Key: PERL5LIB
+      Value: $PERL5LIB_TMP
+    Name: env
+  - Name: workdir
+    Path: $OPT_SRC/ensembl-vep
+  - CmdLine:
+    - echo >> $OPT/.profile &&     echo PATH=$PATH:\$PATH >> $OPT/.profile &&     echo
+      export PATH >> $OPT/.profile &&     ./INSTALL.pl -a a -l -n && rm -rf t travisci
+      .travis.yml
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

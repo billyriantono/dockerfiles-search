@@ -1,0 +1,132 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:14.04
+  Commands:
+  - Env:
+    - Key: GRAPHITE_RELEASE
+      Value: 0.9.15
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get -y install git supervisor libcairo2-dev libffi-dev
+      pkg-config python-dev python-pip fontconfig apache2 libapache2-mod-wsgi git-core
+      collectd memcached gcc g++ make libtool automake libfontconfig1 libfreetype6
+      wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd /usr/local/src ;\tgit clone https://github.com/graphite-project/graphite-web.git
+      ;\tgit clone https://github.com/graphite-project/carbon.git ;\tgit clone https://github.com/graphite-project/whisper.git
+      ;\tgit clone https://github.com/statsite/statsite.git"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd /usr/local/src/whisper; git checkout ${GRAPHITE_RELEASE}; python setup.py
+      install ;\tcd ../carbon; git checkout ${GRAPHITE_RELEASE}; pip install -r requirements.txt;
+      python setup.py install ;\tcd ../graphite-web; git checkout ${GRAPHITE_RELEASE};
+      pip install -r requirements.txt; python check-dependencies.py; python setup.py
+      install ;\tcd ../statsite; ./autogen.sh; ./configure; make; cp ./statsite /usr/local/sbin/;
+      cp sinks/graphite.py /usr/local/sbin/statsite-sink-graphite.py"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates/statsite/statsite.conf
+    - /etc/statsite.conf
+  - CmdLine:
+    - mkdir /opt/graphite/conf/examples ; mv /opt/graphite/conf/*.example /opt/graphite/conf/examples/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates/graphite/conf/*
+    - /opt/graphite/conf/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates/apache/graphite.conf
+    - /etc/apache2/sites-available/
+  - CmdLine:
+    - "a2dissite 000-default ;\ta2ensite graphite ;\ta2enmod ssl ;\ta2enmod socache_shmcb
+      ;\ta2enmod rewrite ;\tmkdir -p /opt/graphite/storage/log/apache2/ ;\tchown -R
+      www-data:www-data /opt/graphite/storage/log"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates/graphite/webapp/*
+    - /opt/graphite/webapp/graphite/
+  - CmdLine:
+    - "cd /opt/graphite/webapp/graphite/ ;\tsed -i -e \"s/UNSAFE_DEFAULT/`date | md5sum
+      | cut -d ' ' -f 1`/\" local_settings.py"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd /opt/graphite/webapp/graphite/ ; ls -al ;\tpython manage.py syncdb --noinput
+      ;\tchown www-data:www-data /opt/graphite/storage/graphite.db"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "groupadd -g 998 carbon ;\tuseradd -c \"carbon user\" -g 998 -u 998 -s /bin/false
+      carbon ;\tchmod 775 /opt/graphite/storage/ ;\tchown www-data:carbon /opt/graphite/storage/
+      ;\tchown -R carbon /opt/graphite/storage/whisper"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -O /tmp/grafana.deb https://s3-us-west-2.amazonaws.com/grafana-releases/release/grafana_4.5.2_amd64.deb;   sudo
+      apt-get install -y adduser libfontconfig && sudo dpkg -i /tmp/grafana.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /usr/local/src/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y purge gcc g++ make libtool automake libcairo2-dev libffi-dev pkg-config
+      python-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get autoremove -y
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates/supervisord/supervisord.conf
+    - /etc/supervisor/conf.d/supervisord.conf
+  - Name: volume
+    Volumes:
+    - /opt/graphite/storage
+  - Name: expose
+    Ports:
+    - "2003"
+  - Name: expose
+    Ports:
+    - "443"
+  - Name: expose
+    Ports:
+    - "8125"
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - /usr/bin/supervisord
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:14.04
+  Name: ""
+  Platform: ""
+  SourceCode: from ubuntu:14.04

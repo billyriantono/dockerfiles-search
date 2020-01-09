@@ -1,0 +1,51 @@
+MetaArgs: null
+Stages:
+- BaseName: golang:1.13-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps gcc git make bash libc-dev  && go get
+      -d github.com/google/cadvisor  && cd $GOPATH/src/github.com/google/cadvisor  &&
+      git checkout v0.34.0  && go fmt ./...  && make build  && mv cadvisor /cadvisor  &&
+      apk del .build-deps
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM golang:1.13-alpine
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - 'apk --no-cache add libc6-compat device-mapper findutils zfs &&     apk --no-cache
+      add thin-provisioning-tools --repository http://dl-3.alpinelinux.org/alpine/edge/main/
+      &&     echo ''hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4'' >> /etc/nsswitch.conf
+      &&     rm -rf /var/cache/apk/*'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /cadvisor
+    - /usr/bin/cadvisor
+  - Name: expose
+    Ports:
+    - "8080"
+  - Health:
+      Interval: 30000000000
+      Test:
+      - CMD-SHELL
+      - wget --quiet --tries=1 --spider http://localhost:8080/healthz || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - /usr/bin/cadvisor
+    - -logtostderr
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

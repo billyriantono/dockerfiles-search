@@ -1,0 +1,54 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.10-alpine
+  Commands:
+  - CmdLine:
+    - set -e     && apk add --no-cache git     && wget -O - https://github.com/golang/dep/raw/master/install.sh
+      | sh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/jimeh/casecmp
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/jimeh/casecmp
+  - CmdLine:
+    - set -e     && dep ensure     && CGO_ENABLED=0 go build -a -o /casecmp        -ldflags
+      "-s -w           -X main.version=$(cat VERSION)           -X main.commit=$(git
+      show --format='%h' --no-patch)          -X main.date=$(date +%Y-%m-%dT%T%z)"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.10-alpine as builder
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /casecmp
+    - /
+  - Env:
+    - Key: PORT
+      Value: "8080"
+    Name: env
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - /casecmp
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.13.5-alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache add git openssh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /go.mod
+    - /src/go.mod
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /go.sum
+    - /src/go.sum
+  - CmdLine:
+    - cd /src && go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /src
+  - CmdLine:
+    - mkdir -p /var/run/vars &&     cd /src &&     git config --get remote.origin.url
+      > /var/run/vars/GIT_REPO &&     git rev-parse --short HEAD > /var/run/vars/GIT_HEAD_COMMIT
+      &&     git describe --abbrev=0 --tags > /var/run/vars/GIT_LAST_TAG &&     git
+      rev-parse --short $(cat /var/run/vars/GIT_LAST_TAG) > /var/run/vars/GIT_TAG_COMMIT
+      &&     git diff $(cat /var/run/vars/GIT_HEAD_COMMIT) $(cat /var/run/vars/GIT_TAG_COMMIT)
+      --quiet > /var/run/vars/GIT_MODIFIED1 || echo '.dev' > /var/run/vars/GIT_MODIFIED1
+      &&     git diff --quiet > /var/run/vars/GIT_MODIFIED2 || echo '.dirty' > /var/run/vars/GIT_MODIFIED2
+      &&     cat /var/run/vars/GIT_MODIFIED1 /var/run/vars/GIT_MODIFIED2 | tr -d '\n'
+      > /var/run/vars/GIT_MODIFIED &&     date '+%Y-%m-%dT%H:%M:%S' > /var/run/vars/BUILD_DATE
+      &&     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build         -gcflags "-N -l"         -ldflags
+      "-X main.GitRepo=$(cat /var/run/vars/GIT_REPO) -X main.GitTag=$(cat /var/run/vars/GIT_LAST_TAG)
+      -X main.GitCommit=$(cat /var/run/vars/GIT_HEAD_COMMIT) -X main.GitDirty=$(cat
+      /var/run/vars/GIT_MODIFIED) -X main.BuildTime=$(cat /var/run/vars/BUILD_DATE)"         -o
+      fs/haproxy-ingress-controller .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13.5-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.13.5-alpine AS builder
+- BaseName: haproxytech/haproxy-alpine:2.0.11
+  Commands:
+  - CmdLine:
+    - apk --no-cache add socat openssl util-linux openrc htop
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /fs
+    - /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/fs/haproxy-ingress-controller
+    - .
+  - Key: DUMB_INIT_SHA256
+    Name: arg
+    Value: 37f2c1f0372a45554f1b89924fbb134fc24c3756efaedf11e07f599494e0eff9
+  - CmdLine:
+    - wget --no-check-certificate -O /dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.2/dumb-init_1.2.2_amd64
+      &&         echo "$DUMB_INIT_SHA256  /dumb-init" | sha256sum -c - &&         chmod
+      +x /dumb-init &&         chmod +x /etc/init.d/haproxy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /dumb-init
+    - --
+    - /start.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: haproxytech/haproxy-alpine:2.0.11
+  Name: ""
+  Platform: ""
+  SourceCode: FROM haproxytech/haproxy-alpine:2.0.11

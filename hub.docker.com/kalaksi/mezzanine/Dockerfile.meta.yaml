@@ -1,0 +1,81 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.10.3
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"kalaksi@users.noreply.github.com"'
+    Name: label
+  - Key: GUNICORN_VERSION
+    Name: arg
+    Value: '">=19.0.0,<20.0.0"'
+  - Key: MEZZANINE_VERSION
+    Name: arg
+    Value: '">=4.3.0,<4.4.0"'
+  - Key: PYTHON_LDAP_VERSION
+    Name: arg
+    Value: '">=3.2.0,<3.3.0"'
+  - Key: DJANGO_AUTH_LDAP_VERSION
+    Name: arg
+    Value: '">=1.7.0,<1.8.0"'
+  - Key: PSYCOPG2_VERSION
+    Name: arg
+    Value: '">=2.8.0,<2.9.0"'
+  - Env:
+    - Key: MEZZANINE_PROJECT
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: GUNICORN_WORKERS
+      Value: '"2"'
+    Name: env
+  - Env:
+    - Key: GUNICORN_PORT
+      Value: '"8000"'
+    Name: env
+  - Env:
+    - Key: MEZZANINE_UID
+      Value: '"78950"'
+    - Key: MEZZANINE_GID
+      Value: '"78950"'
+    Name: env
+  - CmdLine:
+    - apk add --no-cache --virtual=build-deps       gcc       jpeg-dev       python2-dev       python3-dev       openldap-dev       musl-dev       postgresql-dev       zlib-dev
+      &&     apk add --no-cache --virtual=run-deps       python3       jpeg       postgresql-libs       su-exec
+      &&     pip3 --no-cache-dir install --upgrade setuptools pip &&     pip3 --no-cache-dir
+      install --upgrade       mezzanine${MEZZANINE_VERSION}       psycopg2${PSYCOPG2_VERSION}       gunicorn${GUNICORN_VERSION}       python-ldap${PYTHON_LDAP_VERSION}       django-auth-ldap${DJANGO_AUTH_LDAP_VERSION}
+      &&     apk del --no-cache --purge build-deps
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /srv/mezzanine /etc/nginx/conf.d &&     touch /etc/nginx/conf.d/mezzanine.conf
+      &&     chown "${MEZZANINE_UID}:${MEZZANINE_GID}" /srv/mezzanine /etc/nginx/conf.d/mezzanine.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx.conf.tpl
+    - /etc/nginx/mezzanine.conf.tpl
+  - Name: expose
+    Ports:
+    - "8000"
+  - Name: user
+    User: ${MEZZANINE_UID}:${MEZZANINE_GID}
+  - Name: workdir
+    Path: /srv/mezzanine
+  - CmdLine:
+    - set -eu;     [ -z "$MEZZANINE_PROJECT" ] && (echo "MEZZANINE_PROJECT has to
+      be defined!" >&2; exit 1);     cd "$MEZZANINE_PROJECT" || (echo "Failed to descend
+      into project directory. Does it exist?" >&2; exit 1);     sed -r "s/MEZZANINE_PROJECT/$MEZZANINE_PROJECT/g"
+      /etc/nginx/mezzanine.conf.tpl > "/etc/nginx/conf.d/mezzanine.conf" || echo "Failed
+      to generate Nginx configuration! Skipping." >&2;     exec gunicorn -b "0.0.0.0:${GUNICORN_PORT}"
+      -w "$GUNICORN_WORKERS" "${MEZZANINE_PROJECT}.wsgi"
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:3.10.3
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10.3

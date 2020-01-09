@@ -1,0 +1,72 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - "echo \"Configuring the apk\"\t\t\t\t\t\t&&\tapk update \t\t\t\t\t\t\t\t\t\t&&\tapk
+      add --update --no-cache git"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/socks-ovpn
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - go build -mod=vendor -o /go/bin/socks-my-vpn
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- BaseName: alpine:latest
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/socks-my-vpn
+    - /socks/server
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - socks.sh
+    - /socks/
+  - CmdLine:
+    - "echo \"Configuring the apk\"\t\t\t\t\t\t&&\tapk update\t\t\t\t\t\t\t\t\t\t&&\tapk
+      add --update --no-cache\t\t\t\t\topenvpn bash openresolv curl\t\t&&\trm -rf
+      /tmp/* /var/cache/apk/* \t\t\t\t\t&&\tchmod a+x /socks/server /socks/socks.sh
+      \t\t&&\twget -O /etc/openvpn/update-resolv-conf https://raw.githubusercontent.com/masterkorp/openvpn-update-resolv-conf/master/update-resolv-conf.sh
+      &&\tchmod +x /etc/openvpn/update-resolv-conf &&\techo \"Done.\""
+    Name: run
+    PrependShell: true
+  - Health:
+      Interval: 60000000000
+      StartPeriod: 120000000000
+      Test:
+      - CMD-SHELL
+      - curl -L 'https://ifconfig.co'
+      Timeout: 15000000000
+    Name: healthcheck
+  - Name: volume
+    Volumes:
+    - /vpn
+  - CmdLine:
+    - /bin/bash
+    - -c
+    - 'sysctl net.ipv6.conf.all.disable_ipv6=0 && /socks/socks.sh && cd /vpn/ && /usr/sbin/openvpn
+      --config /vpn/*.ovpn '
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

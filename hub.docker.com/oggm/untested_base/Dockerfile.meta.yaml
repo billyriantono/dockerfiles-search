@@ -1,0 +1,137 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: oggm/raw_system:py38
+  Commands:
+  - CmdLine:
+    - $PIP install --no-cache-dir --upgrade "gdal<$(gdal-config --version | cut -d.
+      -f1).$(( $(gdal-config --version | cut -d. -f2) + 1 ))" --install-option="build_ext"
+      --install-option="$(gdal-config --cflags | sed 's/-I/--include-dirs=/')"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - $PIP install --no-cache-dir --upgrade fiona --install-option="build_ext" --install-option="$(gdal-config
+      --cflags | sed 's/-I/--include-dirs=/')"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "PROJ_VERSION=\"6.2.1\" && \tcurl \"https://download.osgeo.org/proj/proj-${PROJ_VERSION}.tar.gz\"
+      -o proj.tar.gz && \ttar xaf proj.tar.gz && \tfor f in 1.8 europe-1.4 north-america-1.2;
+      do \t\tcurl \"https://download.osgeo.org/proj/proj-datumgrid-${f}.zip\" -o proj-datumgrid.zip
+      && \t\tunzip -o proj-datumgrid.zip -d \"proj-${PROJ_VERSION}/data\"; \tdone
+      && \trm proj.tar.gz proj-datumgrid.zip && \tcd \"proj-${PROJ_VERSION}\" && \t./configure
+      --prefix=/opt/proj --enable-shared --disable-static --with-pic && \tmake -j2
+      && make install && \tcd .. && \trm -rf \"proj-${PROJ_VERSION}\" && \techo /opt/proj/lib
+      > /etc/ld.so.conf.d/optproj.conf && \tldconfig"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PROJ_DIR
+      Value: /opt/proj
+    - Key: PROJ_LIB
+      Value: /opt/proj/share/proj
+    - Key: PKG_CONFIG_PATH
+      Value: /opt/proj/lib/pkgconfig
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PROJ_DIR/bin:$PATH
+    Name: env
+  - CmdLine:
+    - "$PIP install --no-cache-dir --upgrade --no-binary :all: \t\tpyproj \t\t\"git+https://github.com/SciTools/cartopy.git@23e31ddecd28189cf8f91a6631a860dc80090f17\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "$PIP install --no-cache-dir --upgrade --no-binary :all: \t\t\"rasterio>=1.0.0\"
+      \t\tdescartes \t\tPillow \t\tgeopandas \t\tnetCDF4 \t\tscikit-image \t\tconfigobj
+      \t\tjoblib \t\tdask \t\tdistributed \t\t\"git+https://github.com/pydata/xarray.git@4dce93f134e8296ea730104b46ce3372b90304ac\"
+      \t\tnose \t\tfilelock \t\tpytest \t\tpytest-cov \t\tilock \t\tprogressbar2 \t\tmotionless
+      \t\tversioneer \t\trequests \t\ttifffile \t\t\"git+https://github.com/OGGM/pytest-mpl.git\"
+      \t\t\"git+https://github.com/fmaussion/salem.git\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'sed -i ''s/^backend.*/backend : Agg/'' "$(python3 -c "import matplotlib, os;
+      print(os.path.dirname(matplotlib.__file__))")"/mpl-data/matplotlibrc'
+    Name: run
+    PrependShell: true
+  From:
+    Image: oggm/raw_system:py38
+  Name: builder
+  Platform: ""
+  SourceCode: FROM oggm/raw_system:py38 as builder
+- BaseName: ubuntu:19.10
+  Commands:
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - CmdLine:
+    - "apt-get -y update && \tapt-get -y install --no-install-recommends \t\tfontconfig
+      \t\tfonts-dejavu \t\tlibfreetype6 \t\tnetcdf-bin \t\tgdal-bin \t\tliblapack3
+      \t\tlibagg2 \t\tlibdb5.3 \t\tlibexpat1 \t\tlibbz2-1.0 \t\tliblzma5 \t\tsqlite3
+      \t\tcurl \t\tgit \t\tlocales \t\tless \t\tnano \t\tca-certificates && \tapt-get
+      -y clean && \trm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - locale-gen en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/proj
+    - /opt/proj
+  - Env:
+    - Key: PROJ_DIR
+      Value: /opt/proj
+    - Key: PROJ_LIB
+      Value: /opt/proj/share/proj
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PROJ_DIR/bin:$PATH
+    Name: env
+  - CmdLine:
+    - echo /opt/proj/lib > /etc/ld.so.conf.d/optproj.conf && ldconfig
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/pyenv
+    - /usr/local/pyenv
+  - Env:
+    - Key: PYENV_ROOT
+      Value: /usr/local/pyenv
+    - Key: PIP
+      Value: pip
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH
+    Name: env
+  - CmdLine:
+    - python3 -c "import matplotlib.font_manager, salem"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /work
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - test.sh
+    - /root/test.sh
+  From:
+    Image: ubuntu:19.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:19.10

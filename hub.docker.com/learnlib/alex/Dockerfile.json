@@ -1,0 +1,175 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "builder-frontend",
+      "BaseName": "node:12",
+      "SourceCode": "FROM node:12 as builder-frontend",
+      "Platform": "",
+      "As": "builder-frontend",
+      "From": {
+        "Image": "node:12"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/root/workdir"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./frontend/src/main/javascript",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "npm ci"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "npm run build"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "builder-backend",
+      "BaseName": "maven:3",
+      "SourceCode": "FROM maven:3 as builder-backend",
+      "Platform": "",
+      "As": "builder-backend",
+      "From": {
+        "Image": "maven:3"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/root/workdir"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "."
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder-frontend",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/root/workdir/dist",
+            "./frontend/target/classes"
+          ]
+        },
+        {
+          "CmdLine": [
+            "mvn install package -P !build-frontend"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "builder-ltsmin",
+      "BaseName": "debian",
+      "SourceCode": "FROM debian as builder-ltsmin",
+      "Platform": "",
+      "As": "builder-ltsmin",
+      "From": {
+        "Image": "debian"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/root/workdir"
+        },
+        {
+          "CmdLine": [
+            "apt-get update -qq \u0026\u0026 apt-get upgrade -qq \u0026\u0026 apt-get install -qq wget"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "wget http://github.com/utwente-fmt/ltsmin/releases/download/v3.0.2/ltsmin-v3.0.2-linux.tgz"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "tar -xzf ltsmin-v3.0.2-linux.tgz"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mv v3.0.2 ltsmin"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "openjdk:12",
+      "SourceCode": "FROM openjdk:12",
+      "Platform": "",
+      "From": {
+        "Image": "openjdk:12"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "builder-backend",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/root/workdir/build/target/alex-1.8.0-SNAPSHOT.war",
+            "/usr/share/java/alex/alex.war"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder-ltsmin",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/root/workdir/ltsmin",
+            "/opt/ltsmin"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/var/lib/alex"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "8000"
+          ]
+        },
+        {
+          "CmdLine": [
+            "java -jar /usr/share/java/alex/alex.war --ltsmin.path=/opt/ltsmin/bin"
+          ],
+          "Name": "cmd",
+          "PrependShell": true
+        }
+      ]
+    }
+  ]
+}

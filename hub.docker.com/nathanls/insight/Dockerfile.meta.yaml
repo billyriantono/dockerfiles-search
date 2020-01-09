@@ -1,0 +1,136 @@
+MetaArgs: null
+Stages:
+- As: swaggerbuilder
+  BaseName: swaggerapi/swagger-codegen-cli:latest
+  Commands: null
+  From:
+    Image: swaggerapi/swagger-codegen-cli:latest
+  Name: swaggerbuilder
+  Platform: ""
+  SourceCode: FROM swaggerapi/swagger-codegen-cli:latest as SwaggerBuilder
+- As: swaggerrunner
+  BaseName: openjdk:12-jdk-alpine
+  Commands:
+  - Chown: ""
+    From: SwaggerBuilder
+    Name: copy
+    SourcesAndDest:
+    - /opt/swagger-codegen-cli/swagger-codegen-cli.jar
+    - ./swagger-codegen-cli.jar
+  - CmdLine:
+    - java -jar ./swagger-codegen-cli.jar generate  -i "https://esi.evetech.net/_latest/swagger.json"  -l
+      python  -o /python-client
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:12-jdk-alpine
+  Name: swaggerrunner
+  Platform: ""
+  SourceCode: FROM openjdk:12-jdk-alpine as SwaggerRunner
+- As: sde
+  BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - wget https://www.fuzzwork.co.uk/dump/sqlite-latest.sqlite.bz2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://www.fuzzwork.co.uk/dump/sqlite-latest.sqlite.bz2.md5
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - md5sum -c sqlite-latest.sqlite.bz2.md5
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bunzip2 sqlite-latest.sqlite.bz2
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: sde
+  Platform: ""
+  SourceCode: FROM alpine:latest as SDE
+- BaseName: python:3.6-slim-stretch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"nathan@nathan-s.com"'
+    Name: label
+  - Labels:
+    - Key: url
+      Value: '"https://github.com/Nathan-LS/Insight"'
+    Name: label
+  - Key: INSIGHT_BRANCH
+    Name: arg
+    Value: master
+  - Name: workdir
+    Path: /InsightDocker
+  - Chown: ""
+    From: SwaggerRunner
+    Name: copy
+    SourcesAndDest:
+    - /python-client
+    - ./python-client
+  - Chown: ""
+    From: SDE
+    Name: copy
+    SourcesAndDest:
+    - /sqlite-latest.sqlite
+    - ./sqlite-latest.sqlite
+  - CmdLine:
+    - apt-get update && apt-get install -y  git  build-essential  zip  && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b $INSIGHT_BRANCH --single-branch https://github.com/Nathan-LS/Insight.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip3 install wheel setuptools
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /InsightDocker/python-client /InsightDocker/python-client-2 -R
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /InsightDocker/python-client-2
+  - CmdLine:
+    - python3 setup.py install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /InsightDocker/Insight
+  - CmdLine:
+    - pip3 install --upgrade -r requirements.txt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /InsightDocker/Insight/scripts/Docker/ -maxdepth 1 -name "*.sh" -type f
+      -exec cp {} /InsightDocker/ \;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /InsightDocker/python-client-2 -R
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /InsightDocker/ -maxdepth 1 -name "*.sh" -type f -exec chmod +x {} \;
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - /InsightDocker/DockerEntry.sh
+    - python3
+    - /InsightDocker/Insight/Insight
+    - -sde
+    - /InsightDocker/sqlite-latest.sqlite
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: python:3.6-slim-stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.6-slim-stretch

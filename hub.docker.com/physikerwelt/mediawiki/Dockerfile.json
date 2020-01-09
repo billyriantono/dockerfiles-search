@@ -1,0 +1,218 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "composer",
+      "BaseName": "composer:1.9.1",
+      "SourceCode": "FROM composer:1.9.1 AS composer",
+      "Platform": "",
+      "As": "composer",
+      "From": {
+        "Image": "composer:1.9.1"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/composer"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/core",
+            "/composer"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/mediawiki",
+            "/composer"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./composer",
+            "/composer"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "COMPOSER_ALLOW_SUPERUSER",
+              "Value": "1"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "docker-php-ext-install pcntl"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "composer",
+            "install",
+            "--no-dev"
+          ],
+          "Name": "run",
+          "PrependShell": false
+        }
+      ]
+    },
+    {
+      "Name": "mediawiki-preq",
+      "BaseName": "php:7.2-apache",
+      "SourceCode": "FROM php:7.2-apache AS mediawiki-preq",
+      "Platform": "",
+      "As": "mediawiki-preq",
+      "From": {
+        "Image": "php:7.2-apache"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "set -eux; \t\tapt-get update; \tapt-get install -y --no-install-recommends \t\tgit \t\tlibrsvg2-bin \t\timagemagick \t\tpython3 \t\tcurl \t\tgnupg \t\tlibrsvg2-dev \t; \trm -rf /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "curl -sL https://deb.nodesource.com/setup_11.x  | bash -"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "apt-get -y install nodejs"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "set -eux; \t\tsavedAptMark=\"$(apt-mark showmanual)\"; \t\tapt-get update; \tapt-get install -y --no-install-recommends \t\tlibicu-dev \t; \t\tdocker-php-ext-install -j \"$(nproc)\" \t\tintl \t\tmbstring \t\tmysqli \t\topcache \t; \t\tpecl install apcu-5.1.17; \tdocker-php-ext-enable \t\tapcu \t; \t\tapt-mark auto '.*' \u003e /dev/null; \tapt-mark manual $savedAptMark; \tldd \"$(php -r 'echo ini_get(\"extension_dir\");')\"/*.so \t\t| awk '/=\u003e/ { print $3 }' \t\t| sort -u \t\t| xargs -r dpkg-query -S \t\t| cut -d: -f1 \t\t| sort -u \t\t| xargs -rt apt-mark manual; \t\tapt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false; \trm -rf /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "set -eux; \ta2enmod rewrite; \t{ \t\techo '\u003cDirectory /var/www/html\u003e'; \t\techo '  RewriteEngine On'; \t\techo '  RewriteCond %{REQUEST_FILENAME} !-f'; \t\techo '  RewriteCond %{REQUEST_FILENAME} !-d'; \t\techo '  RewriteRule ^ %{DOCUMENT_ROOT}/index.php [L]'; \t\techo '\u003c/Directory\u003e'; \t} \u003e \"$APACHE_CONFDIR/conf-available/short-url.conf\"; \ta2enconf short-url"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "{ \t\techo 'opcache.memory_consumption=128'; \t\techo 'opcache.interned_strings_buffer=8'; \t\techo 'opcache.max_accelerated_files=4000'; \t\techo 'opcache.revalidate_freq=60'; \t\techo 'opcache.fast_shutdown=1'; \t} \u003e /usr/local/etc/php/conf.d/opcache-recommended.ini"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "set -eux; \tmkdir -p /var/www/data; \tchown -R www-data:www-data /var/www/data"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "mathoid",
+      "BaseName": "mediawiki-preq",
+      "SourceCode": "FROM mediawiki-preq AS mathoid",
+      "Platform": "",
+      "As": "mathoid",
+      "From": {
+        "Stage": {
+          "Named": "mediawiki-preq",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/srv/"
+        },
+        {
+          "CmdLine": [
+            "git clone \"https://gerrit.wikimedia.org/r/mediawiki/services/mathoid\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/srv/mathoid"
+        },
+        {
+          "CmdLine": [
+            "npm i"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "mediawiki-preq",
+      "SourceCode": "FROM mediawiki-preq",
+      "Platform": "",
+      "From": {
+        "Stage": {
+          "Named": "mediawiki-preq",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "mathoid",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/srv",
+            "/srv"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "composer",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/composer",
+            "/var/www/html"
+          ]
+        },
+        {
+          "CmdLine": [
+            "chown -R www-data:www-data /var/www/html/images"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "docker-php-entrypoint",
+            "apache2-foreground"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

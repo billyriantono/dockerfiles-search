@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12.9-alpine
+  Commands:
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - CmdLine:
+    - apk add --no-cache git gcc musl-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -O - -q https://install.goreleaser.com/github.com/golangci/golangci-lint.sh
+      | sh -s -- -b $(go env GOPATH)/bin v1.17.1
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/bowline
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - go.sum
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go mod verify
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pkg
+    - ./pkg
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cmd
+    - ./cmd
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - fixtures
+    - ./fixtures
+  - CmdLine:
+    - golangci-lint run --enable-all ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go test -v ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /go/bin/bowline
+      cmd/bowline/main.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.9-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12.9-alpine as builder
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/bowline
+    - /go/bin/bowline
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - /go/bin/bowline
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

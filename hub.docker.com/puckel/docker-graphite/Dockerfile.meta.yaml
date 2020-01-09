@@ -1,0 +1,93 @@
+MetaArgs: null
+Stages:
+- BaseName: puckel/docker-base
+  Commands:
+  - Maintainer: Puckel_
+    Name: maintainer
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: TERM
+      Value: linux
+    Name: env
+  - Env:
+    - Key: INITRD
+      Value: "No"
+    Name: env
+  - Env:
+    - Key: GRAPHITE_RELEASE
+      Value: 0.9.13-pre1
+    Name: env
+  - Env:
+    - Key: GRAPHITE_HOME
+      Value: /opt/graphite
+    Name: env
+  - Env:
+    - Key: GRAPHITE_CONF
+      Value: ${GRAPHITE_HOME}/conf
+    Name: env
+  - Env:
+    - Key: GRAPHITE_WEBAPP
+      Value: ${GRAPHITE_HOME}/webapp
+    Name: env
+  - Env:
+    - Key: GRAPHITE_STORAGE
+      Value: ${GRAPHITE_HOME}/storage
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - config
+    - /root/config
+  - CmdLine:
+    - apt-get update -yqq     && apt-get install -yqq     libcairo2-dev libffi-dev
+      pkg-config python-dev python-pip fontconfig apache2 libapache2-mod-wsgi git-core
+      collectd memcached     gcc g++ make supervisor     build-essential libtool autoconf
+      automake scons python-setuptools lsof git texlive check     && apt-get clean     &&
+      rm -rf     easy_install pip     pip install pytest     /var/lib/apt/lists/*     /tmp/*     /var/tmp/*     /usr/share/man     /usr/share/doc     /usr/share/doc-base
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /usr/local/src     && git clone https://github.com/graphite-project/graphite-web.git     &&
+      git clone https://github.com/graphite-project/carbon.git     && git clone https://github.com/graphite-project/whisper.git     &&
+      git clone https://github.com/statsite/statsite.git     && cd whisper; git checkout
+      ${GRAPHITE_RELEASE}; python setup.py install     && cd ../carbon; git checkout
+      ${GRAPHITE_RELEASE}; pip install -r requirements.txt; python setup.py install     &&
+      cd ../graphite-web; git checkout ${GRAPHITE_RELEASE}; pip install -r requirements.txt;
+      python check-dependencies.py; python setup.py install     && cd ../statsite;
+      /bin/sh autogen.sh; /bin/sh configure; make; make install; cp statsite /usr/local/sbin/;
+      cp sinks/graphite.py /usr/local/sbin/statsite-sink-graphite.py     && mkdir
+      ${GRAPHITE_CONF}/examples     && mv ${GRAPHITE_CONF}/*.example ${GRAPHITE_CONF}/examples/     &&
+      cp /root/config/statsite/statsite.conf /etc/statsite.conf     && cp /root/config/graphite/conf/*
+      ${GRAPHITE_CONF}/     && cp /root/config/graphite/webapp/* ${GRAPHITE_WEBAPP}/graphite/     &&
+      sed -i -e "s/UNSAFE_DEFAULT/`date | md5sum | cut -d ' ' -f 1`/" ${GRAPHITE_WEBAPP}/graphite/local_settings.py     &&
+      cp /root/config/apache/*.conf /etc/apache2/sites-available/     && cp /root/config/supervisor/*.conf
+      /etc/supervisor/conf.d/graphite.conf     && cd ${GRAPHITE_WEBAPP}/graphite &&
+      python manage.py syncdb --noinput     && a2dissite 000-default     && a2ensite
+      graphite     && a2enmod socache_shmcb rewrite     && chown www-data:www-data
+      ${GRAPHITE_STORAGE}/graphite.db     && groupadd -g 998 carbon     && useradd
+      -c "carbon user" -g 998 -u 998 -s /bin/false carbon     && chmod 775 ${GRAPHITE_STORAGE}     &&
+      chown www-data:carbon ${GRAPHITE_STORAGE}     && chown -R carbon ${GRAPHITE_STORAGE}/whisper     &&
+      mkdir ${GRAPHITE_STORAGE}/log/apache2     && chown www-data ${GRAPHITE_STORAGE}/log/webapp     &&
+      cp /root/config/graphite/cron/build-index /etc/cron.hourly/graphite-build-index     &&
+      chmod 755 /etc/cron.hourly/graphite-build-index
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "2003"
+    - "2004"
+    - "7002"
+    - "80"
+    - "8125"
+  - CmdLine:
+    - /usr/bin/supervisord
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: puckel/docker-base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM puckel/docker-base

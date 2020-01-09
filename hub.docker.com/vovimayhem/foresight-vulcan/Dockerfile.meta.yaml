@@ -1,0 +1,169 @@
+MetaArgs: null
+Stages:
+- As: development
+  BaseName: ruby:2.4.4-alpine3.7
+  Commands:
+  - Name: workdir
+    Path: /usr/src/app
+  - Env:
+    - Key: HOME
+      Value: /usr/src/app
+    - Key: PATH
+      Value: /usr/src/app/bin:$PATH
+    Name: env
+  - CmdLine:
+    - apk add --no-cache ca-certificates less libpq openssl su-exec tzdata
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache build-base postgresql-dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - Gemfile*
+    - /usr/src/app/
+  - CmdLine:
+    - bundle install --jobs=4 --retry=3
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rails
+    - server
+    - -b
+    - 0.0.0.0
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ruby:2.4.4-alpine3.7
+  Name: development
+  Platform: ""
+  SourceCode: FROM ruby:2.4.4-alpine3.7 AS development
+- As: builder
+  BaseName: ruby:2.4.4-alpine3.7
+  Commands:
+  - Name: workdir
+    Path: /usr/src/app
+  - Env:
+    - Key: HOME
+      Value: /usr/src/app
+    - Key: PATH
+      Value: /usr/src/app/bin:$PATH
+    Name: env
+  - CmdLine:
+    - apk add --no-cache ca-certificates less libpq openssl su-exec tzdata
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache build-base postgresql-dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - Gemfile*
+    - /usr/src/app/
+  - CmdLine:
+    - bundle install --jobs=4 --retry=3
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /usr/src/app
+  - CmdLine:
+    - bundle config without development:test && bundle clean && rm -rf tmp/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: ruby:2.4.4-alpine3.7
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ruby:2.4.4-alpine3.7 AS builder
+- As: deployable
+  BaseName: ruby:2.4.4-alpine3.7
+  Commands:
+  - Name: workdir
+    Path: /usr/src/app
+  - Env:
+    - Key: HOME
+      Value: /usr/src/app
+    - Key: PATH
+      Value: /usr/src/app/bin:$PATH
+    Name: env
+  - CmdLine:
+    - apk add --no-cache ca-certificates less libpq openssl su-exec tzdata
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bundle
+    - /usr/local/bundle
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app
+    - /usr/src/app
+  - Env:
+    - Key: RAILS_ENV
+      Value: production
+    - Key: RACK_ENV
+      Value: production
+    - Key: PORT
+      Value: "3000"
+    Name: env
+  - CmdLine:
+    - export DATABASE_URL=postgres://postgres@example.com:5432/fakedb     AMQP_URL=amqp://guest:guest@amqp:5672     SECRET_KEY_BASE=10167c7f7654ed02b3557b05b88ece
+      &&     rails runner "puts 'Looks Good!'"
+    Name: run
+    PrependShell: true
+  - Key: SOURCE_BRANCH
+    Name: arg
+    Value: null
+  - Key: SOURCE_COMMIT
+    Name: arg
+    Value: null
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.name
+      Value: '"Icalia Foresight Vulcan"'
+    - Key: org.label-schema.description
+      Value: '"Tracks app development & it''s associated cloud resources"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/IcaliaLabs/foresight.git"'
+    - Key: org.label-schema.vcs-ref
+      Value: $SOURCE_COMMIT
+    - Key: org.label-schema.schema-version
+      Value: '"1.0.0-rc1"'
+    Name: label
+  - CmdLine:
+    - set -ex &&  sed -i "s|UNKNOWN_BUILD_DATE|$BUILD_DATE|" app/controllers/info_controller.rb
+      &&  sed -i "s|UNKNOWN_COMMIT_SHA1|$SOURCE_COMMIT|" app/controllers/info_controller.rb
+      &&  sed -i "s|UNKNOWN_COMMIT_BRANCH|$SOURCE_BRANCH|" app/controllers/info_controller.rb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /usr/src/tmp/cache &&    mkdir -p /usr/src/tmp/pids &&    mkdir -p
+      /usr/src/tmp/sockets &&    chown -R nobody /usr/src/app
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: nobody
+  - CmdLine:
+    - puma
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ruby:2.4.4-alpine3.7
+  Name: deployable
+  Platform: ""
+  SourceCode: FROM ruby:2.4.4-alpine3.7 AS deployable

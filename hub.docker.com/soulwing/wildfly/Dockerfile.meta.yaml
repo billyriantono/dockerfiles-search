@@ -1,0 +1,136 @@
+MetaArgs:
+- DefaultValue: 11-jre-slim
+  Key: JRE_VERSION
+  ProvidedValue: null
+  Value: 11-jre-slim
+Stages:
+- As: builder
+  BaseName: debian:latest
+  Commands:
+  - Key: WILDFLY_VERSION
+    Name: arg
+    Value: 17.0.0.Final
+  - Key: WILDFLY_URL
+    Name: arg
+    Value: http://search.maven.org/remotecontent?filepath=org/wildfly/wildfly-dist/${WILDFLY_VERSION}/wildfly-dist-${WILDFLY_VERSION}.tar.gz
+  - Key: S6_VERSION
+    Name: arg
+    Value: v1.21.4.0
+  - Key: S6_REPO
+    Name: arg
+    Value: https://github.com/just-containers/s6-overlay/releases/download
+  - Key: S6_URL
+    Name: arg
+    Value: ${S6_REPO}/${S6_VERSION}/s6-overlay-amd64.tar.gz
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ${S6_URL}
+    - /tmp/s6-overlay.tar.gz
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ${WILDFLY_URL}
+    - /tmp/wildfly.tar.gz
+  - CmdLine:
+    - mkdir /tmp/s6 &&     tar -C /tmp/s6 -zxf /tmp/s6-overlay.tar.gz &&     mkdir
+      /tmp/wildfly &&     tar -C /tmp/wildfly -zxf /tmp/wildfly.tar.gz
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:latest AS builder
+- BaseName: openjdk:${JRE_VERSION}
+  Commands:
+  - Key: CONFIG_DIR
+    Name: arg
+    Value: /etc/wildfly/config.d/
+  - Key: APPS_BASE
+    Name: arg
+    Value: /apps
+  - Env:
+    - Key: WILDFLY_USER
+      Value: wildfly
+    - Key: WILDFLY_HOME
+      Value: ${APPS_BASE}/wildfly
+    - Key: WILDFLY_RUNTIME_BASE_DIR
+      Value: /run/wildfly
+    - Key: WILDFLY_BIND_INTERFACE
+      Value: eth0
+    - Key: WILDFLY_HA
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: WILDFLY_BIND_ADDRESS
+      Value: ${WILDFLY_RUNTIME_BASE_DIR}/configuration/bind_address
+    Name: env
+  - Env:
+    - Key: WILDFLY_MGMT_BIND_ADDRESS
+      Value: ${WILDFLY_RUNTIME_BASE_DIR}/configuration/mgmt_bind_address
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get install -y iproute2 &&     rm -fr /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/s6
+    - /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/wildfly
+    - ${APPS_BASE}/
+  - CmdLine:
+    - ln -s ${APPS_BASE}/wildfly-* ${WILDFLY_HOME}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run-wildfly.sh
+    - ${WILDFLY_HOME}/bin/run-wildfly
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run-jboss-cli.sh
+    - ${WILDFLY_HOME}/bin/run-jboss-cli
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cont-init.d/
+    - /etc/cont-init.d/
+  - CmdLine:
+    - adduser --disabled-password --no-create-home --home "${WILDFLY_HOME}"       --gecos
+      "Wildfly User" --shell "/bin/bash" ${WILDFLY_USER} &&   mv ${WILDFLY_HOME}/standalone
+      ${WILDFLY_HOME}/standalone.OEM &&   ln -s ${WILDFLY_RUNTIME_BASE_DIR} ${WILDFLY_HOME}/standalone
+      &&   mkdir -p $CONFIG_DIR &&   chmod 755 ${WILDFLY_HOME}/bin/run-wildfly &&   chmod
+      755 ${WILDFLY_HOME}/bin/run-jboss-cli &&   ln -s ${WILDFLY_HOME}/bin/run-jboss-cli
+      /usr/local/bin/cli
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+    - "9990"
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /apps/wildfly/bin/run-wildfly
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:${JRE_VERSION}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:${JRE_VERSION}

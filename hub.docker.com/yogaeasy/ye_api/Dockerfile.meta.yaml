@@ -1,0 +1,120 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stretch-slim
+  Commands:
+  - CmdLine:
+    - "set -eux; \tapt-get update; \tapt-get install -y --no-install-recommends \t\tbzip2
+      \t\tca-certificates \t\tlibffi-dev \t\tlibgmp-dev \t\tlibssl-dev \t\tlibyaml-dev
+      \t\tprocps \t\tzlib1g-dev \t; \trm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -eux; \tmkdir -p /usr/local/etc; \t{ \t\techo 'install: --no-document';
+      \t\techo 'update: --no-document'; \t} >> /usr/local/etc/gemrc"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: RUBY_MAJOR
+      Value: "2.5"
+    Name: env
+  - Env:
+    - Key: RUBY_VERSION
+      Value: 2.5.5
+    Name: env
+  - Env:
+    - Key: RUBY_DOWNLOAD_SHA256
+      Value: 9bf6370aaa82c284f193264cc7ca56f202171c32367deceb3599a4f354175d7d
+    Name: env
+  - Env:
+    - Key: RUBYGEMS_VERSION
+      Value: 3.0.3
+    Name: env
+  - CmdLine:
+    - "set -eux; \t\tsavedAptMark=\"$(apt-mark showmanual)\"; \tapt-get update; \tapt-get
+      install -y --no-install-recommends \t\tautoconf \t\tbison \t\tdpkg-dev \t\tgcc
+      \t\tlibbz2-dev \t\tlibgdbm-dev \t\tlibglib2.0-dev \t\tlibncurses-dev \t\tlibreadline-dev
+      \t\tlibxml2-dev \t\tlibxslt-dev \t\tmake \t\truby \t\twget \t\txz-utils \t\truby-dev
+      \t\tgcc \t\tautomake \t\tlibtool \t\trubygems \t\tbuild-essential \t\tlibsqlite3-dev
+      \t; \tapt-get install -y --no-install-recommends         apt-transport-https
+      \        ca-certificates         curl         gnupg-agent         gnupg         software-properties-common
+      \        curl         git     ;     curl -fsSL https://download.docker.com/linux/ubuntu/gpg
+      | apt-key add - ;     add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/debian
+      $(lsb_release -cs) stable\";     apt update;     apt-cache policy docker-ce;
+      \    apt install -y --no-install-recommends docker-ce; \trm -rf /var/lib/apt/lists/*;
+      \t\twget -O ruby.tar.xz \"https://cache.ruby-lang.org/pub/ruby/${RUBY_MAJOR%-rc}/ruby-$RUBY_VERSION.tar.xz\";
+      \techo \"$RUBY_DOWNLOAD_SHA256 *ruby.tar.xz\" | sha256sum --check; \t\tmkdir
+      -p /usr/src/ruby; \ttar -xJf ruby.tar.xz -C /usr/src/ruby --strip-components=1;
+      \trm ruby.tar.xz; \t\tcd /usr/src/ruby; \t\t{ \t\techo '#define ENABLE_PATH_CHECK
+      0'; \t\techo; \t\tcat file.c; \t} > file.c.new; \tmv file.c.new file.c; \t\tautoconf;
+      \tgnuArch=\"$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)\"; \t./configure
+      \t\t--build=\"$gnuArch\" \t\t--disable-install-doc \t\t--enable-shared \t; \tmake
+      -j \"$(nproc)\"; \tmake install; \t\tapt-mark auto '.*' > /dev/null; \tapt-mark
+      manual $savedAptMark > /dev/null; \tfind /usr/local -type f -executable -not
+      \\( -name '*tkinter*' \\) -exec ldd '{}' ';' \t\t| awk '/=>/ { print $(NF-1)
+      }' \t\t| sort -u \t\t| xargs -r dpkg-query --search \t\t| cut -d: -f1 \t\t|
+      sort -u \t\t| xargs -r apt-mark manual \t; \t\tcd /; \trm -r /usr/src/ruby;
+      \truby -e 'exit(Gem::Version.create(ENV[\"RUBYGEMS_VERSION\"]) > Gem::Version.create(Gem::VERSION))';
+      \tgem update --system \"$RUBYGEMS_VERSION\" && rm -r /root/.gem/; \t! dpkg -l
+      | grep -i ruby; \t[ \"$(command -v ruby)\" = '/usr/local/bin/ruby' ]; \truby
+      --version; \tgem --version;     gem install nokogiri -v '1.10.3';     gem install
+      sqlite3 -v '1.4.1' --source 'https://rubygems.org/'; \tbundle --version"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GEM_HOME
+      Value: /usr/local/bundle
+    Name: env
+  - Env:
+    - Key: BUNDLE_PATH
+      Value: '"$GEM_HOME"'
+    - Key: BUNDLE_SILENCE_ROOT_WARNING
+      Value: "1"
+    - Key: BUNDLE_APP_CONFIG
+      Value: '"$GEM_HOME"'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $GEM_HOME/bin:$BUNDLE_PATH/gems/bin:$PATH
+    Name: env
+  - CmdLine:
+    - mkdir -p "$GEM_HOME" && chmod 777 "$GEM_HOME"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - "bundle install --path vendor/bundle; \tapt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false;"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - /bin/bash
+    - -cl
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - bundle exec rails s -b 0.0.0.0
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 60000000000
+      Retries: 7
+      StartPeriod: 10000000000
+      Test:
+      - CMD-SHELL
+      - curl --request GET http://localhost:3000/webhook/bitbucket/healthcheck
+      Timeout: 90000000000
+    Name: healthcheck
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

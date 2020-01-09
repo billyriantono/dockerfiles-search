@@ -1,0 +1,92 @@
+MetaArgs: null
+Stages:
+- As: repo
+  BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: OBP-API
+  - CmdLine:
+    - git clone https://github.com/OpenBankProject/OBP-API.git
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: repo
+  Platform: ""
+  SourceCode: FROM alpine:latest as repo
+- As: maven
+  BaseName: maven:3-jdk-8
+  Commands:
+  - Chown: ""
+    From: repo
+    Name: copy
+    SourcesAndDest:
+    - /OBP-API
+    - /usr/src
+  - CmdLine:
+    - 'cp /usr/src/OBP-API/obp-api/pom.xml /tmp/pom.xml # For Packaging a local repository
+      within the image'
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/OBP-API
+  - CmdLine:
+    - cp obp-api/src/main/resources/props/sample.props.template obp-api/src/main/resources/props/default.props
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp obp-api/src/main/resources/props/test.default.props.template obp-api/src/main/resources/props/test.default.props
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn install -pl .,obp-commons
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn install -DskipTests -pl obp-api
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3-jdk-8
+  Name: maven
+  Platform: ""
+  SourceCode: FROM maven:3-jdk-8 as maven
+- BaseName: openjdk:8-jre-alpine
+  Commands:
+  - CmdLine:
+    - adduser -D obp
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-distribution/9.4.15.v20190215/jetty-distribution-9.4.15.v20190215.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xvf jetty-distribution-9.4.15.v20190215.tar.gz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: maven
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/OBP-API/obp-api/target/obp-api-1.0.war
+    - jetty-distribution-9.4.15.v20190215/webapps/ROOT.war
+  - Name: workdir
+    Path: jetty-distribution-9.4.15.v20190215/
+  - Name: user
+    User: obp
+  - CmdLine:
+    - java
+    - -jar
+    - start.jar
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:8-jre-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre-alpine

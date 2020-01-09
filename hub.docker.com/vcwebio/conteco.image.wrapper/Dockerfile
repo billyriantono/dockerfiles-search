@@ -1,0 +1,39 @@
+##### BEGIN image.wrapper/Dockerfile/image-header #####
+FROM vcwebio/conteco.external.bash AS base
+##### END image.wrapper/Dockerfile/image-header #####
+
+##### BEGIN image.wrapper/Dockerfile/conteco #####
+ENTRYPOINT ["/conteco/bin/image/wrapper/entrypoint"]
+##### END image.wrapper/Dockerfile/conteco #####
+
+##### BEGIN image/Dockerfile/conteco #####
+COPY ./conteco/ /conteco/
+RUN chmod -R +x /conteco/bin && rm -rf /conteco/repo
+COPY ./ /conteco/repo/
+##### END image/Dockerfile/conteco #####
+
+##### BEGIN image/Dockerfile/build-instructions #####
+ENV CONTECO_ENTRYPOINT "bash"
+WORKDIR /conteco/pwd
+##### END image/Dockerfile/build-instructions #####
+
+##### BEGIN image.wrapper/Dockerfile/env-labels-footer #####
+ENV CONTECO_REALM="vcwebio" \
+    CONTECO_ECOSYSTEM="conteco" \
+    CONTECO_TYPE="image" \
+    CONTECO_NAME="wrapper" \
+    CONTECO_TAG="v1.2.0" \
+    CONTECO_BASE="external.bash" \
+    CONTECO_BUILD="image-wrapper"
+LABEL io.vcweb.schema-version="1.0" \
+      io.vcweb.realm="vcwebio" \
+      io.vcweb.ecosystem="conteco" \
+      io.vcweb.type="image" \
+      io.vcweb.name="wrapper" \
+      io.vcweb.tag="v1.2.0" \
+      io.vcweb.base="external.bash" \
+      io.vcweb.build="image-wrapper" \
+      io.vcweb.label="Image Wrapper" \
+      io.vcweb.description="The conteco.image.wrapper image implements the functionality common to all ContEco containers." \
+      io.vcweb.docker.cmd.help="docker run vcwebio/conteco.image.wrapper --help" 
+##### END image.wrapper/Dockerfile/env-labels-footer #####

@@ -1,0 +1,98 @@
+MetaArgs:
+- DefaultValue: docker.io
+  Key: DOCKER_REGISTRY
+  ProvidedValue: null
+  Value: docker.io
+- DefaultValue: qnib
+  Key: FROM_IMG_REPO
+  ProvidedValue: null
+  Value: qnib
+- DefaultValue: '"alplain-openjdk8"'
+  Key: FROM_IMG_NAME
+  ProvidedValue: null
+  Value: '"alplain-openjdk8"'
+- DefaultValue: '"2019-01-28.1"'
+  Key: FROM_IMG_TAG
+  ProvidedValue: null
+  Value: '"2019-01-28.1"'
+- DefaultValue: '""'
+  Key: FROM_IMG_HASH
+  ProvidedValue: null
+  Value: '""'
+Stages:
+- BaseName: ${DOCKER_REGISTRY}/${FROM_IMG_REPO}/${FROM_IMG_NAME}:${FROM_IMG_TAG}${DOCKER_IMG_HASH}
+  Commands:
+  - Key: MAVEN_VERSION
+    Name: arg
+    Value: '"3.6.1"'
+  - Key: ZKUI_COMMIT
+    Name: arg
+    Value: 8d3441d0e3f2299a003d0d75308519e82564836c
+  - Labels:
+    - Key: zkui.commit
+      Value: ${ZKUI_COMMIT}
+    - Key: zkui.maven.version
+      Value: ${MAVEN_VERSION}
+    Name: label
+  - Env:
+    - Key: ENTRYPOINTS_DIR
+      Value: /opt/qnib/entry
+    - Key: M2_HOME
+      Value: /usr/lib/mvn
+    - Key: ZKUI_PORT
+      Value: "9090"
+    - Key: ZK_SERVER
+      Value: tasks.zookeeper:2181
+    - Key: ZKUI_ADMIN_PW
+      Value: manager
+    - Key: ZKUI_USER_PW
+      Value: user
+    Name: env
+  - CmdLine:
+    - apk --no-cache add wget curl libarchive-tools  && wget -qO - "http://ftp.unicamp.br/pub/apache/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz"
+      | tar xfz - -C /opt/  && mv "/opt/apache-maven-$MAVEN_VERSION" "$M2_HOME"  &&
+      ln -s "$M2_HOME/bin/mvn" /usr/bin/mvn  && wget -qO - https://github.com/DeemOpen/zkui/archive/${ZKUI_COMMIT}.zip
+      |bsdtar xf - -C /opt/  && mv /opt/zkui-${ZKUI_COMMIT} /opt/zkui  && apk --no-cache
+      del wget libarchive-tools  && cd /opt/zkui && mvn clean install  && rm -rf /tmp/*
+      /var/cache/apk/* /usr/lib/mvn /opt/zkui/config.cfg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "grep zkSer /opt/zkui/config.cfg" >> /root/.bash_history
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - opt/qnib/zkui/bin/start.sh
+    - /opt/qnib/zkui/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - opt/qnib/entry/*
+    - /opt/qnib/entry/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - opt/qnib/zkui/conf/zkui.conf.orig
+    - /opt/qnib/zkui/conf/
+  - Health:
+      Interval: 2000000000
+      Retries: 30
+      Test:
+      - CMD-SHELL
+      - curl -sI http://127.0.0.1:${ZKUI_PORT}
+      Timeout: 1000000000
+    Name: healthcheck
+  - CmdLine:
+    - /opt/qnib/zkui/bin/start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ${DOCKER_REGISTRY}/${FROM_IMG_REPO}/${FROM_IMG_NAME}:${FROM_IMG_TAG}${DOCKER_IMG_HASH}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${DOCKER_REGISTRY}/${FROM_IMG_REPO}/${FROM_IMG_NAME}:${FROM_IMG_TAG}${DOCKER_IMG_HASH}

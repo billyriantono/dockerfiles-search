@@ -1,0 +1,80 @@
+MetaArgs: null
+Stages:
+- BaseName: dockerfile/java:oracle-java8
+  Commands:
+  - Maintainer: Timon Veenstra <timon@limetri.eu>
+    Name: maintainer
+  - Env:
+    - Key: WILDFLY_VERSION
+      Value: 8.2.0.Final
+    Name: env
+  - Env:
+    - Key: HOME
+      Value: /opt/
+    Name: env
+  - Env:
+    - Key: KEYCLOAK_VERSION
+      Value: 1.0.4.Final
+    Name: env
+  - Env:
+    - Key: PORT_OFFSET
+      Value: "0"
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y bsdtar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd $HOME && curl http://download.jboss.org/wildfly/$WILDFLY_VERSION/wildfly-$WILDFLY_VERSION.tar.gz
+      | tar zx && mv $HOME/wildfly-$WILDFLY_VERSION $HOME/wildfly
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt
+  - CmdLine:
+    - curl -L https://downloads.sourceforge.net/project/keycloak/$KEYCLOAK_VERSION/keycloak-war-dist-all-$KEYCLOAK_VERSION.zip
+      | bsdtar -xf - && mv keycloak-war-dist-all-$KEYCLOAK_VERSION keycloak
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/wildfly
+  - CmdLine:
+    - bsdtar -xf /opt/keycloak/adapters/keycloak-wildfly-adapter-dist-$KEYCLOAK_VERSION.zip
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JBOSS_HOME
+      Value: /opt/wildfly
+    Name: env
+  - CmdLine:
+    - sed -i -e 's/<extensions>/&\n        <extension module="org.keycloak.keycloak-wildfly-subsystem"\/>/'
+      $JBOSS_HOME/standalone/configuration/standalone.xml &&     sed -i -e 's/<profile>/&\n        <subsystem
+      xmlns="urn:jboss:domain:keycloak:1.0"\/>/' $JBOSS_HOME/standalone/configuration/standalone.xml
+      &&     sed -i -e 's/<security-domains>/&\n                <security-domain name="keycloak">\n                    <authentication>\n                        <login-module
+      code="org.keycloak.adapters.jboss.KeycloakLoginModule" flag="required"\/>\n                    <\/authentication>\n                <\/security-domain>/'
+      $JBOSS_HOME/standalone/configuration/standalone.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd -r wildfly -g 433 &&     useradd -u 431 -r -g wildfly -d /opt/wildfly
+      -s /sbin/nologin -c "Wildfly user" wildfly &&     chown -R wildfly:wildfly /opt/wildfly
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: wildfly
+  - Name: expose
+    Ports:
+    - "8080"
+    - "9990"
+  - CmdLine:
+    - /opt/wildfly/bin/standalone.sh
+    - -b
+    - 0.0.0.0
+    - -Djboss.socket.binding.port-offset=$PORT_OFFSET
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: dockerfile/java:oracle-java8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM dockerfile/java:oracle-java8

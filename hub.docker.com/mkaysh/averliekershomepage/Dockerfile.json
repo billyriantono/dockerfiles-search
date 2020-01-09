@@ -1,0 +1,276 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "base",
+      "BaseName": "microsoft/dotnet:2.1-aspnetcore-runtime",
+      "SourceCode": "FROM microsoft/dotnet:2.1-aspnetcore-runtime AS base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Image": "microsoft/dotnet:2.1-aspnetcore-runtime"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "80"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "build",
+      "BaseName": "microsoft/dotnet:2.1-sdk",
+      "SourceCode": "FROM microsoft/dotnet:2.1-sdk AS build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Image": "microsoft/dotnet:2.1-sdk"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/src"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "server/Server/Server.csproj",
+            "Server/Server.csproj"
+          ]
+        },
+        {
+          "CmdLine": [
+            "dotnet restore Server/Server.csproj"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "server",
+            "."
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/src/Server"
+        },
+        {
+          "CmdLine": [
+            "dotnet build Server.csproj -c Release -o /app"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "publish",
+      "BaseName": "build",
+      "SourceCode": "FROM build AS publish",
+      "Platform": "",
+      "As": "publish",
+      "From": {
+        "Stage": {
+          "Named": "build",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "dotnet publish Server.csproj -c Release -o /app"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "yarninstall",
+      "BaseName": "node:alpine",
+      "SourceCode": "FROM node:alpine AS yarninstall",
+      "Platform": "",
+      "As": "yarninstall",
+      "From": {
+        "Image": "node:alpine"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add python2"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "apk add build-base"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "apk add yarn"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "yarn global add @angular/cli"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/src"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "client/package.json",
+            "./package.json"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "client/yarn.lock",
+            "./yarn.lock"
+          ]
+        },
+        {
+          "CmdLine": [
+            "yarn --pure-lockfile"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "copy_client_sources",
+      "BaseName": "yarninstall",
+      "SourceCode": "FROM yarninstall AS copy_client_sources",
+      "Platform": "",
+      "As": "copy_client_sources",
+      "From": {
+        "Stage": {
+          "Named": "yarninstall",
+          "Index": 3
+        }
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/src"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "client",
+            "."
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "ngbuild",
+      "BaseName": "copy_client_sources",
+      "SourceCode": "FROM copy_client_sources AS ngbuild",
+      "Platform": "",
+      "As": "ngbuild",
+      "From": {
+        "Stage": {
+          "Named": "copy_client_sources",
+          "Index": 4
+        }
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/src"
+        },
+        {
+          "CmdLine": [
+            "yarn run build:production"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "final",
+      "BaseName": "base",
+      "SourceCode": "FROM base AS final",
+      "Platform": "",
+      "As": "final",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get install -y libgdiplus \u0026\u0026 rm -rf /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Chown": "",
+          "From": "publish",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app",
+            "."
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "ngbuild",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/src/dist/",
+            "wwwroot/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "dotnet",
+            "Server.dll"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+MetaArgs: null
+Stages:
+- As: cilium-envoy
+  BaseName: quay.io/cilium/cilium-envoy:9e8d7bb5e02d6038d6cf0ec3f28bf4019f3c7d79
+  Commands: null
+  From:
+    Image: quay.io/cilium/cilium-envoy:9e8d7bb5e02d6038d6cf0ec3f28bf4019f3c7d79
+  Name: cilium-envoy
+  Platform: ""
+  SourceCode: FROM quay.io/cilium/cilium-envoy:9e8d7bb5e02d6038d6cf0ec3f28bf4019f3c7d79
+    as cilium-envoy
+- As: builder
+  BaseName: quay.io/cilium/cilium-builder:2019-12-11
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"maintainer@cilium.io"'
+    Name: label
+  - Name: workdir
+    Path: /go/src/github.com/cilium/cilium
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - Key: LOCKDEBUG
+    Name: arg
+    Value: null
+  - Key: V
+    Name: arg
+    Value: null
+  - Key: LIBNETWORK_PLUGIN
+    Name: arg
+    Value: null
+  - CmdLine:
+    - make LOCKDEBUG=$LOCKDEBUG PKG_BUILD=1 V=$V LIBNETWORK_PLUGIN=$LIBNETWORK_PLUGIN     SKIP_DOCS=true
+      DESTDIR=/tmp/install clean-container build-container install-container
+    Name: run
+    PrependShell: true
+  From:
+    Image: quay.io/cilium/cilium-builder:2019-12-11
+  Name: builder
+  Platform: ""
+  SourceCode: FROM quay.io/cilium/cilium-builder:2019-12-11 as builder
+- BaseName: quay.io/cilium/cilium-runtime:2019-12-11
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"maintainer@cilium.io"'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/install
+    - /
+  - Chown: ""
+    From: cilium-envoy
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - plugins/cilium-cni/cni-install.sh
+    - /cni-install.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - plugins/cilium-cni/cni-uninstall.sh
+    - /cni-uninstall.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - contrib/packaging/docker/init-container.sh
+    - /init-container.sh
+  - Name: workdir
+    Path: /root
+  - CmdLine:
+    - "groupadd -f cilium \t&& echo \". /etc/profile.d/bash_completion.sh\" >> /root/.bashrc
+      \    && cilium completion bash >> /root/.bashrc     && sysctl -w kernel.core_pattern=/tmp/core.%e.%p.%t"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: INITSYSTEM
+      Value: '"SYSTEMD"'
+    Name: env
+  - CmdLine:
+    - /usr/bin/cilium
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: quay.io/cilium/cilium-runtime:2019-12-11
+  Name: ""
+  Platform: ""
+  SourceCode: FROM quay.io/cilium/cilium-runtime:2019-12-11

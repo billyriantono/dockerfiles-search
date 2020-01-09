@@ -1,0 +1,125 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:16.04
+  Commands:
+  - CmdLine:
+    - apt-get update &&         echo "Installing Tools..." &&     DEBIAN_FRONTEND=noninteractive
+      apt-get install --no-install-recommends -y         apt-transport-https         libterm-readline-perl-perl         locales         mc         openjdk-8-jre         python-setuptools         vim         wget         &&         echo
+      "Installing Postfix..." &&     echo "postfix postfix/main_mailer_type string
+      Internet site" > preseed.txt &&     debconf-set-selections preseed.txt &&     DEBIAN_FRONTEND=noninteractive
+      apt-get install --no-install-recommends -q -y         postfix         &&         echo
+      "Installing dumb-init..." &&     wget -qO /usr/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.0/dumb-init_1.2.0_amd64
+      &&     chmod +x /usr/bin/dumb-init &&         echo "Installing Supervisor..."
+      &&     easy_install supervisor &&         echo "Cleaning up..." &&     rm preseed.txt
+      &&     rm -r /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ZAMMAD_VERSION
+      Value: 2.9.0
+    Name: env
+  - CmdLine:
+    - echo "Configuring Repos and Keys..." &&     wget -qO- https://dl.packager.io/srv/zammad/zammad/key
+      | apt-key add - &&     wget -O /etc/apt/sources.list.d/zammad.list https://dl.packager.io/srv/zammad/zammad/stable/installer/ubuntu/16.04.repo
+      &&         apt-get update &&         echo "Installing Zammad..." &&     DEBIAN_FRONTEND=noninteractive
+      apt-get install --no-install-recommends -y         zammad=$ZAMMAD_VERSION\*         &&     initctl
+      stop nginx &&     initctl stop zammad &&         echo "Cleaning up..." &&     rm
+      -r /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/server localhost/server 127.0.0.1/' /etc/nginx/sites-available/zammad.conf
+      &&         rm -rf /etc/nginx/sites-enabled/default
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'sed -i -e ''s/^.*config\.logger.*$/  config.logger = ActiveSupport::TaggedLogging.new(Logger.new(STDOUT))/''
+      /opt/zammad/config/environments/production.rb &&     sed -i -e ''s/ \$stdout/
+      #\$stdout/'' /opt/zammad/script/*.rb &&     sed -i -e ''s/ \$stderr/ #\$stderr/''
+      /opt/zammad/script/*.rb &&         ln -sf /dev/stdout /var/log/nginx/access.log
+      &&     ln -sf /dev/stderr /var/log/nginx/error.log &&     ln -sf /dev/stdout
+      /var/log/nginx/zammad.access.log &&     ln -sf /dev/stderr /var/log/nginx/zammad.error.log'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - config/database.yml
+    - /opt/zammad/config/database.yml
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - config/supervisord.conf
+    - /etc/supervisord.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/docker-entrypoint.sh
+    - /docker-entrypoint.sh
+  - CmdLine:
+    - chmod 744 /*.sh &&         chmod 644 /opt/zammad/config/database.yml &&     chown
+      zammad:zammad /opt/zammad/config/database.yml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo "Mod: [form_submit] Add product data to body" &&     sed -i -e "s/body:
+      params\[:body\]/body: params[:product_name].present? ? \"[#{params[:product_name]}
+      #{params[:version]} | #{params[:os]} | #{params[:country]} | #{params[:reason]}]\\\n\\\n#{params[:body]}\"
+      : params[:body]/" /opt/zammad/app/controllers/form_controller.rb &&         echo
+      "Mod: [form_submit] Fail silently on honeypot field submission" &&     sed -i
+      -e "s/\(# validate input\)/if params[:req_name] \\&\\& !params[:req_name].empty?\\n      render
+      json: {}, status: :ok\\n      return\\n    end\\n\\n    \1/" /opt/zammad/app/controllers/form_controller.rb'
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: RAILS_ENV
+      Value: production
+    - Key: PATH
+      Value: /opt/zammad/bin:$PATH
+    - Key: GEM_PATH
+      Value: /opt/zammad/vendor/bundle/ruby/2.4.0/
+    - Key: DB_ADAPTER
+      Value: mysql2
+    - Key: DB_DATABASE
+      Value: zammad
+    - Key: DB_USERNAME
+      Value: zammad
+    - Key: DB_PASSWORD
+      Value: '""'
+    - Key: DB_HOST
+      Value: mysql
+    - Key: DB_PORT
+      Value: "3306"
+    - Key: DB_CREATE
+      Value: "false"
+    - Key: DB_MIGRATE
+      Value: "false"
+    - Key: DB_INDEX
+      Value: "false"
+    - Key: ES_URL
+      Value: http://elasticsearch:9200
+    Name: env
+  - Name: expose
+    Ports:
+    - "3000"
+    - "6042"
+    - "80"
+    - "9001"
+    - "9200"
+  - Name: workdir
+    Path: '"/opt/zammad"'
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - supervisord
+    - -c
+    - /etc/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:16.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04

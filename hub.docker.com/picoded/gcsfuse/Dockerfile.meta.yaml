@@ -1,0 +1,104 @@
+MetaArgs: null
+Stages:
+- As: gocompile
+  BaseName: golang:1.10.0-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - CmdLine:
+    - go get -u github.com/googlecloudplatform/gcsfuse
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10.0-alpine
+  Name: gocompile
+  Platform: ""
+  SourceCode: FROM golang:1.10.0-alpine as gocompile
+- BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - apk add --no-cache ca-certificates fuse && rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache ca-certificates bash && rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: gocompile
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/gcsfuse
+    - /usr/local/bin
+  - CmdLine:
+    - mkdir -p /workspace
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /workspace
+  - Env:
+    - Key: GOOGLE_APPLICATION_CREDENTIALS
+      Value: '"/gcscredentials"'
+    Name: env
+  - Env:
+    - Key: GOOGLE_APPLICATION_CREDENTIALS_JSON
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: GCSFUSE_MOUNT
+      Value: '"/workspace"'
+    Name: env
+  - Env:
+    - Key: GCSFUSE_BUCKET
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: GCSFUSE_ARGS
+      Value: '"--limit-ops-per-sec 100 --limit-bytes-per-sec 100 --stat-cache-ttl
+        60s --type-cache-ttl 60s"'
+    Name: env
+  - CmdLine:
+    - "mkdir -p /entrypoint/ && \techo '#!/bin/bash' > /entrypoint/gcsfuse.sh && \techo
+      ''                                                              >> /entrypoint/gcsfuse.sh
+      && \techo '# Configuration checks'                                        >>
+      /entrypoint/gcsfuse.sh && \techo 'if [ -z \"${GCSFUSE_BUCKET}\" ]; then'                           >>
+      /entrypoint/gcsfuse.sh && \techo '    echo \"Error: GCSFUSE_BUCKET is not specified\"'
+      \            >> /entrypoint/gcsfuse.sh && \techo '    exit 128'                                                  >>
+      /entrypoint/gcsfuse.sh && \techo 'fi'                                                            >>
+      /entrypoint/gcsfuse.sh && \techo ''                                                              >>
+      /entrypoint/gcsfuse.sh && \techo '# Write auth file if it does not exist'                        >>
+      /entrypoint/gcsfuse.sh && \techo 'if [ ! -f \"${GOOGLE_APPLICATION_CREDENTIALS}\"
+      ]; then'         >> /entrypoint/gcsfuse.sh && \techo '    if [ -z \"${GOOGLE_APPLICATION_CREDENTIALS_JSON}\"
+      ]; then'  >> /entrypoint/gcsfuse.sh && \techo '        echo \"Error: Missing
+      GOOGLE_APPLICATION_CREDENTIALS_JSON or ${GOOGLE_APPLICATION_CREDENTIALS} not
+      provided\"'  >> /entrypoint/gcsfuse.sh && \techo '        exit 128'                                              >>
+      /entrypoint/gcsfuse.sh && \techo '    fi'                                                        >>
+      /entrypoint/gcsfuse.sh && \techo '    echo \"${GOOGLE_APPLICATION_CREDENTIALS_JSON}\"
+      > ${GOOGLE_APPLICATION_CREDENTIALS}'  >> /entrypoint/gcsfuse.sh && \techo 'fi'
+      \                                                           >> /entrypoint/gcsfuse.sh
+      && \techo ''                                                              >>
+      /entrypoint/gcsfuse.sh && \techo 'echo \"==> [picoded/gcsfuse] : Mounting GCS
+      Filesystem\"'        >> /entrypoint/gcsfuse.sh && \techo 'mkdir -p ${GCSFUSE_MOUNT}'
+      \                                    >> /entrypoint/gcsfuse.sh && \techo 'gcsfuse
+      $GCSFUSE_ARGS ${GCSFUSE_BUCKET} ${GCSFUSE_MOUNT}'      >> /entrypoint/gcsfuse.sh
+      && \techo ''                                                              >>
+      /entrypoint/gcsfuse.sh && \techo 'echo \"==> [picoded/gcsfuse] : Entrypoint
+      Chain\"'               >> /entrypoint/gcsfuse.sh && \techo 'exec \"$@\"'                                                     >>
+      /entrypoint/gcsfuse.sh && \tchmod +x /entrypoint/gcsfuse.sh;"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint/gcsfuse.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

@@ -1,0 +1,73 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: centos:7.4.1708
+  Commands:
+  - Env:
+    - Key: GOPATH
+      Value: /root
+    - Key: OAUTH2_PROXY_VERSION
+      Value: master
+    - Key: PATH
+      Value: '"${PATH}:/usr/local/go/bin:/root/bin"'
+    Name: env
+  - CmdLine:
+    - yum install -y git wget tar 'ca-certificates*' &&   wget https://storage.googleapis.com/golang/go1.9.linux-amd64.tar.gz
+      &&   tar xzf go1.9.linux-amd64.tar.gz -C /usr/local &&   rm go1.9.linux-amd64.tar.gz
+      &&   go get -u github.com/golang/dep/cmd/dep
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum install -y  unzip &&   mkdir -p /root/src/github.com/bitly/ &&   cd /root/src/github.com/bitly/
+      &&   curl -Lo - https://github.com/bitly/oauth2_proxy/archive/${OAUTH2_PROXY_VERSION}.zip>${OAUTH2_PROXY_VERSION}.zip
+      &&   unzip ${OAUTH2_PROXY_VERSION}.zip &&   mv oauth2_proxy-${OAUTH2_PROXY_VERSION}
+      oauth2_proxy
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root/src/github.com/bitly/oauth2_proxy
+  - CmdLine:
+    - sed -E 's/gopkg.in\/fsnotify.v1/gopkg.in\/fsnotify\/fsnotify.v1/' -i Gopkg.toml
+      &&   sed -E 's/gopkg.in\/fsnotify.v1/gopkg.in\/fsnotify\/fsnotify.v1/' -i Gopkg.lock
+      &&   sed -E 's/gopkg.in\/fsnotify.v1/gopkg.in\/fsnotify\/fsnotify.v1/' -i watcher.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dep ensure &&   sed -E 's/127.0.0.1:4180/0.0.0.0:4180/' -i main.go &&   CGO_ENABLED=0
+      GOOS=linux go build -ldflags '-s -w -extldflags "-static"' -o /target/oauth2_proxy
+      .
+    Name: run
+    PrependShell: true
+  From:
+    Image: centos:7.4.1708
+  Name: builder
+  Platform: ""
+  SourceCode: FROM centos:7.4.1708 as builder
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /target/oauth2_proxy
+    - /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+    - /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+  - Name: expose
+    Ports:
+    - "4180"
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - /oauth2_proxy
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

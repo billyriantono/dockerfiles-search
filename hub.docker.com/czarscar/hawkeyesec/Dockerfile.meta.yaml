@@ -1,0 +1,123 @@
+MetaArgs: null
+Stages:
+- As: cargo-audit-build
+  BaseName: ekidd/rust-musl-builder
+  Commands:
+  - CmdLine:
+    - cargo install cargo cargo-audit --root /home/rust &&     strip /home/rust/bin/cargo
+      /home/rust/bin/cargo-audit
+    Name: run
+    PrependShell: true
+  From:
+    Image: ekidd/rust-musl-builder
+  Name: cargo-audit-build
+  Platform: ""
+  SourceCode: FROM ekidd/rust-musl-builder AS cargo-audit-build
+- BaseName: alpine:3.10
+  Commands:
+  - Key: FINDSECBUGS_FOLDER
+    Name: arg
+    Value: /usr/local/opt/findsecbugs
+  - Key: OWASP_DEP_FOLDER
+    Name: arg
+    Value: /usr/local/bin/owaspdependency
+  - CmdLine:
+    - apk add --no-cache             bash             git             nodejs             npm             openjdk8-jre             php-cli             php-json             php-mbstring             php-openssl             php-phar             python             py2-pip             ruby
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '{         echo ''install: --no-document'';         echo ''update: --no-document'';     }
+      >> /etc/gemrc'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install --no-cache-dir safety==1.8.5 piprot==0.9.10 bandit==1.6.2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gem install bundler bundler-audit:0.6.1 brakeman:4.5.1 && bundle audit update     &&
+      rm -rf $(gem env home)/cache/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: FINDSECBUGS_VERSION
+      Value: 1.8.0
+    Name: env
+  - CmdLine:
+    - mkdir -p ${FINDSECBUGS_FOLDER} && cd ${FINDSECBUGS_FOLDER}     && wget --quiet
+      https://github.com/find-sec-bugs/find-sec-bugs/releases/download/version-${FINDSECBUGS_VERSION}/findsecbugs-cli-${FINDSECBUGS_VERSION}.zip     &&
+      unzip -q findsecbugs-cli-${FINDSECBUGS_VERSION}.zip     && rm findsecbugs-cli-${FINDSECBUGS_VERSION}.zip     &&
+      rm findsecbugs.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/findsecbugs.sh
+    - ${FINDSECBUGS_FOLDER}/findsecbugs.sh
+  - CmdLine:
+    - chmod +x ${FINDSECBUGS_FOLDER}/findsecbugs.sh     && ln -s ${FINDSECBUGS_FOLDER}/findsecbugs.sh
+      /usr/local/bin/findsecbugs
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: OWASP_VERSION
+      Value: 5.2.4
+    Name: env
+  - CmdLine:
+    - mkdir $OWASP_DEP_FOLDER && cd $OWASP_DEP_FOLDER     && wget --quiet http://dl.bintray.com/jeremy-long/owasp/dependency-check-${OWASP_VERSION}-release.zip     &&
+      unzip -q dependency-check-${OWASP_VERSION}-release.zip     && chmod +x $OWASP_DEP_FOLDER/dependency-check/bin/dependency-check.sh     &&
+      rm dependency-check-${OWASP_VERSION}-release.zip     && mv dependency-check/bin/dependency-check.sh
+      dependency-check/bin/dependency-check
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /usr/local/bin     && wget --quiet https://get.sensiolabs.org/security-checker.phar     &&
+      chmod +x security-checker.phar
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: cargo-audit-build
+    Name: copy
+    SourcesAndDest:
+    - /home/rust/bin/
+    - /usr/local/bin/
+  - CmdLine:
+    - cargo-audit --help
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /hawkeye
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /hawkeye
+  - CmdLine:
+    - cd /hawkeye && npm install --production --quiet     && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /target
+  - Env:
+    - Key: PATH
+      Value: /hawkeye/bin:$OWASP_DEP_FOLDER/dependency-check/bin:$PATH
+    Name: env
+  - CmdLine:
+    - dependency-check --updateonly
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - hawkeye
+    - scan
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10

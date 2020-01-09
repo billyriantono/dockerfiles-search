@@ -1,0 +1,159 @@
+MetaArgs: null
+Stages:
+- As: protoc_builder
+  BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - apk add --no-cache build-base curl automake autoconf libtool git zlib-dev
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GRPC_VERSION
+      Value: 1.8.4
+    - Key: PROTOBUF_VERSION
+      Value: 3.5.1
+    - Key: OUTDIR
+      Value: /out
+    Name: env
+  - CmdLine:
+    - mkdir -p /protobuf &&     curl -L https://github.com/google/protobuf/archive/v${PROTOBUF_VERSION}.tar.gz
+      | tar xvz --strip-components=1 -C /protobuf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth 1 --recursive -b v${GRPC_VERSION} https://github.com/grpc/grpc.git
+      /grpc &&     rm -rf grpc/third_party/protobuf &&     ln -s /protobuf /grpc/third_party/protobuf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /protobuf &&     autoreconf -f -i -Wall,no-obsolete &&     ./configure --prefix=/usr
+      --enable-static=no &&     make -j2 && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd grpc &&     make -j2 plugins
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /protobuf &&     make install DESTDIR=${OUTDIR}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /grpc &&     make install-plugins prefix=${OUTDIR}/usr
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find ${OUTDIR} -name "*.a" -delete -or -name "*.la" -delete
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: protoc_builder
+  Platform: ""
+  SourceCode: FROM alpine:3.7 as protoc_builder
+- As: swift_builder
+  BaseName: swift:4.0.3
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install -y automake libtool autoconf tzdata curl
+      libcurl4-openssl-dev patchelf &&     apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b dev https://github.com/novi/grpc-swift &&     cd grpc-swift &&     make
+      all &&     cp .build/debug/protoc-gen-swift /usr/bin &&     cp .build/debug/protoc-gen-swiftgrpc
+      /usr/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/saga-dash/swift-protobuf-validator &&     cd swift-protobuf-validator
+      &&     make &&     cp .build/debug/protoc-gen-swiftvalidator /usr/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /protoc-gen-swift &&     cp /grpc-swift/.build/debug/protoc-gen-swift
+      /protoc-gen-swift/ &&     cp /grpc-swift/.build/debug/protoc-gen-swiftgrpc /protoc-gen-swift/
+      &&     cp /swift-protobuf-validator/.build/debug/protoc-gen-swiftvalidator /protoc-gen-swift/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /lib64/ld-linux-x86-64.so.2         $(ldd /protoc-gen-swift/protoc-gen-swift
+      | awk '{print $3}' | grep /lib | sort | uniq)         /protoc-gen-swift/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /protoc-gen-swift/ -name 'lib*.so*' -exec patchelf --set-rpath /protoc-gen-swift
+      {} \; &&     for p in protoc-gen-swift protoc-gen-swiftgrpc protoc-gen-swiftvalidator;
+      do         patchelf --set-interpreter /protoc-gen-swift/ld-linux-x86-64.so.2
+      /protoc-gen-swift/${p};     done
+    Name: run
+    PrependShell: true
+  From:
+    Image: swift:4.0.3
+  Name: swift_builder
+  Platform: ""
+  SourceCode: FROM swift:4.0.3 as swift_builder
+- As: packer
+  BaseName: znly/upx
+  Commands:
+  - Chown: ""
+    From: protoc_builder
+    Name: copy
+    SourcesAndDest:
+    - /out/
+    - /out/
+  - CmdLine:
+    - upx --lzma         /out/usr/bin/protoc
+    Name: run
+    PrependShell: true
+  From:
+    Image: znly/upx
+  Name: packer
+  Platform: ""
+  SourceCode: FROM znly/upx as packer
+- BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - apk add --no-cache libstdc++
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: packer
+    Name: copy
+    SourcesAndDest:
+    - /out/
+    - /
+  - Chown: ""
+    From: swift_builder
+    Name: copy
+    SourcesAndDest:
+    - /protoc-gen-swift
+    - /protoc-gen-swift
+  - CmdLine:
+    - for p in protoc-gen-swift protoc-gen-swiftgrpc protoc-gen-swiftvalidator; do         ln
+      -s /protoc-gen-swift/${p} /usr/bin/${p};     done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache curl &&     mkdir -p /protobuf/google/protobuf &&         for
+      f in any duration descriptor empty struct timestamp wrappers; do             curl
+      -L -o /protobuf/google/protobuf/${f}.proto https://raw.githubusercontent.com/google/protobuf/master/src/google/protobuf/${f}.proto;         done
+      &&     mkdir -p /protobuf/google/api &&         for f in annotations http; do             curl
+      -L -o /protobuf/google/api/${f}.proto https://raw.githubusercontent.com/grpc-ecosystem/grpc-gateway/master/third_party/googleapis/google/api/${f}.proto;         done
+      &&     mkdir -p /protobuf/google/pubsub/v1 &&         for f in pubsub; do             curl
+      -L -o /protobuf/google/pubsub/v1/${f}.proto https://raw.githubusercontent.com/googleapis/googleapis/master/google/pubsub/v1/${f}.proto;         done
+      &&     mkdir -p /protobuf/google/pubsub/v1beta2 &&         for f in pubsub;
+      do             curl -L -o /protobuf/google/pubsub/v1beta2/${f}.proto https://raw.githubusercontent.com/googleapis/googleapis/master/google/pubsub/v1beta2/${f}.proto;         done
+      &&     apk del curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/protoc
+    - -I/protobuf
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

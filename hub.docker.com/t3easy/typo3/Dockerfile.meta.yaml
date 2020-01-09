@@ -1,0 +1,159 @@
+MetaArgs:
+- DefaultValue: "7.2"
+  Key: PHP_VERSION
+  ProvidedValue: null
+  Value: "7.2"
+- DefaultValue: production
+  Key: TARGET_ENVIRONMENT
+  ProvidedValue: null
+  Value: production
+- DefaultValue: php
+  Key: TARGET_SERVICE
+  ProvidedValue: null
+  Value: php
+Stages:
+- As: builder
+  BaseName: t3easy/php:${PHP_VERSION}-development
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app
+  - CmdLine:
+    - rm -rf /app/.docker     && mkdir -p /app/config     && mkdir -p /app/var
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - composer install --no-ansi --no-interaction --no-dev --no-progress --classmap-authoritative
+    Name: run
+    PrependShell: true
+  From:
+    Image: t3easy/php:${PHP_VERSION}-development
+  Name: builder
+  Platform: ""
+  SourceCode: FROM t3easy/php:${PHP_VERSION}-development AS builder
+- As: php-base
+  BaseName: t3easy/php:${PHP_VERSION}-${TARGET_ENVIRONMENT}
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .docker/cron.sh
+    - /usr/local/bin/cron
+  - CmdLine:
+    - rm /var/spool/cron/crontabs/root  && echo '*/15 * * * * php -f /app/vendor/bin/typo3
+      scheduler:run' > /var/spool/cron/crontabs/www-data
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .docker/ca-certificates
+    - /usr/local/share/ca-certificates
+  - CmdLine:
+    - update-ca-certificates
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: '"/app/vendor/bin:$PATH"'
+    Name: env
+  From:
+    Image: t3easy/php:${PHP_VERSION}-${TARGET_ENVIRONMENT}
+  Name: php-base
+  Platform: ""
+  SourceCode: FROM t3easy/php:${PHP_VERSION}-${TARGET_ENVIRONMENT} AS php-base
+- As: php-production
+  BaseName: php-base
+  Commands:
+  - Chown: "82"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - Env:
+    - Key: TYPO3_CONTEXT
+      Value: Production
+    Name: env
+  From:
+    Stage:
+      Index: 1
+      Named: php-base
+  Name: php-production
+  Platform: ""
+  SourceCode: FROM php-base as php-production
+- As: php-development
+  BaseName: php-base
+  Commands:
+  - Env:
+    - Key: TYPO3_CONTEXT
+      Value: Development
+    Name: env
+  From:
+    Stage:
+      Index: 1
+      Named: php-base
+  Name: php-development
+  Platform: ""
+  SourceCode: FROM php-base as php-development
+- As: web-base
+  BaseName: nginx:alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .docker/web/typo3.conf
+    - /etc/nginx/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .docker/web/default.conf
+    - /etc/nginx/conf.d/
+  - Name: workdir
+    Path: /app
+  From:
+    Image: nginx:alpine
+  Name: web-base
+  Platform: ""
+  SourceCode: FROM nginx:alpine as web-base
+- As: web-production
+  BaseName: web-base
+  Commands:
+  - Chown: "101"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /app
+  From:
+    Stage:
+      Index: 4
+      Named: web-base
+  Name: web-production
+  Platform: ""
+  SourceCode: FROM web-base as web-production
+- As: web-development
+  BaseName: web-base
+  Commands: null
+  From:
+    Stage:
+      Index: 4
+      Named: web-base
+  Name: web-development
+  Platform: ""
+  SourceCode: FROM web-base as web-development
+- As: runtime
+  BaseName: ${TARGET_SERVICE}-${TARGET_ENVIRONMENT}
+  Commands: null
+  From:
+    Image: ${TARGET_SERVICE}-${TARGET_ENVIRONMENT}
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM ${TARGET_SERVICE}-${TARGET_ENVIRONMENT} as runtime

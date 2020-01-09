@@ -1,0 +1,161 @@
+MetaArgs: null
+Stages:
+- As: frontend
+  BaseName: node:12.3.1
+  Commands:
+  - Name: workdir
+    Path: /web
+  - CmdLine:
+    - npm install -g @angular/cli
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - web/package.json
+    - web/package-lock.json
+    - /web/
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - web/
+    - /web/
+  - CmdLine:
+    - ng build --configuration=production --base-href=/
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12.3.1
+  Name: frontend
+  Platform: ""
+  SourceCode: FROM node:12.3.1 as frontend
+- As: builder
+  BaseName: golang:1.13-alpine
+  Commands:
+  - Env:
+    - Key: GOFLAGS
+      Value: '"-mod=readonly"'
+    Name: env
+  - CmdLine:
+    - apk add --update --no-cache ca-certificates make git curl mercurial bzr
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /workspace
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /workspace
+  - Key: GOPROXY
+    Name: arg
+    Value: null
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.*
+    - /workspace/
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Makefile
+    - main-targets.mk
+    - /workspace/
+  - CmdLine:
+    - make bin/packr2
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: frontend
+    Name: copy
+    SourcesAndDest:
+    - /web/dist/web
+    - /workspace/web/dist/web
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /workspace
+  - Key: BUILD_TARGET
+    Name: arg
+    Value: null
+  - CmdLine:
+    - make uibundle
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -xe &&     if [[ "${BUILD_TARGET}" == "debug" ]]; then         cd /tmp;
+      GOBIN=/workspace/build/debug go get github.com/go-delve/delve/cmd/dlv; cd -;         make
+      build-debug;         mv build/debug /build;     else         make build-release;         mv
+      build/release /build;     fi
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.13-alpine AS builder
+- BaseName: alpine:3.10.1
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache ca-certificates tzdata bash curl
+    Name: run
+    PrependShell: true
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -c
+  - CmdLine:
+    - 'test ! -e /etc/nsswitch.conf && echo ''hosts: files dns'' > /etc/nsswitch.conf'
+    Name: run
+    PrependShell: true
+  - Key: BUILD_TARGET
+    Name: arg
+    Value: null
+  - CmdLine:
+    - if [[ "${BUILD_TARGET}" == "debug" ]]; then apk add --update --no-cache libc6-compat;
+      fi
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/*
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - configs
+    - /etc/cloudinfo/serviceconfig
+  - CmdLine:
+    - 'sed -i "s|dataLocation: ./configs/|dataLocation: /etc/cloudinfo/serviceconfig/|g"
+      /etc/cloudinfo/serviceconfig/services.yaml'
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CLOUDINFO_SERVICELOADER_SERVICECONFIGLOCATION
+      Value: '"/etc/cloudinfo/serviceconfig"'
+    Name: env
+  - CmdLine:
+    - cloudinfo
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.10.1
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10.1

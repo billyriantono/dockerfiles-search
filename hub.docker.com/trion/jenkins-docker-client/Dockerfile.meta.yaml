@@ -1,0 +1,69 @@
+MetaArgs: null
+Stages:
+- As: cmps
+  BaseName: alpine
+  Commands:
+  - Key: compose_version
+    Name: arg
+    Value: 1.21.1
+  - CmdLine:
+    - apk --no-cache add python py-pip git &&     git clone --depth 1 --branch ${compose_version}
+      https://github.com/docker/compose.git /code/compose &&     cd /code/compose
+      &&     pip --no-cache-dir install -r requirements.txt -r requirements-dev.txt
+      pyinstaller==3.1.1 &&     git rev-parse --short HEAD > compose/GITSHA &&     ln
+      -s /lib /lib64 && ln -s /lib/libc.musl-x86_64.so.1 ldd &&     ln -s /lib/ld-musl-x86_64.so.1
+      /lib64/ld-linux-x86-64.so.2 &&     pyinstaller docker-compose.spec &&     unlink
+      /lib/ld-linux-x86-64.so.2 /lib64 ldd || true &&     mv dist/docker-compose /usr/local/bin/docker-compose
+      &&     pip freeze | xargs pip uninstall -y &&     apk del python py-pip git
+      &&     rm -rf /code /usr/lib/python2.7/ /root/.cache /var/cache/apk/* &&     chmod
+      +x /usr/local/bin/docker-compose
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: cmps
+  Platform: ""
+  SourceCode: FROM alpine AS cmps
+- BaseName: jenkins/jenkins:alpine
+  Commands:
+  - Maintainer: trion development GmbH "info@trion.de"
+    Name: maintainer
+  - Env:
+    - Key: JENKINS_USER
+      Value: jenkins
+    Name: env
+  - Name: user
+    User: root
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /usr/local/bin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - apk --no-cache add shadow su-exec
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: cmps
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/docker-compose
+    - /usr/bin/docker-compose
+  - CmdLine:
+    - ln -s /lib /lib64 &&   ln -s /lib/ld-musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2
+      &&   curl https://get.docker.com/builds/Linux/x86_64/docker-latest.tgz | tar
+      xvz -C /tmp/ &&   mv /tmp/docker/docker /usr/bin/docker
+    Name: run
+    PrependShell: true
+  From:
+    Image: jenkins/jenkins:alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM jenkins/jenkins:alpine

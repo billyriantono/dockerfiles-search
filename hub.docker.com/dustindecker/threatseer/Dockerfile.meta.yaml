@@ -1,0 +1,108 @@
+MetaArgs:
+- DefaultValue: "1.10"
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: "1.10"
+- DefaultValue: /go/src/github.com/dustin-decker/threatseer
+  Key: PROJECT_PATH
+  ProvidedValue: null
+  Value: /go/src/github.com/dustin-decker/threatseer
+Stages:
+- As: builder
+  BaseName: golang:${GO_VERSION}-alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache add git ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/golang/dep/releases/download/v0.4.1/dep-linux-amd64
+    - /usr/bin/dep
+  - CmdLine:
+    - chmod +x /usr/bin/dep
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -D -u 59999 container-user
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --no-cache add gcc libc-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/dustin-decker/threatseer
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gopkg.toml
+    - Gopkg.lock
+    - ./
+  - CmdLine:
+    - dep ensure --vendor-only
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - ${PROJECT_PATH}
+  - CmdLine:
+    - export PATH=$PATH:`go env GOHOSTOS`-`go env GOHOSTARCH`     && CGO_ENABLED=0
+      GOOS=linux GOARCH=amd64 go build --ldflags '-extldflags "-static"' -o bin/server
+      server/*.go     && go test $(go list ./... | grep -v /vendor/)
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:${GO_VERSION}-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:${GO_VERSION}-alpine AS builder
+- BaseName: scratch
+  Commands:
+  - Name: expose
+    Ports:
+    - "8081"
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/ca-certificates.crt
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/passwd
+    - /etc/passwd
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/dustin-decker/threatseer/threatseer.yml
+    - /threatseer.yml
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/dustin-decker/threatseer/config
+    - /config
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/dustin-decker/threatseer/bin/server
+    - /bin/server
+  - CmdLine:
+    - /bin/server
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

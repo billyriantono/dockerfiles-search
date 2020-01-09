@@ -1,0 +1,111 @@
+MetaArgs: null
+Stages:
+- As: dependencies
+  BaseName: node:10.9-alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk upgrade &&     apk add --no-cache bash git openssh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package*.json
+    - ./
+  - CmdLine:
+    - npm set progress=false && npm config set depth 0
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install --only=production
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -R node_modules prod_node_modules
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.9-alpine
+  Name: dependencies
+  Platform: ""
+  SourceCode: FROM node:10.9-alpine as dependencies
+- As: base
+  BaseName: node:10.9-alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  From:
+    Image: node:10.9-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:10.9-alpine as base
+- As: dev
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: dependencies
+    Name: copy
+    SourcesAndDest:
+    - /app/node_modules
+    - /app/node_modules
+  - CmdLine:
+    - npm run start:dev
+    Name: cmd
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: base
+  Name: dev
+  Platform: ""
+  SourceCode: FROM base as dev
+- As: test
+  BaseName: dev
+  Commands:
+  - CmdLine:
+    - npm run unit
+    Name: cmd
+    PrependShell: true
+  From:
+    Stage:
+      Index: 2
+      Named: dev
+  Name: test
+  Platform: ""
+  SourceCode: FROM dev as test
+- As: build
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: dependencies
+    Name: copy
+    SourcesAndDest:
+    - /app/prod_node_modules
+    - /app/node_modules
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - npm start
+    Name: cmd
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: base
+  Name: build
+  Platform: ""
+  SourceCode: FROM base as build

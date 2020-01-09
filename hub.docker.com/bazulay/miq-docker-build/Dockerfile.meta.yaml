@@ -1,0 +1,144 @@
+MetaArgs: null
+Stages:
+- BaseName: centos:7
+  Commands:
+  - Env:
+    - Key: container
+      Value: docker
+    Name: env
+  - Maintainer: ManageIQ https://github.com/ManageIQ/manageiq-appliance-build
+    Name: maintainer
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: TERM
+      Value: xterm
+    Name: env
+  - CmdLine:
+    - curl -sSLko /etc/yum.repos.d/rhscl-rh-postgresql94-epel-7.repo https://copr-fe.cloud.fedoraproject.org/coprs/rhscl/rh-postgresql94/repo/epel-7/rhscl-rh-postgresql94-epel-7.repo
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+      &&     yum -y install --setopt=tsflags=nodocs                    bison                                      bzip2                                      cmake                                      file                                       gcc-c++                                    git                                        libffi-devel                               libtool                                    libxml2-devel                              libxslt-devel                              libyaml-devel                              make                                       memcached                                  net-tools                                  nodejs                                     openssl-devel                              patch                                      rh-postgresql94-postgresql-server                    rh-postgresql94-postgresql-devel                     readline-devel                             sqlite-devel                               sysvinit-tools                             which                                      &&                          yum
+      clean all
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/opt/rh/rh-postgresql94/lib/pgsql/data
+  - CmdLine:
+    - 'curl -sL https://github.com/postmodern/chruby/archive/v0.3.9.tar.gz | tar xz
+      &&     cd chruby-0.3.9 && make install && scripts/setup.sh &&     echo "gem:
+      --no-ri --no-rdoc --no-document" > ~/.gemrc &&     echo "source /usr/local/share/chruby/chruby.sh"
+      >> ~/.bashrc &&     curl -sL https://github.com/postmodern/ruby-install/archive/v0.6.0.tar.gz
+      | tar xz &&     cd ruby-install-0.6.0 && make install && ruby-install ruby 2.2.4
+      -- --disable-install-doc &&     echo "chruby ruby-2.2.4" >> ~/.bash_profile
+      &&     rm -rf /chruby-* && rm -rf /usr/local/src/* && yum clean all'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "export BASEDIR=/manageiq" > /etc/default/evm &&     echo "export PATH=$PATH:/opt/rubies/ruby-2.2.4/bin:/opt/rh/rh-postgresql94/root/bin:/opt/rh/rh-postgresql94/root/usr/libexec"
+      >> /etc/default/evm &&     echo "[[ -s /etc/default/evm_postgres ]] && source
+      /etc/default/evm_postgres" >> /etc/default/evm &&     echo "export APPLIANCE_PG_SCL_NAME=rh-postgresql94"
+      > /etc/default/evm_postgres &&     echo "export APPLIANCE_PG_SERVICE=rh-postgresql94-postgresql"
+      >> /etc/default/evm_postgres &&     echo "export APPLIANCE_PG_DATA=/var/opt/rh/rh-postgresql94/lib/pgsql/data"
+      >> /etc/default/evm_postgres &&     echo "export APPLIANCE_PG_CHECKDB=/opt/rh/rh-postgresql94/root/usr/libexec/postgresql-check-db-dir"
+      >> /etc/default/evm_postgres &&     echo "[[ -s /opt/rh/\${APPLIANCE_PG_SCL_NAME}/enable
+      ]] && source /opt/rh/\${APPLIANCE_PG_SCL_NAME}/enable" >> /etc/default/evm_postgres
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /manageiq && git clone --depth 1 https://github.com/ManageIQ/manageiq
+      /manageiq
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /manageiq
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-assets/docker_setup
+    - bin/docker_setup
+  - CmdLine:
+    - /bin/bash -l -c "/usr/bin/memcached -u memcached -p 11211 -m 64 -c 1024 -l 127.0.0.1
+      -d &&     source /etc/default/evm &&     bin/docker_setup --no-db --no-tests
+      &&     pkill memcached &&     rm -rvf /opt/rubies/ruby-2.2.4/lib/ruby/gems/2.2.0/cache/*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-assets/docker_initdb
+    - bin/docker_initdb
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-assets/evmserver.sh
+    - bin/evmserver.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-assets/evmserverd.service
+    - /usr/lib/systemd/system/evmserverd.service
+  - CmdLine:
+    - ln -s /manageiq/bin/evmserver.sh /usr/bin &&     ln -s /manageiq/bin/docker_initdb
+      /usr/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - systemctl enable evmserverd memcached
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3000"
+    - "4000"
+    - 5900-5999
+  - Labels:
+    - Key: name
+      Value: '"manageiq"'
+    - Key: vendor
+      Value: '"ManageIQ"'
+    - Key: version
+      Value: '"Capablanca"'
+    - Key: release
+      Value: '"latest"'
+    - Key: architecture
+      Value: '"x86_64"'
+    - Key: url
+      Value: '"http://manageiq.org/"'
+    - Key: summary
+      Value: '"ManageIQ development image"'
+    - Key: description
+      Value: '"ManageIQ is a management and automation platform for virtual, private,
+        and hybrid cloud infrastructures."'
+    - Key: INSTALL
+      Value: '''docker run -ti --privileged                     --name ${NAME}_volume                     --entrypoint
+        /usr/bin/docker_initdb                     $IMAGE'''
+    - Key: RUN
+      Value: '''docker run -di --privileged                     --name ${NAME}_run                     -v
+        /etc/localtime:/etc/localtime:ro                     --volumes-from ${NAME}_volume                     -p
+        3000:3000                     -p 4000:4000                     -p 5900-5999:5900-5999                     $IMAGE'''
+    - Key: STOP
+      Value: '''docker stop ${NAME}_run &&           echo "Container ${NAME}_run has
+        been stopped"'''
+    - Key: UNINSTALL
+      Value: '''docker rm -v ${NAME}_volume ${NAME}_run &&           echo "Uninstallation
+        complete"'''
+    Name: label
+  - CmdLine:
+    - /usr/sbin/init
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos:7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:7

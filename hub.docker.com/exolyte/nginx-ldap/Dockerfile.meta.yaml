@@ -1,0 +1,167 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.7
+  Commands:
+  - Maintainer: Uday Kabe, <uday.kabe@exolyte.com>
+    Name: maintainer
+  - Env:
+    - Key: NGINX_VERSION
+      Value: 1.12.2
+    - Key: LDAP_SERVER
+      Value: '"127.0.0.1:389"'
+    - Key: LDAP_SEARCH_BASE_DN
+      Value: '"ou=users,dc=example,dc=com"'
+    - Key: LDAP_USER_ATTRIBUTE_LIST
+      Value: '"givenName,sn,cn"'
+    - Key: LDAP_USER_SEARCHFILTER
+      Value: '"objectClass=inetOrgPerson"'
+    - Key: LDAP_BIND_DN
+      Value: '"cn=admin,ou=itg,dc=example,dc=com"'
+    - Key: LDAP_BIND_DN_PASSWORD
+      Value: '"password"'
+    - Key: LDAP_GROUP_ATTRIBUTE_DN
+      Value: '"member"'
+    Name: env
+  - CmdLine:
+    - "apk --update add --no-cache --virtual .build-deps \t\tcurl \t\tgnupg \t\tgcc
+      \t\tmake \t\twget \t\tlibc-dev \t\tpcre-dev \t\tzlib-dev \t\tlinux-headers \t\tlibxslt-dev
+      \t\tgd-dev \t\tgeoip-dev         musl-dev libressl-dev expat-dev apr-dev apr-util-dev
+      curl-dev linux-pam-dev"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 &&     cd ~ &&     curl -fSL
+      http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz -o nginx.tar.gz && \tcurl
+      -fSL http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz.asc  -o nginx.tar.gz.asc
+      && \texport GNUPGHOME=\"$(mktemp -d)\" && \tfound=''; \tfor server in \t\tha.pool.sks-keyservers.net
+      \t\thkp://keyserver.ubuntu.com:80 \t\thkp://p80.pool.sks-keyservers.net:80 \t\tpgp.mit.edu
+      \t; do \t\techo \"Fetching GPG key $GPG_KEYS from $server\"; \t\tgpg --keyserver
+      \"$server\" --keyserver-options timeout=10 --recv-keys \"$GPG_KEYS\" && found=yes
+      && break; \tdone; \ttest -z \"$found\" && echo >&2 \"error: failed to fetch
+      GPG key $GPG_KEYS\" && exit 1; \tgpg --batch --verify nginx.tar.gz.asc nginx.tar.gz
+      \t&& rm -r \"$GNUPGHOME\" nginx.tar.gz.asc \t&& mkdir -p /usr/src \t&& tar -zxC
+      /usr/src -f nginx.tar.gz \t&& rm nginx.tar.gz"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NGINX_HTTP_AUTH_PAM_MODULE_VERSION
+      Value: 1.5.1
+    - Key: NGINX_RTMP_MODULE_VERSION
+      Value: 1.2.1
+    - Key: NGINX_DAV_EXT_MODULE_VERSION
+      Value: 0.1.0
+    - Key: NGINX_HTTP_SHIBBOLETH_VERSION
+      Value: 2.0.1
+    - Key: NGINX_UPSTREAM_FAIR_VERSION
+      Value: 0.1.2
+    - Key: NGINX_STICKY_MODULE_NG_VERSION
+      Value: master
+    - Key: NGINX_AUTH_LDAP_VERSION
+      Value: master
+    Name: env
+  - CmdLine:
+    - cd /usr/src &&     echo 'if [ "_master" != _$3 ]; then export pref="v"; else
+      export pref=""; fi; wget --no-check-certificate $1/$2/archive/$pref$3.zip &&
+      unzip $pref$3 && mv $2-$3 $2' > getgh && chmod +x getgh &&     ./getgh https://github.com/kvspb
+      nginx-auth-ldap master &&     ./getgh https://github.com/arut nginx-dav-ext-module
+      ${NGINX_DAV_EXT_MODULE_VERSION} &&     ./getgh https://github.com/nginx-shib
+      nginx-http-shibboleth ${NGINX_HTTP_SHIBBOLETH_VERSION} &&     ./getgh https://github.com/itoffshore
+      nginx-upstream-fair ${NGINX_UPSTREAM_FAIR_VERSION} &&     ./getgh https://github.com/sto
+      ngx_http_auth_pam_module ${NGINX_HTTP_AUTH_PAM_MODULE_VERSION} &&     ./getgh
+      https://github.com/arut nginx-rtmp-module ${NGINX_RTMP_MODULE_VERSION}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /usr/src &&     wget --no-check-certificate -O master.zip https://bitbucket.org/nginx-goodies/nginx-sticky-module-ng/get/${NGINX_STICKY_MODULE_NG_VERSION}.zip
+      &&     mkdir temp && unzip ${NGINX_STICKY_MODULE_NG_VERSION} -d temp &&     mkdir
+      nginx-sticky-module && mv temp/*/* nginx-sticky-module/ &&     rm -rf temp ${NGINX_STICKY_MODULE_NG_VERSION}.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "addgroup -g 1000 -S nginx && \tadduser -u 1000 -D -S -h /var/cache/nginx -s
+      /sbin/nologin -G nginx nginx"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "CONFIG=\"\t\t--prefix=/etc/nginx \t\t--sbin-path=/usr/sbin/nginx \t\t--modules-path=/usr/lib/nginx/modules
+      \t\t--conf-path=/etc/nginx/nginx.conf \t\t--error-log-path=/var/log/nginx/error.log
+      \t\t--http-log-path=/var/log/nginx/access.log \t\t--pid-path=/var/run/nginx.pid
+      \t\t--lock-path=/var/run/nginx.lock \t\t--http-client-body-temp-path=/var/cache/nginx/client_temp
+      \t\t--http-proxy-temp-path=/var/cache/nginx/proxy_temp \t\t--http-fastcgi-temp-path=/var/cache/nginx/fastcgi_temp
+      \t\t--http-uwsgi-temp-path=/var/cache/nginx/uwsgi_temp \t\t--http-scgi-temp-path=/var/cache/nginx/scgi_temp
+      \t\t--user=nginx \t\t--group=nginx \t\t--with-http_ssl_module \t\t--with-http_realip_module
+      \t\t--with-http_addition_module \t\t--with-http_sub_module \t\t--with-http_dav_module
+      \t\t--with-http_flv_module \t\t--with-http_mp4_module \t\t--with-http_gunzip_module
+      \t\t--with-http_gzip_static_module \t\t--with-http_random_index_module \t\t--with-http_secure_link_module
+      \t\t--with-http_stub_status_module \t\t--with-http_auth_request_module \t\t--with-http_xslt_module=dynamic
+      \t\t--with-http_image_filter_module=dynamic \t\t--with-http_geoip_module=dynamic
+      \t\t--with-threads \t\t--with-stream \t\t--with-stream_ssl_module \t\t--with-stream_ssl_preread_module
+      \t\t--with-stream_realip_module \t\t--with-stream_geoip_module=dynamic \t\t--with-http_slice_module
+      \t\t--with-mail \t\t--with-mail_ssl_module \t\t--with-compat \t\t--with-file-aio
+      \t\t--with-http_v2_module         --add-dynamic-module=../nginx-auth-ldap         --add-dynamic-module=../nginx-dav-ext-module
+      \        --add-dynamic-module=../nginx-http-shibboleth         --add-dynamic-module=../nginx-upstream-fair
+      \        --add-dynamic-module=../nginx-sticky-module         --add-dynamic-module=../ngx_http_auth_pam_module
+      \        --add-dynamic-module=../nginx-rtmp-module \t\" \t&& cd /usr/src/nginx-$NGINX_VERSION
+      \t&& ./configure $CONFIG --with-debug \t&& make -j$(getconf _NPROCESSORS_ONLN)
+      \t&& mv objs/nginx objs/nginx-debug \t&& mv objs/ngx_http_xslt_filter_module.so
+      objs/ngx_http_xslt_filter_module-debug.so \t&& mv objs/ngx_http_image_filter_module.so
+      objs/ngx_http_image_filter_module-debug.so \t&& mv objs/ngx_http_geoip_module.so
+      objs/ngx_http_geoip_module-debug.so \t&& mv objs/ngx_stream_geoip_module.so
+      objs/ngx_stream_geoip_module-debug.so \t&& ./configure $CONFIG \t&& make -j$(getconf
+      _NPROCESSORS_ONLN) \t&& make install \t&& rm -rf /etc/nginx/html/ \t&& mkdir
+      /etc/nginx/conf.d/ \t&& mkdir -p /usr/share/nginx/html/ \t&& install -m644 html/index.html
+      /usr/share/nginx/html/ \t&& install -m644 html/50x.html /usr/share/nginx/html/
+      \t&& install -m755 objs/nginx-debug /usr/sbin/nginx-debug \t&& install -m755
+      objs/ngx_http_xslt_filter_module-debug.so /usr/lib/nginx/modules/ngx_http_xslt_filter_module-debug.so
+      \t&& install -m755 objs/ngx_http_image_filter_module-debug.so /usr/lib/nginx/modules/ngx_http_image_filter_module-debug.so
+      \t&& install -m755 objs/ngx_http_geoip_module-debug.so /usr/lib/nginx/modules/ngx_http_geoip_module-debug.so
+      \t&& install -m755 objs/ngx_stream_geoip_module-debug.so /usr/lib/nginx/modules/ngx_stream_geoip_module-debug.so
+      \t&& ln -s ../../usr/lib/nginx/modules /etc/nginx/modules \t&& strip /usr/sbin/nginx*
+      \t&& strip /usr/lib/nginx/modules/*.so \t&& rm -rf /usr/src/ \t\t&& apk add
+      --no-cache --virtual .gettext gettext \t&& mv /usr/bin/envsubst /tmp/ \t\t&&
+      runDeps=\"$( \t\tscanelf --needed --nobanner --format '%n#p' /usr/sbin/nginx
+      /usr/lib/nginx/modules/*.so /tmp/envsubst \t\t\t| tr ',' '\\n' \t\t\t| sort
+      -u \t\t\t| awk 'system(\"[ -e /usr/local/lib/\" $1 \" ]\") == 0 { next } { print
+      \"so:\" $1 }' \t)\" \t&& apk add --no-cache --virtual .nginx-rundeps $runDeps
+      \t&& apk del .build-deps \t&& apk del .gettext \t&& mv /tmp/envsubst /usr/local/bin/
+      \t\t&& ln -sf /dev/stdout /var/log/nginx/access.log \t&& ln -sf /dev/stderr
+      /var/log/nginx/error.log"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates/configuration/nginx.ldap.conf
+    - /templates/configuration/nginx.conf
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - Name: workdir
+    Path: /etc/nginx
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - resources/scripts/entrypoint.sh
+    - /usr/local/bin/entrypoint.sh
+  - CmdLine:
+    - chmod u+x /usr/local/bin/entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - nginx
+    - -g
+    - daemon off;
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

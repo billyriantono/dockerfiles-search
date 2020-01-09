@@ -1,0 +1,1 @@
+FROM  gcr.io/spinnaker-marketplace/igor:1.2.0-20190322100313

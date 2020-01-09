@@ -1,0 +1,21 @@
+ARG NAMESPACE=soedinglab/
+ARG VERSION=version-10
+FROM golang:latest as mmseqs-web-builder
+
+RUN go get -u github.com/kardianos/govendor
+WORKDIR /opt/mmseqs-web
+ADD backend .
+RUN go build -o mmseqs-backend
+
+FROM ${NAMESPACE}mmseqs2:${VERSION}
+LABEL maintainer="Milot Mirdita <milot@mirdita.de>"
+
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
+COPY --from=mmseqs-web-builder /opt/mmseqs-web/mmseqs-backend /usr/local/bin/mmseqs-web
+
+ADD https://github.com/krallin/tini/releases/download/v0.18.0/tini /sbin/tini
+RUN chmod +x /sbin/tini
+
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/mmseqs-web"]
+

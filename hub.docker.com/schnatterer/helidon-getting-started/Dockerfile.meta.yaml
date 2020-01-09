@@ -1,0 +1,104 @@
+MetaArgs: null
+Stages:
+- As: build-img
+  BaseName: helidon/jdk8-graalvm-maven:1.0.0-rc13
+  Commands: null
+  From:
+    Image: helidon/jdk8-graalvm-maven:1.0.0-rc13
+  Name: build-img
+  Platform: ""
+  SourceCode: FROM helidon/jdk8-graalvm-maven:1.0.0-rc13 as build-img
+- As: mavencache
+  BaseName: build-img
+  Commands:
+  - Env:
+    - Key: MAVEN_OPTS
+      Value: -Dmaven.repo.local=/mvn
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pom.xml
+    - /mvn/
+  - Name: workdir
+    Path: /mvn
+  - CmdLine:
+    - mvn package dependency:resolve dependency:resolve-plugins
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build-img
+  Name: mavencache
+  Platform: ""
+  SourceCode: FROM build-img as mavencache
+- As: build
+  BaseName: build-img
+  Commands:
+  - Env:
+    - Key: MAVEN_OPTS
+      Value: -Dmaven.repo.local=/mvn
+    Name: env
+  - Chown: ""
+    From: mavencache
+    Name: copy
+    SourcesAndDest:
+    - /mvn/
+    - /mvn/
+  - Name: workdir
+    Path: /helidon
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - pom.xml
+    - .
+  - CmdLine:
+    - mvn package -Pnative-image -Dnative.image.skip -DskipTests
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src
+    - src
+  - CmdLine:
+    - mvn package -Pnative-image -Dnative.image.buildStatic -DskipTests
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "done!"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build-img
+  Name: build
+  Platform: ""
+  SourceCode: FROM build-img as build
+- BaseName: scratch
+  Commands:
+  - Name: workdir
+    Path: /helidon
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /helidon/target/helidon-quickstart
+    - .
+  - Name: user
+    User: "1000"
+  - CmdLine:
+    - ./helidon-quickstart
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "8080"
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

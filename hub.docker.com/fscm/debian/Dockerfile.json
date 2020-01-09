@@ -1,0 +1,163 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "first_stage",
+      "BaseName": "debian:buster",
+      "SourceCode": "FROM debian:buster as first_stage",
+      "Platform": "",
+      "As": "first_stage",
+      "From": {
+        "Image": "debian:buster"
+      },
+      "Commands": [
+        {
+          "Key": "OS_CODENAME",
+          "Name": "arg",
+          "Value": "\"buster\""
+        },
+        {
+          "Key": "OS_VERSION",
+          "Name": "arg",
+          "Value": "\"10.2\""
+        },
+        {
+          "Env": [
+            {
+              "Key": "LANG",
+              "Value": "C.UTF-8"
+            },
+            {
+              "Key": "DEBCONF_NONINTERACTIVE_SEEN",
+              "Value": "true"
+            },
+            {
+              "Key": "DEBIAN_FRONTEND",
+              "Value": "noninteractive"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "files/",
+            "/root/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apt-get -qq update \u0026\u0026   apt-get -qq -y -o Dpkg::Use-Pty=0 --no-install-recommends install     binutils     coreutils     curl     dbus     debian-archive-keyring     debootstrap     dpkg-dev     vim     wget \u0026\u0026   rm /usr/share/debootstrap/scripts/${OS_CODENAME} \u0026\u0026   cp /root/debootstrap/${OS_CODENAME} /usr/share/debootstrap/scripts/ \u0026\u0026   install --directory --owner=root --group=root --mode=0755 /build \u0026\u0026   install --directory --owner=root --group=root --mode=0755 /build/usr/bin \u0026\u0026   install --owner=root --group=root --mode=0755 --target-directory=/build/usr/bin /root/tests/* \u0026\u0026   debootstrap --variant=docker --arch=amd64 --foreign ${OS_CODENAME} /build \u0026\u0026   rm -rf /build/boot \u0026\u0026   rm -rf /build/proc \u0026\u0026   rm -rf /build/sys \u0026\u0026   echo '' \u003e \"/build/etc/resolv.conf\" \u0026\u0026   echo 'host' \u003e \"/build/etc/hostname\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "second_stage",
+      "BaseName": "scratch",
+      "SourceCode": "FROM scratch as second_stage",
+      "Platform": "",
+      "As": "second_stage",
+      "From": {
+        "Scratch": true
+      },
+      "Commands": [
+        {
+          "Key": "OS_CODENAME",
+          "Name": "arg",
+          "Value": "\"buster\""
+        },
+        {
+          "Env": [
+            {
+              "Key": "LANG",
+              "Value": "C.UTF-8"
+            },
+            {
+              "Key": "DEBCONF_NONINTERACTIVE_SEEN",
+              "Value": "true"
+            },
+            {
+              "Key": "DEBIAN_FRONTEND",
+              "Value": "noninteractive"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "first_stage",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/build",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "mv /bin/mount /bin/mount.orig \u0026\u0026   ln -s /bin/true /bin/mount \u0026\u0026   /debootstrap/debootstrap --second-stage \u0026\u0026   mv /bin/mount.orig /bin/mount \u0026\u0026   echo \"deb http://deb.debian.org/debian ${OS_CODENAME} main non-free contrib\" \u003e /etc/apt/sources.list \u0026\u0026   echo \"deb http://security.debian.org/ ${OS_CODENAME}/updates main contrib non-free\" \u003e\u003e /etc/apt/sources.list \u0026\u0026   echo \"deb http://deb.debian.org/debian ${OS_CODENAME}-updates main contrib non-free\" \u003e\u003e /etc/apt/sources.list \u0026\u0026   apt-get -qq update \u0026\u0026   apt-get -y -q -o Dpkg::Options::=\"--force-confdef\" --no-install-recommends upgrade \u0026\u0026   dpkg-divert --local --rename --add /sbin/initctl \u0026\u0026   echo '#!/bin/sh' \u003e /usr/sbin/policy-rc.d \u0026\u0026   echo 'exit 101' \u003e\u003e /usr/sbin/policy-rc.d \u0026\u0026   echo '#!/bin/sh' \u003e /sbin/initctl \u0026\u0026   echo 'exit 0' \u003e\u003e /sbin/initctl \u0026\u0026   chmod 0755 /usr/sbin/policy-rc.d /sbin/initctl \u0026\u0026   apt-get clean \u0026\u0026   rm -f /etc/apt/apt.conf.d/01autoremove-kernels \u0026\u0026   APT_GET_CLEAN='\"rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*.deb /var/cache/apt/*.bin || true\";' \u0026\u0026   echo \"DPkg::Post-Invoke { ${APT_GET_CLEAN} };\" \u003e /etc/apt/apt.conf.d/90docker-clean \u0026\u0026   echo \"APT::Update::Post-Invoke { ${APT_GET_CLEAN} };\" \u003e\u003e /etc/apt/apt.conf.d/90docker-clean \u0026\u0026   echo \"Dir::Cache::pkgcache \\\"\\\";\" \u003e\u003e /etc/apt/apt.conf.d/90docker-clean \u0026\u0026   echo \"Dir::Cache::srcpkgcache \\\"\\\";\" \u003e\u003e /etc/apt/apt.conf.d/90docker-clean \u0026\u0026   echo \"DPkg::Use-Pty \\\"false\\\";\" \u003e /etc/apt/apt.conf.d/90docker-no-dpkg-output \u0026\u0026   echo \"Acquire::Languages \\\"none\\\";\" \u003e /etc/apt/apt.conf.d/90docker-no-languages \u0026\u0026   echo \"Acquire::GzipIndexes \\\"true\\\";\" \u003e /etc/apt/apt.conf.d/90docker-gzip-indexes \u0026\u0026   echo \"Acquire::CompressionTypes::Order:: \\\"gz\\\";\" \u003e\u003e /etc/apt/apt.conf.d/90docker-gzip-indexes \u0026\u0026   echo \"APT::AutoRemove::SuggestsImportant \\\"false\\\";\" \u003e /etc/apt/apt.conf.d/90docker-autoremove-suggests \u0026\u0026   echo \"APT::Install-Recommends \\\"false\\\";\" \u003e /etc/apt/apt.conf.d/90docker-no-recommends \u0026\u0026   echo \"force-unsafe-io\" \u003e /etc/dpkg/dpkg.cfg.d/90docker-apt-speedup \u0026\u0026   echo \"path-exclude=/usr/share/doc/*\" \u003e /etc/dpkg/dpkg.cfg.d/90docker-excludes \u0026\u0026   echo \"path-exclude=/usr/share/info/*\" \u003e\u003e /etc/dpkg/dpkg.cfg.d/90docker-excludes \u0026\u0026   echo \"path-exclude=/usr/share/locale/*\" \u003e\u003e /etc/dpkg/dpkg.cfg.d/90docker-excludes \u0026\u0026   echo \"path-exclude=/usr/share/man/*\" \u003e\u003e /etc/dpkg/dpkg.cfg.d/90docker-excludes \u0026\u0026   echo \"path-include=/usr/share/doc/*/copyright\" \u003e\u003e /etc/dpkg/dpkg.cfg.d/90docker-excludes \u0026\u0026   rm -rf /usr/share/info/* \u0026\u0026   rm -rf /usr/share/locale/* \u0026\u0026   rm -rf /usr/share/man/* \u0026\u0026   rm -rf /var/cache/apt/* \u0026\u0026   rm -rf /var/lib/apt/lists/* \u0026\u0026   rm -rf /var/log/* \u0026\u0026   rm -rf /dev/.??* \u0026\u0026   rm -rf /home/.??* \u0026\u0026   rm -rf /root/.??* \u0026\u0026   rm -rf /tmp/.??* \u0026\u0026   find /usr/share/doc -mindepth 1 -not -name copyright -not -type d -delete \u0026\u0026   find /usr/share/doc -mindepth 1 -type d -empty -delete \u0026\u0026   find /var/cache -type f -delete \u0026\u0026   cat /etc/debian_version"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "scratch",
+      "SourceCode": "FROM scratch",
+      "Platform": "",
+      "From": {
+        "Scratch": true
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"Frederico Martins \u003chttps://hub.docker.com/u/fscm/\u003e\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Env": [
+            {
+              "Key": "LANG",
+              "Value": "C.UTF-8"
+            },
+            {
+              "Key": "DEBCONF_NONINTERACTIVE_SEEN",
+              "Value": "true"
+            },
+            {
+              "Key": "DEBIAN_FRONTEND",
+              "Value": "noninteractive"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "second_stage",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "/bin/bash"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

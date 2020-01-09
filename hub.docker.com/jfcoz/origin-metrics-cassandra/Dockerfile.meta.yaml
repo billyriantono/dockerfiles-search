@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- BaseName: jboss/base-jdk:8
+  Commands:
+  - Maintainer: Hawkular Metrics <hawkular-dev@lists.jboss.org>
+    Name: maintainer
+  - Name: expose
+    Ports:
+    - "7000"
+    - "7001"
+    - "9042"
+    - "9160"
+  - Env:
+    - Key: CASSANDRA_VERSION
+      Value: '"3.0.15"'
+    - Key: CASSANDRA_HOME
+      Value: '"/opt/apache-cassandra"'
+    - Key: HOME
+      Value: '"/home/cassandra"'
+    - Key: PATH
+      Value: '"/opt/apache-cassandra/bin:$PATH"'
+    - Key: CASSANDRA_NODES_SERVICE_NAME
+      Value: '"hawkular-cassandra-nodes"'
+    - Key: TAKE_SNAPSHOT
+      Value: '"false"'
+    Name: env
+  - Name: user
+    User: root
+  - CmdLine:
+    - yum install -y -q bind-utils openssl &&     yum clean all
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz.md5
+    - /tmp/
+  - CmdLine:
+    - cd /opt;     curl -LO https://archive.apache.org/dist/cassandra/$CASSANDRA_VERSION/apache-cassandra-$CASSANDRA_VERSION-bin.tar.gz
+      &&     if [ "$(md5sum apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz | awk
+      '{print $1}')" != "$(cat /tmp/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz.md5)"
+      ]; then echo "The Cassandra binary does not match the expected md5sum"; exit
+      1; fi &&     tar xzf apache-cassandra-$CASSANDRA_VERSION-bin.tar.gz &&     rm
+      apache-cassandra-$CASSANDRA_VERSION-bin.tar.gz &&     ln -s apache-cassandra-$CASSANDRA_VERSION
+      apache-cassandra
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cassandra.yaml.template
+    - cassandra-env.sh.template
+    - cassandra-metrics-reporter.yaml
+    - logback.xml
+    - /opt/apache-cassandra/conf/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cassandra-docker.sh
+    - cassandra-docker-ready.sh
+    - cassandra-prestop.sh
+    - cassandra-poststart.sh
+    - gather-seeds.sh
+    - /opt/apache-cassandra/bin/
+  - CmdLine:
+    - cd /opt/apache-cassandra/lib &&     curl -Lo jmx_prometheus_javaagent.jar https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.9/jmx_prometheus_javaagent-0.9.jar
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - prometheus.yaml
+    - /opt/hawkular/prometheus_agent/prometheus.yaml
+  - CmdLine:
+    - groupadd -r cassandra -g 312 &&     useradd -u 313 -r -g cassandra -d /opt/apache-cassandra
+      -s /sbin/nologin cassandra &&     chown -R cassandra:cassandra /opt/apache-cassandra
+      &&     chmod -R go+rw /opt/apache-cassandra &&     mkdir $HOME &&     chown
+      -R cassandra:cassandra $HOME &&     chmod -R go+rw $HOME
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: "313"
+  - CmdLine:
+    - /opt/apache-cassandra/bin/cassandra-docker.sh --seeds=${HOSTNAME}
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: jboss/base-jdk:8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM jboss/base-jdk:8

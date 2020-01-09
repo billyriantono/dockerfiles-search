@@ -1,0 +1,143 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12-alpine
+  Commands:
+  - Env:
+    - Key: VERSION
+      Value: ${VERSION:-"0.11.5"}
+    Name: env
+  - CmdLine:
+    - apk add git sed
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b v${VERSION} https://github.com/mholt/caddy /go/src/github.com/mholt/caddy
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/mholt/caddy/caddy/caddymain
+  - CmdLine:
+    - sed -i 's@var EnableTelemetry = true@var EnableTelemetry = false@g' run.go
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: after
+      Value: '''// This is where other plugins get plugged in (imported)'''
+    Name: env
+  - CmdLine:
+    - sed -i "\@${after}@a _ \"github.com/nicolasazrak/caddy-cache\"" run.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "\@${after}@a _ \"github.com/captncraig/cors\"" run.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "\@${after}@a _ \"github.com/epicagency/caddy-expires\"" run.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "\@${after}@a _ \"github.com/filebrowser/caddy\"" run.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "\@${after}@a _ \"github.com/abiosoft/caddy-git\"" run.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "\@${after}@a _ \"github.com/miekg/caddy-prometheus\"" run.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "\@${after}@a _ \"github.com/xuqingfeng/caddy-rate-limit\"" run.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "\@${after}@a _ \"github.com/captncraig/caddy-realip\"" run.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go fmt run.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -d -v github.com/mholt/caddy/...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -d -v github.com/caddyserver/builds
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/mholt/caddy/caddy
+  - CmdLine:
+    - GOOS=linux GOARCH=amd64 go run build.go -goos=$GOOS -goarch=$GOARCH -goarm=$GOARM     &&
+      mkdir /install     && mv caddy /install
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12-alpine as builder
+- BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk add --no-cache openssh-client git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /install/caddy
+    - /usr/bin/caddy
+  - CmdLine:
+    - /usr/bin/caddy -version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/caddy -plugins
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "2015"
+    - "443"
+    - "80"
+  - Name: volume
+    Volumes:
+    - /root/.caddy
+    - /srv
+  - Name: workdir
+    Path: /srv
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Caddyfile
+    - /etc/Caddyfile
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - index.html
+    - /srv/index.html
+  - CmdLine:
+    - /usr/bin/caddy
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --conf
+    - /etc/Caddyfile
+    - --log
+    - stdout
+    - -agree=false
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

@@ -1,0 +1,133 @@
+MetaArgs:
+- DefaultValue: edge
+  Key: alpine_version
+  ProvidedValue: null
+  Value: edge
+Stages:
+- As: base
+  BaseName: alpine:${alpine_version}
+  Commands:
+  - CmdLine:
+    - apk update && apk upgrade
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:${alpine_version}
+  Name: base
+  Platform: ""
+  SourceCode: FROM alpine:${alpine_version} as base
+- As: gitgau-build
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apk add --no-cache make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /src /dist
+    Name: run
+    PrependShell: true
+  - Key: gitgau_ref
+    Name: arg
+    Value: master
+  - Env:
+    - Key: gitgau_ref
+      Value: ${gitgau_ref}
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - '"https://codeload.github.com/znerol/git-gau/tar.gz/${gitgau_ref}"'
+    - /src/git-gau-src.tar.gz
+  - CmdLine:
+    - tar -o -C /src -xf /src/git-gau-src.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -C /src/git-gau-* prefix=/dist install-bin
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: gitgau-build
+  Platform: ""
+  SourceCode: FROM base as gitgau-build
+- As: certhub-build
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apk add --no-cache make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /src /dist
+    Name: run
+    PrependShell: true
+  - Key: certhub_ref
+    Name: arg
+    Value: master
+  - Env:
+    - Key: certhub_ref
+      Value: ${certhub_ref}
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - '"https://codeload.github.com/certhub/certhub/tar.gz/${certhub_ref}"'
+    - /src/certhub-src.tar.gz
+  - CmdLine:
+    - tar -o -C /src -xf /src/certhub-src.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -C /src/certhub-* prefix=/dist install-bin
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: certhub-build
+  Platform: ""
+  SourceCode: FROM base as certhub-build
+- BaseName: base
+  Commands:
+  - CmdLine:
+    - apk add --no-cache ca-certificates curl git openssh-client openssl tini
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: gitgau-build
+    Name: copy
+    SourcesAndDest:
+    - /dist
+    - /usr
+  - Chown: ""
+    From: certhub-build
+    Name: copy
+    SourcesAndDest:
+    - /dist
+    - /usr
+  - CmdLine:
+    - addgroup -S certhub && adduser -S certhub -G certhub
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: certhub
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /usr/bin/ssh-agent
+    - /usr/lib/git-gau/docker-entry
+    - /usr/lib/git-gau/docker-entry.d
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

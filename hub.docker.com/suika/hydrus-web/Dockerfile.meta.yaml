@@ -1,0 +1,71 @@
+MetaArgs: null
+Stages:
+- As: nweb
+  BaseName: alpine
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - /nweb24.c
+    - /nweb24.c
+  - CmdLine:
+    - apk add --update --no-cache gcc libc-dev     && cc -O2 nweb24.c -o nweb
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: nweb
+  Platform: ""
+  SourceCode: FROM alpine as nweb
+- As: ngbuild
+  BaseName: woahbase/alpine-ng
+  Commands:
+  - CmdLine:
+    - git clone https://github.com/floogulinc/hydrus-web /tmp/hydrus-web
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/hydrus-web
+  - CmdLine:
+    - npm install --no-interactive     && ng build --prod
+    Name: run
+    PrependShell: true
+  From:
+    Image: woahbase/alpine-ng
+  Name: ngbuild
+  Platform: ""
+  SourceCode: FROM woahbase/alpine-ng as ngbuild
+- BaseName: alpine
+  Commands:
+  - Chown: ""
+    From: nweb
+    Name: copy
+    SourcesAndDest:
+    - /nweb
+    - /sbin/nweb
+  - Chown: ""
+    From: ngbuild
+    Name: copy
+    SourcesAndDest:
+    - /tmp/hydrus-web/dist/hydrus-web
+    - /hydrus-web
+  - Health:
+      Interval: 10000000000
+      Retries: 3
+      Test:
+      - CMD-SHELL
+      - wget --quiet --tries=1 --no-check-certificate --spider   http://localhost:80
+        || exit 1
+      Timeout: 5000000000
+    Name: healthcheck
+  - CmdLine:
+    - nweb
+    - "80"
+    - /hydrus-web
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

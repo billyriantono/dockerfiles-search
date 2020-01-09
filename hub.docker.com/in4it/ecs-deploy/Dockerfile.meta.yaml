@@ -1,0 +1,115 @@
+MetaArgs: null
+Stages:
+- As: webapp-builder
+  BaseName: node:10
+  Commands:
+  - Env:
+    - Key: PREFIX
+      Value: /ecs-deploy
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - webapp/package.json
+    - webapp/package-lock.json
+    - ./
+  - CmdLine:
+    - npm set progress=false && npm config set depth 0 && npm cache clean --force
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm i && mkdir -p /webapp && mv package.json package-lock.json ./node_modules
+      /webapp
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /webapp
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - webapp
+    - /webapp
+  - CmdLine:
+    - cd /webapp && $(npm bin)/ng build --prod --base-href ${PREFIX}/webapp/
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10
+  Name: webapp-builder
+  Platform: ""
+  SourceCode: FROM node:10 as webapp-builder
+- As: go-builder
+  BaseName: golang:1.13-alpine
+  Commands:
+  - Name: workdir
+    Path: /ecs-deploy/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - apk add -u -t build-tools curl git &&     CGO_ENABLED=0 GOOS=linux go build
+      -a -installsuffix cgo -o ecs-deploy cmd/ecs-deploy/main.go &&     apk del build-tools
+      &&     rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-alpine
+  Name: go-builder
+  Platform: ""
+  SourceCode: FROM golang:1.13-alpine as go-builder
+- BaseName: alpine:latest
+  Commands:
+  - Key: SOURCE_COMMIT
+    Name: arg
+    Value: unknown
+  - Env:
+    - Key: GIN_MODE
+      Value: release
+    Name: env
+  - CmdLine:
+    - apk --no-cache add ca-certificates bash curl && mkdir -p /app/webapp
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Chown: ""
+    From: go-builder
+    Name: copy
+    SourcesAndDest:
+    - /ecs-deploy/ecs-deploy
+    - .
+  - Chown: ""
+    From: webapp-builder
+    Name: copy
+    SourcesAndDest:
+    - /webapp/dist
+    - webapp/dist
+  - CmdLine:
+    - echo ${SOURCE_COMMIT} > source_commit
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf *.go webapp/src
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./ecs-deploy
+    - --server
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

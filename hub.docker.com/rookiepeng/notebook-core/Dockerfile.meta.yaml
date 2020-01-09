@@ -1,0 +1,173 @@
+MetaArgs:
+- DefaultValue: ubuntu
+  Key: BASE_CONTAINER
+  ProvidedValue: null
+  Value: ubuntu
+Stages:
+- BaseName: $BASE_CONTAINER
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"rookiepeng <zpeng.me@gmail.com>"'
+    Name: label
+  - Key: NB_USER
+    Name: arg
+    Value: '"notebook"'
+  - Key: NB_UID
+    Name: arg
+    Value: '"1000"'
+  - Key: NB_GID
+    Name: arg
+    Value: '"100"'
+  - Name: user
+    User: root
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get -yq dist-upgrade  && apt-get install -yq --no-install-recommends     wget     bzip2     ca-certificates     sudo     locales     fonts-liberation     run-one     build-essential  &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "en_US.UTF-8 UTF-8" > /etc/locale.gen &&     locale-gen
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CONDA_DIR
+      Value: /opt/conda
+    - Key: SHELL
+      Value: /bin/bash
+    - Key: NB_USER
+      Value: $NB_USER
+    - Key: NB_UID
+      Value: $NB_UID
+    - Key: NB_GID
+      Value: $NB_GID
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    - Key: LANG
+      Value: en_US.UTF-8
+    - Key: LANGUAGE
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $CONDA_DIR/bin:$PATH
+    - Key: HOME
+      Value: /home/$NB_USER
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - fix-permissions
+    - /usr/local/bin/fix-permissions
+  - CmdLine:
+    - chmod +x /usr/local/bin/fix-permissions
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "auth requisite pam_deny.so" >> /etc/pam.d/su &&     sed -i.bak -e 's/^%admin/#%admin/'
+      /etc/sudoers &&     sed -i.bak -e 's/^%sudo/#%sudo/' /etc/sudoers &&     useradd
+      -m -s /bin/bash -N -u $NB_UID $NB_USER &&     mkdir -p $CONDA_DIR &&     chown
+      $NB_USER:$NB_GID $CONDA_DIR &&     chmod g+w /etc/passwd &&     fix-permissions
+      $HOME &&     fix-permissions "$(dirname $CONDA_DIR)"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $NB_UID
+  - Name: workdir
+    Path: $HOME
+  - CmdLine:
+    - cd /tmp &&     wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+      &&     /bin/bash Miniconda3-latest-Linux-x86_64.sh -f -b -p $CONDA_DIR &&     rm
+      Miniconda3-latest-Linux-x86_64.sh &&     $CONDA_DIR/bin/conda config --system
+      --prepend channels conda-forge &&     $CONDA_DIR/bin/conda config --system --set
+      auto_update_conda false &&     $CONDA_DIR/bin/conda config --system --set show_channel_urls
+      true &&     $CONDA_DIR/bin/conda install --quiet --yes conda &&     $CONDA_DIR/bin/conda
+      update --all --quiet --yes &&     conda list python | grep '^python ' | tr -s
+      ' ' | cut -d '.' -f 1,2 | sed 's/$/.*/' >> $CONDA_DIR/conda-meta/pinned &&     conda
+      clean --all -f -y &&     rm -rf /home/$NB_USER/.cache/yarn &&     fix-permissions
+      $CONDA_DIR &&     fix-permissions /home/$NB_USER
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - conda install --quiet --yes tini &&     conda list tini | grep tini | tr -s
+      ' ' | cut -d ' ' -f 1,2 >> $CONDA_DIR/conda-meta/pinned &&     conda clean --all
+      -f -y &&     fix-permissions $CONDA_DIR &&     fix-permissions /home/$NB_USER
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - conda install --quiet --yes     notebook     jupyterhub     jupyterlab &&     conda
+      clean --all -f -y &&     npm cache clean --force &&     jupyter notebook --generate-config
+      &&     rm -rf $CONDA_DIR/share/jupyter/lab/staging &&     rm -rf /home/$NB_USER/.cache/yarn
+      &&     fix-permissions $CONDA_DIR &&     fix-permissions /home/$NB_USER
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8888"
+  - CmdLine:
+    - tini
+    - -g
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - start-notebook.sh
+    Name: cmd
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start-notebook.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start-singleuser.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - jupyter_notebook_config.py
+    - /etc/jupyter/
+  - Name: user
+    User: root
+  - CmdLine:
+    - fix-permissions /etc/jupyter/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /usr/local/bin/start.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /usr/local/bin/start-notebook.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /usr/local/bin/start-singleuser.sh
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $NB_UID
+  From:
+    Image: $BASE_CONTAINER
+  Name: ""
+  Platform: ""
+  SourceCode: FROM $BASE_CONTAINER

@@ -1,0 +1,9 @@
+FROM debian:10-slim
+RUN apt-get update \
+  && apt-get install -y curl ca-certificates gnupg2 apt-transport-https --no-install-recommends  \
+  && curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - \
+  && echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | tee -a /etc/apt/sources.list.d/kubernetes.list \
+  && apt-get update \
+  && apt-get install -y kubectl --no-install-recommends \ 
+  && rm -rf /var/lib/apt/lists/* 
+RUN curl -kLO https://git.io/get_helm.sh && chmod 700 get_helm.sh && ./get_helm.sh

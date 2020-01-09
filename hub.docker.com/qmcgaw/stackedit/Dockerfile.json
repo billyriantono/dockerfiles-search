@@ -1,0 +1,311 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "BASE_IMAGE_BUILDER_GO",
+      "DefaultValue": "golang",
+      "ProvidedValue": null,
+      "Value": "golang"
+    },
+    {
+      "Key": "BASE_IMAGE_BUILDER_NODE",
+      "DefaultValue": "alpine",
+      "ProvidedValue": null,
+      "Value": "alpine"
+    },
+    {
+      "Key": "ALPINE_VERSION",
+      "DefaultValue": "3.10",
+      "ProvidedValue": null,
+      "Value": "3.10"
+    },
+    {
+      "Key": "GO_VERSION",
+      "DefaultValue": "1.13.0",
+      "ProvidedValue": null,
+      "Value": "1.13.0"
+    },
+    {
+      "Key": "STACKEDIT_VERSION",
+      "DefaultValue": "v5.14.0",
+      "ProvidedValue": null,
+      "Value": "v5.14.0"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "server",
+      "BaseName": "${BASE_IMAGE_BUILDER_GO}:${GO_VERSION}-alpine${ALPINE_VERSION}",
+      "SourceCode": "FROM ${BASE_IMAGE_BUILDER_GO}:${GO_VERSION}-alpine${ALPINE_VERSION} AS server",
+      "Platform": "",
+      "As": "server",
+      "From": {
+        "Image": "${BASE_IMAGE_BUILDER_GO}:${GO_VERSION}-alpine${ALPINE_VERSION}"
+      },
+      "Commands": [
+        {
+          "Key": "GOARCH",
+          "Name": "arg",
+          "Value": "amd64"
+        },
+        {
+          "Key": "GOARM",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "BINCOMPRESS",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "CmdLine": [
+            "apk --update add git build-base upx"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "go get -u -v golang.org/x/vgo"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/tmp/gobuild"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "go.mod",
+            "go.sum",
+            "./"
+          ]
+        },
+        {
+          "CmdLine": [
+            "go mod download"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "*.go",
+            "./"
+          ]
+        },
+        {
+          "CmdLine": [
+            "CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} GOARM=${GOARM} go build -a -installsuffix cgo -ldflags=\"-s -w\" -o app"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "[ \"${BINCOMPRESS}\" == \"\" ] || (upx -v --best --lzma --overlay=strip app \u0026\u0026 upx -t app)"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "stackedit",
+      "BaseName": "${BASE_IMAGE_BUILDER_NODE}:${ALPINE_VERSION}",
+      "SourceCode": "FROM ${BASE_IMAGE_BUILDER_NODE}:${ALPINE_VERSION} AS stackedit",
+      "Platform": "",
+      "As": "stackedit",
+      "From": {
+        "Image": "${BASE_IMAGE_BUILDER_NODE}:${ALPINE_VERSION}"
+      },
+      "Commands": [
+        {
+          "Key": "STACKEDIT_VERSION",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Name": "workdir",
+          "Path": "/stackedit"
+        },
+        {
+          "CmdLine": [
+            "apk add -q --progress --update --no-cache git npm"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "wget -q https://github.com/benweet/stackedit/archive/${STACKEDIT_VERSION}.tar.gz -O stackedit.tar.gz \u0026\u0026     tar -xzf stackedit.tar.gz --strip-components=1 \u0026\u0026     rm stackedit.tar.gz"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "npm install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "npm run build"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "final",
+      "BaseName": "scratch",
+      "SourceCode": "FROM scratch AS final",
+      "Platform": "",
+      "As": "final",
+      "From": {
+        "Scratch": true
+      },
+      "Commands": [
+        {
+          "Key": "BUILD_DATE",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "VCS_REF",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "STACKEDIT_VERSION",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Labels": [
+            {
+              "Key": "org.label-schema.schema-version",
+              "Value": "\"1.0.0-rc1\""
+            },
+            {
+              "Key": "maintainer",
+              "Value": "\"quentin.mcgaw@gmail.com\""
+            },
+            {
+              "Key": "org.label-schema.build-date",
+              "Value": "$BUILD_DATE"
+            },
+            {
+              "Key": "org.label-schema.vcs-ref",
+              "Value": "$VCS_REF"
+            },
+            {
+              "Key": "org.label-schema.vcs-url",
+              "Value": "\"https://github.com/qdm12/stackedit-docker\""
+            },
+            {
+              "Key": "org.label-schema.url",
+              "Value": "\"https://github.com/qdm12/stackedit-docker\""
+            },
+            {
+              "Key": "org.label-schema.vcs-description",
+              "Value": "\"StackEdit server in a lightweight Docker container\""
+            },
+            {
+              "Key": "org.label-schema.vcs-usage",
+              "Value": "\"https://github.com/qdm12/stackedit-docker/blob/master/README.md#setup\""
+            },
+            {
+              "Key": "org.label-schema.docker.cmd",
+              "Value": "\"docker run -d -p 8000:8000/tcp qmcgaw/stackedit\""
+            },
+            {
+              "Key": "org.label-schema.docker.cmd.devel",
+              "Value": "\"docker run -it --rm -p 8000:8000/tcp qmcgaw/stackedit\""
+            },
+            {
+              "Key": "org.label-schema.docker.params",
+              "Value": "\"\""
+            },
+            {
+              "Key": "org.label-schema.version",
+              "Value": "$STACKEDIT_VERSION"
+            },
+            {
+              "Key": "image-size",
+              "Value": "\"29.3MB\""
+            },
+            {
+              "Key": "ram-usage",
+              "Value": "\"7MB\""
+            },
+            {
+              "Key": "cpu-usage",
+              "Value": "\"Very low\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "8000"
+          ]
+        },
+        {
+          "Health": {
+            "Interval": 100000000000,
+            "Retries": 1,
+            "StartPeriod": 1000000000,
+            "Test": [
+              "CMD",
+              "/server",
+              "healthcheck"
+            ],
+            "Timeout": 2000000000
+          },
+          "Name": "healthcheck"
+        },
+        {
+          "Name": "user",
+          "User": "1000"
+        },
+        {
+          "CmdLine": [
+            "/server"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "Chown": "1000",
+          "From": "stackedit",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/stackedit/dist",
+            "/html"
+          ]
+        },
+        {
+          "Chown": "1000",
+          "From": "server",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/tmp/gobuild/app",
+            "/server"
+          ]
+        }
+      ]
+    }
+  ]
+}

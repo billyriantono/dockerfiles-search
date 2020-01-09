@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: node:11-alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache add make g++ python git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - bower.json
+    - /app/
+  - CmdLine:
+    - npm install  && npm install bower  && ./node_modules/.bin/bower --allow-root
+      install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - /app/
+  - CmdLine:
+    - ./node_modules/.bin/gulp release
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:11-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:11-alpine AS BUILDER
+- BaseName: nginx:alpine
+  Commands:
+  - Env:
+    - Key: EC_BASE_URL
+      Value: https://envirocar.org/auth-proxy/api
+    - Key: EC_BASE
+      Value: https://envirocar.org/auth-proxy
+    - Key: EC_WEBSITE_BASE
+      Value: https://envirocar.org/
+    - Key: EC_SERVER_BASE
+      Value: https://envirocar.org/api/stable
+    Name: env
+  - Chown: ""
+    From: BUILDER
+    Name: copy
+    SourcesAndDest:
+    - /app/dist/
+    - /usr/share/nginx/html/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker-entrypoint.sh
+    - /usr/bin/docker-entrypoint.sh
+  - Health:
+      Interval: 5000000000
+      Retries: 3
+      Test:
+      - CMD-SHELL
+      - wget http://localhost:80/ -q -O - > /dev/null 2>&1
+      Timeout: 5000000000
+    Name: healthcheck
+  - CmdLine:
+    - /usr/bin/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - nginx
+    - -g
+    - daemon off;
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginx:alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx:alpine

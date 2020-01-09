@@ -1,0 +1,185 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:latest
+  Commands:
+  - Env:
+    - Key: HTTP_PORT
+      Value: "80"
+    Name: env
+  - Env:
+    - Key: SSL_PORT
+      Value: "443"
+    Name: env
+  - Env:
+    - Key: USERNAME
+      Value: moodle
+    Name: env
+  - Env:
+    - Key: USERGROUP
+      Value: moodle
+    Name: env
+  - Env:
+    - Key: APPUID
+      Value: "1000"
+    Name: env
+  - Env:
+    - Key: APPGID
+      Value: "1000"
+    Name: env
+  - Env:
+    - Key: USER_HOME
+      Value: /home/moodle
+    Name: env
+  - Env:
+    - Key: BUILD_REQUIREMENTS
+      Value: wget expect gnupg
+    Name: env
+  - Env:
+    - Key: REQUIREMENTS
+      Value: sudo curl openssl ca-certificates supervisor cron apache2 mariadb-server
+        php libapache2-mod-php php-mysql php-xml php-xmlrpc php-zip php-gd php-intl
+        php-mbstring php-soap php-solr php-redis openjdk-8-jdk software-properties-common
+    Name: env
+  - Name: user
+    User: root
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - "apt-get update -qqy \t&& apt-get -qqy --no-install-recommends install ${BUILD_REQUIREMENTS}
+      ${REQUIREMENTS} \t&& mkdir -p ${USER_HOME} \t&& groupadd --system --gid ${APPGID}
+      ${USERGROUP} \t&& useradd --system --uid ${APPUID} -g ${USERGROUP} ${USERNAME}
+      --home ${USER_HOME} \t&& echo \"${USERNAME}:$(openssl rand 512 | openssl sha256
+      | awk '{print $2}')\" | chpasswd \t&& chown -R ${USERNAME}:${USERGROUP} ${USER_HOME}"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R ${USERNAME}:${USERGROUP} ${USER_HOME}   && mkdir -p /mnt/data
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cfg/apache2/moodle.conf
+    - /etc/apache2/sites-available/moodle.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cfg/apache2/security.conf
+    - /etc/apache2/conf-available/security.conf
+  - CmdLine:
+    - rm /etc/apache2/sites-enabled/*   && ln -s /etc/apache2/sites-available/moodle.conf
+      /etc/apache2/sites-enabled/moodle.conf   && ln -s /etc/apache2/conf-available/security.conf
+      /etc/apache2/conf-enabled/security.conf || /bin/true   && a2enmod headers   &&
+      a2enmod rewrite   && a2enmod ssl   && mv /etc/apache2 /etc/apache2.tpl   &&
+      mkdir -p /etc/ssl/{certs,private}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /etc/php /etc/php.tpl
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/
+  - CmdLine:
+    - curl -Ls https://download.moodle.org/stable35/moodle-latest-35.tgz --output
+      moodle.tgz   && tar xzf moodle.tgz   && mv ./moodle /var/www/html/   && chown
+      -R www-data:www-data /var/www/html/moodle   && rm -rf /tmp/*   && echo "*/1
+      * * * * /usr/bin/php  /var/www/html/moodle/admin/cli/cron.php" | crontab -u
+      www-data -
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cfg/config.php
+    - /var/www/html/moodle/config.tpl.php
+  - Name: workdir
+    Path: /tmp/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cfg/mysql/init.sh
+    - /etc/mysql/init.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cfg/mysql/init.sql
+    - /etc/mysql/init.sql
+  - CmdLine:
+    - mv /var/lib/mysql /var/lib/mysql.tpl   && mv /etc/mysql/mariadb.conf.d /etc/mysql/mariadb.conf.d.tpl
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/
+  - CmdLine:
+    - curl -Ls https://mirror.klaus-uwe.me/apache/lucene/solr/7.4.0/solr-7.4.0.tgz
+      --output solr-7.4.0.tgz   && tar xzf solr-*.tgz   && solr-*/bin/install_solr_service.sh
+      solr-*.tgz -n   && mv /var/solr/data /var/solr/data.tpl   && rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cfg/solr/init.sh
+    - /opt/solr/init.sh
+  - Name: workdir
+    Path: /tmp/
+  - CmdLine:
+    - curl -Ls https://www.dotdeb.org/dotdeb.gpg --output dotdeb.gpg   && apt-key
+      add dotdeb.gpg   && apt-get update -qqy   && apt-get -qqy --no-install-recommends
+      install redis-server   && mv /var/lib/redis /var/lib/redis.tpl   && mv /etc/redis
+      /etc/redis.tpl   && rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cfg/supervisord.conf
+    - /etc/supervisor/conf.d/supervisord.conf
+  - CmdLine:
+    - "apt-get --auto-remove -y purge ${BUILD_REQUIREMENTS}   \t&& rm -rf /var/lib/apt/lists/*
+      \t  && rm -rf /tmp/*"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - ${HTTP_PORT}
+    - ${SSL_PORT}
+    - "8983"
+  - Name: volume
+    Volumes:
+    - /mnt/data
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - ln -s usr/local/bin/docker-entrypoint.sh /
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/bin/supervisord
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:latest

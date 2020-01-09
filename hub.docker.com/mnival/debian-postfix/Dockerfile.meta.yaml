@@ -1,0 +1,111 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stable-slim
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Michael Nival <docker@mn-home.fr>"'
+    - Key: name
+      Value: '"debian-postfix"'
+    - Key: description
+      Value: '"Debian Stable with postfix, rsyslog, supervisor"'
+    - Key: docker.cmd
+      Value: '"docker run -d -p 25:25 --name mail mnival/debian-postfix"'
+    Name: label
+  - CmdLine:
+    - "addgroup --system postfix --gid 120 && \taddgroup --system postdrop --gid 121
+      && \tadduser --system --home /var/spool/postfix --no-create-home --disabled-password
+      --ingroup postfix postfix --uid 120"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "printf \"deb http://ftp.debian.org/debian/ stable main\\ndeb http://ftp.debian.org/debian/
+      stable-updates main\\ndeb http://security.debian.org/ stable/updates main\\n\"
+      >> /etc/apt/sources.list.d/stable.list && \tcat /dev/null > /etc/apt/sources.list
+      && \texport DEBIAN_FRONTEND=noninteractive && \tapt update && \tapt -y --no-install-recommends
+      full-upgrade && \tapt install -y --no-install-recommends postfix ca-certificates
+      rsyslog logrotate supervisor && \tpostconf -X mydestination myhostname mydomain
+      && \trm -f /etc/ssl/certs/ssl-cert-snakeoil.pem /etc/ssl/certs/ssl-cert-snakeoil.pem.broken
+      /etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/private/ssl-cert-snakeoil.key.broken
+      && \tfind /etc/ssl/certs -maxdepth 1 -lname ssl-cert-snakeoil.pem -delete >
+      /dev/null 2>&1 || true && \techo \"UTC\" > /etc/timezone && \trm /etc/localtime
+      && \tdpkg-reconfigure tzdata && \trm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+      /var/log/alternatives.log /var/log/dpkg.log /var/log/apt/ /var/cache/debconf/*-old"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "sed -i 's@^\\(.*\\)\\(\\$.*master\\) \\+&@\\1exec \\2 -d@' /usr/lib/postfix/sbin/postfix-script
+      && \tsed -i '/^\\$\\|^#\\|^mail\\|^$\\|imuxsock/! s/\\(.*\\)/#\\1/; s@/var/log/mail@/var/log/postfix/mail@'
+      /etc/rsyslog.conf"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "tar -C /etc/postfix -czf /root/postfix-config.tgz . && \ttar -C /var/spool/postfix
+      -czf /root/postfix-spool.tgz . && \ttar -C /var/lib/postfix -czf /root/postfix-data.tgz
+      ."
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "chmod -x /etc/cron.daily/* && \tchmod +x /etc/cron.daily/logrotate"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisor-postfix.conf
+    - /etc/supervisor/conf.d/postfix.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisor-cron.conf
+    - /etc/supervisor/conf.d/cron.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisor-rsyslog.conf
+    - /etc/supervisor/conf.d/rsyslog.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - logrotate-postfix
+    - /etc/logrotate.d/postfix
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - start-postfix
+    - /usr/local/bin/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - event-supervisor/event-supervisor.sh
+    - /usr/local/bin/event-supervisor.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - event-supervisor/supervisor-eventlistener.conf
+    - /etc/supervisor/conf.d/eventlistener.conf
+  - CmdLine:
+    - sed -i 's@^\(logfile\)=[a-z|A-Z|/|\.]*@\1=/dev/null@' /etc/supervisor/supervisord.conf
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "25"
+  - Name: volume
+    Volumes:
+    - /etc/postfix
+    - /var/log/postfix
+    - /var/spool/postfix
+    - /var/lib/postfix
+  - CmdLine:
+    - /usr/bin/supervisord
+    - -n
+    - -c
+    - /etc/supervisor/supervisord.conf
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:stable-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stable-slim

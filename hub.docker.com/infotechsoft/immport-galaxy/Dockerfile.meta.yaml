@@ -1,0 +1,127 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:9-slim
+  Commands:
+  - Labels:
+    - Key: name
+      Value: '"infotechsoft/immport-galaxy"'
+    - Key: release-date
+      Value: '"2018-01-05"'
+    - Key: description
+      Value: '"ImmPortGalaxy on Debian"'
+    - Key: immportgalaxy.url
+      Value: '"https://github.com/ImmPortDB/immport-galaxy"'
+    - Key: maintainer
+      Value: '"Thomas J. Taylor <thomas@infotechsoft.com>"'
+    Name: label
+  - Key: GALAXY_RELEASE
+    Name: arg
+    Value: null
+  - Key: GALAXY_REPO
+    Name: arg
+    Value: null
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: GALAXY_RELEASE
+      Value: ${GALAXY_RELEASE:-master}
+    - Key: GALAXY_REPO
+      Value: ${GALAXY_REPO:-https://api.github.com/repos/ImmPortDB/immport-galaxy/tarball/master}
+    - Key: GALAXY_HOME
+      Value: /home/galaxy
+    - Key: GALAXY_USER
+      Value: galaxy
+    - Key: GALAXY_GID
+      Value: "1001"
+    - Key: GALAXY_UID
+      Value: "1001"
+    - Key: GALAXY_VIRTUAL_ENV
+      Value: /home/galaxy/.venv
+    - Key: LANG
+      Value: en_US.UTF-8
+    - Key: LANGUAGE
+      Value: en_US:en
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    - Key: PATH
+      Value: /opt/conda/bin:$PATH
+    Name: env
+  - CmdLine:
+    - "apt-get -qq update && \tapt-get -qq -y install \t\tlocales \t\tgnupg && \techo
+      \"${LANG} UTF-8\" | tee -a /etc/locale.gen && \tlocale-gen \"${LANG}\" && \tdpkg-reconfigure
+      --frontend $DEBIAN_FRONTEND locales && \tupdate-locale \"${LANG}\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "echo \"deb http://cloud.r-project.org/bin/linux/debian/ stretch-cran34/\" |
+      tee -a /etc/apt/sources.list && \tapt-key adv --keyserver hkp://keyserver.ubuntu.com:80
+      --recv-key E19F5F87128899B192B1A2C2AD5F960A256A04AF && \tapt-get -qq update
+      && \tapt-get -qq -y --no-install-recommends install \t\tcurl \t\tgfortran \t\tg++
+      \t\tlibbz2-dev \t\tlibcurl4-openssl-dev \t\tlibglu1-mesa-dev \t\tlibhdf5-dev
+      \t\tlibhdf5-serial-dev \t\tliblzma-dev \t\tlibnlopt-dev \t\tlibpcre3-dev \t\tlibreadline-dev
+      \t\tlibx11-dev \t\tlibxml2-dev \t\tmesa-common-dev \t\tpython2.7 \t\tpython-dev
+      \t\tpython-pip \t\tr-base \t\tr-base-dev \t\txorg-dev && \tpip install --upgrade
+      pip && \tpip install --upgrade virtualenv && \tapt-get -qq -y autoremove &&
+      \tapt-get -qq -y clean && \trm -rf /tmp/* \t\t/var/lib/apt/lists/* \t\t/var/tmp/*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/
+    - /tmp/
+  - CmdLine:
+    - "mkdir -p $GALAXY_HOME && \tgroupadd -r $GALAXY_USER -g $GALAXY_GID &&     useradd
+      -u $GALAXY_UID -r -g $GALAXY_USER -d $GALAXY_HOME -c \"Galaxy user\" $GALAXY_USER
+      && \tcurl -L $GALAXY_REPO | tar xz -C $GALAXY_HOME --strip-components 1 && \tchown
+      -R $GALAXY_USER:$GALAXY_USER $GALAXY_HOME && \tcp /tmp/galaxy.ini $GALAXY_HOME/config/galaxy.ini"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GALAXY_HOME
+  - CmdLine:
+    - "Rscript /tmp/r-requirements.R && \tvirtualenv $GALAXY_VIRTUAL_ENV --distribute
+      && \tchown -R $GALAXY_USER:$GALAXY_USER $GALAXY_VIRTUAL_ENV && \t. $GALAXY_VIRTUAL_ENV/bin/activate
+      && \tpip install -r /tmp/pip-requirements.txt && \t./scripts/common_startup.sh
+      --no-create-venv --no-replace-pip"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "curl -o /tmp/anaconda.sh https://repo.continuum.io/archive/Anaconda2-5.0.1-Linux-x86_64.sh
+      &&     /bin/bash /tmp/anaconda.sh -b -p /opt/conda && \tcp /tmp/.condarc /opt/conda/.condarc
+      && \tconda update -y --all && \tconda install -y ig-checkFCS && \tconda clean
+      -y --tarballs --packages --source-cache && \tfind /opt/conda       \\( -type
+      d -a -name test -o -name tests \\)       -o \\( -type f -a -name '*.pyc' -o
+      -name '*.pyo' \\)       -exec rm -rf '{}' + && \tapt-get -qq -y autoremove &&
+      \tapt-get -qq -y clean && \tfor x in `ls /usr/share/locale | grep -v -i en |
+      grep -v -i local`;       do rm -rf /usr/share/locale/$x;     done &&     rm
+      -rf /tmp/* \t\t/usr/share/doc/* \t\t/usr/share/man/* \t\t/var/lib/apt/lists/*
+      \t\t/var/tmp/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd ./tools/flowtools/bin && \tcc -o flock1 ../src/flock1.c ../src/find_connected.c
+      -lm && \tcc -o flock2 ../src/flock2.c -lm && \tcc -o cent_adjust ../src/cent_adjust.c
+      -lm"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: newt
+    Name: env
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: user
+    User: $GALAXY_USER
+  - CmdLine:
+    - sh
+    - run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:9-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:9-slim

@@ -1,0 +1,125 @@
+MetaArgs: null
+Stages:
+- BaseName: piegsaj/oracle-jre:latest
+  Commands:
+  - Maintainer: Jens Piegsa (piegsa@gmail.com)
+    Name: maintainer
+  - Env:
+    - Key: MYSQL_CONNECTOR_VERSION
+      Value: 5.1.38
+    Name: env
+  - Env:
+    - Key: CUSTOMFIELD_EDITOR_PLUGIN_BUILD
+      Value: "117"
+    Name: env
+  - Env:
+    - Key: REST_API_BROWSER_PLUGIN_BUILD
+      Value: "30210"
+    Name: env
+  - Env:
+    - Key: JIRA_HOME
+      Value: /var/atlassian/jira
+    Name: env
+  - Env:
+    - Key: JIRA_INSTALL
+      Value: /opt/atlassian/jira
+    Name: env
+  - Env:
+    - Key: BUILD_PACKAGES
+      Value: xmlstarlet curl jq
+    Name: env
+  - Env:
+    - Key: RUNTIME_PACKAGES
+      Value: libtcnative-1 augeas-tools
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - dbconfig-template.xml
+    - /tmp/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - adjust-log4j-properties.aug
+    - /tmp/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - adjust-server-xml.aug
+    - /opt/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - adjust-server-xml-proxy-settings.aug
+    - /opt/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - run-jira.sh
+    - /opt/
+  - CmdLine:
+    - apt-get update -qq &&     apt-get install -qq -y --no-install-recommends ${RUNTIME_PACKAGES}
+      ${BUILD_PACKAGES} &&     apt-get clean -qq &&     echo "launch.application$Boolean=false"             >
+      /unattended.varfile &&     echo "rmiPort$Long=8005"                           >>
+      /unattended.varfile &&     echo "app.jiraHome=${JIRA_HOME}"                   >>
+      /unattended.varfile &&     echo "app.install.service$Boolean=false"           >>
+      /unattended.varfile &&     echo "existingInstallationDir=/opt/JIRA Core"      >>
+      /unattended.varfile &&     echo "sys.confirmedUpdateInstallationString=false"
+      >> /unattended.varfile &&     echo "sys.languageId=en"                           >>
+      /unattended.varfile &&     echo "sys.installationDir=${JIRA_INSTALL}"         >>
+      /unattended.varfile &&     echo "executeLauncherAction$Boolean=true"          >>
+      /unattended.varfile &&     echo "httpPort$Long=8080"                          >>
+      /unattended.varfile &&     echo "portChoice=default"                          >>
+      /unattended.varfile &&     JSON_FEED=https://my.atlassian.com/download/feeds/current/jira-core.json
+      &&     JSON=$(curl $JSON_FEED -Ls | cut -b 11- | rev | cut -c 2- | rev) &&     JSON_SELECTOR='.[]
+      | select(.zipUrl | contains("jira-core")) | select(.zipUrl | contains("-x64.bin"))'
+      &&     JIRA_VERSION=$(echo "$JSON" | jq -r "$JSON_SELECTOR | .version") &&     JIRA_DOWNLOAD_URL=$(echo
+      "$JSON" | jq -r "$JSON_SELECTOR | .zipUrl") &&     MYSQL_CONNECTOR="mysql-connector-java-${MYSQL_CONNECTOR_VERSION}"
+      &&     curl -Ls                ${JIRA_DOWNLOAD_URL} -o /tmp/jira.bin &&     chmod
+      +x                /tmp/jira.bin &&     ./tmp/jira.bin          -q -varfile /unattended.varfile
+      &&     curl -Ls                http://dev.mysql.com/get/Downloads/Connector-J/${MYSQL_CONNECTOR}.tar.gz
+      | tar xz --directory=/tmp --no-same-owner &&     cp                      /tmp/${MYSQL_CONNECTOR}/${MYSQL_CONNECTOR}-bin.jar
+      ${JIRA_INSTALL}/lib/ &&     mkdir -p                ${JIRA_HOME}/plugins/installed-plugins/
+      &&     curl -Ls https://marketplace.atlassian.com/download/plugins/jiracustomfieldeditorplugin/version/${CUSTOMFIELD_EDITOR_PLUGIN_BUILD}          -o  ${JIRA_HOME}/plugins/installed-plugins/customfield-editor-plugin-${CUSTOMFIELD_EDITOR_PLUGIN_BUILD}.jar
+      &&     curl -Ls https://marketplace.atlassian.com/download/plugins/com.atlassian.labs.rest-api-browser/version/${REST_API_BROWSER_PLUGIN_BUILD}          -o  ${JIRA_HOME}/plugins/installed-plugins/rest-api-browser-plugin-${REST_API_BROWSER_PLUGIN_BUILD}.jar
+      &&     cp                      /tmp/dbconfig-template.xml ${JIRA_HOME}/dbconfig-template.xml
+      &&     augtool -LeAf           /tmp/adjust-log4j-properties.aug -r ${JIRA_INSTALL}/
+      &&     sed -i "/^jira.home =.*/c\jira.home = ${JIRA_HOME}" ${JIRA_INSTALL}/atlassian-jira/WEB-INF/classes/jira-application.properties
+      &&     echo                    "${JIRA_VERSION}" > ${JIRA_INSTALL}/jira.version
+      &&     chmod -R 700            ${JIRA_INSTALL}/conf &&     chmod -R 700            ${JIRA_INSTALL}/logs
+      &&     chmod -R 700            ${JIRA_INSTALL}/temp &&     chmod -R 700            ${JIRA_INSTALL}/work
+      &&     chown -R jira:jira      ${JIRA_INSTALL}/conf &&     chown -R jira:jira      ${JIRA_INSTALL}/logs
+      &&     chown -R jira:jira      ${JIRA_INSTALL}/temp &&     chown -R jira:jira      ${JIRA_INSTALL}/work
+      &&     chmod +x                /opt/run-jira.sh &&     chown jira:jira         $JAVA_HOME/jre/lib/security/cacerts
+      &&     chmod -R 700            ${JIRA_HOME} &&     chown -R jira:jira      ${JIRA_HOME}
+      &&     apt-get remove          -qq --purge -y ${BUILD_PACKAGES} $(apt-mark showauto)
+      &&     rm -rf                  /var/lib/apt/lists/* &&     rm -rf                  /tmp/*
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: jira:jira
+  - Name: expose
+    Ports:
+    - "8005"
+    - "8080"
+    - "8443"
+  - Name: volume
+    Volumes:
+    - ${JIRA_HOME}
+  - Name: volume
+    Volumes:
+    - ${JIRA_INSTALL}/conf
+  - Name: volume
+    Volumes:
+    - /etc/jira
+  - Name: workdir
+    Path: ${JIRA_HOME}
+  - CmdLine:
+    - /opt/run-jira.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: piegsaj/oracle-jre:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM piegsaj/oracle-jre:latest

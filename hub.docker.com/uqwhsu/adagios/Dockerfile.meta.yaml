@@ -1,0 +1,166 @@
+MetaArgs: null
+Stages:
+- BaseName: centos:7
+  Commands:
+  - Maintainer: Will Hsu <uqwhsu@gmail.com>
+    Name: maintainer
+  - Env:
+    - Key: ADAGIOS_HOST
+      Value: adagios.local
+    Name: env
+  - Env:
+    - Key: ADAGIOS_USER
+      Value: nagiosadmin
+    Name: env
+  - Env:
+    - Key: ADAGIOS_PASS
+      Value: P@ssw0rd
+    Name: env
+  - Env:
+    - Key: LOCALTIMEZONE
+      Value: UTC
+    Name: env
+  - Env:
+    - Key: SSLCERT
+      Value: /etc/pki/tls/certs/localhost.pem
+    Name: env
+  - CmdLine:
+    - yum -y --setopt=tsflags=nodocs update && yum -y install centos-release-openstack-pike
+      && yum -y --setopt=tsflags=nodocs install nagios nagios-plugins-all postfix
+      cyrus-sasl-plain mailx && yum-config-manager --disable centos-openstack-pike
+      && yum -y install epel-release && yum -y install --setopt=tsflags=nodocs lighttpd
+      lighttpd-fastcgi uwsgi uwsgi-plugin-python tar acl git gmp-devel perl-libwww-perl
+      perl-Crypt-SSLeay pnp4nagios python-devel python-pip python-django python-simplejson
+      python-paramiko openssl sudo supervisor sendxmpp && yum -y install http://opensource.is/repo/ok-release.rpm
+      && yum --enablerepo=ok-testing -y install okconfig pynag mk-livestatus && rpm
+      -e --nodeps httpd && yum --enablerepo=ok-testing --enablerepo=centos-openstack-pike
+      clean all && rm -rf /var/cache/yum
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip --disable-pip-version-check --no-cache-dir install supervisor-quick && cd
+      /usr/local && git clone https://github.com/opinkerfi/adagios.git && cp -r /usr/local/adagios/adagios/etc/adagios
+      /etc/ && chown -R nagios:nagios /etc/adagios/ && cd adagios && pip --disable-pip-version-check
+      --no-cache-dir install --no-deps . && cd /usr/local && rm -rf adagios
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /var/cache/* /etc/nagios/passwd && chown -R nagios /etc/nagios/* && mkdir
+      -p /etc/nagios/adagios && pynag config --append cfg_dir=/etc/nagios/adagios
+      && pynag config --append "broker_module=/usr/lib64/nagios/brokers/npcdmod.o
+      config_file=/etc/pnp4nagios/npcd.cfg" && pynag config --append "broker_module=/usr/lib64/mk-livestatus/livestatus.o
+      /var/spool/nagios/cmd/livestatus" && pynag config --set "process_performance_data=1"
+      && usermod -G apache,lighttpd nagios && usermod -G apache,nagios lighttpd &&
+      cd /etc/lighttpd && sed -i 's|server.use-ipv6 = "enable"|server.use-ipv6 = "disable"|g'
+      lighttpd.conf && sed -i 's|include "conf.d/access_log.conf"|#include "conf.d/access_log.conf"|g'
+      lighttpd.conf && sed -i 's|server.errorlog             = log_root + "/error.log"|server.errorlog
+      = "/dev/null"|g' lighttpd.conf && sed -i 's|#include "conf.d/config.conf"|include
+      "ssl.conf"|g' lighttpd.conf && sed -i 's|#  "mod_alias",|  "mod_alias",|g' modules.conf
+      && sed -i 's|#  "mod_auth",|  "mod_auth",|g' modules.conf && sed -i 's|#  "mod_redirect",|  "mod_redirect",|g'
+      modules.conf && sed -i 's|#  "mod_rewrite",|  "mod_rewrite",|g' modules.conf
+      && sed -i 's|#  "mod_setenv",|  "mod_setenv",|g' modules.conf && sed -i 's|#include
+      "conf.d/fastcgi.conf"|include "conf.d/fastcgi.conf"|g' modules.conf && sed -i
+      's|#include "conf.d/cgi.conf"|include "conf.d/cgi.conf"|g' modules.conf && sed
+      -i 's|## ========================|include "nagios.conf"|g' modules.conf && sed
+      -i 's|OPTIONS=|OPTIONS=\nexport SYSTEMCTL_SKIP_REDIRECT=1|g' /usr/sbin/service
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/supervisord.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - lighttpd/nagios.conf
+    - /etc/lighttpd/nagios.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - lighttpd/ssl.conf
+    - /etc/lighttpd/ssl.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - uwsgi/uwsgi.adagios.ini
+    - /etc/uwsgi.adagios.ini
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - lighttpd/index.html
+    - /var/www/html/index.html
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - /usr/bin/run.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nagios.initd.autobackuprestore
+    - /etc/init.d/nagios
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nagios-supervisor-wrapper.sh
+    - /usr/bin/nagios-supervisor-wrapper.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - opt/
+    - /opt/
+  - CmdLine:
+    - 'sed -i ''s|^\(nagios_init_script\)=\(.*\)$|\1="sudo /etc/init.d/nagios"|g''
+      /etc/adagios/adagios.conf && echo "nagios ALL=NOPASSWD: /etc/init.d/nagios *"
+      >> /etc/sudoers && echo "nagios ALL=NOPASSWD: /sbin/service nagios *" >> /etc/sudoers
+      && echo "nagios ALL=NOPASSWD: /usr/sbin/nagios -v *" >> /etc/sudoers && sed
+      -i ''s|Defaults    requiretty|Defaults    !requiretty|g'' /etc/sudoers && chmod
+      755 /usr/bin/run.sh /usr/bin/nagios-supervisor-wrapper.sh /opt/nagios-plugins-install.sh'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp && curl -s -S https://assets.nagios.com/downloads/exchange/nagiosmobile/nagiosmobile.tar.gz
+      | tar xfz - && cd nagiosmobile && sed -i 's|AuthUserFile /usr/local/nagios/etc/htpasswd.users|AuthUserFile
+      /etc/nagios/passwd|g' nagiosmobile_apache.conf && sed -i 's|/usr/local/nagios/var/status.dat|/var/log/nagios/status.dat|g'
+      include.inc.php && sed -i 's|/usr/local/nagios/var/rw/nagios.cmd|/var/spool/nagios/cmd/nagios.cmd|g'
+      include.inc.php && sed -i 's|/usr/local/nagios/etc/cgi.cfg|/etc/nagios/cgi.cfg|g'
+      include.inc.php && sed -i 's|/usr/local/nagios/var/objects.cache|/var/log/nagios/objects.cache|g'
+      include.inc.php && sed -i 's|$output = system($service." restart",$code);|$output
+      = ""; $code = 0;|g' INSTALL.php && sed -i 's|exit($errors);|exit(0);|g' INSTALL.php
+      && sed -i 's|/nagiosxi|/adagios|g' includes/main.inc.php && sed -i 's|Nagios
+      XI|Adagios|g' includes/main.inc.php && ./INSTALL.php && chmod 644 /etc/httpd/conf.d/nagiosmobile.conf
+      && cd /tmp && rm -rf nagiosmobile
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /etc/nagios
+  - CmdLine:
+    - /usr/bin/run.sh
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - Name: volume
+    Volumes:
+    - /etc/adagios
+    - /etc/nagios
+    - /var/lib/pnp4nagios
+    - /var/log/nagios
+    - /opt
+  From:
+    Image: centos:7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:7

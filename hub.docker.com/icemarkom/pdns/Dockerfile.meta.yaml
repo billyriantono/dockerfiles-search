@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- As: pdns-builder
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk --update upgrade &&     apk add ca-certificates curl &&     apk add --virtual
+      .build-depends             file g++ make boost-dev libsodium-dev lua-dev             net-snmp-dev
+      protobuf-dev libedit-dev re2-dev
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: pdns-builder
+  Platform: ""
+  SourceCode: FROM alpine AS pdns-builder
+- As: dnsdist-builder
+  BaseName: pdns-builder
+  Commands:
+  - Key: dnsdist_name
+    Name: arg
+    Value: dnsdist
+  - Key: dnsdist_ver
+    Name: arg
+    Value: 1.3.3
+  - CmdLine:
+    - echo "Building ${dnsdist_name} version ${dnsdist_ver}" &&     curl -RL -O "https://downloads.powerdns.com/releases/${dnsdist_name}-${dnsdist_ver}.tar.bz2"
+      &&     tar xvfj "${dnsdist_name}-${dnsdist_ver}.tar.bz2" &&     rm -f "${dnsdist_name}-${dnsdist_ver}.tar.bz2"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd "${dnsdist_name}-${dnsdist_ver}" &&     ./configure       --sysconfdir=/etc/pdns       --mandir=/usr/share/man       --enable-dnscrypt       --enable-dns-over-tls       --enable-libsodium       --enable-re2       --with-net-snmp
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd "${dnsdist_name}-${dnsdist_ver}" &&     make &&     make install-strip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk del --purge .build-depends &&     rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: pdns-builder
+  Name: dnsdist-builder
+  Platform: ""
+  SourceCode: FROM pdns-builder AS dnsdist-builder
+- As: dnsdist
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk --update upgrade &&     apk add ca-certificates curl less man openssl             libedit
+      re2 libsodium lua net-snmp protobuf &&     rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - addgroup -g 2500 -S pdns &&     adduser -u 2500 -S -D -G pdns pdns
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: dnsdist-builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/
+    - /usr/local/bin/
+  - Chown: ""
+    From: dnsdist-builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/man/man1/
+    - /usr/share/man/man1/
+  - CmdLine:
+    - /usr/local/bin/dnsdist
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: dnsdist
+  Platform: ""
+  SourceCode: FROM alpine AS dnsdist

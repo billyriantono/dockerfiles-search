@@ -1,0 +1,236 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "cpp-builddeps",
+      "BaseName": "debian:buster",
+      "SourceCode": "FROM debian:buster AS cpp-builddeps",
+      "Platform": "",
+      "As": "cpp-builddeps",
+      "From": {
+        "Image": "debian:buster"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "true       \u0026\u0026 apt-get update       \u0026\u0026 apt-get install -y           autoconf           bison           build-essential           cmake           curl           flex           g++           gnupg           libboost-dev           libboost-filesystem-dev           libboost-regex-dev           libboost-system-dev           libstdc++6-8-dbg           pkg-config           python           tar       \u0026\u0026 true"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "true       \u0026\u0026 mkdir -p /src       \u0026\u0026 cd /src       \u0026\u0026 curl -Oapache-arrow-0.15.1.tar.gz --location http://archive.apache.org/dist/arrow/arrow-0.15.1/apache-arrow-0.15.1.tar.gz       \u0026\u0026 tar zxf apache-arrow-0.15.1.tar.gz       \u0026\u0026 cd apache-arrow-0.15.1/cpp       \u0026\u0026 cmake -DARROW_COMPUTE=ON -DARROW_OPTIONAL_INSTALL=ON -DARROW_BUILD_STATIC=ON -DARROW_BUILD_SHARED=OFF -DCMAKE_BUILD_TYPE=Release .       \u0026\u0026 make -j4 arrow       \u0026\u0026 make install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "PKG_CONFIG_PATH",
+              "Value": "\"/src/apache-arrow-0.15.1/cpp/jemalloc_ep-prefix/src/jemalloc_ep/dist/lib/pkgconfig:/src/apache-arrow-0.15.1/cpp/gflags_ep-prefix/src/gflags_ep/lib/pkgconfig\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "CMAKE_PREFIX_PATH",
+              "Value": "\"/src/apache-arrow-0.15.1/cpp/double-conversion_ep/src/double-conversion_ep\""
+            }
+          ],
+          "Name": "env"
+        }
+      ]
+    },
+    {
+      "Name": "python-dev",
+      "BaseName": "python:3.7.4-buster",
+      "SourceCode": "FROM python:3.7.4-buster AS python-dev",
+      "Platform": "",
+      "As": "python-dev",
+      "From": {
+        "Image": "python:3.7.4-buster"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "pip install pyarrow==0.15.1 pytest pandas==0.25.3"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir /app"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        }
+      ]
+    },
+    {
+      "Name": "cpp-build",
+      "BaseName": "cpp-builddeps",
+      "SourceCode": "FROM cpp-builddeps AS cpp-build",
+      "Platform": "",
+      "As": "cpp-build",
+      "From": {
+        "Stage": {
+          "Named": "cpp-builddeps",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "mkdir -p /app/src"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "vendor/",
+            "/app/vendor/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "touch /app/src/csv-to-arrow.cc /app/src/json-to-arrow.cc /app/src/json-warnings.cc /app/src/json-table-builder.cc /app/src/common.cc"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "CMakeLists.txt",
+            "/app"
+          ]
+        },
+        {
+          "CmdLine": [
+            "cmake -DCMAKE_BUILD_TYPE=Release ."
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "src/",
+            "/app/src/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "make -j4"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "test",
+      "BaseName": "python-dev",
+      "SourceCode": "FROM python-dev AS test",
+      "Platform": "",
+      "As": "test",
+      "From": {
+        "Stage": {
+          "Named": "python-dev",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "cpp-build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/csv-to-arrow",
+            "/usr/bin/csv-to-arrow"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "cpp-build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/json-to-arrow",
+            "/usr/bin/json-to-arrow"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "tests/",
+            "/app/tests/"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "CmdLine": [
+            "pytest -vv"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "dist",
+      "BaseName": "scratch",
+      "SourceCode": "FROM scratch AS dist",
+      "Platform": "",
+      "As": "dist",
+      "From": {
+        "Scratch": true
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "cpp-build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/csv-to-arrow",
+            "/usr/bin/csv-to-arrow"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "cpp-build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/json-to-arrow",
+            "/usr/bin/json-to-arrow"
+          ]
+        }
+      ]
+    }
+  ]
+}

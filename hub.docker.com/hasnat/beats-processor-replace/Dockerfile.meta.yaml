@@ -1,0 +1,90 @@
+MetaArgs:
+- DefaultValue: 6.4.2
+  Key: BEATS_VERSION
+  ProvidedValue: null
+  Value: 6.4.2
+- DefaultValue: 1.10.3
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: 1.10.3
+- DefaultValue: linux-amd64
+  Key: GO_PLATFORM
+  ProvidedValue: null
+  Value: linux-amd64
+- DefaultValue: filebeat
+  Key: BEAT_NAME
+  ProvidedValue: null
+  Value: filebeat
+Stages:
+- As: builder
+  BaseName: golang:${GO_VERSION}
+  Commands:
+  - Key: BEATS_VERSION
+    Name: arg
+    Value: null
+  - Name: workdir
+    Path: /go/src/github.com/hasnat/beats-processor-replace
+  - CmdLine:
+    - go get github.com/elastic/beats || true
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /go/src/github.com/elastic/beats && git checkout v${BEATS_VERSION}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - go get -d ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -buildmode=plugin -o processor-replace-linux.so
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:${GO_VERSION}
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:${GO_VERSION} as builder
+- BaseName: docker.elastic.co/beats/filebeat:${BEATS_VERSION}
+  Commands:
+  - Name: user
+    User: root
+  - CmdLine:
+    - mkdir -p /usr/local/plugins/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/hasnat/beats-processor-replace/processor-replace-linux.so
+    - /usr/local/plugins/
+  - CmdLine:
+    - chown -R filebeat:filebeat /usr/local/plugins/
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: filebeat
+  - CmdLine:
+    - cat /usr/local/bin/docker-entrypoint
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - filebeat
+    - -e
+    - --plugin
+    - /usr/local/plugins/processor-replace-linux.so
+    - -v
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: docker.elastic.co/beats/filebeat:${BEATS_VERSION}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM docker.elastic.co/beats/filebeat:${BEATS_VERSION}

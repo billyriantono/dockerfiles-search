@@ -1,0 +1,124 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stretch-slim
+  Commands:
+  - Maintainer: Juha Kovanen <juha@particl.io>
+    Name: maintainer
+  - Key: CONTAINER_TIMEZONE
+    Name: arg
+    Value: Europe/Helsinki
+  - Key: PARTICL_VERSION
+    Name: arg
+    Value: master
+  - Key: BUILD
+    Name: arg
+    Value: "false"
+  - Env:
+    - Key: PARTICL_DATA
+      Value: /root/.particl
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /opt/particl-${PARTICL_VERSION}/bin:$PATH
+    Name: env
+  - CmdLine:
+    - apt-get update -y     && apt-get upgrade -y     && apt-get install -y apt-transport-https
+      ca-certificates wget curl gnupg2 autogen git net-tools iputils-ping     build-essential
+      libtool autotools-dev automake autoconf pkg-config libssl-dev libboost-all-dev
+      ntp ntpdate     libzmq3-dev libqt5gui5 libqt5core5a libqt5dbus5 qttools5-dev
+      qttools5-dev-tools libprotobuf-dev protobuf-compiler     libqrencode-dev autoconf
+      openssl libevent-dev libminiupnpc-dev bsdmainutils libsodium-dev     && apt-get
+      clean     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo ${CONTAINER_TIMEZONE} >/etc/timezone &&     ln -sf /usr/share/zoneinfo/${CONTAINER_TIMEZONE}
+      /etc/localtime &&     dpkg-reconfigure -f noninteractive tzdata &&     echo
+      "Container timezone set to: $CONTAINER_TIMEZONE"'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ntpdate -q ntp.ubuntu.com
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ "${PARTICL_VERSION}" = "master" ]; then         cd /root         && git
+      clone https://github.com/particl/particl-core.git         && cd particl-core         &&
+      cd /root/particl-core         && mkdir db4         && cd /root/particl-core/db4         &&
+      wget 'http://download.oracle.com/berkeley-db/db-4.8.30.NC.tar.gz'         &&
+      tar -xzvf db-4.8.30.NC.tar.gz         && cd /root/particl-core/db4/db-4.8.30.NC/build_unix         &&
+      ../dist/configure --enable-cxx --disable-shared --with-pic --prefix=/root/particl-core/db4/         &&
+      make install         && cd /root/particl-core         && ./autogen.sh         &&
+      ./configure LDFLAGS="-L/root/particl-core/db4/lib/" CPPFLAGS="-I/root/particl-core/db4/include/"         &&
+      make;     elif [ "${BUILD}" = "true" ]; then         cd /root         && git
+      clone https://github.com/particl/particl-core.git         && cd particl-core         &&
+      git fetch --all --tags --prune         && git checkout tags/v${PARTICL_VERSION}
+      -b v${PARTICL_VERSION}         && cd /root/particl-core         && mkdir db4         &&
+      cd /root/particl-core/db4         && wget 'http://download.oracle.com/berkeley-db/db-4.8.30.NC.tar.gz'         &&
+      tar -xzvf db-4.8.30.NC.tar.gz         && cd /root/particl-core/db4/db-4.8.30.NC/build_unix         &&
+      ../dist/configure --enable-cxx --disable-shared --with-pic --prefix=/root/particl-core/db4/         &&
+      make install         && cd /root/particl-core         && ./autogen.sh         &&
+      ./configure LDFLAGS="-L/root/particl-core/db4/lib/" CPPFLAGS="-I/root/particl-core/db4/include/"         &&
+      make;     else         cd /root         && mkdir -p particl-core/src         &&
+      cd particl-core         && wget https://github.com/particl/particl-core/releases/download/v${PARTICL_VERSION}/particl-${PARTICL_VERSION%rc1}-x86_64-linux-gnu.tar.gz         &&
+      tar -xzvf particl-${PARTICL_VERSION%rc1}-x86_64-linux-gnu.tar.gz         &&
+      cp -rf particl-${PARTICL_VERSION%rc1}/bin/* src/;     fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /root/.particl
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /root/.particl
+  - CmdLine:
+    - mkdir -p /opt/particl/bin     && cp -rf /root/particl-core/src/particl-cli /root/particl-core/src/particl-tx
+      /root/particl-core/src/particld /opt/particl/bin/     && rm -rf /root/particl-core
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /opt/particl/bin/entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/rpcauth.py
+    - /opt/particl/bin/rpcauth.py
+  - Env:
+    - Key: PATH
+      Value: '"/opt/particl/bin:${PATH}"'
+    Name: env
+  - CmdLine:
+    - chmod +x /opt/particl/bin/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "51738"
+    - "51935"
+  - Health:
+      Interval: 300000000000
+      Retries: 3
+      Test:
+      - CMD-SHELL
+      - particl-cli getnetworkinfo || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - particld
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

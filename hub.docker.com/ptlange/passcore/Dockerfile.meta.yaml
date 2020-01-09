@@ -1,0 +1,99 @@
+MetaArgs:
+- DefaultValue: microsoft/dotnet
+  Key: REPO
+  ProvidedValue: null
+  Value: microsoft/dotnet
+Stages:
+- As: builder
+  BaseName: $REPO:2.2-runtime-deps-alpine3.8
+  Commands:
+  - CmdLine:
+    - apk add --no-cache     icu-libs     nodejs=8.14.0-r0     nodejs-npm
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DOTNET_SYSTEM_GLOBALIZATION_INVARIANT
+      Value: "false"
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: DOTNET_SDK_VERSION
+      Value: 2.2.100
+    Name: env
+  - CmdLine:
+    - wget -O dotnet.tar.gz https://dotnetcli.blob.core.windows.net/dotnet/Sdk/$DOTNET_SDK_VERSION/dotnet-sdk-$DOTNET_SDK_VERSION-linux-musl-x64.tar.gz     &&
+      dotnet_sha512='668dbbfdee1b898de57ee7320b3f7f77c3bae896cb1480d64869512f26d6998edccc1163c9ca6ed62b326e2d745a81e82a35a24cf4f7e11319fec0c6904e566e'     &&
+      echo "$dotnet_sha512  dotnet.tar.gz" | sha512sum -c -     && mkdir -p /usr/share/dotnet     &&
+      tar -C /usr/share/dotnet -xzf dotnet.tar.gz     && ln -s /usr/share/dotnet/dotnet
+      /usr/bin/dotnet     && rm dotnet.tar.gz
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DOTNET_USE_POLLING_FILE_WATCHER
+      Value: "true"
+    - Key: NUGET_XMLDOC_MODE
+      Value: skip
+    Name: env
+  - CmdLine:
+    - dotnet help
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - CmdLine:
+    - dotnet restore
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dotnet publish -c Release -o /app/out /p:PASSCORE_PROVIDER=LDAP
+    Name: run
+    PrependShell: true
+  From:
+    Image: $REPO:2.2-runtime-deps-alpine3.8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM $REPO:2.2-runtime-deps-alpine3.8 as builder
+- BaseName: $REPO:2.2-runtime-deps-alpine3.8
+  Commands:
+  - Env:
+    - Key: ASPNETCORE_VERSION
+      Value: 2.2.0
+    Name: env
+  - CmdLine:
+    - wget -O aspnetcore.tar.gz https://dotnetcli.blob.core.windows.net/dotnet/aspnetcore/Runtime/$ASPNETCORE_VERSION/aspnetcore-runtime-$ASPNETCORE_VERSION-linux-musl-x64.tar.gz     &&
+      aspnetcore_sha512='c297f7196b72e02ec41a5a0c027dcec1648ad552bf44036fa491d67d9b4f09e3ade84fd51ebffd68e8fa8077f2497ad851e13c83dac6aba89dd03f6df0adca6f'     &&
+      echo "$aspnetcore_sha512  aspnetcore.tar.gz" | sha512sum -c -     && mkdir -p
+      /usr/share/dotnet     && tar -zxf aspnetcore.tar.gz -C /usr/share/dotnet     &&
+      rm aspnetcore.tar.gz     && ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/out
+    - .
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - dotnet
+    - /app/Unosquare.PassCore.Web.dll
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: $REPO:2.2-runtime-deps-alpine3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM $REPO:2.2-runtime-deps-alpine3.8

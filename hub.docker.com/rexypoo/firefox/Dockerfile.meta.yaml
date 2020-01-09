@@ -1,0 +1,133 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: ubuntu
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -yq     apulse     ca-certificates     dbus-x11     firefox     hicolor-icon-theme     libasound2     libcanberra-gtk3-module     libgl1-mesa-dri     libgl1-mesa-glx     libpulse0     --no-install-recommends  &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - firefox-helper.sh
+    - /usr/local/bin/firefox-helper.sh
+  - CmdLine:
+    - chmod a+x /usr/local/bin/firefox-helper.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu
+  Name: build
+  Platform: ""
+  SourceCode: FROM ubuntu AS build
+- As: drop-privileges
+  BaseName: build
+  Commands:
+  - Env:
+    - Key: USER
+      Value: firefox
+    - Key: UID
+      Value: "24322"
+    - Key: TEMPLATE
+      Value: /firefox/Downloads
+    Name: env
+  - Name: workdir
+    Path: /firefox
+  - CmdLine:
+    - adduser     --disabled-password     --gecos ""     --home "$(pwd)"     --no-create-home     --uid
+      "$UID"     "$USER"  && adduser "$USER" audio  && mkdir /firefox/Downloads  &&
+      chown -R "$USER":"$USER" .
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://raw.githubusercontent.com/Rexypoo/docker-entrypoint-helper/master/entrypoint-helper.sh
+    - /usr/local/bin/entrypoint-helper.sh
+  - CmdLine:
+    - chmod u+x /usr/local/bin/entrypoint-helper.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - entrypoint-helper.sh
+    - /usr/local/bin/firefox-helper.sh
+    - --no-remote
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: build
+  Name: drop-privileges
+  Platform: ""
+  SourceCode: FROM build AS drop-privileges
+- As: configure
+  BaseName: drop-privileges
+  Commands:
+  - CmdLine:
+    - echo 'pref("general.config.obscure_value", 0);' >> /usr/lib/firefox/defaults/pref/local-settings.js  &&
+      echo 'pref("general.config.filename", "mozilla.cfg");' >> /usr/lib/firefox/defaults/pref/local-settings.js  &&
+      echo "//" > /usr/lib/firefox/mozilla.cfg  && echo 'pref("browser.tabs.remote.autostart",
+      false);  // Disable multithreading that breaks docker' >> /usr/lib/firefox/mozilla.cfg  &&
+      echo 'pref("app.normandy.first_run", false);  // Disable first-time setup' >>
+      /usr/lib/firefox/mozilla.cfg
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: drop-privileges
+  Name: configure
+  Platform: ""
+  SourceCode: FROM drop-privileges AS configure
+- As: dev
+  BaseName: configure
+  Commands:
+  - CmdLine:
+    - bash
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 2
+      Named: configure
+  Name: dev
+  Platform: ""
+  SourceCode: FROM configure AS dev
+- As: release
+  BaseName: configure
+  Commands:
+  - Labels:
+    - Key: org.opencontainers.image.url
+      Value: '"https://hub.docker.com/r/rexypoo/firefox"'
+    - Key: org.opencontainers.image.documentation
+      Value: '"https://hub.docker.com/r/rexypoo/firefox"'
+    - Key: org.opencontainers.image.source
+      Value: '"https://github.com/Rexypoo/docker-firefox"'
+    - Key: org.opencontainers.image.version
+      Value: '"0.1a"'
+    - Key: org.opencontainers.image.licenses
+      Value: '"MIT"'
+    - Key: org.opencontainers.image.description
+      Value: '"Firefox on Docker"'
+    - Key: org.opencontainers.image.title
+      Value: '"rexypoo/firefox"'
+    - Key: org.label-schema.docker.cmd
+      Value: '''mkdir -p "$HOME"/.firefox-settings &&       docker run -d --rm       --name
+        firefox       --net=host       -e DISPLAY       -v /tmp/.X11-unix:/tmp/.X11-unix:ro       --device
+        /dev/snd       -v "$HOME"/Downloads:/firefox/Downloads       -v "$HOME"/.firefox-settings:/firefox/.mozilla/firefox       rexypoo/firefox'''
+    - Key: org.label-schema.docker.cmd.devel
+      Value: '"docker run -it --rm --entrypoint bash rexypoo/firefox"'
+    - Key: org.label-schema.docker.cmd.debug
+      Value: '"docker exec -it firefox bash"'
+    Name: label
+  From:
+    Stage:
+      Index: 2
+      Named: configure
+  Name: release
+  Platform: ""
+  SourceCode: FROM configure AS release

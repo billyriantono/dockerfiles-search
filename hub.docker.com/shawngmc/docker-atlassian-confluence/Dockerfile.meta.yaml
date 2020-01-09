@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8-alpine
+  Commands:
+  - Env:
+    - Key: CONF_HOME
+      Value: /var/atlassian/confluence
+    Name: env
+  - Env:
+    - Key: CONF_INSTALL
+      Value: /opt/atlassian/confluence
+    Name: env
+  - Env:
+    - Key: CONF_VERSION
+      Value: 6.15.6
+    Name: env
+  - Env:
+    - Key: JAVA_CACERTS
+      Value: $JAVA_HOME/jre/lib/security/cacerts
+    Name: env
+  - Env:
+    - Key: CERTIFICATE
+      Value: $CONF_HOME/certificate
+    Name: env
+  - CmdLine:
+    - set -x     && apk --no-cache add curl xmlstarlet bash ttf-dejavu libc6-compat
+      gcompat     && mkdir -p                "${CONF_HOME}"     && chmod -R 700            "${CONF_HOME}"     &&
+      chown daemon:daemon     "${CONF_HOME}"     && mkdir -p                "${CONF_INSTALL}/conf"     &&
+      curl -Ls                "https://www.atlassian.com/software/confluence/downloads/binary/atlassian-confluence-${CONF_VERSION}.tar.gz"
+      | tar -xz --directory "${CONF_INSTALL}" --strip-components=1 --no-same-owner     &&
+      curl -Ls                "https://dev.mysql.com/get/Downloads/Connector-J/mysql-connector-java-5.1.44.tar.gz"
+      | tar -xz --directory "${CONF_INSTALL}/confluence/WEB-INF/lib" --strip-components=1
+      --no-same-owner "mysql-connector-java-5.1.44/mysql-connector-java-5.1.44-bin.jar"     &&
+      chmod -R 700            "${CONF_INSTALL}/conf"     && chmod -R 700            "${CONF_INSTALL}/temp"     &&
+      chmod -R 700            "${CONF_INSTALL}/logs"     && chmod -R 700            "${CONF_INSTALL}/work"     &&
+      chown -R daemon:daemon  "${CONF_INSTALL}/conf"     && chown -R daemon:daemon  "${CONF_INSTALL}/temp"     &&
+      chown -R daemon:daemon  "${CONF_INSTALL}/logs"     && chown -R daemon:daemon  "${CONF_INSTALL}/work"     &&
+      echo -e                 "\nconfluence.home=$CONF_HOME" >> "${CONF_INSTALL}/confluence/WEB-INF/classes/confluence-init.properties"     &&
+      xmlstarlet              ed --inplace         --delete               "Server/@debug"         --delete               "Server/Service/Connector/@debug"         --delete               "Server/Service/Connector/@useURIValidationHack"         --delete               "Server/Service/Connector/@minProcessors"         --delete               "Server/Service/Connector/@maxProcessors"         --delete               "Server/Service/Engine/@debug"         --delete               "Server/Service/Engine/Host/@debug"         --delete               "Server/Service/Engine/Host/Context/@debug"                                "${CONF_INSTALL}/conf/server.xml"     &&
+      touch -d "@0"           "${CONF_INSTALL}/conf/server.xml"     && chown daemon:daemon     "${JAVA_CACERTS}"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: daemon:daemon
+  - Name: expose
+    Ports:
+    - "8090"
+    - "8091"
+  - Name: volume
+    Volumes:
+    - /var/atlassian/confluence
+    - /opt/atlassian/confluence/logs
+  - Name: workdir
+    Path: /var/atlassian/confluence
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /opt/atlassian/confluence/bin/start-confluence.sh
+    - -fg
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 5000000000
+      Retries: 3
+      Test:
+      - CMD-SHELL
+      - wget localhost:8090/status -q -O - > /dev/null 2>&1
+      Timeout: 5000000000
+    Name: healthcheck
+  From:
+    Image: openjdk:8-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-alpine

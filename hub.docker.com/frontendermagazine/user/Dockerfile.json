@@ -1,0 +1,182 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "base",
+      "BaseName": "node:10-alpine",
+      "SourceCode": "FROM node:10-alpine AS base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Image": "node:10-alpine"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "mkdir -p /var/app \u0026\u0026 chown -R node /var/app"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/var/app"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "package.json",
+            "."
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "package-lock.json",
+            "."
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "dependencies",
+      "BaseName": "base",
+      "SourceCode": "FROM base AS dependencies",
+      "Platform": "",
+      "As": "dependencies",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add --update python build-base"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "npm ci --only=prod --silent"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cp -R node_modules prod_node_modules"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "npm ci --silent"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "build",
+      "BaseName": "dependencies",
+      "SourceCode": "FROM dependencies AS build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Stage": {
+          "Named": "dependencies",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "npm run build"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "release",
+      "BaseName": "base",
+      "SourceCode": "FROM base AS release",
+      "Platform": "",
+      "As": "release",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add --update bash \u0026\u0026 rm -rf /var/cache/apk/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "dependencies",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/var/app/prod_node_modules",
+            "./node_modules"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/var/app/build",
+            "./build"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "NODE_ENV",
+              "Value": "production"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "4000"
+          ]
+        },
+        {
+          "CmdLine": [
+            "npm run start"
+          ],
+          "Name": "cmd",
+          "PrependShell": true
+        }
+      ]
+    }
+  ]
+}

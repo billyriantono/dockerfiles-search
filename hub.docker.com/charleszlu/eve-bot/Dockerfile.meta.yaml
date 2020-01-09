@@ -1,0 +1,102 @@
+MetaArgs:
+- DefaultValue: "3.7"
+  Key: PYTHON_VER
+  ProvidedValue: null
+  Value: "3.7"
+- DefaultValue: 3.8.0
+  Key: PROTOBUF_VER
+  ProvidedValue: null
+  Value: 3.8.0
+- DefaultValue: 1.2.19
+  Key: MUMBLE_VER
+  ProvidedValue: null
+  Value: 1.2.19
+Stages:
+- As: builder
+  BaseName: python:${PYTHON_VER}-alpine
+  Commands:
+  - Key: PROTOBUF_VER
+    Name: arg
+    Value: null
+  - Key: MUMBLE_VER
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk --update add --no-cache     libtool     make     g++
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp &&     wget https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOBUF_VER}/protobuf-all-${PROTOBUF_VER}.tar.gz
+      &&     tar xzf protobuf-all-${PROTOBUF_VER}.tar.gz &&     cd protobuf-${PROTOBUF_VER}
+      &&     ./configure &&     make &&     make check &&     make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp &&     wget https://github.com/mumble-voip/mumble/releases/download/${MUMBLE_VER}/mumble-${MUMBLE_VER}.tar.gz
+      &&     tar xzf mumble-${MUMBLE_VER}.tar.gz &&     cd mumble-${MUMBLE_VER}/src
+      &&     sed -i '1isyntax = "proto2";' Mumble.proto &&     protoc --python_out=.
+      Mumble.proto
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:${PYTHON_VER}-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM python:${PYTHON_VER}-alpine AS builder
+- BaseName: python:${PYTHON_VER}-alpine
+  Commands:
+  - Key: PROTOBUF_VER
+    Name: arg
+    Value: null
+  - Key: MUMBLE_VER
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk --update add --no-cache bash &&     pip install --no-cache-dir protobuf==${PROTOBUF_VER}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /eve-bot
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/mumble-${MUMBLE_VER}/src/Mumble_pb2.py
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - eve-bot.py
+    - ./
+  - Env:
+    - Key: MUMBLE_PORT
+      Value: "64738"
+    Name: env
+  - Env:
+    - Key: DELAY
+      Value: "90"
+    Name: env
+  - Env:
+    - Key: BOT_NICKNAME
+      Value: '"-Eve-"'
+    Name: env
+  - Env:
+    - Key: MIMIC_PREFIX
+      Value: '"Mimic-"'
+    Name: env
+  - Env:
+    - Key: MIMIC_VERSION
+      Value: ${MUMBLE_VER}
+    Name: env
+  - CmdLine:
+    - python -u ./eve-bot.py --eavesdrop-in="$EAVESDROP_IN" --relay-to="$RELAY_TO"
+      --server=$MUMBLE_SERVER --delay=$DELAY --nick=$BOT_NICKNAME --mimic-prefix=$MIMIC_PREFIX
+      --mimic-version=$MIMIC_VERSION
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: python:${PYTHON_VER}-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:${PYTHON_VER}-alpine

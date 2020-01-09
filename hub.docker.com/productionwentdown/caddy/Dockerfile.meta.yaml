@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.13-alpine
+  Commands:
+  - Key: version
+    Name: arg
+    Value: '"1.0.4"'
+  - Key: plugins
+    Name: arg
+    Value: '""'
+  - Key: telemetry
+    Name: arg
+    Value: '"true"'
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - plugger.go
+    - ./
+  - CmdLine:
+    - apk add --no-cache git upx ca-certificates     && echo -e "module caddy\nrequire
+      github.com/caddyserver/caddy v${version}" > go.mod     && go run plugger.go
+      -plugins="${plugins}" -telemetry="${telemetry}"     && CGO_ENABLED=0 GOOS=linux
+      GO111MODULE=on go build     && upx --ultra-brute caddy     && ./caddy -version
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.13-alpine as build
+- BaseName: scratch
+  Commands:
+  - Labels:
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/productionwentdown/caddy"'
+    Name: label
+  - Labels:
+    - Key: org.label-schema.version
+      Value: ${version}
+    Name: label
+  - Labels:
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/caddy
+    - /bin/caddy
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/ca-certificates.crt
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Caddyfile
+    - /etc/Caddyfile
+  - Env:
+    - Key: CADDYPATH
+      Value: /etc/.caddy
+    Name: env
+  - Name: volume
+    Volumes:
+    - /etc/.caddy
+  - Name: workdir
+    Path: /srv
+  - Name: expose
+    Ports:
+    - "2015"
+  - CmdLine:
+    - /bin/caddy
+    - --conf
+    - /etc/Caddyfile
+    - --log
+    - stdout
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

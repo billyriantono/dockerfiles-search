@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:7-jdk
+  Commands:
+  - Maintainer: Pan Luo <pan.luo@ubc.ca>
+    Name: maintainer
+  - Env:
+    - Key: DSPACE_VERSION
+      Value: "5.4"
+    - Key: TOMCAT_MAJOR
+      Value: "8"
+    - Key: TOMCAT_VERSION
+      Value: 8.0.42
+    Name: env
+  - Env:
+    - Key: TOMCAT_TGZ_URL
+      Value: https://archive.apache.org/dist/tomcat/tomcat-$TOMCAT_MAJOR/v$TOMCAT_VERSION/bin/apache-tomcat-$TOMCAT_VERSION.tar.gz
+    - Key: MAVEN_TGZ_URL
+      Value: http://apache.mirror.iweb.ca/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz
+    Name: env
+  - Env:
+    - Key: CATALINA_HOME
+      Value: /usr/local/tomcat
+    - Key: DSPACE_HOME
+      Value: /dspace
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $CATALINA_HOME/bin:$DSPACE_HOME/bin:$PATH
+    Name: env
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - apt-get update && apt-get install --no-install-recommends --no-install-suggests
+      -y vim ant postgresql-client netcat     && mkdir -p maven dspace "$CATALINA_HOME"     &&
+      curl -fSL "$TOMCAT_TGZ_URL" -o tomcat.tar.gz     && curl -fSL "$MAVEN_TGZ_URL"
+      -o maven.tar.gz     && tar -xvf tomcat.tar.gz --strip-components=1 -C "$CATALINA_HOME"     &&
+      tar -xvf maven.tar.gz --strip-components=1  -C maven     && rm -fr "$CATALINA_HOME/webapps/*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /dspace-src
+  - Name: workdir
+    Path: /dspace-src
+  - CmdLine:
+    - /tmp/maven/bin/mvn package -P '!dspace-xmlui,!dspace-lni,!dspace-oai,!dspace-sword,!dspace-swordv2'     &&
+      cd dspace/target/dspace-installer     && ant init_installation init_configs
+      install_code copy_webapps     && rm -fr ~/.m2 && rm -fr /tmp/* /dspace-src &&
+      rm -rf /var/lib/apt/lists/* && apt-get clean
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./docker/rootfs
+    - /
+  - Name: workdir
+    Path: /dspace
+  - CmdLine:
+    - echo "Debian GNU/Linux 8 (jessie) image. (`uname -rsv`)" >> /root/.built &&     echo
+      "- with `java -version 2>&1 | awk 'NR == 2'`" >> /root/.built &&     echo "-
+      with DSpace $DSPACE_VERSION on Tomcat $TOMCAT_VERSION"  >> /root/.built
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - $DSPACE_HOME/assetstore
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - start-dspace
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:7-jdk
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:7-jdk

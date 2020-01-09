@@ -1,0 +1,71 @@
+MetaArgs:
+- DefaultValue: "2"
+  Key: DOTNET_VERSION
+  ProvidedValue: null
+  Value: "2"
+Stages:
+- As: builder
+  BaseName: microsoft/dotnet:${DOTNET_VERSION}-sdk
+  Commands:
+  - Name: workdir
+    Path: /repo
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - export DOTNET_CLI_TELEMETRY_OPTOUT=1  && dotnet clean  && dotnet publish     --configuration
+      release     --output /jellyfin     Jellyfin.Server
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:${DOTNET_VERSION}-sdk
+  Name: builder
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:${DOTNET_VERSION}-sdk as builder
+- As: ffmpeg
+  BaseName: jrottenberg/ffmpeg:4.0-vaapi
+  Commands: null
+  From:
+    Image: jrottenberg/ffmpeg:4.0-vaapi
+  Name: ffmpeg
+  Platform: ""
+  SourceCode: FROM jrottenberg/ffmpeg:4.0-vaapi as ffmpeg
+- BaseName: microsoft/dotnet:${DOTNET_VERSION}-runtime
+  Commands:
+  - CmdLine:
+    - apt-get update  && apt-get install --no-install-recommends --no-install-suggests
+      -y    libfontconfig1  && apt-get clean autoclean  && apt-get autoremove  &&
+      rm -rf /var/lib/{apt,dpkg,cache,log}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ffmpeg
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /jellyfin
+    - /jellyfin
+  - Name: expose
+    Ports:
+    - "8096"
+  - Name: volume
+    Volumes:
+    - /config
+    - /media
+  - CmdLine:
+    - dotnet /jellyfin/jellyfin.dll --datadir /config
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:${DOTNET_VERSION}-runtime
+  Name: ""
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:${DOTNET_VERSION}-runtime

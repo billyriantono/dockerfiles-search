@@ -1,0 +1,101 @@
+MetaArgs:
+- DefaultValue: custom
+  Key: BUILD_VERSION
+  ProvidedValue: null
+  Value: custom
+- DefaultValue: "6.0"
+  Key: MONO_VERSION
+  ProvidedValue: null
+  Value: "6.0"
+Stages:
+- As: awshelper
+  BaseName: xueshanf/awscli
+  Commands:
+  - Key: BUILD_VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - if [[ -z "$BUILD_VERSION" || "$BUILD_VERSION" == "custom" ]];     then         latestFilename=$(
+      aws --no-sign-request s3 ls eco-releases | grep -E -e "EcoServer_v[0-9.]*-beta.zip"
+      | sort -n | tail -1 | awk '{print $4}' );     else         latestFilename="EcoServer_v$BUILD_VERSION.zip";     fi
+      &&     echo "$latestFilename" | sed 's/EcoServer_v\([0-9.]*-beta\).zip/\1/'
+      > /VERSION &&     aws --no-sign-request s3 cp "s3://eco-releases/$latestFilename"
+      /ecoserver.zip &&     mkdir /eco &&     unzip -q -d /eco /ecoserver.zip
+    Name: run
+    PrependShell: true
+  From:
+    Image: xueshanf/awscli
+  Name: awshelper
+  Platform: ""
+  SourceCode: FROM xueshanf/awscli AS awshelper
+- BaseName: mono:$MONO_VERSION
+  Commands:
+  - Chown: ""
+    From: awshelper
+    Name: copy
+    SourcesAndDest:
+    - /eco
+    - /app
+  - Chown: ""
+    From: awshelper
+    Name: copy
+    SourcesAndDest:
+    - /VERSION
+    - /app/VERSION
+  - CmdLine:
+    - mkdir -p /app/DefaultConfigs &&     cp /app/Configs/* /app/DefaultConfigs/
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - 3000/udp
+    - 3001/tcp
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - generate_config.sh
+    - README.md
+    - /app/
+  - CmdLine:
+    - /app/start.sh
+    Name: cmd
+    PrependShell: false
+  - Key: BUILD_VERSION
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.version
+      Value: '"$BUILD_VERSION"'
+    - Key: org.label-schema.vendor
+      Value: ZokRadonh
+    - Key: org.label-schema.license
+      Value: MIT
+    - Key: org.label-schema.build-date
+      Value: '"$BUILD_DATE"'
+    - Key: org.label-schema.description
+      Value: '"ECO game server"'
+    - Key: org.label-schema.vcs-ref
+      Value: '"$VCS_REF"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/zokradonh/ecogameserver"'
+    - Key: org.label-schema.docker.cmd
+      Value: '"docker run -d -p 3000:3000/udp -p 3001:3001/tcp -v eco_config:/app/Configs
+        -v eco_world:/app/Storage zokradonh/ecogameserver"'
+    - Key: org.label-schema.usage
+      Value: '"/app/README.md"'
+    Name: label
+  From:
+    Image: mono:$MONO_VERSION
+  Name: ""
+  Platform: ""
+  SourceCode: FROM mono:$MONO_VERSION

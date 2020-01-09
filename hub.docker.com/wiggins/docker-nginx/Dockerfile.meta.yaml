@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- BaseName: wiggins/alpine:latest
+  Commands:
+  - Maintainer: wiggins
+    Name: maintainer
+  - Key: VERSION
+    Name: arg
+    Value: ${VERSION:-1.14.0}
+  - Key: AUTOINDEX_NAME_LEN
+    Name: arg
+    Value: ${AUTOINDEX_NAME_LEN:-100}
+  - Env:
+    - Key: INSTALL_DIR
+      Value: /usr/local/nginx
+    - Key: DATA_DIR
+      Value: /data/wwwroot
+    - Key: TEMP_DIR
+      Value: /tmp/nginx
+    Name: env
+  - CmdLine:
+    - "set -x && \tmkdir -p $(dirname ${DATA_DIR}) ${TEMP_DIR} && cd ${TEMP_DIR} &&
+      \tDOWN_URL=\"http://nginx.org/download\" && \tDOWN_URL=\"${DOWN_URL}/nginx-${VERSION}.tar.gz\"
+      && \tFILE_NAME=${DOWN_URL##*/} && mkdir -p ${TEMP_DIR}/${FILE_NAME%%\\.tar*}
+      && \tapk --update --no-cache upgrade && \tapk add --no-cache --virtual .build-deps
+      geoip geoip-dev pcre libxslt gd openssl-dev pcre-dev zlib-dev \t\tbuild-base
+      linux-headers libxslt-dev gd-dev openssl-dev libstdc++ libgcc patch git tar
+      curl && \tcurl -Lk ${DOWN_URL} | tar xz -C ${TEMP_DIR} --strip-components=1
+      && \tcurl -Lk https://github.com/maowiggins/nginx-add-module/raw/master/nginx-mode.tar.gz|tar
+      xz -C ${TEMP_DIR} && \tgit clone https://github.com/ipipdotnet/nginx-ipip-module.git
+      && \taddgroup -g 400 -S www && \tadduser -u 400 -S -h ${DATA_DIR} -s /sbin/nologin
+      -g 'WEB Server' -G www www && \tfind ${TEMP_DIR} -type f -exec sed -i 's/\\r$//g'
+      {} \\; && \tCFLAGS=-Wno-unused-but-set-variable ./configure --prefix=${INSTALL_DIR}
+      \t\t--user=www --group=www \t\t--error-log-path=/data/wwwlogs/error.log \t\t--http-log-path=/data/wwwlogs/access.log
+      \t\t--pid-path=/usr/local/nginx/nginx.pid \t\t--lock-path=/var/lock/nginx.lock
+      \t\t--with-pcre \t\t--with-ipv6 \t\t--with-mail \t\t--with-mail_ssl_module \t\t--with-pcre-jit
+      \t\t--with-file-aio \t\t--with-threads \t\t--with-stream \t\t--with-stream_ssl_module
+      \t\t--with-http_ssl_module \t\t--with-http_flv_module \t\t--with-http_v2_module
+      \t\t--with-http_realip_module \t\t--with-http_gzip_static_module \t\t--with-http_stub_status_module
+      \t\t--with-http_sub_module \t\t--with-http_mp4_module \t\t--with-http_image_filter_module
+      \t\t--with-http_addition_module \t\t--with-http_auth_request_module \t\t--with-http_dav_module
+      \t\t--with-http_degradation_module \t\t--with-http_geoip_module \t\t--with-http_xslt_module
+      \t\t--with-http_gunzip_module \t\t--with-http_secure_link_module \t\t--with-http_slice_module
+      \t\t--add-module=./ngx_http_substitutions_filter_module \t\t--add-dynamic-module=./nginx-ipip-module
+      && \tmake -j$(getconf _NPROCESSORS_ONLN) && \tmake install && \tcurl -Lks https://raw.githubusercontent.com/xiaoyawl/docker-nginx/master/Block_Injections.conf
+      > ${INSTALL_DIR}/conf/Block_Injections.conf && \trunDeps=\"$( scanelf --needed
+      --nobanner --recursive /usr/local/ | awk '{ gsub(/,/, \"\\nso:\", $2); print
+      \"so:\" $2 }' | sort -u | xargs -r apk info --installed | sort -u )\" && \trunDeps=\"${runDeps}
+      inotify-tools supervisor logrotate python\" && \tapk add --no-cache --virtual
+      .ngx-rundeps $runDeps && \tapk del .build-deps && \trm -rf /var/cache/apk/*
+      /tmp/* ${INSTALL_DIR}/conf/nginx.conf && \tmkdir -p /usr/local/geoip && \tcurl
+      -Lk http://www.maxmind.com/download/geoip/database/GeoLiteCountry/GeoIP.dat.gz
+      > /usr/local/geoip/GeoIP.dat.gz && \tcurl -Lk http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz
+      > /usr/local/geoip/GeoLiteCity.dat.gz && \tcd /usr/local/geoip && \tgunzip GeoIP.dat.gz
+      && \tgunzip GeoLiteCity.dat.gz"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: ${INSTALL_DIR}/sbin:$PATH
+    - Key: TERM
+      Value: linux
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - etc
+    - /etc
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - entrypoint.sh
+    - /entrypoint.sh
+  - Name: volume
+    Volumes:
+    - ${DATA_DIR}
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: wiggins/alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM wiggins/alpine:latest

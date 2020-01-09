@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: ubuntu:19.04
+  Commands: null
+  From:
+    Image: ubuntu:19.04
+  Name: base
+  Platform: ""
+  SourceCode: FROM ubuntu:19.04 AS base
+- As: build
+  BaseName: base
+  Commands:
+  - Key: QEMU_VERSION
+    Name: arg
+    Value: 4.0.0
+  - CmdLine:
+    - "apt-get update && apt-get install -y \t\tbison         build-essential \t\tcurl
+      \t\tflex         libbz2-dev \t\tlibglib2.0-dev         libjpeg-dev         libpixman-1-dev
+      \        libpng-dev         libusb-1.0-0-dev         pkg-config         python
+      \        xz-utils \t&& rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /build;     curl -o /build/qemu.tar.xz https://download.qemu.org/qemu-${QEMU_VERSION}.tar.xz;     tar
+      -C /build --strip-components=1 -xf /build/qemu.tar.xz;     rm -f /build/qemu.tar.xz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: build
+  Platform: ""
+  SourceCode: FROM base AS build
+- As: build-static
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - ./configure --static --target-list=aarch64-linux-user --disable-kvm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -j2 && make install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build
+  Name: build-static
+  Platform: ""
+  SourceCode: FROM build as build-static
+- As: build-dynamic
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - ./configure --target-list=aarch64-linux-user,aarch64-softmmu --disable-kvm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -j2 && make install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build
+  Name: build-dynamic
+  Platform: ""
+  SourceCode: FROM build as build-dynamic
+- As: runtime
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - "apt-get update && apt-get install --no-install-recommends -y \t\tlibglib2.0-bin
+      \t&& rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /usr/local
+  - Chown: ""
+    From: build-static
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/qemu-aarch64
+    - /usr/local/bin/qemu-aarch64-static
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM base AS runtime

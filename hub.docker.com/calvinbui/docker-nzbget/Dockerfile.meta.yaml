@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- As: buildstage
+  BaseName: lsiobase/alpine:3.11
+  Commands:
+  - Key: NZBGET_RELEASE
+    Name: arg
+    Value: null
+  - CmdLine:
+    - "echo \"**** install build packages ****\" &&  apk add \tcurl \tg++ \tgcc \tgit
+      \tlibxml2-dev \tlibxslt-dev \tmake \tncurses-dev \topenssl-dev &&  echo \"****
+      build nzbget ****\" &&  if [ -z ${NZBGET_RELEASE+x} ]; then \tNZBGET_RELEASE=$(curl
+      -sX GET \"https://api.github.com/repos/nzbget/nzbget/releases/latest\" \t| awk
+      '/tag_name/{print $4;exit}' FS='[\"\"]');  fi &&  mkdir -p /app/nzbget &&  git
+      clone https://github.com/nzbget/nzbget.git nzbget &&  cd nzbget/ &&  git checkout
+      ${NZBGET_RELEASE} &&  git cherry-pick -n fa57474d &&  ./configure \tbindir='${exec_prefix}'
+      &&  make &&  make prefix=/app/nzbget install &&  sed -i \t-e \"s#^MainDir=.*#MainDir=/downloads#g\"
+      \t-e \"s#^ScriptDir=.*#ScriptDir=$\\{MainDir\\}/scripts#g\" \t-e \"s#^WebDir=.*#WebDir=$\\{AppDir\\}/webui#g\"
+      \t-e \"s#^ConfigTemplate=.*#ConfigTemplate=$\\{AppDir\\}/webui/nzbget.conf.template#g\"
+      \t-e \"s#^UnrarCmd=.*#UnrarCmd=$\\{AppDir\\}/unrar#g\" \t-e \"s#^SevenZipCmd=.*#SevenZipCmd=$\\{AppDir\\}/7za#g\"
+      \t-e \"s#^CertStore=.*#CertStore=$\\{AppDir\\}/cacert.pem#g\" \t-e \"s#^CertCheck=.*#CertCheck=yes#g\"
+      \t-e \"s#^DestDir=.*#DestDir=$\\{MainDir\\}/completed#g\" \t-e \"s#^InterDir=.*#InterDir=$\\{MainDir\\}/intermediate#g\"
+      \t-e \"s#^LogFile=.*#LogFile=$\\{MainDir\\}/nzbget.log#g\" \t-e \"s#^AuthorizedIP=.*#AuthorizedIP=127.0.0.1#g\"
+      \ /app/nzbget/share/nzbget/nzbget.conf &&  mv /app/nzbget/share/nzbget/webui
+      /app/nzbget/ &&  cp /app/nzbget/share/nzbget/nzbget.conf /app/nzbget/webui/nzbget.conf.template
+      &&  ln -s /usr/bin/7za /app/nzbget/7za &&  ln -s /usr/bin/unrar /app/nzbget/unrar
+      &&  cp /nzbget/pubkey.pem /app/nzbget/pubkey.pem &&  curl -o \t/app/nzbget/cacert.pem
+      -L \t\"https://curl.haxx.se/ca/cacert.pem\""
+    Name: run
+    PrependShell: true
+  From:
+    Image: lsiobase/alpine:3.11
+  Name: buildstage
+  Platform: ""
+  SourceCode: FROM lsiobase/alpine:3.11 as buildstage
+- BaseName: lsiobase/alpine:3.11
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: build_version
+      Value: '"Linuxserver.io version:- ${VERSION} Build-date:- ${BUILD_DATE}"'
+    Name: label
+  - Labels:
+    - Key: maintainer
+      Value: '"sparklyballs,thelamer"'
+    Name: label
+  - CmdLine:
+    - "echo \"**** install build packages ****\" &&  apk add --no-cache --upgrade
+      --virtual=build-dependencies \tgcc \tlibc-dev \tlibxml2-dev \tlibxslt-dev \tmake
+      \tpy2-pip \tpython-dev &&  echo \"**** install packages ****\" &&  apk add --no-cache
+      \tcurl \tlibxml2 \tlibxslt \topenssl \tp7zip \tpython2 \tunrar \twget &&  echo
+      \"**** install python packages ****\" &&  pip install --no-cache-dir \tapprise
+      \tchardet \tpynzbget && echo \"**** cleanup ****\" &&  apk del --purge \tbuild-dependencies
+      &&  rm -rf \t/root/.cache \t/tmp/*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: buildstage
+    Name: copy
+    SourcesAndDest:
+    - /app/nzbget
+    - /app/nzbget
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - root/
+    - /
+  - Name: volume
+    Volumes:
+    - /config
+    - /downloads
+  - Name: expose
+    Ports:
+    - "6789"
+  From:
+    Image: lsiobase/alpine:3.11
+  Name: ""
+  Platform: ""
+  SourceCode: FROM lsiobase/alpine:3.11

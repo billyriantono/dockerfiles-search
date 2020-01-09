@@ -1,0 +1,262 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stretch-slim
+  Commands:
+  - Maintainer: Kiwix <contact@kiwix.org>
+    Name: maintainer
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: DEPLOY_USER
+      Value: grimoirelab
+    Name: env
+  - Env:
+    - Key: DEPLOY_USER_DIR
+      Value: /home/${DEPLOY_USER}
+    Name: env
+  - Env:
+    - Key: DIST_SCRIPT
+      Value: /usr/local/bin/build_grimoirelab
+    - Key: LOGS_DIR
+      Value: /logs
+    - Key: DIST_DIR
+      Value: /dist
+    Name: env
+  - Env:
+    - Key: REL_FILE
+      Value: /releases.cfg
+    Name: env
+  - Env:
+    - Key: ES
+      Value: elasticsearch-6.1.4
+    Name: env
+  - Env:
+    - Key: KB_VERSION
+      Value: 6.1.4-1
+    Name: env
+  - Env:
+    - Key: KB_TAG
+      Value: community-v${KB_VERSION}
+    Name: env
+  - Env:
+    - Key: KB
+      Value: kibiter-${KB_VERSION}
+    Name: env
+  - Env:
+    - Key: KB_DIR
+      Value: ${KB}-linux-x86_64
+    Name: env
+  - Env:
+    - Key: GITHUB_TOKEN
+      Value: xxx
+    Name: env
+  - Env:
+    - Key: GET
+      Value: '"wget -q"'
+    Name: env
+  - CmdLine:
+    - mkdir /usr/share/man/man1 &&     apt-get update &&     apt-get -y install --no-install-recommends         bash
+      locales         gcc         git git-core         pandoc         python3         python3-pip         python3-venv         python3-dev         python3-gdbm         mariadb-client         unzip
+      curl wget sudo ssh         openjdk-8-jdk-headless         net-tools         mariadb-server
+      cloc         &&     apt-get clean &&     find /var/lib/apt/lists -type f -delete
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'useradd ${DEPLOY_USER} --create-home --shell /bin/bash ;     echo "${DEPLOY_USER}
+      ALL=NOPASSWD: ALL" >> /etc/sudoers ;     mkdir ${DIST_DIR} ; chown -R ${DEPLOY_USER}:${DEPLOY_USER}
+      ${DIST_DIR} ;     mkdir ${LOGS_DIR} ; chown -R ${DEPLOY_USER}:${DEPLOY_USER}
+      ${LOGS_DIR}'
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    - Key: LANGUAGE
+      Value: en_US:en
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - CmdLine:
+    - sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen &&     echo
+      'LANG="en_US.UTF-8"'>/etc/default/locale &&     dpkg-reconfigure --frontend=noninteractive
+      locales &&     update-locale LANG=en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/releases.cfg
+    - ${REL_FILE}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/build_grimoirelab
+    - ${DIST_SCRIPT}
+  - CmdLine:
+    - chmod 755 ${DIST_SCRIPT}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dist/*
+    - ${DIST_DIR}/
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "0"
+    Name: env
+  - CmdLine:
+    - ${DIST_SCRIPT} --build --install --install_system --distdir ${DIST_DIR} --relfile
+      ${REL_FILE}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ${GET} https://artifacts.elastic.co/downloads/elasticsearch/${ES}.deb &&     ${GET}
+      https://artifacts.elastic.co/downloads/elasticsearch/${ES}.deb.sha512 &&     sudo
+      dpkg -i ${ES}.deb &&     rm ${ES}.deb ${ES}.deb.sha512
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'sed -e "/MAX_MAP_COUNT=/s/^/#/g" -i /etc/init.d/elasticsearch &&     echo "http.host:
+      0.0.0.0" >> /etc/elasticsearch/elasticsearch.yml &&     echo "cluster.routing.allocation.disk.watermark.flood_stage:
+      99.9%" >> /etc/elasticsearch/elasticsearch.yml &&     echo "cluster.routing.allocation.disk.watermark.low:
+      99.9%" >> /etc/elasticsearch/elasticsearch.yml &&     echo "cluster.routing.allocation.disk.watermark.high:
+      99.9%" >> /etc/elasticsearch/elasticsearch.yml'
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9200"
+  - CmdLine:
+    - echo "mysqld_safe &" > /tmp/config &&     echo "mysqladmin --silent --wait=30
+      ping || exit 1" >> /tmp/config &&     echo "mysql -e 'CREATE USER grimoirelab;'"
+      >> /tmp/config &&     echo "mysql -e 'GRANT ALL PRIVILEGES ON *.* TO \"grimoirelab\"@\"%\"
+      WITH GRANT OPTION;'" >> /tmp/config &&     bash /tmp/config &&     rm -f /tmp/config
+      &&     sed -e "/bind-address/s/^/#/g" -i /etc/mysql/mariadb.conf.d/50-server.cnf
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3306"
+  - Name: user
+    User: ${DEPLOY_USER}
+  - Name: workdir
+    Path: ${DEPLOY_USER_DIR}
+  - CmdLine:
+    - '${GET} https://github.com/grimoirelab/kibiter/releases/download/${KB_TAG}/${KB_DIR}.tar.gz
+      &&     tar xzf ${KB_DIR}.tar.gz &&     rm ${KB_DIR}.tar.gz &&     sed -e "s|^#server.host:
+      .*$|server.host: 0.0.0.0|" -i ${KB_DIR}/config/kibana.yml'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ${KB_DIR}/bin/kibana 2>&1 | grep -m 1 "Optimization of .* complete in .* seconds"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'sudo /etc/init.d/elasticsearch start &&     ${KB_DIR}/bin/kibana 2>&1 > /dev/null
+      &     ( until $(curl --output /dev/null --silent --fail http://127.0.0.1:9200/.kibana/config/_search
+      ); do         printf ''.'' &&         sleep 2 &&         curl -XPOST "http://127.0.0.1:5601/api/kibana/settings/indexPattern:placeholder"           -H
+      ''Content-Type: application/json'' -H ''kbn-version: ''${KB_VERSION}           -H
+      ''Accept: application/json'' -d ''{"value": "*"}''           --silent --output
+      /dev/null ;     done )'
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "5601"
+  - Name: user
+    User: root
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/mordred-infra.cfg
+    - /infra.cfg
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/mordred-dashboard.cfg
+    - /dashboard.cfg
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/mordred-project.cfg
+    - /project.cfg
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/mordred-override.cfg
+    - /override.cfg
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/orgs.json
+    - /orgs.json
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/projects.json
+    - /projects.json
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/identities.yaml
+    - /identities.yaml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/menu.yaml
+    - /menu.yaml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/aliases.json
+    - /aliases.json
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/dashboard_overview.json
+    - /dashboard_overview.json
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - sudo chmod 755 /entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -c
+    - /infra.cfg
+    - /dashboard.cfg
+    - /project.cfg
+    - /override.cfg
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

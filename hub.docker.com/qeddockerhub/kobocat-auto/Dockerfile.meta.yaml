@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- BaseName: qeddockerhub/kobocat_base:latest
+  Commands:
+  - Env:
+    - Key: KOBOCAT_SRC_DIR
+      Value: /srv/src/kobocat
+    - Key: BACKUPS_DIR
+      Value: /srv/backups
+    - Key: KOBOCAT_LOGS_DIR
+      Value: /srv/logs
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./apt_requirements.txt
+    - '"${KOBOCAT_TMP_DIR}/current_apt_requirements.txt"'
+  - CmdLine:
+    - if ! diff "${KOBOCAT_TMP_DIR}/current_apt_requirements.txt" "${KOBOCAT_TMP_DIR}/base_apt_requirements.txt";
+      then         apt-get update &&         apt-get install -y $(cat "${KOBOCAT_TMP_DIR}/current_apt_requirements.txt")
+      &&         apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*     ;
+      fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install --upgrade 'pip>=10,<11'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./requirements/
+    - '"${KOBOCAT_TMP_DIR}/current_requirements/"'
+  - CmdLine:
+    - if ! diff "${KOBOCAT_TMP_DIR}/current_requirements/base.pip" "${KOBOCAT_TMP_DIR}/base_requirements/base.pip";
+      then         pip install --src "${PIP_EDITABLE_PACKAGES_DIR}/" -r "${KOBOCAT_TMP_DIR}/current_requirements/base.pip"     ;
+      fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if ! diff "${KOBOCAT_TMP_DIR}/current_requirements/s3.pip" "${KOBOCAT_TMP_DIR}/base_requirements/s3.pip";
+      then         pip install --src "${PIP_EDITABLE_PACKAGES_DIR}/" -r "${KOBOCAT_TMP_DIR}/current_requirements/s3.pip"     ;
+      fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ -e "${KOBOCAT_TMP_DIR}/current_requirements/uninstall.pip" ]; then         pip
+      uninstall --yes -r "${KOBOCAT_TMP_DIR}/current_requirements/uninstall.pip"     ;
+      fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf "${KOBOCAT_SRC_DIR}"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - '"${KOBOCAT_SRC_DIR}"'
+  - CmdLine:
+    - mkdir -p /etc/service/uwsgi &&     cp "${KOBOCAT_SRC_DIR}/docker/run_uwsgi.bash"
+      /etc/service/uwsgi/run &&     mkdir -p /etc/service/celery &&     cp "${KOBOCAT_SRC_DIR}/docker/run_celery.bash"
+      /etc/service/celery/run &&     cp "${KOBOCAT_SRC_DIR}/docker/init.bash" /etc/my_init.d/10_init_kobocat.bash
+      &&     cp "${KOBOCAT_SRC_DIR}/docker/sync_static.sh" /etc/my_init.d/11_sync_static.bash
+      &&     mkdir -p "${KOBOCAT_SRC_DIR}/emails/" &&     chown -R "${UWSGI_USER}"
+      "${KOBOCAT_SRC_DIR}/emails/" &&     mkdir -p "${BACKUPS_DIR}" &&     mkdir -p
+      "${KOBOCAT_LOGS_DIR}" &&     chown -R "${UWSGI_USER}" "${KOBOCAT_LOGS_DIR}"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "db:*:*:kobo:kobo" > /root/.pgpass &&     chmod 600 /root/.pgpass
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'source /etc/profile' >> /root/.bashrc
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: '"${KOBOCAT_SRC_DIR}"'
+  - Name: expose
+    Ports:
+    - "8000"
+  From:
+    Image: qeddockerhub/kobocat_base:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM qeddockerhub/kobocat_base:latest

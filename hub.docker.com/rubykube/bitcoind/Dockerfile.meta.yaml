@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:8
+  Commands:
+  - Env:
+    - Key: BITCOIN_VERSION
+      Value: 0.15.1
+    Name: env
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y wget curl build-essential libtool                        autotools-dev
+      automake pkg-config                        libssl-dev libevent-dev bsdmainutils
+      python3                        libboost-system-dev libboost-filesystem-dev libboost-chrono-dev                        libboost-program-options-dev
+      libboost-test-dev libboost-thread-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://github.com/bitcoin/bitcoin/archive/v${BITCOIN_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar vzxf v${BITCOIN_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd bitcoin-${BITCOIN_VERSION} && ./autogen.sh &&   ./configure --disable-wallet
+      --without-gui --without-miniupnpc &&   make -j &&   make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:8 as builder
+- As: runtime
+  BaseName: debian:stable-slim
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/bitcoin*
+    - /usr/local/bin/
+  - Env:
+    - Key: BITCOIN_HOME
+      Value: /bitcoin
+    Name: env
+  - CmdLine:
+    - groupadd -g 1000 bitcoin     && useradd -u 1000 -g bitcoin -s /bin/bash -m -d
+      ${BITCOIN_HOME} bitcoin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir ${HOME}/.bitcoin
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - config/bitcoin.conf
+    - ${HOME}/.bitcoin
+  - CmdLine:
+    - chown bitcoin:bitcoin -R $BITCOIN_HOME
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: bitcoin
+  - Name: expose
+    Ports:
+    - "19000"
+    - "19001"
+  - CmdLine:
+    - bitcoind
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stable-slim
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM debian:stable-slim as runtime

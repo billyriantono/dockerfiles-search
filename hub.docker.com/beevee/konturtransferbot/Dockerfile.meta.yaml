@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- As: golang
+  BaseName: golang:alpine
+  Commands:
+  - Name: workdir
+    Path: /go/src/github.com/beevee/konturtransferbot
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - apk add --no-cache git mercurial     && go get github.com/kardianos/govendor     &&
+      govendor sync     && apk del git mercurial
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /go/bin/konturtransferbot
+      github.com/beevee/konturtransferbot/cmd/konturtransferbot
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: golang
+  Platform: ""
+  SourceCode: FROM golang:alpine as golang
+- As: alpine
+  BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk --no-cache add tzdata zip ca-certificates
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/share/zoneinfo
+  - CmdLine:
+    - zip -r -0 /zoneinfo.zip .
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: alpine
+  Platform: ""
+  SourceCode: FROM alpine:latest as alpine
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cmd/konturtransferbot/schedule.yml
+    - /schedule.yml
+  - Chown: ""
+    From: golang
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/konturtransferbot
+    - /konturtransferbot
+  - Env:
+    - Key: ZONEINFO
+      Value: /zoneinfo.zip
+    Name: env
+  - Chown: ""
+    From: alpine
+    Name: copy
+    SourcesAndDest:
+    - /zoneinfo.zip
+    - /
+  - Chown: ""
+    From: alpine
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - CmdLine:
+    - /konturtransferbot
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

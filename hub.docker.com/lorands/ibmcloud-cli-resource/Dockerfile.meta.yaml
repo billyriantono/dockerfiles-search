@@ -1,0 +1,123 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - mkdir -p /assets
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /assets
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/lorands/ibmcloud-cli-resource
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - CmdLine:
+    - go build -o /assets/in github.com/lorands/ibmcloud-cli-resource/in/cmd/in
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -o /assets/out github.com/lorands/ibmcloud-cli-resource/out/cmd/out
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -o /assets/check github.com/lorands/ibmcloud-cli-resource/check/cmd/check
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/lorands/ibmcloud-cli-resource
+  - CmdLine:
+    - "set -e; for pkg in $(go list ./... | grep -v \"acceptance\"); do \t\tgo test
+      -o \"/tests/$(basename $pkg).test\" -c $pkg; \tdone"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- As: base_resource
+  BaseName: frolvlad/alpine-glibc
+  Commands:
+  - CmdLine:
+    - apk add --no-cache bash tzdata ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache bash ca-certificates curl jq python3 git build-base
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - update-ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache python3 &&     python3 -m ensurepip &&     rm -r /usr/lib/python*/ensurepip
+      &&     pip3 install --upgrade pip setuptools &&     if [ ! -e /usr/bin/pip ];
+      then ln -s pip3 /usr/bin/pip ; fi &&     if [[ ! -e /usr/bin/python ]]; then
+      ln -sf /usr/bin/python3 /usr/bin/python; fi &&     rm -r /root/.cache
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://clis.ng.bluemix.net/download/bluemix-cli/0.18.2/linux64
+    - /tmp/bx-cli.tgz
+  - CmdLine:
+    - tar zxvf bx-cli.tgz &&   Bluemix_CLI/install_bluemix_cli &&   rm -f /tmp/bx-cli.tgz
+      &&   rm -rf /tmp/Bluemix_CLI
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - ibmcloud plugin install cloud-databases -f
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bx config --check-version=false
+    Name: run
+    PrependShell: true
+  From:
+    Image: frolvlad/alpine-glibc
+  Name: base_resource
+  Platform: ""
+  SourceCode: FROM frolvlad/alpine-glibc AS base_resource
+- As: resource
+  BaseName: base_resource
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - assets/
+    - /opt/resource/
+  - CmdLine:
+    - chmod +x /opt/resource/*
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: base_resource
+  Name: resource
+  Platform: ""
+  SourceCode: FROM base_resource AS resource
+- BaseName: resource
+  Commands: null
+  From:
+    Stage:
+      Index: 2
+      Named: resource
+  Name: ""
+  Platform: ""
+  SourceCode: FROM resource

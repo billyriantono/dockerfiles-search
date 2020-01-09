@@ -1,0 +1,132 @@
+MetaArgs: null
+Stages:
+- As: go_builder
+  BaseName: golang:1.11
+  Commands:
+  - Key: DRWEB_KEY
+    Name: arg
+    Value: null
+  - Env:
+    - Key: DRWEB_KEY
+      Value: $DRWEB_KEY
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/malice-plugins/drweb
+  - Name: workdir
+    Path: /go/src/github.com/malice-plugins/drweb
+  - CmdLine:
+    - go get github.com/golang/dep/cmd/dep && dep ensure
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -ldflags "-s -w -X main.LicenseKey=${DRWEB_KEY} -X main.Version=v$(cat
+      VERSION) -X main.BuildTime=$(date -u +%Y%m%d)" -o /bin/avscan
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11
+  Name: go_builder
+  Platform: ""
+  SourceCode: FROM golang:1.11 as go_builder
+- BaseName: debian:jessie-slim
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"https://github.com/blacktop"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.repository
+      Value: = "https://github.com/malice-plugins/drweb.git"
+    Name: label
+  - Labels:
+    - Key: malice.plugin.category
+      Value: '"av"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.mime
+      Value: '"*"'
+    Name: label
+  - Labels:
+    - Key: malice.plugin.docker.engine
+      Value: '"*"'
+    Name: label
+  - CmdLine:
+    - groupadd -r malice     && useradd --no-log-init -r -g malice malice     && mkdir
+      /malware     && chown -R malice:malice /malware
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DRWEB
+      Value: 11.0.5
+    Name: env
+  - CmdLine:
+    - buildDeps='libreadline-dev:i386     ca-certificates     libc6-dev:i386     build-essential     gcc-multilib     cabextract     mercurial     git-core     unzip     wget'     &&
+      set -x     && dpkg --add-architecture i386 && apt-get update -qq     && apt-get
+      install -y $buildDeps psmisc gnupg libc6-i386 libfontconfig1 libxrender1 libglib2.0-0
+      libxi6 xauth     && set -x     && echo "Install Dr Web..."     && cd /tmp     &&
+      wget --progress=bar:force https://download.geo.drweb.com/pub/drweb/unix/workstation/11.0/drweb-${DRWEB}-av-linux-amd64.run     &&
+      chmod 755 /tmp/drweb-${DRWEB}-av-linux-amd64.run     && DRWEB_NON_INTERACTIVE=yes
+      /tmp/drweb-${DRWEB}-av-linux-amd64.run     && echo "===> Clean up unnecessary
+      files..."     && apt-get purge -y --auto-remove $buildDeps     && apt-get clean     &&
+      rm -rf /var/lib/apt/lists/* /var/cache/apt/archives /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update -qq && apt-get install -yq --no-install-recommends ca-certificates     &&
+      rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Key: DRWEB_KEY
+    Name: arg
+    Value: null
+  - Env:
+    - Key: DRWEB_KEY
+      Value: $DRWEB_KEY
+    Name: env
+  - CmdLine:
+    - if [ "x$DRWEB_KEY" != "x" ]; then     echo "===> Adding Dr.WEB License Key...";     /opt/drweb.com/bin/drweb-configd
+      -d -p /var/run/drweb-configd.pid;     /opt/drweb.com/bin/drweb-ctl license --GetRegistered
+      "$DRWEB_KEY";     kill $(cat /var/run/drweb-configd.pid);     else     echo
+      "===> Running Dr.WEB as DEMO...";     /opt/drweb.com/bin/drweb-configd -d -p
+      /var/run/drweb-configd.pid;     /opt/drweb.com/bin/drweb-ctl license --GetDemo;     kill
+      $(cat /var/run/drweb-configd.pid);     fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/malice     && /opt/drweb.com/bin/drweb-configd -d -p /var/run/drweb-configd.pid     &&
+      drweb-ctl update     && kill $(cat /var/run/drweb-configd.pid)
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - http://www.eicar.org/download/eicar.com.txt
+    - /malware/EICAR
+  - Chown: ""
+    From: go_builder
+    Name: copy
+    SourcesAndDest:
+    - /bin/avscan
+    - /bin/avscan
+  - Name: expose
+    Ports:
+    - "4443"
+  - Name: workdir
+    Path: /malware
+  - CmdLine:
+    - /bin/avscan
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie-slim

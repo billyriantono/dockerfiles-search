@@ -1,0 +1,403 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get -y install     build-essential     git     libpng-dev     perl     perl-base     unzip     wget
+      &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: OPT
+      Value: /opt/vep
+    Name: env
+  - Env:
+    - Key: OPT_SRC
+      Value: $OPT/src
+    Name: env
+  - Env:
+    - Key: HTSLIB_DIR
+      Value: $OPT_SRC/htslib
+    Name: env
+  - Env:
+    - Key: BRANCH
+      Value: '""'
+    Name: env
+  - Name: workdir
+    Path: $OPT_SRC
+  - CmdLine:
+    - git clone $BRANCH --depth 1 https://github.com/Ensembl/ensembl.git &&     cp
+      ensembl/cpanfile ensembl_cpanfile &&     rm -rf ensembl &&     git clone $BRANCH
+      --depth 1 https://github.com/Ensembl/ensembl-vep.git && chmod u+x ensembl-vep/*.pl
+      &&     git clone $BRANCH --depth 1 https://github.com/Ensembl/ensembl-variation.git
+      &&     mkdir var_c_code &&     cp ensembl-variation/C_code/*.c ensembl-variation/C_code/Makefile
+      var_c_code/ &&     rm -rf ensembl-variation &&     chmod u+x var_c_code/* &&     git
+      clone --depth 1 https://github.com/bioperl/bioperl-ext.git &&     wget https://github.com/Ensembl/ensembl-xs/archive/2.3.2.zip
+      -O ensembl-xs.zip &&     unzip -q ensembl-xs.zip && mv ensembl-xs-2.3.2 ensembl-xs
+      && rm -rf ensembl-xs.zip &&     ensembl-vep/travisci/get_dependencies.sh &&     mv
+      bioperl-live bioperl-live_bak && mkdir bioperl-live && mv bioperl-live_bak/Bio
+      bioperl-live/ && rm -rf bioperl-live_bak &&     rm -rf Bio-HTS/.??* Bio-HTS/Changes
+      Bio-HTS/DISCLAIMER Bio-HTS/MANIFEST* Bio-HTS/README Bio-HTS/scripts Bio-HTS/t
+      Bio-HTS/travisci            bioperl-ext/.??* bioperl-ext/Bio/SeqIO bioperl-ext/Bio/Tools
+      bioperl-ext/Makefile.PL bioperl-ext/README* bioperl-ext/t bioperl-ext/examples            ensembl-vep/.??*
+      ensembl-vep/docker            ensembl-xs/.??* ensembl-xs/Changes ensembl-xs/INSTALL
+      ensembl-xs/MANIFEST ensembl-xs/README ensembl-xs/t ensembl-xs/travisci            htslib/.??*
+      htslib/INSTALL htslib/NEWS htslib/README* htslib/test &&     mv kent-335_base
+      kent-335_base_bak && mkdir -p kent-335_base/src &&     cp -R kent-335_base_bak/confs
+      kent-335_base/ &&     cp -R kent-335_base_bak/src/lib kent-335_base_bak/src/inc
+      kent-335_base_bak/src/jkOwnLib kent-335_base/src/ &&     cp kent-335_base_bak/src/*.sh
+      kent-335_base/src/ &&     rm -rf kent-335_base_bak
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: bioperl-ext/Bio/Ext/Align/
+  - CmdLine:
+    - perl -pi -e"s|(cd libs.+)CFLAGS=\\\'|\$1CFLAGS=\\\'-fPIC |" Makefile.PL
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $HTSLIB_DIR
+  - CmdLine:
+    - make install && rm -f Makefile *.c cram/*.c
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $OPT_SRC/var_c_code
+  - CmdLine:
+    - make && rm -f Makefile *.c
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as builder
+- BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get -y install     build-essential     cpanminus     curl     libmysqlclient-dev     libpng-dev     libssl-dev     locales     openssl     perl     perl-base     unzip     vim
+      &&     apt-get -y purge manpages-dev &&     apt-get clean &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: OPT
+      Value: /opt/vep
+    Name: env
+  - Env:
+    - Key: OPT_SRC
+      Value: $OPT/src
+    Name: env
+  - Env:
+    - Key: PERL5LIB_TMP
+      Value: $PERL5LIB:$OPT_SRC/ensembl-vep:$OPT_SRC/ensembl-vep/modules
+    Name: env
+  - Env:
+    - Key: PERL5LIB
+      Value: $PERL5LIB_TMP:$OPT_SRC/bioperl-live
+    Name: env
+  - Env:
+    - Key: KENT_SRC
+      Value: $OPT/src/kent-335_base/src
+    Name: env
+  - Env:
+    - Key: HTSLIB_DIR
+      Value: $OPT_SRC/htslib
+    Name: env
+  - Env:
+    - Key: MACHTYPE
+      Value: x86_64
+    Name: env
+  - Env:
+    - Key: DEPS
+      Value: $OPT_SRC
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $OPT_SRC/ensembl-vep:$OPT_SRC/var_c_code:$PATH
+    Name: env
+  - Env:
+    - Key: LANG_VAR
+      Value: en_US.UTF-8
+    Name: env
+  - CmdLine:
+    - useradd -r -m -U -d "$OPT" -s /bin/bash -c "VEP User" -p '' vep && usermod -a
+      -G sudo vep && mkdir -p $OPT_SRC
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: vep
+  - Chown: vep:vep
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $OPT_SRC
+    - $OPT_SRC
+  - Name: user
+    User: root
+  - Name: workdir
+    Path: $OPT_SRC/bioperl-ext/Bio/Ext/Align/
+  - CmdLine:
+    - perl Makefile.PL && make && make install && rm -f Makefile*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $OPT_SRC/ensembl-xs
+  - CmdLine:
+    - perl Makefile.PL && make && make install && rm -f Makefile*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $OPT_SRC
+  - CmdLine:
+    - ensembl-vep/travisci/build_c.sh &&     cpanm --installdeps --with-recommends
+      --notest --cpanfile ensembl_cpanfile . &&     cpanm --installdeps --with-recommends
+      --notest --cpanfile ensembl-vep/cpanfile . &&     rm -rf bioperl-live &&     echo
+      "$LANG_VAR UTF-8" >> /etc/locale.gen && locale-gen en_US.utf8 &&     /usr/sbin/update-locale
+      LANG=$LANG_VAR &&     cp $HTSLIB_DIR/bgzip $HTSLIB_DIR/tabix $HTSLIB_DIR/htsfile
+      /usr/local/bin/
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LC_ALL
+      Value: $LANG_VAR
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: $LANG_VAR
+    Name: env
+  - Name: user
+    User: vep
+  - Env:
+    - Key: PERL5LIB
+      Value: $PERL5LIB_TMP
+    Name: env
+  - Name: workdir
+    Path: $OPT_SRC/ensembl-vep
+  - CmdLine:
+    - echo >> $OPT/.profile &&     echo PATH=$PATH:\$PATH >> $OPT/.profile &&     echo
+      export PATH >> $OPT/.profile &&     ./INSTALL.pl -a ap -g miRNA,LoF -l && rm
+      -rf t travisci .travis.yml
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - loftee.tgz
+    - $OPT/src/ensembl-vep/modules
+  - Name: user
+    User: root
+  - CmdLine:
+    - apt-get update   && apt-get install -y python3-pip python3-dev   && cd /usr/local/bin   &&
+      ln -s /usr/bin/python3 python   && pip3 install --upgrade pip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get -y install apache2 apt-utils build-essential cpanminus
+      curl git libmysqlclient-dev libpng-dev libssl-dev manpages mysql-client openssl
+      perl perl-base unzip vim wget sudo
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cpanm Test::Object PPI::Document Task::Weaken Test::SubCalls Test::Object DBI
+      DBD::mysql Archive::Zip Perl::Critic Set::IntervalTree
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install apt-transport-https
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo apt-get update    && sudo apt-get -y install software-properties-common
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo add-apt-repository 'deb [arch=amd64,i386] https://cran.rstudio.com/bin/linux/ubuntu
+      xenial/'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - Name: workdir
+    Path: /
+  - Env:
+    - Key: PACKAGE_BIO
+      Value: '"libhts2 bedtools"'
+    Name: env
+  - Env:
+    - Key: PACKAGE_DEV
+      Value: '"gfortran gcc-multilib autoconf liblzma-dev libncurses5-dev libblas-dev
+        liblapack-dev libssh2-1-dev libxml2-dev vim libssl-dev libcairo2-dev libbz2-dev
+        libcurl4-openssl-dev"'
+    Name: env
+  - Env:
+    - Key: PYTHON_MODULES
+      Value: '"numpy cython scipy pandas cyvcf2 toml"'
+    Name: env
+  - CmdLine:
+    - "apt-get update \t&& apt-get install -y --no-install-recommends \t\tnano ed
+      locales vim-tiny fonts-texgyre     $PACKAGE_DEV $PACKAGE_BIO \t&& rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get autoremove
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://github.com/brentp/vcfanno/releases/download/v0.3.1/vcfanno_linux64
+      &&     mv vcfanno_linux64 vcfanno &&     mv vcfanno /usr/local/bin &&     chmod
+      755 /usr/local/bin/vcfanno
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://github.com/EBIvariation/vcf-validator/releases/download/v0.6/vcf_validator
+      && mv vcf_validator /usr/local/bin/ && chmod 755 /usr/local/bin/vcf_validator
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - wget https://github.com/samtools/samtools/releases/download/1.9/samtools-1.9.tar.bz2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bunzip2 -dc samtools-1.9.tar.bz2 | tar xvf -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd samtools-1.9 && ./configure --prefix=/usr/local/bin && make && make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - sudo -H pip install --upgrade pip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo -H pip install -U setuptools
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo -H pip install $PYTHON_MODULES
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "wget http://ab-initio.mit.edu/nlopt/nlopt-2.4.2.tar.gz \t\t&& gzip -dc nlopt-2.4.2.tar.gz
+      | tar xvf - \t\t&& cd nlopt-2.4.2     && ./configure \t\t&& make \t\t&& make
+      install"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update   && apt-get install -y --no-install-recommends libpq-dev libxt-dev
+      libudunits2-dev
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - git clone https://github.com/atks/vt.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: vt
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make test
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp vt /usr/local/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - export PATH=/usr/local/bin:$PATH
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get clean autoclean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /var/lib/{dpkg,cache,log}
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /workdir
+  - Name: workdir
+    Path: /workdir/
+  - Name: user
+    User: root
+  - CmdLine:
+    - mkdir /data && chmod 777 /data
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /data
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: user
+    User: root
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - rm -f nlopt-2.4.2.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf $HOME/src/ensembl-vep/t/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -f $HOME/src/v335_base.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -f $HOME/src/release-1-6-924.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /vt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /samtools-1.9.tar.bz2
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - gvanno.tgz
+    - /
+  - Env:
+    - Key: PATH
+      Value: $PATH:/gvanno
+    Name: env
+  - Env:
+    - Key: PYTHONPATH
+      Value: :/gvanno/lib:${PYTHONPATH}
+    Name: env
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

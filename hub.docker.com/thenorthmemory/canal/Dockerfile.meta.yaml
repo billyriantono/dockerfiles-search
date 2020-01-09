@@ -1,0 +1,110 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: maven:3.6.1-jdk-8-alpine
+  Commands:
+  - Key: GIT_SOURCE_REPO
+    Name: arg
+    Value: '"https://github.com/alibaba/canal.git"'
+  - Key: GIT_SOURCE_BRANCH
+    Name: arg
+    Value: '"canal-1.1.4"'
+  - Name: workdir
+    Path: /canal
+  - CmdLine:
+    - 'set -ex   && apk --no-cache add git   && git clone --branch ${GIT_SOURCE_BRANCH}
+      --depth 1 --single-branch ${GIT_SOURCE_REPO} /canal   && ls -al .   && dos2unix       ./pom.xml       ./deployer/pom.xml       ./deployer/src/main/assembly/release.xml       ./deployer/src/main/resources/logback.xml       ./client-adapter/launcher/pom.xml       ./client-adapter/launcher/src/main/assembly/release.xml       ./client-adapter/launcher/src/main/resources/logback.xml   &&
+      {     echo ''#!/bin/sh'';     echo '''';     echo ''JAVA_OPTS_EXT="-Djava.awt.headless=true
+      -Djava.net.preferIPv4Stack=true -Dfile.encoding=UTF-8"'';     echo ''case ${@}
+      in'';     echo ''  -a | a | -adapter | adapter)'';     echo ''    exec java
+      ${JAVA_OPTS} ${JAVA_OPTS_EXT} com.alibaba.otter.canal.adapter.launcher.CanalAdapterApplication'';     echo
+      ''  ;;'';     echo ''  -d | d | -deployer | deployer)'';     echo ''    exec
+      java ${JAVA_OPTS} ${JAVA_OPTS_EXT} com.alibaba.otter.canal.deployer.CanalLauncher'';     echo
+      ''  ;;'';     echo ''  -v | v | -version | version)'';     echo ''    echo "canal
+      version: ${CANAL_VERSION} on java-${JAVA_VERSION}"'';     echo ''  ;;'';     echo
+      ''  *)'';     echo ''    echo "usage: [[-][a[dapter]]|[d[eployer]]|[v[ersion]]]"'';     echo
+      ''    echo ""'';     echo ''    echo "  adapter: launch the canal adapter, the
+      workdir must be located in /alibaba/canal-adapter"'';     echo ''    echo "  deployer:
+      launch the canal deployer, the workdir must be located in /alibaba/canal-deployer"'';     echo
+      ''    echo "  version: display this build version"'';     echo ''    echo ""'';     echo
+      ''    echo "shown this usage manual default"'';     echo ''  ;;'';     echo
+      ''esac'';   } > ./canal   && chmod +x ./canal   && export VERSION=`grep -m1
+      -E ''<version>.*</version>'' ./pom.xml | sed ''s@.*>\(.*\)<.*@\1@''`   && export
+      REVISION=`git --git-dir=./.git rev-parse --short --verify HEAD`   && sed -i
+      -e "s@\${CANAL_VERSION}@${VERSION} ${REVISION}@"       ./canal   && sed -i -e
+      ''/<module>example<\/module>$/d;/<module>canal-admin<\/module>$/d''       ./pom.xml   &&
+      sed -i -e ''s@<finalName>.*</finalName>@<finalName>canal-deployer</finalName>@''       ./deployer/pom.xml   &&
+      sed -i -e ''s@<format>tar.gz</format>@<format>dir</format>@''       ./deployer/src/main/assembly/release.xml   &&
+      sed -i -e ''s@<finalName>.*</finalName>@<finalName>canal-adapter</finalName>@''       ./client-adapter/launcher/pom.xml   &&
+      sed -i -e ''s@<format>tar.gz</format>@<format>dir</format>@''       ./client-adapter/launcher/src/main/assembly/release.xml   &&
+      sed -i -e ''s@\(<appender-ref\s*ref\s*=\)"\(.*\)"\s*\(/>\)@\1"STDOUT"\3@''       ./deployer/src/main/resources/logback.xml       ./client-adapter/launcher/src/main/resources/logback.xml   &&
+      sed -i -e ''$!N;/^\(.*\)\n\1$/!P;D''       ./deployer/src/main/resources/logback.xml       ./client-adapter/launcher/src/main/resources/logback.xml   &&
+      mvn clean package -Dmaven.test.skip=true -Dmaven.javadoc.skip=true -Denv=release'
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.6.1-jdk-8-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM maven:3.6.1-jdk-8-alpine as builder
+- BaseName: openjdk:8-jdk-alpine
+  Commands:
+  - Key: GIT_SOURCE_REPO
+    Name: arg
+    Value: '"https://github.com/alibaba/canal.git"'
+  - Key: GIT_SOURCE_BRANCH
+    Name: arg
+    Value: '"canal-1.1.4"'
+  - Labels:
+    - Key: maintainer
+      Value: '"James Zhang <thenorthmemory@dingtalk.com>"'
+    - Key: canal_git_repo
+      Value: '"${GIT_SOURCE_REPO}"'
+    - Key: canal_git_branch
+      Value: '"${GIT_SOURCE_BRANCH}"'
+    Name: label
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    - Key: CLASSPATH
+      Value: ./conf:./lib:./conf/*:./lib/*:$CLASSPATH
+    - Key: CANAL_GIT_REPO
+      Value: ${GIT_SOURCE_REPO}
+    - Key: CANAL_GIT_BRANCH
+      Value: ${GIT_SOURCE_BRANCH}
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /canal/canal
+    - /canal/LICENSE.txt
+    - /canal/RELEASE.txt
+    - /canal/README.md
+    - /alibaba/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /canal/target/canal-deployer
+    - /alibaba/canal-deployer/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /canal/target/canal-adapter
+    - /alibaba/canal-adapter/
+  - CmdLine:
+    - /alibaba/canal
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "11111"
+    - "11112"
+    - "8081"
+  From:
+    Image: openjdk:8-jdk-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-alpine

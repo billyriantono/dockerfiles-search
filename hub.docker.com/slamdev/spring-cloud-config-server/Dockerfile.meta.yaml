@@ -1,0 +1,65 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: maven:3-jdk-8-alpine
+  Commands:
+  - Key: SPRING_CLOUD_CONFIG_VERSION
+    Name: arg
+    Value: '"2.0.1.RELEASE"'
+  - Key: SPRING_BOOT_VERSION
+    Name: arg
+    Value: '"2.0.4.RELEASE"'
+  - Name: workdir
+    Path: /opt
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pom.xml
+    - pom.xml
+  - CmdLine:
+    - mvn package  -Dspring.cloud.config.version=${SPRING_CLOUD_CONFIG_VERSION}  -Dspring.boot.version=${SPRING_BOOT_VERSION}
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3-jdk-8-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM maven:3-jdk-8-alpine as BUILD
+- As: run
+  BaseName: openjdk:8-jre-alpine
+  Commands:
+  - Env:
+    - Key: JAVA_OPTS
+      Value: '"-XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -XX:MaxRAMFraction=1"'
+    Name: env
+  - Chown: ""
+    From: BUILD
+    Name: copy
+    SourcesAndDest:
+    - /opt/target/app-1.jar
+    - /opt/app.jar
+  - Name: workdir
+    Path: /opt
+  - Name: expose
+    Ports:
+    - "8888"
+  - Health:
+      Interval: 2000000000
+      StartPeriod: 15000000000
+      Test:
+      - CMD-SHELL
+      - wget --quiet --tries=1 --spider http://localhost:8888/actuator/health || exit
+        1
+    Name: healthcheck
+  - CmdLine:
+    - sh
+    - -c
+    - java ${JAVA_OPTS} -jar app.jar
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:8-jre-alpine
+  Name: run
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre-alpine as RUN

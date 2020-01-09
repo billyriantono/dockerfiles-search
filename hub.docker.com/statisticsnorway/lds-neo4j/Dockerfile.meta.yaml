@@ -1,0 +1,102 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: statisticsnorway/lds-server-base:latest
+  Commands:
+  - CmdLine:
+    - jlink
+    - --strip-debug
+    - --no-header-files
+    - --no-man-pages
+    - --compress=2
+    - --module-path
+    - /opt/jdk/jmods
+    - --output
+    - /linked
+    - --add-modules
+    - jdk.unsupported,java.base,java.management,java.net.http,java.xml,java.naming,java.desktop
+    Name: run
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pom.xml
+    - /lds/server/
+  - Name: workdir
+    Path: /lds
+  - CmdLine:
+    - cat server/pom.xml | /clone_snapshots.sh && for i in $(ls -d */ | cut -f1 -d'/');
+      do cd $i; mvn -B install; cd ..; done
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /lds/server
+  - CmdLine:
+    - mvn -B verify dependency:go-offline
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /lds/server/src/
+  - CmdLine:
+    - mvn -B -o verify && mvn -B -o dependency:copy-dependencies
+    Name: run
+    PrependShell: true
+  From:
+    Image: statisticsnorway/lds-server-base:latest
+  Name: build
+  Platform: ""
+  SourceCode: FROM statisticsnorway/lds-server-base:latest as build
+- BaseName: alpine:latest
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /linked
+    - /opt/jdk/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /lds/server/target/dependency
+    - /opt/lds/lib/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /lds/server/target/linked-data-store-*.jar
+    - /opt/lds/server/
+  - CmdLine:
+    - touch /opt/lds/saga.log
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /opt/jdk/bin:$PATH
+    Name: env
+  - Name: workdir
+    Path: /opt/lds
+  - Name: volume
+    Volumes:
+    - /conf
+    - /schemas
+  - Name: expose
+    Ports:
+    - "9090"
+  - CmdLine:
+    - java
+    - -cp
+    - /opt/lds/server/*:/opt/lds/lib/*
+    - no.ssb.lds.server.Server
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

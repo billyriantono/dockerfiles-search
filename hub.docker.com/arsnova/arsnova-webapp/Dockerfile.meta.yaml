@@ -1,0 +1,159 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8-jre
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Daniel Gerhardt <code@dgerhardt.net>"'
+    Name: label
+  - Env:
+    - Key: ARSNOVA_BACKEND_VERSION
+      Value: 2.7.4
+    Name: env
+  - Env:
+    - Key: ARSNOVA_MOBILE_VERSION
+      Value: 2.7.1
+    Name: env
+  - Env:
+    - Key: ARSNOVA_SETUPTOOL_VERSION
+      Value: 2.7.0
+    Name: env
+  - Env:
+    - Key: ARSNOVA_CUSTOMIZATION_VERSION
+      Value: master
+    Name: env
+  - Env:
+    - Key: ARSNOVA_BACKEND_ARCHIVE
+      Value: arsnova-backend-$ARSNOVA_BACKEND_VERSION.war
+    Name: env
+  - Env:
+    - Key: ARSNOVA_BACKEND_URL
+      Value: https://github.com/thm-projects/arsnova-backend/releases/download/v$ARSNOVA_BACKEND_VERSION/$ARSNOVA_BACKEND_ARCHIVE
+    Name: env
+  - Env:
+    - Key: ARSNOVA_MOBILE_ARCHIVE
+      Value: arsnova-mobile-$ARSNOVA_MOBILE_VERSION.war
+    Name: env
+  - Env:
+    - Key: ARSNOVA_MOBILE_URL
+      Value: https://github.com/thm-projects/arsnova-mobile/releases/download/v$ARSNOVA_MOBILE_VERSION/$ARSNOVA_MOBILE_ARCHIVE
+    Name: env
+  - Env:
+    - Key: ARSNOVA_SETUPTOOL_ARCHIVE
+      Value: v$ARSNOVA_SETUPTOOL_VERSION.tar.gz
+    Name: env
+  - Env:
+    - Key: ARSNOVA_SETUPTOOL_URL
+      Value: https://github.com/thm-projects/arsnova-setuptool/archive/$ARSNOVA_SETUPTOOL_ARCHIVE
+    Name: env
+  - Env:
+    - Key: ARSNOVA_CUSTOMIZATION_ARCHIVE
+      Value: $ARSNOVA_CUSTOMIZATION_VERSION.tar.gz
+    Name: env
+  - Env:
+    - Key: ARSNOVA_CUSTOMIZATION_URL
+      Value: https://github.com/thm-projects/arsnova-customization/archive/$ARSNOVA_CUSTOMIZATION_ARCHIVE
+    Name: env
+  - Env:
+    - Key: ARSNOVA_CONFIG_URL
+      Value: https://raw.githubusercontent.com/thm-projects/arsnova-backend/v$ARSNOVA_BACKEND_VERSION/src/main/resources/arsnova.properties.example
+    Name: env
+  - Env:
+    - Key: ARSNOVA_COUCHDB_HOST
+      Value: couchdb
+    Name: env
+  - Env:
+    - Key: ARSNOVA_COUCHDB_PORT
+      Value: "5984"
+    Name: env
+  - Env:
+    - Key: ARSNOVA_COUCHDB_NAME
+      Value: arsnova
+    Name: env
+  - Env:
+    - Key: ARSNOVA_COUCHDB_USERNAME
+      Value: admin
+    Name: env
+  - Env:
+    - Key: ARSNOVA_COUCHDB_PASSWORD
+      Value: '""'
+    Name: env
+  - Key: TOMCAT_VALVE
+    Name: arg
+    Value: '''<Valve className="org.apache.catalina.valves.RemoteIpValve" remoteIpHeader="x-forwarded-for"
+      protocolHeader="x-forwarded-proto" />'''
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: expose
+    Ports:
+    - "8090"
+  - CmdLine:
+    - apt-get update &&   apt-get install -y --no-install-recommends     gawk     libservlet3.1-java     libtcnative-1     python     tomcat8   &&   apt-get
+      clean &&   rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/arsnova &&   cd /opt/arsnova &&   curl -fsSLO "$ARSNOVA_BACKEND_URL"
+      &&   curl -fsSLO "$ARSNOVA_MOBILE_URL" &&   ln -s `pwd`/"$ARSNOVA_BACKEND_ARCHIVE"
+      /var/lib/tomcat8/webapps/api.war &&   ln -s `pwd`/"$ARSNOVA_MOBILE_ARCHIVE"
+      /var/lib/tomcat8/webapps/mobile.war
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fsSLO "$ARSNOVA_CONFIG_URL" &&   mkdir /etc/arsnova &&   sed     -e ':a;N;$!ba;s/\\\n
+      *//g'     arsnova.properties.example |     sed     -e 's/^\(socketio.bind-address
+      *= *\).*/\10.0.0.0/g'     -e '/^#socketio.proxy-path *=/s/^#//g'     -e 's/^#\(session.guest-session.cleanup-days
+      *= *\).*/\10/g'     -e 's/^#\(user.cleanup-days *= *\).*/\10/g' |     gawk '{       match($0,
+      /^(# ?)?([a-z0-9._-]+)( *= *)(.*)$/, a);       if (RLENGTH != -1) {         b
+      = gensub(/[.-]/, "_", "g", a[2]);         defaultVal = "";         if (!a[1])
+      defaultVal = a[4];         out = a[2] a[3] "${ARSNOVA_" toupper(b) ":" defaultVal
+      "}";       } else {         out = $0;       }       print out;     }'     >
+      /etc/arsnova/arsnova.properties &&   rm arsnova.properties.example &&   sed
+      -i "s#</Host>#  $TOMCAT_VALVE\n\n      </Host>#g" /etc/tomcat8/server.xml &&   printf
+      '<?xml version="1.0" encoding="UTF-8"?>\n<Context docBase="/opt/arsnova/customization"
+      path="/customization"/>\n' > /etc/tomcat8/Catalina/localhost/customization.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/arsnova &&   cd /opt/arsnova &&   mkdir setuptool &&   curl -fsSLO
+      "$ARSNOVA_SETUPTOOL_URL" &&   tar xzf "$ARSNOVA_SETUPTOOL_ARCHIVE" -C setuptool
+      --strip-components 1 &&   rm -rf "$ARSNOVA_SETUPTOOL_ARCHIVE" &&   mkdir customization
+      &&   curl -fsSLO "$ARSNOVA_CUSTOMIZATION_URL" &&   tar xzf "$ARSNOVA_CUSTOMIZATION_ARCHIVE"
+      -C customization --strip-components 4 "arsnova-customization-$ARSNOVA_CUSTOMIZATION_VERSION/src/main/webapp"
+      &&   rm -rf "$ARSNOVA_CUSTOMIZATION_ARCHIVE"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-healthcheck.sh
+    - /
+  - Health:
+      Interval: 12000000000
+      StartPeriod: 30000000000
+      Test:
+      - CMD-SHELL
+      - /docker-healthcheck.sh
+      Timeout: 9000000000
+    Name: healthcheck
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jre
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre

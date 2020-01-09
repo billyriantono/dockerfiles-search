@@ -1,0 +1,70 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: appropriate/curl
+  Commands:
+  - Key: jq_version
+    Name: arg
+    Value: "1.5"
+  - Name: workdir
+    Path: /tmp/sqs-alpine
+  - CmdLine:
+    - apk add --update git   && rm -rf /var/cache/apk/*   && git clone --verbose --depth=1
+      https://github.com/kobim/sqs-insight.git   && curl -L -o /usr/local/bin/jq https://github.com/stedolan/jq/releases/download/jq-${jq_version}/jq-linux64   &&
+      chmod +x /usr/local/bin/jq   && export elasticmq_version=$(curl -sL https://api.github.com/repos/adamw/elasticmq/releases/latest
+      | jq -r .tag_name)   && elasticmq_version=${elasticmq_version//v}   && curl
+      -LO https://s3-eu-west-1.amazonaws.com/softwaremill-public/elasticmq-server-${elasticmq_version}.jar   &&
+      mv elasticmq-server-${elasticmq_version}.jar elasticmq-server.jar
+    Name: run
+    PrependShell: true
+  From:
+    Image: appropriate/curl
+  Name: builder
+  Platform: ""
+  SourceCode: FROM appropriate/curl as Builder
+- BaseName: anapsix/alpine-java:8
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Ronald E. Oribio R. https://github.com/roribio"'
+    Name: label
+  - Chown: ""
+    From: Builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/sqs-alpine/
+    - /opt/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/
+    - /etc/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - opt/
+    - /opt/
+  - CmdLine:
+    - apk add --update     nodejs     nodejs-npm     supervisor   && rm -rf     /var/cache/apk/*     /etc/supervisord.conf   &&
+      ln -s /etc/supervisor/supervisord.conf /etc/supervisord.conf   && cd /opt/sqs-insight   &&
+      npm install
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9324"
+    - "9325"
+  - CmdLine:
+    - /usr/bin/supervisord
+    - -n
+    - -c
+    - /etc/supervisor/supervisord.conf
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: anapsix/alpine-java:8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM anapsix/alpine-java:8

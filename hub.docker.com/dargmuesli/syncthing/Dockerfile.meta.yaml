@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12-alpine
+  Commands:
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - Env:
+    - Key: BUILD_HOST
+      Value: syncthing.net
+    Name: env
+  - Env:
+    - Key: BUILD_USER
+      Value: docker
+    Name: env
+  - CmdLine:
+    - apk add --no-cache git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - go run build.go -no-upgrade build
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12-alpine AS builder
+- BaseName: alpine
+  Commands:
+  - Env:
+    - Key: PUID
+      Value: "1000"
+    - Key: PGID
+      Value: "1000"
+    Name: env
+  - Name: expose
+    Ports:
+    - 21027/udp
+    - "22000"
+    - "8384"
+  - Name: volume
+    Volumes:
+    - /var/syncthing
+  - CmdLine:
+    - apk add --update --no-cache ca-certificates su-exec
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/syncthing
+    - /bin/syncthing
+  - Health:
+      Interval: 60000000000
+      Test:
+      - CMD-SHELL
+      - nc -z localhost 8384 || exit 1
+      Timeout: 10000000000
+    Name: healthcheck
+  - CmdLine:
+    - chown "${PUID}:${PGID}" /var/syncthing   && su-exec "${PUID}:${PGID}"      env
+      HOME=/var/syncthing      /bin/syncthing        -home /var/syncthing/config        -gui-address
+      0.0.0.0:8384
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

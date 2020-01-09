@@ -1,0 +1,125 @@
+MetaArgs: null
+Stages:
+- BaseName: appliedis/java:8-alpine
+  Commands:
+  - Maintainer: Jonathan Meyer <jon@gisjedi.com>
+    Name: maintainer
+  - Labels:
+    - Key: name
+      Value: '"Tomcat 8"'
+    - Key: vendor
+      Value: '"Applied Information Sciences"'
+    - Key: license
+      Value: '"Apache v2.0"'
+    Name: label
+  - Env:
+    - Key: CATALINA_HOME
+      Value: /usr/local/tomcat
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $CATALINA_HOME/bin:$PATH
+    Name: env
+  - CmdLine:
+    - mkdir -p "$CATALINA_HOME"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $CATALINA_HOME
+  - Env:
+    - Key: TOMCAT_NATIVE_LIBDIR
+      Value: $CATALINA_HOME/native-jni-lib
+    Name: env
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: ${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$TOMCAT_NATIVE_LIBDIR
+    Name: env
+  - CmdLine:
+    - apk add --no-cache gnupg
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GPG_KEYS
+      Value: 05AB33110949707C93A279E3D3EFE6B686867BA6 07E48665A34DCAFAE522E5E6266191C37C037D42
+        47309207D818FFD8DCD3F83F1931D684307A10A5 541FBE7D8F78B25E055DDEE13C370389288584E7
+        61B832AC2F1C5A90F0F9B00A1C506407564C17A3 713DA88BE50911535FE716F5208B0AB1D63011C7
+        79F7026C690BAA50B92CD8B66A3AD3F4F22C4FED 9BA44C2621385CB966EBA586F72C284D731FABEE
+        A27677289986DB50844682F8ACB77FC2E86E29AC A9C5DF4D22E99998D9875A5110C01C5A2F6059E7
+        DCFD35E0BF8CA7344752DE8B6FB21E8933C60243 F3A04C595DB5B6A5F1ECA43E3B7BBB100D811BBE
+        F7DA48BB64BCB84ECBA7EE6935CD23C10D498E23
+    Name: env
+  - CmdLine:
+    - "set -ex; \tfor key in $GPG_KEYS; do \t\tgpg --keyserver ha.pool.sks-keyservers.net
+      --recv-keys \"$key\"; \tdone"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TOMCAT_MAJOR
+      Value: "8"
+    Name: env
+  - Env:
+    - Key: TOMCAT_VERSION
+      Value: 8.0.46
+    Name: env
+  - Env:
+    - Key: TOMCAT_TGZ_URL
+      Value: https://www.apache.org/dyn/closer.cgi?action=download&filename=tomcat/tomcat-$TOMCAT_MAJOR/v$TOMCAT_VERSION/bin/apache-tomcat-$TOMCAT_VERSION.tar.gz
+    Name: env
+  - Env:
+    - Key: TOMCAT_ASC_URL
+      Value: https://www.apache.org/dist/tomcat/tomcat-$TOMCAT_MAJOR/v$TOMCAT_VERSION/bin/apache-tomcat-$TOMCAT_VERSION.tar.gz.asc
+    Name: env
+  - Env:
+    - Key: TOMCAT_TGZ_FALLBACK_URL
+      Value: https://archive.apache.org/dist/tomcat/tomcat-$TOMCAT_MAJOR/v$TOMCAT_VERSION/bin/apache-tomcat-$TOMCAT_VERSION.tar.gz
+    Name: env
+  - Env:
+    - Key: TOMCAT_ASC_FALLBACK_URL
+      Value: https://archive.apache.org/dist/tomcat/tomcat-$TOMCAT_MAJOR/v$TOMCAT_VERSION/bin/apache-tomcat-$TOMCAT_VERSION.tar.gz.asc
+    Name: env
+  - CmdLine:
+    - "set -x \t\t&& apk add --no-cache --virtual .fetch-deps \t\tca-certificates
+      \t\ttar \t\topenssl \t&& { \t\twget -O tomcat.tar.gz \"$TOMCAT_TGZ_URL\" \t\t||
+      wget -O tomcat.tar.gz \"$TOMCAT_TGZ_FALLBACK_URL\" \t; } \t&& { \t\twget -O
+      tomcat.tar.gz.asc \"$TOMCAT_ASC_URL\" \t\t|| wget -O tomcat.tar.gz.asc \"$TOMCAT_ASC_FALLBACK_URL\"
+      \t; } \t&& gpg --batch --verify tomcat.tar.gz.asc tomcat.tar.gz \t&& tar -xvf
+      tomcat.tar.gz --strip-components=1 \t&& rm bin/*.bat \t&& rm tomcat.tar.gz*
+      \t\t&& nativeBuildDir=\"$(mktemp -d)\" \t&& tar -xvf bin/tomcat-native.tar.gz
+      -C \"$nativeBuildDir\" --strip-components=1 \t&& apk add --no-cache --virtual
+      .native-build-deps \t\tapr-dev \t\tcoreutils \t\tdpkg-dev dpkg \t\tgcc \t\tlibc-dev
+      \t\tmake \t\t\"openjdk${JAVA_VERSION%%[-~bu]*}\"=\"$JAVA_ALPINE_VERSION\" \t\topenssl-dev
+      \t&& ( \t\texport CATALINA_HOME=\"$PWD\" \t\t&& cd \"$nativeBuildDir/native\"
+      \t\t&& gnuArch=\"$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)\" \t\t&& ./configure
+      \t\t\t--build=\"$gnuArch\" \t\t\t--libdir=\"$TOMCAT_NATIVE_LIBDIR\" \t\t\t--prefix=\"$CATALINA_HOME\"
+      \t\t\t--with-apr=\"$(which apr-1-config)\" \t\t\t--with-java-home=\"$(docker-java-home)\"
+      \t\t\t--with-ssl=yes \t\t&& make -j \"$(nproc)\" \t\t&& make install \t) \t&&
+      runDeps=\"$( \t\tscanelf --needed --nobanner --recursive \"$TOMCAT_NATIVE_LIBDIR\"
+      \t\t\t| awk '{ gsub(/,/, \"\\nso:\", $2); print \"so:\" $2 }' \t\t\t| sort -u
+      \t\t\t| xargs -r apk info --installed \t\t\t| sort -u \t)\" \t&& apk add --virtual
+      .tomcat-native-rundeps $runDeps \t&& apk del .fetch-deps .native-build-deps
+      \t&& rm -rf \"$nativeBuildDir\" \t&& rm bin/tomcat-native.tar.gz \t&& apk add
+      --no-cache bash \t&& find ./bin/ -name '*.sh' -exec sed -ri 's|^#!/bin/sh$|#!/usr/bin/env
+      bash|' '{}' +"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -e \t&& nativeLines=\"$(catalina.sh configtest 2>&1)\" \t&& nativeLines=\"$(echo
+      \"$nativeLines\" | grep 'Apache Tomcat Native')\" \t&& nativeLines=\"$(echo
+      \"$nativeLines\" | sort -u)\" \t&& if ! echo \"$nativeLines\" | grep 'INFO:
+      Loaded APR based Apache Tomcat Native library' >&2; then \t\techo >&2 \"$nativeLines\";
+      \t\texit 1; \tfi"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - catalina.sh
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: appliedis/java:8-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM appliedis/java:8-alpine

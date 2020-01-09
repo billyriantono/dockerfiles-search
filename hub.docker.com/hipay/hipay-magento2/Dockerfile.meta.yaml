@@ -1,0 +1,280 @@
+MetaArgs: null
+Stages:
+- BaseName: php:7.2-apache
+  Commands:
+  - Maintainer: Hipay Fullservice <integration@hipay.com>
+    Name: maintainer
+  - CmdLine:
+    - "apt-get update \t&& apt-get -qy --no-install-recommends install \t\tgit \t
+      \tlibmcrypt-dev \t\tlibjpeg62-turbo-dev \t\tlibpng-dev \t\tlibfreetype6-dev
+      \t\tlibxslt1-dev \t\tlibicu-dev \t\tmysql-client \t\tdefault-libmysqlclient-dev
+      \    && docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/
+      \    && docker-php-ext-configure zip --enable-zip     && docker-php-ext-install
+      gd bcmath intl mbstring soap xsl zip pdo_mysql \t&& curl -sS https://getcomposer.org/installer
+      | php -- --filename=composer -- --install-dir=/usr/local/bin \t&& pecl install
+      apcu     && echo \"extension=apcu.so\" > /usr/local/etc/php/conf.d/apcu.ini
+      \t&& rm -r /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "curl -o /usr/local/bin/gosu -fsSL \"https://github.com/tianon/gosu/releases/download/1.7/gosu-$(dpkg
+      --print-architecture)\" \t  && chmod +x /usr/local/bin/gosu"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -o dockerize-linux-amd64-v0.2.0.tar.gz -sSOL https://github.com/jwilder/dockerize/releases/download/v0.2.0/dockerize-linux-amd64-v0.2.0.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar -C /usr/local/bin -xzvf dockerize-linux-amd64-v0.2.0.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod u+x /usr/local/bin/dockerize
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GITHUB_API_TOKEN
+      Value: bef0ec80d12009086371c166b904702cea3d35b1
+    - Key: MAGE_ACCOUNT_PUBLIC_KEY
+      Value: e3b8d4033c8f6440aec19950253a8cb3
+    - Key: MAGE_ACCOUNT_PRIVATE_KEY
+      Value: 8a297c071a7c3085ea0630283c96f002
+    Name: env
+  - Env:
+    - Key: PHP_TIMEZONE
+      Value: Europe/Paris
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/php.ini
+    - /usr/local/etc/php/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/apache2/site-available/000-default.conf
+    - /etc/apache2/site-available/
+  - CmdLine:
+    - ln -s /usr/local/bin/php /usr/bin/php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod rewrite
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser --disabled-password --gecos "" magento2   && usermod -a -G www-data
+      magento2   && usermod -a -G magento2 www-data
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/www/html/magento2
+  - CmdLine:
+    - chown -R magento2:www-data /var/www/html/magento2
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DOCKERIZE_TEMPLATES_PATH
+      Value: /home/magento2/dockerize
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/dockerize/auth.json.tmpl
+    - conf/dockerize/composer.json.tmpl
+    - conf/dockerize/mtf/phpunit.xml.tmpl
+    - conf/dockerize/mtf/credentials.xml.tmpl
+    - conf/dockerize/mtf/etc/config.xml.tmpl
+    - /home/magento2/dockerize/
+  - CmdLine:
+    - chown -R magento2:magento2 $DOCKERIZE_TEMPLATES_PATH
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gosu magento2 mkdir /home/magento2/.composer/
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MAGE_VERSION
+      Value: '"2.3.0"'
+    - Key: MAGE_SAMPLE_DATA_VERSION
+      Value: '"100.*"'
+    Name: env
+  - CmdLine:
+    - "gosu magento2 dockerize -template $DOCKERIZE_TEMPLATES_PATH/auth.json.tmpl:/home/magento2/.composer/auth.json
+      \t\t\t\t\t\t\t\t\t\t\t\t-template $DOCKERIZE_TEMPLATES_PATH/composer.json.tmpl:/var/www/html/magento2/composer.json"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gosu magento2 composer config -g github-oauth.github.com $GITHUB_API_TOKEN
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gosu magento2 composer install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: dev/tests/functional/
+  - CmdLine:
+    - gosu magento2 composer install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/www/html/magento2
+  - CmdLine:
+    - chown -R magento2:www-data .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "find . -type d -exec chmod 770 {} \\; \t&& find . -type f -exec chmod 660 {}
+      \\; \t&& chmod u+x bin/magento \t&& chmod u+x /var/www/html/magento2/dev/tests/functional/vendor/phpunit/phpunit/phpunit"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /var/www/html/magento2/dev/tests/functional/vendor/bin:/var/www/html/magento2/bin:$PATH
+    Name: env
+  - CmdLine:
+    - echo "PATH=/var/www/html/magento2/dev/tests/functional/vendor/bin:/var/www/html/magento2/bin:$PATH"
+      >> /home/magento2/.profile
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MYSQL_ROOT_PASSWORD
+      Value: magento2
+    Name: env
+  - Env:
+    - Key: MAGE_REINSTALL
+      Value: "0"
+    - Key: MAGE_INSTALL_SAMPLE_DATA
+      Value: '"--use-sample-data"'
+    - Key: MAGE_ADMIN_FIRSTNAME
+      Value: '"John"'
+    - Key: MAGE_ADMIN_LASTNAME
+      Value: '"Doe"'
+    - Key: MAGE_ADMIN_EMAIL
+      Value: '"john.doe@yopmail.com"'
+    - Key: MAGE_ADMIN_USER
+      Value: '"admin"'
+    - Key: MAGE_ADMIN_PWD
+      Value: '"admin123"'
+    - Key: MAGE_BASE_URL
+      Value: '"http://127.0.0.1"'
+    - Key: MAGE_BASE_URL_SECURE
+      Value: '"https://127.0.0.1"'
+    - Key: MAGE_BACKEND_FRONTNAME
+      Value: '"admin"'
+    - Key: MAGE_DB_HOST
+      Value: '"db"'
+    - Key: MAGE_DB_PORT
+      Value: '"3306"'
+    - Key: MAGE_DB_NAME
+      Value: '"magento2"'
+    - Key: MAGE_DB_USER
+      Value: '"magento2"'
+    - Key: MAGE_DB_PASSWORD
+      Value: '"magento2"'
+    - Key: MAGE_DB_PREFIX
+      Value: '"mage_"'
+    - Key: MAGE_LANGUAGE
+      Value: '"en_US"'
+    - Key: MAGE_CURRENCY
+      Value: '"USD"'
+    - Key: MAGE_TIMEZONE
+      Value: '"America/Chicago"'
+    - Key: MAGE_USE_REWRITES
+      Value: "1"
+    - Key: MAGE_USE_SECURE
+      Value: "0"
+    - Key: MAGE_USE_SECURE_ADMIN
+      Value: "0"
+    - Key: MAGE_ADMIN_USE_SECURITY_KEY
+      Value: "0"
+    - Key: MAGE_SESSION_SAVE
+      Value: files
+    - Key: MAGE_KEY
+      Value: '"69c60a47f9dca004e47bf8783f4b9408"'
+    Name: env
+  - Env:
+    - Key: MAGE_CLEANUP_DATABASE
+      Value: '""'
+    - Key: MAGE_DB_INIT_STATEMENTS
+      Value: '"SET NAMES utf8;"'
+    - Key: MAGE_SALES_ORDER_INCREMENT_PREFIX
+      Value: "0"
+    Name: env
+  - Env:
+    - Key: MAGE_RUN_REINDEX
+      Value: "1"
+    - Key: MAGE_RUN_CACHE_CLEAN
+      Value: "0"
+    - Key: MAGE_RUN_CACHE_FLUSH
+      Value: "0"
+    - Key: MAGE_RUN_CACHE_DISABLE
+      Value: "1"
+    - Key: MAGE_RUN_STATIC_CONTENT_DEPLOY
+      Value: "1"
+    - Key: MAGE_RUN_SETUP_DI_COMPILE
+      Value: "0"
+    - Key: MAGE_RUN_DEPLOY_MODE
+      Value: developer
+    - Key: MAGE_ENABLE_MODULE_MAGENTO_DEVELOPER
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: CUSTOM_REPOSITORIES
+      Value: '""'
+    - Key: CUSTOM_PACKAGES
+      Value: '""'
+    - Key: CUSTOM_MODULES
+      Value: '""'
+    Name: env
+  - CmdLine:
+    - 'gosu magento2 sed -i -e"s/\"minimum-stability\": \"alpha\"/\"minimum-stability\":
+      \"dev\"/g" composer.json'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/\/var\/www\/html/\/var\/www\/html\/magento2/' /etc/apache2/apache2.conf     &&
+      sed -i -e 's/\/var\/www\/html/\/var\/www\/html\/magento2/' /etc/apache2/sites-available/000-default.conf
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: APACHE_RUN_USER
+      Value: www-data
+    - Key: APACHE_RUN_GROUP
+      Value: www-data
+    - Key: APACHE_PID_FILE
+      Value: /var/run/apache2/apache2.pid
+    - Key: APACHE_RUN_DIR
+      Value: /var/run/apache2
+    - Key: APACHE_LOCK_DIR
+      Value: /var/lock/apache2
+    - Key: APACHE_LOG_DIR
+      Value: /var/log/apache2
+    Name: env
+  - Env:
+    - Key: SELENIUM_HOST
+      Value: selenium
+    - Key: SELENIUM_PORT
+      Value: "4444"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/magento2-start
+    - /usr/local/bin/
+  - CmdLine:
+    - magento2-start
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: php:7.2-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.2-apache

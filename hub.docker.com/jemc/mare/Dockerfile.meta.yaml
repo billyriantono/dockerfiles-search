@@ -1,0 +1,174 @@
+MetaArgs: null
+Stages:
+- As: dev
+  BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk add --no-cache --update     alpine-sdk coreutils linux-headers clang-dev
+      lld     valgrind perl     libexecinfo-dev libressl-dev pcre2-dev     llvm5-dev
+      llvm5-static     crystal shards
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CC
+      Value: clang
+    Name: env
+  - Env:
+    - Key: CXX
+      Value: clang++
+    Name: env
+  - CmdLine:
+    - 'sh -c ''crystal --version | grep -C10 "LLVM: 5.0.1"'''
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sh -c 'clang++ -v -c   -o /usr/lib/crystal/core/llvm/ext/llvm_ext.o   /usr/lib/crystal/core/llvm/ext/llvm_ext.cc
+      `llvm-config --cxxflags`'
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PONYC_VERSION
+      Value: 0.33.0
+    Name: env
+  - Env:
+    - Key: PONYC_GIT_URL
+      Value: https://github.com/ponylang/ponyc
+    Name: env
+  - CmdLine:
+    - git clone -b ${PONYC_VERSION} --depth 1 ${PONYC_GIT_URL} /tmp/ponyc &&     cd
+      /tmp/ponyc &&     sed -i 's/void Main_/\/\/ void Main_/g' src/libponyrt/sched/start.c
+      &&     sed -i 's/  Main_/  \/\/ Main_/g' src/libponyrt/sched/start.c &&     make
+      default_pic=true runtime-bitcode=yes verbose=yes config=debug libponyrt &&     clang
+      -shared -fpic -pthread -ldl -latomic -lexecinfo -o libponyrt.so build/debug/lib/native/libponyrt.bc
+      &&     sudo mv libponyrt.so /usr/lib/ &&     sudo cp build/debug/lib/native/libponyrt.bc
+      /usr/lib/ &&     sudo cp build/debug/lib/native/libponyrt.a /usr/lib/ &&     rm
+      -rf /tmp/ponyc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /opt/code
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/code
+  From:
+    Image: alpine:3.9
+  Name: dev
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as dev
+- As: build
+  BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk add --no-cache --update     alpine-sdk coreutils linux-headers clang-dev
+      lld     valgrind perl     libexecinfo-dev libressl-dev pcre2-dev     llvm5-dev
+      llvm5-static     crystal shards
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: dev
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/libponyrt.so
+    - /usr/lib/
+  - Chown: ""
+    From: dev
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/libponyrt.a
+    - /usr/lib/libponyrt.bc
+    - /usr/lib/
+  - Chown: ""
+    From: dev
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/crystal/core/llvm/ext/llvm_ext.o
+    - /usr/lib/crystal/core/llvm/ext/
+  - CmdLine:
+    - mkdir /opt/mare
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/mare
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Makefile
+    - main.cr
+    - /opt/mare/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - lib
+    - /opt/mare/lib
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /opt/mare/src
+  - CmdLine:
+    - make /tmp/bin/mare
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: build
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as build
+- As: release
+  BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk add --no-cache --update   llvm5-libs gc pcre gcc clang lld libgcc libevent
+      musl-dev libexecinfo-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /opt/code
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/code
+  - Chown: ""
+    From: dev
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/libponyrt.so
+    - /usr/lib/
+  - Chown: ""
+    From: dev
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/libponyrt.a
+    - /usr/lib/libponyrt.bc
+    - /usr/lib/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/prelude
+    - /opt/mare/src/prelude
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - packages
+    - /opt/mare/packages
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/bin/mare
+    - /bin/mare
+  - CmdLine:
+    - /bin/mare
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: release
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as release

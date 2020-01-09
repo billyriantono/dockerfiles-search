@@ -1,0 +1,116 @@
+MetaArgs: null
+Stages:
+- As: node
+  BaseName: node:lts-alpine
+  Commands:
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - package.json
+    - .
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - package-lock.json
+    - .
+  - CmdLine:
+    - npm ci
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - node_modules/.bin/gulp build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:lts-alpine
+  Name: node
+  Platform: ""
+  SourceCode: FROM node:lts-alpine as node
+- As: net-builder
+  BaseName: microsoft/dotnet:2.1-sdk
+  Commands:
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - Bonsai.sln
+    - .
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - Bonsai.csproj
+    - .
+  - CmdLine:
+    - dotnet restore
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: node
+    Name: copy
+    SourcesAndDest:
+    - /build
+    - .
+  - CmdLine:
+    - dotnet publish --output ../out/ --configuration Release --runtime linux-x64
+      Bonsai.csproj
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.1-sdk
+  Name: net-builder
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1-sdk as net-builder
+- BaseName: microsoft/dotnet:2.1-aspnetcore-runtime
+  Commands:
+  - CmdLine:
+    - apt-get -yqq update &&     apt-get -yqq install ffmpeg libc6-dev libgdiplus
+      libx11-dev &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL https://deb.nodesource.com/setup_10.x | bash - &&     apt-get install
+      -y nodejs &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: net-builder
+    Name: copy
+    SourcesAndDest:
+    - /out
+    - .
+  - CmdLine:
+    - mkdir /app/External/ffmpeg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/bin/ffmpeg /app/External/ffmpeg/ffmpeg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/bin/ffprobe /app/External/ffmpeg/ffprobe
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ASPNETCORE_ENVIRONMENT
+      Value: Production
+    Name: env
+  - CmdLine:
+    - dotnet
+    - Bonsai.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: microsoft/dotnet:2.1-aspnetcore-runtime
+  Name: ""
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1-aspnetcore-runtime

@@ -1,0 +1,112 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.13-alpine3.10
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Takeru Sato <type.in.type@gmail.com>"'
+    Name: label
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Env:
+    - Key: GEOIP_UPDATE_VERSION
+      Value: 4.1.5
+    Name: env
+  - Env:
+    - Key: SRC_DL_URL_PREF
+      Value: https://github.com/maxmind/geoipupdate/archive
+    Name: env
+  - Env:
+    - Key: SRC_PATH
+      Value: /go/src/github.com/maxmind/geoipupdate
+    Name: env
+  - CmdLine:
+    - mkdir -p /go/src/github.com/maxmind/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --update --no-cache curl gcc make libc-dev git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L "${SRC_DL_URL_PREF}/v${GEOIP_UPDATE_VERSION}.tar.gz" | tar -zxC /go/src/github.com/maxmind/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv "${SRC_PATH}-${GEOIP_UPDATE_VERSION}" /go/src/github.com/maxmind/geoipupdate
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd "${SRC_PATH}" && make build/geoipupdate
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L "https://github.com/gliderlabs/sigil/releases/download/v0.4.0/sigil_0.4.0_$(uname
+      -sm|tr \  _).tgz" | tar -zxC /usr/local/bin
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-alpine3.10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.13-alpine3.10 as builder
+- BaseName: alpine:3.10
+  Commands:
+  - Env:
+    - Key: GEOIP_CONF_FILE
+      Value: /usr/local/etc/GeoIP.conf
+    Name: env
+  - Env:
+    - Key: GEOIP_DB_DIR
+      Value: /usr/share/GeoIP
+    Name: env
+  - Env:
+    - Key: SCHEDULE
+      Value: '"55 20 * * *"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - GeoIP.conf.tmpl
+    - ${GEOIP_CONF_FILE}.tmpl
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run-geoipupdate
+    - /usr/local/bin/run-geoipupdate
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run
+    - /usr/local/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/maxmind/geoipupdate/build/geoipupdate
+    - /usr/local/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/sigil
+    - /usr/local/bin/
+  - CmdLine:
+    - apk add --update --no-cache ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/run
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10

@@ -1,0 +1,111 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stretch
+  Commands:
+  - Maintainer: josh at webhosting coop
+    Name: maintainer
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: container
+      Value: docker
+    - Key: ICINGA2_FEATURE_GRAPHITE
+      Value: "true"
+    - Key: DOCKER_ICINGA2_UPDATED
+      Value: "20181201"
+    Name: env
+  - CmdLine:
+    - apt-get -qq update && apt-get -qqy install --no-install-recommends gnupg2 sudo
+      procps ca-certificates wget pwgen supervisor && wget -O - https://packages.icinga.com/icinga.key
+      | apt-key add - && echo "deb http://deb.debian.org/debian stretch-backports
+      main" >> /etc/apt/sources.list  && apt-get -qq update  && echo "icinga-common
+      icinga/check_external_commands boolean true" | debconf-set-selections
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-cache search icinga2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y -f icinga2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -yqq install unzip fail2ban nagios-plugins icinga2-bin icinga2-ido-mysql
+      icingaweb2 icinga2-classicui icinga2 mailutils ssmtp icli nagios-plugins-contrib
+      monitoring-plugins openssh-server  && dpkg-statoverride --update --add nagios
+      www-data 2710 /var/run/icinga2/cmd/icinga2.cmd  && apt-get clean  && rm -Rf
+      /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - icinga2 feature enable ido-mysql
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - icinga2 api setup
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/^.* NodeName = .*/const NodeName = "docker-icinga2"/gi' /etc/icinga2/constants.conf;
+      icinga2 pki new-cert --cn docker-icinga2 --key /etc/icinga2/pki/docker-icinga2.key
+      --csr /etc/icinga2/pki/docker-icinga2.csr; icinga2 pki sign-csr --csr /etc/icinga2/pki/docker-icinga2.csr
+      --cert /etc/icinga2/pki/docker-icinga2.crt;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'sed -i "s/#UsePrivilegeSeparation.*/UsePrivilegeSeparation no/g" /etc/ssh/sshd_config
+      && sed -i "s/UsePAM.*/UsePAM no/g" /etc/ssh/sshd_config;  echo "sshd: ALL" >>
+      /etc/hosts.allow;  rm -f /etc/ssh/ssh_host_ecdsa_key /etc/ssh/ssh_host_rsa_key
+      &&  ssh-keygen -q -N "" -t dsa -f /etc/ssh/ssh_host_ecdsa_key &&  ssh-keygen
+      -q -N "" -t rsa -f /etc/ssh/ssh_host_rsa_key &&  groupadd wheel &&  useradd
+      -g wheel appuser &&  mkdir /home/appuser &&  chown -R appuser. /home/appuser
+      &&  sed -i -e ''s/^\(%wheel\s\+.\+\)/#\1/gi'' /etc/sudoers;  echo -e ''\n%wheel
+      ALL=(ALL) ALL'' >> /etc/sudoers;  echo -e ''\nDefaults:root   !requiretty''
+      >> /etc/sudoers;  echo -e ''\nDefaults:%wheel !requiretty'' >> /etc/sudoers;  echo
+      ''syntax on'' >> /root/.vimrc;  echo ''alias vi="vim"'' >> /root/.bash_profile;  echo
+      ''syntax on'' >> /home/appuser/.vimrc;  echo ''alias vi="vim"'' >> /home/appuser/.bash_profile;'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/log/supervisor
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - content/
+    - /
+  - CmdLine:
+    - chmod u+x /opt/icinga2/initdocker
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - www/index.html
+    - /var/www/html/index.html
+  - Name: expose
+    Ports:
+    - "22"
+    - "3306"
+    - "443"
+    - "5665"
+    - "80"
+  - Name: volume
+    Volumes:
+    - /etc/icinga2
+    - /etc/icingaweb2
+    - /var/lib/icinga2
+    - /usr/share/icingaweb2
+    - /var/lib/mysql
+  - CmdLine:
+    - /opt/icinga2/initdocker
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch

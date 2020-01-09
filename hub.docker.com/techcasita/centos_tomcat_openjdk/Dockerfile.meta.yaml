@@ -1,0 +1,136 @@
+MetaArgs: null
+Stages:
+- BaseName: centos:centos7
+  Commands:
+  - Maintainer: Wolf Paulus <wolf@paulus.com>
+    Name: maintainer
+  - Key: OPENSSL_VERSION
+    Name: arg
+    Value: 1.0.2
+  - Key: TOMCAT_MAJOR
+    Name: arg
+    Value: "9"
+  - Key: TOMCAT_MINOR
+    Name: arg
+    Value: 9.0.24
+  - Key: TOMCAT_NATIVE
+    Name: arg
+    Value: 1.2.23
+  - Key: JAVA_HOME
+    Name: arg
+    Value: /usr/lib/jvm/adoptopenjdk-11-hotspot/
+  - Key: DOWNLOAD
+    Name: arg
+    Value: https://github.com/AdoptOpenJDK/openjdk11-binaries/releases/download/jdk-11.0.4%2B11/OpenJDK11U-jdk_x64_linux_hotspot_11.0.4_11.tar.gz
+  - CmdLine:
+    - yum -y update &&  yum -y upgrade &&  yum -y install wget &&  yum -y install
+      tar &&  yum -y install wget &&  yum -y install perl &&  yum -y install apr-devel
+      &&  yum -y install openssl-devel &&  yum groupinstall -y "Development tools"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/adoptopenjdk.repo
+    - /etc/yum.repos.d
+  - CmdLine:
+    - yum -y install adoptopenjdk-11-hotspot
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_HOME
+      Value: ${JAVA_HOME}
+    Name: env
+  - Env:
+    - Key: JRE_HOME
+      Value: ${JAVA_HOME}
+    Name: env
+  - Env:
+    - Key: OPENSSL_VERSION
+      Value: ${OPENSSL_VERSION}
+    Name: env
+  - CmdLine:
+    - curl -#L https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz -o
+      /tmp/openssl.tar.gz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - tar zxvf openssl.tar.gz &&     rm openssl.tar.gz &&     mv openssl-* openssl
+      &&     cd openssl &&     ./config shared &&     make depend &&     make install
+      &&     rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TOMCAT_MAJOR
+      Value: ${TOMCAT_MAJOR}
+    Name: env
+  - Env:
+    - Key: TOMCAT_MINOR
+      Value: ${TOMCAT_MINOR}
+    Name: env
+  - Env:
+    - Key: TOMCAT_LINK
+      Value: http://apache.mirrors.pair.com/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_MINOR}/bin/apache-tomcat-${TOMCAT_MINOR}.tar.gz
+    Name: env
+  - Env:
+    - Key: TOMCAT_NATIVE
+      Value: ${TOMCAT_NATIVE}
+    Name: env
+  - Env:
+    - Key: TOMCAT_NATIVE_LINK
+      Value: http://apache.mirrors.pair.com/tomcat/tomcat-connectors/native/${TOMCAT_NATIVE}/source/tomcat-native-${TOMCAT_NATIVE}-src.tar.gz
+    Name: env
+  - Env:
+    - Key: CATALINA_HOME
+      Value: /opt/tomcat
+    Name: env
+  - Name: workdir
+    Path: /opt/tomcat
+  - CmdLine:
+    - curl -#L ${TOMCAT_LINK} -o /tmp/apache-tomcat.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar zxvf /tmp/apache-tomcat.tar.gz -C /opt &&     rm /tmp/apache-tomcat.tar.gz
+      &&     mv /opt/apache-tomcat-${TOMCAT_MINOR}/* /opt/tomcat
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -#L ${TOMCAT_NATIVE_LINK} -o /tmp/tomcat-native.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/tomcat-native &&     tar zxvf /tmp/tomcat-native.tar.gz -C /opt/tomcat-native
+      --strip-components=1 &&     rm /tmp/*tar.gz &&     cd /opt/tomcat-native/native
+      &&     ./configure         --libdir=/usr/lib/         --prefix="$CATALINA_HOME"         --with-apr=/usr/bin/apr-1-config         --with-java-home="$JAVA_HOME"         --with-ssl=yes
+      &&     make -j$(nproc) &&     make install &&     rm -rf /opt/tomcat-native
+      /tmp/openssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -e \tif `/opt/tomcat/bin/catalina.sh configtest | grep -q 'INFO: Loaded
+      APR based Apache Tomcat Native library'`         then \t    echo \"Build Passed\"
+      \        else             echo \"Build Failed\"             exit 1 \tfi"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum remove -y apr-devel kernel-devel kernel-headers boost* rsync perl* &&  yum
+      groupremove -y "Development Tools" &&  yum clean all
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - /opt/tomcat/bin/catalina.sh
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos:centos7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:centos7

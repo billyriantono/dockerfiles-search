@@ -1,0 +1,107 @@
+MetaArgs: null
+Stages:
+- As: rootfs-stage
+  BaseName: alpine:3.10
+  Commands:
+  - Maintainer: sparkyballs,thelamer
+    Name: maintainer
+  - Env:
+    - Key: REL
+      Value: v3.10
+    Name: env
+  - Env:
+    - Key: ARCH
+      Value: x86_64
+    Name: env
+  - Env:
+    - Key: MIRROR
+      Value: http://dl-cdn.alpinelinux.org/alpine
+    Name: env
+  - Env:
+    - Key: PACKAGES
+      Value: alpine-baselayout,alpine-keys,apk-tools,busybox,libc-utils,xz
+    Name: env
+  - CmdLine:
+    - "apk add --no-cache \tbash \tcurl \ttzdata \txz"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "curl -o  /mkimage-alpine.bash -L \thttps://raw.githubusercontent.com/thies88/docker-alpine/master/builder/scripts/mkimage-alpine.bash
+      &&  chmod +x \t/mkimage-alpine.bash &&  ./mkimage-alpine.bash  &&  mkdir /root-out
+      &&  tar xf \t/rootfs.tar.xz -C \t/root-out &&  sed -i -e 's/^root::/root:!:/'
+      /root-out/etc/shadow"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: rootfs-stage
+  Platform: ""
+  SourceCode: FROM alpine:3.10 as rootfs-stage
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: rootfs-stage
+    Name: copy
+    SourcesAndDest:
+    - /root-out/
+    - /
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: build_version
+      Value: '"Alpine-baseimage-from-scratch version:- ${VERSION} Build-date:- ${BUILD_DATE}"'
+    Name: label
+  - Labels:
+    - Key: MAINTAINER
+      Value: '"thies88, Thnx to: sparkyballs,TheLamer"'
+    Name: label
+  - Key: OVERLAY_VERSION
+    Name: arg
+    Value: '"v1.22.1.0"'
+  - Key: OVERLAY_ARCH
+    Name: arg
+    Value: '"amd64"'
+  - Env:
+    - Key: PS1
+      Value: '"$(whoami)@$(hostname):$(pwd)\\$ "'
+    - Key: HOME
+      Value: '"/root"'
+    Name: env
+  - CmdLine:
+    - "echo @testing http://dl-cdn.alpinelinux.org/alpine/edge/testing >> /etc/apk/repositories
+      &&  echo @edge http://dl-cdn.alpinelinux.org/alpine/edge/main >> /etc/apk/repositories
+      &&  echo @edgecom http://dl-cdn.alpinelinux.org/alpine/edge/community >> /etc/apk/repositories
+      &&  echo \"**** install build packages ****\" &&  apk add --no-cache --virtual=build-dependencies
+      \tcurl \ttar &&  echo \"**** install runtime packages ****\" &&  apk add --no-cache
+      \tbash \tca-certificates \tcoreutils \tshadow \tnano \ttzdata && \techo \"****
+      add s6 overlay ****\" &&  curl -o  /tmp/s6-overlay.tar.gz -L \t\"https://github.com/just-containers/s6-overlay/releases/download/${OVERLAY_VERSION}/s6-overlay-${OVERLAY_ARCH}.tar.gz\"
+      &&  tar xfz \t/tmp/s6-overlay.tar.gz -C / &&  echo \"**** create abc user and
+      make our folders ****\" &&  groupmod -g 1000 users &&  useradd -u 911 -U -d
+      /config -s /bin/false abc &&  usermod -G users abc &&  mkdir -p \t/app \t/config
+      \t/defaults &&  echo \"**** cleanup ****\" &&  apk del --purge \tbuild-dependencies
+      &&  rm -rf \t/tmp/* /usr/share/terminfo/*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - root/
+    - /
+  - CmdLine:
+    - "mkdir -p /package-list && \tapk info -vv|sort > /package-list/package-list.txt"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

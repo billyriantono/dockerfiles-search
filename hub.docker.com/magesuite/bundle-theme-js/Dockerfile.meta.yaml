@@ -1,0 +1,108 @@
+MetaArgs: null
+Stages:
+- As: magesuite-node-base
+  BaseName: node:10-alpine
+  Commands:
+  - Name: user
+    User: root
+  - Env:
+    - Key: NODE_HOME
+      Value: /opt/node
+    Name: env
+  - Env:
+    - Key: NODE_HOME_GLOBAL
+      Value: '"${NODE_HOME}/global"'
+    Name: env
+  - Env:
+    - Key: NPM_CONFIG_PREFIX
+      Value: '"${NODE_HOME_GLOBAL}"'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"${NPM_CONFIG_PREFIX}/bin:${PATH}"'
+    Name: env
+  - CmdLine:
+    - deluser --remove-home node
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10-alpine
+  Name: magesuite-node-base
+  Platform: ""
+  SourceCode: FROM node:10-alpine AS magesuite-node-base
+- As: magesuite-node-reqs
+  BaseName: magesuite-node-base
+  Commands:
+  - CmdLine:
+    - apk update &&     apk add python make g++
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - node-global-requirements
+    - '"${NODE_HOME_GLOBAL}/requirements"'
+  - CmdLine:
+    - mkdir -p "${NPM_CONFIG_PREFIX}" &&     cd ${NODE_HOME} &&     npm config set
+      puppeteer_skip_chromium_download true -g &&     < "${NPM_CONFIG_PREFIX}/requirements"
+      xargs npm install -g &&     npm cache clean --force
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk del python make g++ gcc &&     rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: magesuite-node-base
+  Name: magesuite-node-reqs
+  Platform: ""
+  SourceCode: FROM magesuite-node-base AS magesuite-node-reqs
+- BaseName: magesuite-node-base
+  Commands:
+  - Chown: ""
+    From: magesuite-node-reqs
+    Name: copy
+    SourcesAndDest:
+    - '"${NODE_HOME_GLOBAL}"'
+    - '"${NODE_HOME_GLOBAL}"'
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /bin/cs-bundle-js
+  - CmdLine:
+    - chmod +x /bin/cs-bundle-js &&     mkdir -p /workdir
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /workdir
+  - Name: workdir
+    Path: /workdir
+  - Labels:
+    - Key: maintainer
+      Value: '"filip.sobalski@creativestyle.pl"'
+    - Key: org.label-schema.name
+      Value: '"magesuite/bundle-theme-js"'
+    - Key: org.label-schema.url
+      Value: '"https://github.com/magesuite/docker-bundle-theme-js"'
+    - Key: org.label-schema.vendor
+      Value: '"creativestyle"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0.0-rc1"'
+    Name: label
+  - CmdLine:
+    - /bin/cs-bundle-js
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: magesuite-node-base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM magesuite-node-base

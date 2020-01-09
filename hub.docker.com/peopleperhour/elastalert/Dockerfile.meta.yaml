@@ -1,0 +1,110 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.5
+  Commands:
+  - Env:
+    - Key: ELASTALERT_VERSION
+      Value: 0.1.6
+    Name: env
+  - Env:
+    - Key: ELASTALERT_URL
+      Value: https://github.com/Yelp/elastalert/archive/v${ELASTALERT_VERSION}.zip
+    Name: env
+  - Env:
+    - Key: CONFIG_DIR
+      Value: /opt/config
+    Name: env
+  - Env:
+    - Key: RULES_DIRECTORY
+      Value: /opt/rules
+    Name: env
+  - Env:
+    - Key: ELASTALERT_CONFIG
+      Value: ${CONFIG_DIR}/config.yaml
+    Name: env
+  - Env:
+    - Key: LOG_DIR
+      Value: /opt/logs
+    Name: env
+  - Env:
+    - Key: ELASTALERT_DIRECTORY_NAME
+      Value: elastalert
+    Name: env
+  - Env:
+    - Key: ELASTALERT_HOME
+      Value: /opt/${ELASTALERT_DIRECTORY_NAME}
+    Name: env
+  - Env:
+    - Key: ELASTALERT_SUPERVISOR_CONF
+      Value: ${CONFIG_DIR}/elastalert_supervisord.conf
+    Name: env
+  - Env:
+    - Key: ELASTICSEARCH_HOST
+      Value: es_host
+    Name: env
+  - Env:
+    - Key: ELASTICSEARCH_PORT
+      Value: "9200"
+    Name: env
+  - Env:
+    - Key: S3_BUCKET
+      Value: staging_elastalert_rules
+    Name: env
+  - Env:
+    - Key: PYTHONHTTPSVERIFY
+      Value: "0"
+    Name: env
+  - CmdLine:
+    - apk add --no-cache bash gcc musl-dev openssl gettext  wget python python-dev
+      py-setuptools &&     apk add --no-cache --virtual=build-dependencies wget ca-certificates
+      &&     wget "https://bootstrap.pypa.io/get-pip.py" -O /dev/stdout | python &&     apk
+      del build-dependencies
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config
+    - ${CONFIG_DIR}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./start-elastalert.sh
+    - /opt/
+  - CmdLine:
+    - pip install awscli &&    wget --no-check-certificate ${ELASTALERT_URL} &&     unzip
+      *.zip &&     rm *.zip &&    mv e* ${ELASTALERT_DIRECTORY_NAME}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${ELASTALERT_HOME}
+  - CmdLine:
+    - python setup.py install &&     pip install -e . &&     pip install supervisor
+      &&     chmod +x /opt/start-elastalert.sh &&     mkdir -p ${CONFIG_DIR} &&     mkdir
+      -p ${RULES_DIRECTORY} &&     mkdir -p ${LOG_DIR} &&     cp ${ELASTALERT_HOME}/supervisord.conf.example
+      ${ELASTALERT_SUPERVISOR_CONF} &&     sed -i -e"s|logfile=.*log|logfile=${LOG_DIR}/elastalert_supervisord.log|g"
+      ${ELASTALERT_SUPERVISOR_CONF} &&     sed -i -e"s|stderr_logfile=.*log|stderr_logfile=${LOG_DIR}/elastalert_stderr.log|g"
+      ${ELASTALERT_SUPERVISOR_CONF} &&     sed -i -e"s|python elastalert.py|python
+      -m elastalert.elastalert --config ${ELASTALERT_CONFIG}|g" ${ELASTALERT_SUPERVISOR_CONF}
+      &&     supervisord -c ${ELASTALERT_SUPERVISOR_CONF} &&     apk del python-dev
+      &&     apk del musl-dev &&     apk del gcc &&     rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - ${CONFIG_DIR}
+    - ${RULES_DIRECTORY}
+    - ${LOG_DIR}
+  - CmdLine:
+    - /opt/start-elastalert.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.5
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.5

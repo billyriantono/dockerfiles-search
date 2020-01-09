@@ -1,0 +1,185 @@
+MetaArgs: null
+Stages:
+- BaseName: maven:3.6.2-jdk-8-slim
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - jetty-shib-authenticator
+    - /jetty-shib-authenticator
+  - CmdLine:
+    - cd /jetty-shib-authenticator &&     mvn package
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.6.2-jdk-8-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM maven:3.6.2-jdk-8-slim
+- BaseName: openjdk:8-jdk-slim
+  Commands:
+  - Env:
+    - Key: JETTY_VER
+      Value: 9.4.20.v20190813
+    Name: env
+  - Env:
+    - Key: JETTY_BIN
+      Value: https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-distribution/${JETTY_VER}/jetty-distribution-${JETTY_VER}.tar.gz
+    Name: env
+  - Env:
+    - Key: FEDORA_VER
+      Value: 5.1.0
+    Name: env
+  - Env:
+    - Key: FEDORA_BIN
+      Value: https://github.com/fcrepo4/fcrepo4/releases/download/fcrepo-${FEDORA_VER}/fcrepo-webapp-${FEDORA_VER}.war
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get install -y curl &&     curl -Lo jetty.tar.gz ${JETTY_BIN}
+      &&     tar -xzf jetty.tar.gz &&     rm -rf jetty.tar.gz &&     cd jetty-distribution-${JETTY_VER}/webapps
+      &&     curl -Lo fcrepo.war ${FEDORA_BIN} &&     mkdir fcrepo &&     cd fcrepo
+      &&     jar -xf ../fcrepo.war &&     cd ../ &&     rm fcrepo.war
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8-jdk-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-slim
+- BaseName: alpine:3.10.2
+  Commands:
+  - Env:
+    - Key: JETTY_VER
+      Value: 9.4.20.v20190813
+    Name: env
+  - Env:
+    - Key: FCREPO_JETTY_PORT
+      Value: "8080"
+    Name: env
+  - Env:
+    - Key: JSONLD_ADDON_VERSION
+      Value: 0.0.6
+    - Key: COMPACTION_URI
+      Value: https://oa-pass.github.io/pass-data-model/src/main/resources/context-3.4.jsonld
+    - Key: JSONLD_STRICT
+      Value: "true"
+    - Key: JSONLD_CONTEXT_PERSIST
+      Value: "true"
+    - Key: JSONLD_CONTEXT_MINIMAL
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: FCREPO_BASE_URI
+      Value: http://localhost:8080/fcrepo/rest
+    - Key: FCREPO_USER
+      Value: fedoraAdmin
+    - Key: FCREPO_PASS
+      Value: moo
+    - Key: FCREPO_DATA_DIR
+      Value: /data/fcrepo
+    - Key: FCREPO_SP_AUTH_HEADER
+      Value: REMOTE_USER
+    - Key: FCREPO_SP_AUTH_ROLES
+      Value: fedoraUser
+    - Key: FCREPO_AUTH_REALM
+      Value: fcrepo
+    - Key: FCREPO_AUTH_LOGLEVEL
+      Value: DEBUG
+    - Key: FCREPO_MODESHAPE_CONFIG
+      Value: classpath:/config/file-simple/repository.json
+    - Key: FCREPO_LOGLEVEL
+      Value: DEBUG
+    Name: env
+  - Chown: ""
+    From: "1"
+    Name: copy
+    SourcesAndDest:
+    - /jetty-distribution-${JETTY_VER}/
+    - /jetty-distribution-${JETTY_VER}/
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /jetty-shib-authenticator/target/jetty-shib-authenticator-0.0.1-SNAPSHOT.jar
+    - /jetty-distribution-${JETTY_VER}/lib/ext
+  - Name: workdir
+    Path: /jetty-distribution-${JETTY_VER}
+  - CmdLine:
+    - wget -O webapps/fcrepo/WEB-INF/lib/jsonld-addon-filters-${JSONLD_ADDON_VERSION}-shaded.jar         http://central.maven.org/maven2/org/dataconservancy/fcrepo/jsonld-addon-filters/${JSONLD_ADDON_VERSION}/jsonld-addon-filters-${JSONLD_ADDON_VERSION}-shaded.jar
+      &&     echo "53883365d715e64bf55ec0e433a2266f9374254e *webapps/fcrepo/WEB-INF/lib/jsonld-addon-filters-${JSONLD_ADDON_VERSION}-shaded.jar"         |
+      sha1sum -c -
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - fedora-env.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - init-fedora.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run_tests.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - web.xml
+    - webapps/fcrepo/WEB-INF/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - fcrepo-config.xml
+    - webapps/fcrepo/WEB-INF/classes/spring
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - fcrepo.xml
+    - webapps/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - fcrepo-realm.properties
+    - etc/
+  - CmdLine:
+    - apk add --no-cache openjdk8-jre &&     java -jar ./start.jar --create-startd
+      &&     java -jar ./start.jar --add-to-start=http-forwarded
+    Name: run
+    PrependShell: true
+  - Key: ENABLE_CONTAINER_DEBUG
+    Name: arg
+    Value: "false"
+  - CmdLine:
+    - if [ "${ENABLE_CONTAINER_DEBUG}" = "true" ] ; then  java -jar ./start.jar --add-to-start=debug,debuglog
+      ;  fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /data
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: expose
+    Ports:
+    - ${FCREPO_JETTY_PORT}
+  - CmdLine:
+    - /init-fedora.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.10.2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10.2

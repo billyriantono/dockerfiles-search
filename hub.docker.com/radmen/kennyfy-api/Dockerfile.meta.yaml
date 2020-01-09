@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: openjdk:8-alpine
+  Commands:
+  - Name: workdir
+    Path: /usr/src/app
+  - CmdLine:
+    - apk add --no-cache bash
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "wget -O /usr/bin/lein https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein
+      \t&& chmod +x /usr/bin/lein"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /usr/src/app/
+  - CmdLine:
+    - "lein uberjar \t&& mv target/uberjar/kennyfy-api-*-standalone.jar target/uberjar/kennyfy-api.jar"
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM openjdk:8-alpine as build
+- BaseName: openjdk:8-alpine
+  Commands:
+  - Name: workdir
+    Path: /usr/src/app
+  - Key: DOCKER_UID
+    Name: arg
+    Value: "1000"
+  - Key: DOCKER_GID
+    Name: arg
+    Value: "1000"
+  - Env:
+    - Key: APP_PORT
+      Value: "8080"
+    Name: env
+  - CmdLine:
+    - "addgroup -g $DOCKER_GID app \t&& adduser -h /usr/src/app -u $DOCKER_UID -G
+      app -D app"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apk add --no-cache libcap \t&& setcap 'cap_net_bind_service=+ep' $(realpath
+      $(which java))"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/ld-musl-x86_64.path
+    - /etc/ld-musl-x86_64.path
+  - Name: user
+    User: app
+  - Chown: app
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/target/uberjar/kennyfy-api.jar
+    - /usr/src/app/
+  - CmdLine:
+    - java
+    - -jar
+    - kennyfy-api.jar
+    - --port
+    - $APP_PORT
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-alpine

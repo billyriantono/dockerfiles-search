@@ -1,0 +1,186 @@
+MetaArgs: null
+Stages:
+- As: yarninstall
+  BaseName: node:alpine
+  Commands:
+  - CmdLine:
+    - apk add yarn
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add python
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src/client
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client/package.json
+    - ./package.json
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client/yarn.lock
+    - ./yarn.lock
+  - CmdLine:
+    - yarn --pure-lockfile
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:alpine
+  Name: yarninstall
+  Platform: ""
+  SourceCode: FROM node:alpine AS yarninstall
+- As: copy_client_sources
+  BaseName: yarninstall
+  Commands:
+  - Name: workdir
+    Path: /src/client
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client
+    - .
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .git
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .gitignore
+    - .
+  From:
+    Stage:
+      Index: 0
+      Named: yarninstall
+  Name: copy_client_sources
+  Platform: ""
+  SourceCode: FROM yarninstall AS copy_client_sources
+- As: ngbuild
+  BaseName: copy_client_sources
+  Commands:
+  - Name: workdir
+    Path: /src/client
+  - CmdLine:
+    - yarn run build:production
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: copy_client_sources
+  Name: ngbuild
+  Platform: ""
+  SourceCode: FROM copy_client_sources AS ngbuild
+- As: base
+  BaseName: microsoft/dotnet:2.2-aspnetcore-runtime
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Name: expose
+    Ports:
+    - "80"
+  From:
+    Image: microsoft/dotnet:2.2-aspnetcore-runtime
+  Name: base
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2-aspnetcore-runtime AS base
+- As: build
+  BaseName: microsoft/dotnet:2.2-sdk
+  Commands:
+  - CmdLine:
+    - git clone https://github.com/vcpsh/single-sign-on --branch master
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sh.vcp.groupadministration/sh.vcp.groupadministration.csproj
+    - sh.vcp.groupadministration/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sh.vcp.groupadministration.dal/sh.vcp.groupadministration.dal.csproj
+    - sh.vcp.groupadministration.dal/
+  - CmdLine:
+    - dotnet restore sh.vcp.groupadministration/sh.vcp.groupadministration.csproj
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Name: workdir
+    Path: /src/sh.vcp.groupadministration
+  - CmdLine:
+    - dotnet build sh.vcp.groupadministration.csproj -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.2-sdk
+  Name: build
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2-sdk AS build
+- As: publish
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - dotnet publish sh.vcp.groupadministration.csproj -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 4
+      Named: build
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build AS publish
+- As: final
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - Chown: ""
+    From: ngbuild
+    Name: copy
+    SourcesAndDest:
+    - /src/client/dist/client/
+    - ./wwwroot/
+  - CmdLine:
+    - dotnet
+    - sh.vcp.groupadministration.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 3
+      Named: base
+  Name: final
+  Platform: ""
+  SourceCode: FROM base AS final

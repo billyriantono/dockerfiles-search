@@ -1,0 +1,102 @@
+MetaArgs: null
+Stages:
+- As: frontend
+  BaseName: 360cloud/wayne-ui-builder:v1.0.1
+  Commands:
+  - Key: RAVEN_DSN
+    Name: arg
+    Value: null
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/frontend
+    - /workspace
+  - CmdLine:
+    - sed -i  "s~__ravenDsn__~${RAVEN_DSN}~g" /workspace/src/environments/environment.prod.ts
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /workspace &&        npm config set registry https://registry.npm.taobao.org
+      &&        npm install &&        npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: 360cloud/wayne-ui-builder:v1.0.1
+  Name: frontend
+  Platform: ""
+  SourceCode: FROM 360cloud/wayne-ui-builder:v1.0.1 as frontend
+- As: backend
+  BaseName: 360cloud/wayne-server-builder:v1.0.1
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - /go/src/github.com/Qihoo360/wayne
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.sum
+    - /go/src/github.com/Qihoo360/wayne
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/backend
+    - /go/src/github.com/Qihoo360/wayne/src/backend
+  - CmdLine:
+    - rm -rf /go/src/github.com/Qihoo360/wayne/src/backend/static
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: frontend
+    Name: copy
+    SourcesAndDest:
+    - /workspace/dist/
+    - /go/src/github.com/Qihoo360/wayne/src/backend/static/
+  - Chown: ""
+    From: frontend
+    Name: copy
+    SourcesAndDest:
+    - /workspace/dist/index.html
+    - /go/src/github.com/Qihoo360/wayne/src/backend/views/
+  - CmdLine:
+    - export GO111MODULE=on && cd /go/src/github.com/Qihoo360/wayne/src/backend &&
+      bee generate docs && bee pack -o /_build
+    Name: run
+    PrependShell: true
+  From:
+    Image: 360cloud/wayne-server-builder:v1.0.1
+  Name: backend
+  Platform: ""
+  SourceCode: FROM 360cloud/wayne-server-builder:v1.0.1 as backend
+- BaseName: 360cloud/centos:7
+  Commands:
+  - CmdLine:
+    - ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: backend
+    Name: copy
+    SourcesAndDest:
+    - /_build/backend.tar.gz
+    - /opt/wayne/
+  - Name: workdir
+    Path: /opt/wayne/
+  - CmdLine:
+    - tar -xzvf backend.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./backend
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: 360cloud/centos:7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM 360cloud/centos:7

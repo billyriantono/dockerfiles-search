@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: maven:3.6-jdk-8-alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /home
+  - Name: workdir
+    Path: /home
+  - CmdLine:
+    - mvn clean package -DskipTests
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.6-jdk-8-alpine
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM maven:3.6-jdk-8-alpine AS build-env
+- BaseName: ubuntu:18.04
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"mario.micudaj@viadee.de"'
+    Name: label
+  - CmdLine:
+    - apt-get update &&     apt-get -y install openjdk-8-jre-headless &&     apt-get
+      -y install libc6 &&     apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - addgroup --gid 1000 appuser &&     adduser --uid 1000 --gid 1000 appuser &&     mkdir
+      -p /app &&     mkdir -p /data
+    Name: run
+    PrependShell: true
+  - Key: APP_COMPONENT_DIR
+    Name: arg
+    Value: /home/target
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - ${APP_COMPONENT_DIR}/lib
+    - /app/lib
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - ${APP_COMPONENT_DIR}/dependency
+    - /app/bin
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - ${APP_COMPONENT_DIR}/dependency/META-INF
+    - /app/bin/META-INF
+  - CmdLine:
+    - chown -R appuser:appuser /app &&     chown -R appuser:appuser /data &&     find
+      /app -type d -exec chmod 550 {} + &&     find /app -type f -exec chmod 660 {}
+      + &&     chmod 770 /data
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: user
+    User: appuser
+  - Name: workdir
+    Path: /data
+  - CmdLine:
+    - /usr/bin/java
+    - -Dspark.master=local[*]
+    - -cp
+    - /app/bin:/app/lib/*
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

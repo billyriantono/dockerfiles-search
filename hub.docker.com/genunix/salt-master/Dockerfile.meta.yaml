@@ -1,0 +1,126 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stretch
+  Commands:
+  - Maintainer: Filip Pytloun <filip@pytloun.cz>
+    Name: maintainer
+  - Key: version
+    Name: arg
+    Value: "2018.3"
+  - Env:
+    - Key: VERSION
+      Value: $version
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get -qq update &&     apt-get install -y wget gnupg2 &&     wget -O - https://repo.saltstack.com/apt/debian/9/amd64/latest/SALTSTACK-GPG-KEY.pub
+      | apt-key add - &&     echo "deb http://repo.saltstack.com/apt/debian/9/amd64/${VERSION}
+      stretch main" >/etc/apt/sources.list.d/saltstack.list &&     apt-get update
+      && apt-get install -y salt-master salt-api pwgen git make myrepos &&     mkdir
+      -p /etc/reclass /var/run/salt /etc/salt/pki/master/minions &&     apt-get clean
+      && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'useradd --system salt &&     chown -R salt:salt /etc/salt /var/cache/salt /var/log/salt
+      /var/run/salt &&     echo "user: salt" >> /etc/salt/master'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -qq update &&     apt-get install --no-install-recommends -y python-pip
+      python-ddt python-pyparsing &&     pip install -e git+https://github.com/salt-formulas/reclass.git#egg=reclass
+      &&     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TINI_VERSION
+      Value: 0.18.0
+    Name: env
+  - Env:
+    - Key: TINI_SHA
+      Value: eadb9d6e2dc960655481d78a92d2c8bc021861045987ccd3e27c7eae5af0cf33
+    Name: env
+  - CmdLine:
+    - wget https://github.com/krallin/tini/releases/download/v${TINI_VERSION}/tini-static-amd64
+      -O /bin/tini && chmod +x /bin/tini   && echo "$TINI_SHA  /bin/tini" | sha256sum
+      -c -
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MOLTEN_VERSION
+      Value: 0.3.1
+    Name: env
+  - Env:
+    - Key: MOLTEN_MD5
+      Value: 04483620978a3167827bdd1424e34505
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/martinhoefling/molten/releases/download/v${MOLTEN_VERSION}/molten-${MOLTEN_VERSION}.tar.gz
+    - molten-${MOLTEN_VERSION}.tar.gz
+  - CmdLine:
+    - echo "${MOLTEN_MD5}  molten-${MOLTEN_VERSION}.tar.gz" | md5sum --check
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/molten && tar -xf molten-${MOLTEN_VERSION}.tar.gz -C /opt/molten
+      --strip-components=1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/salt-formulas/salt-formulas.git /tmp/salt-formulas
+      &&     cd /tmp/salt-formulas &&     make submodules &&     make update &&     make
+      install &&     cd && rm -rf /tmp/salt-formulas
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/reclass-config.yml
+    - /etc/reclass/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/reclass.conf
+    - /etc/salt/master.d/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/env.conf
+    - /etc/salt/master.d/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/api.conf
+    - /etc/salt/master.d/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/auth.conf
+    - /etc/salt/master.d/
+  - Name: expose
+    Ports:
+    - "4505"
+    - "4506"
+    - "8000"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - /bin/tini
+    - --
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch

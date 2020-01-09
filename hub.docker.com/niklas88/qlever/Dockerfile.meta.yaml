@@ -1,0 +1,130 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: ubuntu:18.04
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Niklas Schnelle <schnelle@informatik.uni-freiburg.de>"'
+    Name: label
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Env:
+    - Key: LC_ALL
+      Value: C.UTF-8
+    Name: env
+  - Env:
+    - Key: LC_CTYPE
+      Value: C.UTF-8
+    Name: env
+  From:
+    Image: ubuntu:18.04
+  Name: base
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as base
+- As: builder
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y build-essential cmake clang-format-8 libsparsehash-dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app/
+  - Name: workdir
+    Path: /app/
+  - CmdLine:
+    - misc/format-check.sh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/build/
+  - CmdLine:
+    - cmake -DCMAKE_BUILD_TYPE=Release -DLOGLEVEL=DEBUG -DUSE_PARALLEL=true .. &&
+      make -j $(nproc) && make test
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base as builder
+- As: runtime
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apt-get update && apt-get install -y wget python3-yaml unzip curl bzip2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y libgomp1
+    Name: run
+    PrependShell: true
+  - Key: UID
+    Name: arg
+    Value: "1000"
+  - CmdLine:
+    - groupadd -r qlever && useradd --no-log-init -r -u $UID -g qlever qlever && chown
+      qlever:qlever /app
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: qlever
+  - Env:
+    - Key: PATH
+      Value: /app/:$PATH
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/build/*Main
+    - /app/src/web/*
+    - /app/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/e2e/*
+    - /app/e2e/
+  - Env:
+    - Key: PATH
+      Value: /app/:$PATH
+    Name: env
+  - Name: user
+    User: qlever
+  - Name: expose
+    Ports:
+    - "7001"
+  - Name: volume
+    Volumes:
+    - /input
+    - /index
+  - Env:
+    - Key: INDEX_PREFIX
+      Value: index
+    Name: env
+  - CmdLine:
+    - /bin/sh
+    - -c
+    - exec ServerMain -i "/index/${INDEX_PREFIX}" -p 7001 "$@"
+    - --
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM base as runtime

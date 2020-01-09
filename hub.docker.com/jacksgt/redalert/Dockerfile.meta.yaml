@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- As: node-builder
+  BaseName: node:9
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /redalert
+  - Name: workdir
+    Path: /redalert
+  - CmdLine:
+    - make build-ui
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:9
+  Name: node-builder
+  Platform: ""
+  SourceCode: FROM node:9 as node-builder
+- As: go-builder
+  BaseName: golang:1.10
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: node-builder
+    Name: copy
+    SourcesAndDest:
+    - /redalert
+    - /go/src/github.com/jonog/redalert
+  - CmdLine:
+    - curl https://glide.sh/get | sh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/jonog/redalert
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    - Key: GODEBUG
+      Value: netdns=go
+    Name: env
+  - CmdLine:
+    - make install-deps &&     make build
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10
+  Name: go-builder
+  Platform: ""
+  SourceCode: FROM golang:1.10 as go-builder
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: go-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/jonog/redalert/redalert
+    - /redalert
+  - Chown: ""
+    From: go-builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Name: expose
+    Ports:
+    - "8888"
+  - CmdLine:
+    - /redalert
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - server
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

@@ -1,0 +1,109 @@
+MetaArgs: null
+Stages:
+- As: jsonnet-cloner
+  BaseName: alpine/git:latest
+  Commands:
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - CmdLine:
+    - git clone https://github.com/google/go-jsonnet.git $GOPATH/src/github.com/google/go-jsonnet
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd $GOPATH/src/github.com/google/go-jsonnet && git checkout v0.10.0
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine/git:latest
+  Name: jsonnet-cloner
+  Platform: ""
+  SourceCode: FROM alpine/git:latest as jsonnet-cloner
+- As: builder
+  BaseName: golang:1.10
+  Commands:
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - CmdLine:
+    - go get github.com/fatih/color
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: jsonnet-cloner
+    Name: copy
+    SourcesAndDest:
+    - $GOPATH/src/github.com/google/go-jsonnet
+    - $GOPATH/src/github.com/google/go-jsonnet
+  - Name: workdir
+    Path: $GOPATH/src/github.com/google/go-jsonnet
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /jsonnet-amd64 -v jsonnet/cmd.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.10 as builder
+- As: remarshal-cloner
+  BaseName: alpine/git:latest
+  Commands:
+  - CmdLine:
+    - git clone https://github.com/dbohdan/remarshal.git /src/remarshal
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /src/remarshal && git checkout v0.8.0
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine/git:latest
+  Name: remarshal-cloner
+  Platform: ""
+  SourceCode: FROM alpine/git:latest as remarshal-cloner
+- As: resource
+  BaseName: python:3.6-alpine3.7
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /jsonnet-amd64
+    - /usr/local/bin/jsonnet
+  - Chown: ""
+    From: remarshal-cloner
+    Name: copy
+    SourcesAndDest:
+    - /src/remarshal
+    - /src/remarshal
+  - CmdLine:
+    - apk add --update make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /usr/local/bin/jsonnet
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src/remarshal
+  - CmdLine:
+    - python setup.py install
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.6-alpine3.7
+  Name: resource
+  Platform: ""
+  SourceCode: FROM python:3.6-alpine3.7 as resource
+- BaseName: resource
+  Commands: null
+  From:
+    Stage:
+      Index: 3
+      Named: resource
+  Name: ""
+  Platform: ""
+  SourceCode: FROM resource

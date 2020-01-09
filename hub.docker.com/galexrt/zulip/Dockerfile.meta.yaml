@@ -1,0 +1,142 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:xenial-20171114
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Alexander Trost <galexrt@googlemail.com>"'
+    Name: label
+  - Env:
+    - Key: ZULIP_GIT_URL
+      Value: '"https://github.com/zulip/zulip.git"'
+    - Key: ZULIP_GIT_REF
+      Value: '"master"'
+    Name: env
+  - CmdLine:
+    - echo 'APT::Install-Recommends 0;' >> /etc/apt/apt.conf.d/01norecommends &&     echo
+      'APT::Install-Suggests 0;' >> /etc/apt/apt.conf.d/01norecommends &&     apt-get
+      -q update &&     apt-get -q install locales &&     locale-gen en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: '"en_US.UTF-8"'
+    - Key: LANGUAGE
+      Value: '"en_US:en"'
+    - Key: LC_ALL
+      Value: '"en_US.UTF-8"'
+    Name: env
+  - CmdLine:
+    - apt-get -q dist-upgrade -y &&     apt-get -q install -y git sudo ca-certificates
+      apt-transport-https python3 &&     useradd -d /home/zulip -m zulip &&     echo
+      'zulip ALL=(ALL:ALL) NOPASSWD:ALL' >> /etc/sudoers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone "$ZULIP_GIT_URL" &&     (cd zulip && git checkout "$ZULIP_GIT_REF")
+      &&     chown -R zulip:zulip zulip &&     mv zulip /home/zulip/zulip
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: zulip
+  - Name: workdir
+    Path: /home/zulip/zulip
+  - CmdLine:
+    - ./tools/provision --production-travis
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash -c "source /srv/zulip-py3-venv/bin/activate && ./tools/build-release-tarball
+      docker" &&     mv /tmp/tmp.*/zulip-server-docker.tar.gz /tmp/zulip-server-docker.tar.gz
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:xenial-20171114
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:xenial-20171114
+- BaseName: ubuntu:xenial-20171114
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Alexander Trost <galexrt@googlemail.com>"'
+    Name: label
+  - Env:
+    - Key: DATA_DIR
+      Value: '"/data"'
+    - Key: LANG
+      Value: '"en_US.UTF-8"'
+    - Key: LANGUAGE
+      Value: '"en_US:en"'
+    - Key: LC_ALL
+      Value: '"en_US.UTF-8"'
+    Name: env
+  - CmdLine:
+    - echo 'APT::Install-Recommends 0;' >> /etc/apt/apt.conf.d/01norecommends &&     echo
+      'APT::Install-Suggests 0;' >> /etc/apt/apt.conf.d/01norecommends &&     apt-get
+      -q update &&     apt-get -q install locales &&     locale-gen en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: '"en_US.UTF-8"'
+    - Key: LANGUAGE
+      Value: '"en_US:en"'
+    - Key: LC_ALL
+      Value: '"en_US.UTF-8"'
+    Name: env
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /tmp/zulip-server-docker.tar.gz
+    - /root/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - custom_zulip_files/
+    - /root/custom_zulip
+  - CmdLine:
+    - apt-get -q dist-upgrade -y &&     apt-get -q install -y sudo ca-certificates
+      apt-transport-https nginx-full &&     rm /etc/init.d/nginx &&     ln -s /bin/true
+      /etc/init.d/nginx &&     mkdir -p "$DATA_DIR" &&     cd /root &&     tar -xf
+      zulip-server-docker.tar.gz &&     rm -f zulip-server-docker.tar.gz &&     mv
+      zulip-server-docker zulip &&     cp -rf /root/custom_zulip/* /root/zulip &&     rm
+      -rf /root/custom_zulip &&     export PUPPET_CLASSES="zulip::dockervoyager"            DEPLOYMENT_TYPE="dockervoyager"            ADDITIONAL_PACKAGES="expect"
+      &&     /root/zulip/scripts/setup/install --hostname="$(hostname)" --email="docker-zulip"
+      --no-init-db &&     apt-get -qq autoremove --purge -y &&     apt-get -qq clean
+      &&     rm -rf /root/zulip/puppet/ /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /sbin/entrypoint.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - setup_files/
+    - /opt/files
+  - Name: volume
+    Volumes:
+    - $DATA_DIR
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - CmdLine:
+    - /sbin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - app:run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:xenial-20171114
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:xenial-20171114

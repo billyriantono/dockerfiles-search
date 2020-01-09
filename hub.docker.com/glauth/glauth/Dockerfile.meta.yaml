@@ -1,0 +1,109 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:alpine
+  Commands:
+  - Maintainer: Ben Yanke <ben@benyanke.com>
+    Name: maintainer
+  - CmdLine:
+    - mkdir /app /tmp/gocode
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /app/
+  - Name: workdir
+    Path: /app
+  - Env:
+    - Key: GOPATH
+      Value: /tmp/gocode
+    Name: env
+  - Env:
+    - Key: GOOS
+      Value: linux
+    Name: env
+  - Env:
+    - Key: GOARCH
+      Value: amd64
+    Name: env
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - CmdLine:
+    - apk add --no-cache git bzr make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -d -v ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -u github.com/jteeuwen/go-bindata/... && $GOPATH/bin/go-bindata -pkg=main
+      assets && gofmt -w bindata.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make linux64 && cp ./bin/glauth64 /app/glauth
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:alpine as build
+- As: run
+  BaseName: alpine
+  Commands:
+  - Maintainer: Ben Yanke <ben@benyanke.com>
+    Name: maintainer
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - sample-simple.cfg
+    - /app/config/config.cfg
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app/glauth
+    - /app/glauth
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app/scripts/docker/start.sh
+    - /app/docker/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app/scripts/docker/default-config.cfg
+    - /app/docker/
+  - CmdLine:
+    - apk update && apk add --no-cache dumb-init openldap-clients && which ldapsearch
+      && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "389"
+    - "5555"
+    - "636"
+  - CmdLine:
+    - /usr/bin/dumb-init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /bin/sh
+    - /app/docker/start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: run
+  Platform: ""
+  SourceCode: FROM alpine as run

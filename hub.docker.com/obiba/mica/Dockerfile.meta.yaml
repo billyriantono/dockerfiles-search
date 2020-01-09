@@ -1,0 +1,175 @@
+MetaArgs: null
+Stages:
+- As: gosu
+  BaseName: obiba/docker-gosu:latest
+  Commands: null
+  From:
+    Image: obiba/docker-gosu:latest
+  Name: gosu
+  Platform: ""
+  SourceCode: FROM obiba/docker-gosu:latest AS gosu
+- As: building
+  BaseName: maven:3.5.4-slim
+  Commands:
+  - Env:
+    - Key: NVM_DIR
+      Value: /root/.nvm
+    Name: env
+  - Env:
+    - Key: NODE_VERSION
+      Value: 4.5.0
+    Name: env
+  - Env:
+    - Key: MICA_BRANCH
+      Value: master
+    Name: env
+  - CmdLine:
+    - mkdir -p $NVM_DIR
+    Name: run
+    PrependShell: true
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -c
+  - CmdLine:
+    - 'apt-get update &&     apt-get install -y --no-install-recommends devscripts
+      debhelper build-essential fakeroot git &&     curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.11/install.sh
+      | bash &&     source $NVM_DIR/nvm.sh &&     nvm install $NODE_VERSION &&     npm
+      install -g bower grunt &&     echo ''{ "allow_root": true }'' > $HOME/.bowerrc'
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /projects
+  - CmdLine:
+    - git clone https://github.com/obiba/mica2.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /projects/mica2
+  - CmdLine:
+    - source $NVM_DIR/nvm.sh;     git checkout $MICA_BRANCH;     mvn clean install
+      &&     mvn -Prelease org.apache.maven.plugins:maven-antrun-plugin:run@make-deb
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.5.4-slim
+  Name: building
+  Platform: ""
+  SourceCode: FROM maven:3.5.4-slim AS building
+- As: es-plugin
+  BaseName: maven:3.5.4-slim
+  Commands:
+  - Env:
+    - Key: MICA_SEARCH_ES_BRANCH
+      Value: master
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get install -y --no-install-recommends git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /projects
+  - CmdLine:
+    - git clone https://github.com/obiba/mica-search-es.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /projects/mica-search-es
+  - CmdLine:
+    - git checkout $MICA_SEARCH_ES_BRANCH;     mvn clean install
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.5.4-slim
+  Name: es-plugin
+  Platform: ""
+  SourceCode: FROM maven:3.5.4-slim AS es-plugin
+- As: server
+  BaseName: openjdk:8-jdk-stretch
+  Commands:
+  - Env:
+    - Key: MICA_ADMINISTRATOR_PASSWORD
+      Value: password
+    Name: env
+  - Env:
+    - Key: MICA_ANONYMOUS_PASSWORD
+      Value: password
+    Name: env
+  - Env:
+    - Key: MICA_HOME
+      Value: /srv
+    Name: env
+  - Env:
+    - Key: DEFAULT_PLUGINS_DIR
+      Value: /opt/plugins
+    Name: env
+  - Env:
+    - Key: JAVA_OPTS
+      Value: -Xmx2G
+    Name: env
+  - Name: workdir
+    Path: /tmp
+  - Chown: ""
+    From: building
+    Name: copy
+    SourcesAndDest:
+    - /projects/mica2/mica-dist/target/mica2_*.deb
+    - .
+  - CmdLine:
+    - apt-get update &&     apt-get install -y --no-install-recommends daemon psmisc
+      &&     DEBIAN_FRONTEND=noninteractive dpkg -i mica2_*.deb &&     rm mica2_*.deb
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $DEFAULT_PLUGINS_DIR
+  - Chown: ""
+    From: es-plugin
+    Name: copy
+    SourcesAndDest:
+    - /projects/mica-search-es/target/mica-search-es-*-dist.zip
+    - .
+  - Chown: ""
+    From: gosu
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/gosu
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /bin
+    - /opt/mica/bin
+  - CmdLine:
+    - chmod +x -R /opt/mica/bin;     chown -R mica /opt/mica;     chmod +x /usr/share/mica2/bin/mica2
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $MICA_HOME
+  - Name: volume
+    Volumes:
+    - $MICA_HOME
+  - Name: expose
+    Ports:
+    - "8082"
+    - "8445"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - /bin/bash
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - app
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jdk-stretch
+  Name: server
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-stretch AS server

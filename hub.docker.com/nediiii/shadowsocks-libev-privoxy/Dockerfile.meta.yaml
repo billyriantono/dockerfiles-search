@@ -1,0 +1,50 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: nediiii/alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache py-pip &&     pip install gfwlist2privoxy &&     gfwlist2privoxy
+      -i https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt -t socks5
+      -p 127.0.0.1:1080 -f /root/gfwlist.action &&     chmod 660 /root/gfwlist.action
+    Name: run
+    PrependShell: true
+  From:
+    Image: nediiii/alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM nediiii/alpine as builder
+- BaseName: nediiii/shadowsocks-libev
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"nediiii <varnediiii@gmail.com>"'
+    Name: label
+  - CmdLine:
+    - apk add --no-cache privoxy &&     echo "actionsfile gfwlist.action" >> /etc/privoxy/config
+      &&     sed -i 's/enable-edit-actions 0/enable-edit-actions 1/g' /etc/privoxy/config
+      &&     sed -i 's/listen-address  127.0.0.1:8118/listen-address  0.0.0.0:8118/g'
+      /etc/privoxy/config
+    Name: run
+    PrependShell: true
+  - Chown: privoxy:privoxy
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /root/gfwlist.action
+    - /etc/privoxy/gfwlist.action
+  - Name: expose
+    Ports:
+    - "1080"
+    - "8118"
+  - CmdLine:
+    - /usr/sbin/privoxy /etc/privoxy/config     &&     ss-local     -s $SERVER_ADDR     -p
+      $SERVER_PORT     -k $PASSWORD     -m $METHOD     -b 0.0.0.0     -l 1080     -t
+      $TIMEOUT     --fast-open     -u
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: nediiii/shadowsocks-libev
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nediiii/shadowsocks-libev

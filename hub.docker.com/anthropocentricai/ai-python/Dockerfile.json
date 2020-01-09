@@ -1,0 +1,213 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "ALPINE_VERSION",
+      "DefaultValue": "3.8",
+      "ProvidedValue": null,
+      "Value": "3.8"
+    },
+    {
+      "Key": "PYTHON_VERSION",
+      "DefaultValue": "3.7.1",
+      "ProvidedValue": null,
+      "Value": "3.7.1"
+    },
+    {
+      "Key": "PYTHON_BASE",
+      "DefaultValue": "3.7",
+      "ProvidedValue": null,
+      "Value": "3.7"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "base",
+      "BaseName": "python:${PYTHON_VERSION}-alpine${ALPINE_VERSION}",
+      "SourceCode": "FROM python:${PYTHON_VERSION}-alpine${ALPINE_VERSION} as base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Image": "python:${PYTHON_VERSION}-alpine${ALPINE_VERSION}"
+      },
+      "Commands": [
+        {
+          "Maintainer": "Kacper Sokol \u003cks1591@bristol.ac.uk\u003e",
+          "Name": "maintainer"
+        },
+        {
+          "CmdLine": [
+            "rm -fr /usr/local/lib/python3.*/config-3.*m-x86_64-linux-gnu"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "builder",
+      "BaseName": "base",
+      "SourceCode": "FROM base as builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Key": "PYTHON_BASE",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "CmdLine": [
+            "mkdir /install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "apk --no-cache --update-cache add   gfortran build-base openblas-dev   freetype-dev libpng-dev   file binutils"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "PYTHONPATH",
+              "Value": "\"/install/lib/python${PYTHON_BASE}/site-packages:${PYTHONPATH}\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PATH",
+              "Value": "\"/install/bin:${PATH}\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "requirements*.txt",
+            "/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "touch /requirements-dev.txt \u0026\u0026     pip install --no-cache-dir                 --install-option=\"--prefix=/install\"                 -r /requirements.txt                 -r /requirements-aux.txt                 -r /requirements-dev.txt"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "find /install/lib/python3.*/site-packages/ \\( -name '__pycache__' -o -name 'test' -o -name 'tests' \\) -type d -print0 | xargs -0 rm -rf -- \u0026\u0026     find /install/share/jupyter/lab/static/ -name '*.map' -print -exec rm \"{}\" \\; \u0026\u0026     rm -rf /root/.cache \u0026\u0026     rm -rf /tmp/* \u0026\u0026     find /install/lib/python3.*/site-packages/ -name '*.so' -print -exec /bin/sh -c 'file \"{}\" | grep -q \"not stripped\" \u0026\u0026 strip -s \"{}\"' \\;"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "scientific-python",
+      "BaseName": "base",
+      "SourceCode": "FROM base as scientific-python",
+      "Platform": "",
+      "As": "scientific-python",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk --no-cache add   openblas   libstdc++   freetype libpng \u0026\u0026     rm -rf /root/.cache \u0026\u0026     rm -rf /tmp/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/install",
+            "/usr/local"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "A_USER",
+              "Value": "jovian"
+            },
+            {
+              "Key": "A_UID",
+              "Value": "1000"
+            },
+            {
+              "Key": "A_HOME",
+              "Value": "/jovian"
+            },
+            {
+              "Key": "A_SHELL",
+              "Value": "/bin/sh"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "mkdir ${A_HOME} \u0026\u0026     adduser -D -s ${A_SHELL} -u ${A_UID} -h ${A_HOME} ${A_USER} \u0026\u0026     chown ${A_USER} ${A_HOME}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "${A_HOME}"
+        },
+        {
+          "Name": "user",
+          "User": "${A_USER}"
+        },
+        {
+          "CmdLine": [
+            "jupyter serverextension enable --py jupyterlab"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "8888"
+          ]
+        },
+        {
+          "CmdLine": [
+            "jupyter",
+            "lab",
+            "--ip=0.0.0.0",
+            "--port=8888",
+            "--no-browser"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

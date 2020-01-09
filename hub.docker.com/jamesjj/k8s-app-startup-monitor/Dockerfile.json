@@ -1,0 +1,179 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "BASE_IMAGE",
+      "DefaultValue": "gcr.io/distroless/base",
+      "ProvidedValue": null,
+      "Value": "gcr.io/distroless/base"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "os_config_image",
+      "BaseName": "$BASE_IMAGE:debug",
+      "SourceCode": "FROM $BASE_IMAGE:debug as os_config_image",
+      "Platform": "",
+      "As": "os_config_image",
+      "From": {
+        "Image": "$BASE_IMAGE:debug"
+      },
+      "Commands": [
+        {
+          "Key": "BASE_IMAGE",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "CmdLine": [
+            "adduser",
+            "-h",
+            "/",
+            "-s",
+            "/sbin/nologin",
+            "-D",
+            "-H",
+            "app_user"
+          ],
+          "Name": "run",
+          "PrependShell": false
+        }
+      ]
+    },
+    {
+      "Name": "build_image",
+      "BaseName": "golang:1.12-stretch",
+      "SourceCode": "FROM golang:1.12-stretch as build_image",
+      "Platform": "",
+      "As": "build_image",
+      "From": {
+        "Image": "golang:1.12-stretch"
+      },
+      "Commands": [
+        {
+          "Key": "BASE_IMAGE",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Name": "workdir",
+          "Path": "/go/src/app"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "*.go",
+            "./"
+          ]
+        },
+        {
+          "CmdLine": [
+            "go get -d -v ./..."
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "go test -v -cover ./..."
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "go install -v ./..."
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "service_image",
+      "BaseName": "$BASE_IMAGE",
+      "SourceCode": "FROM $BASE_IMAGE as service_image",
+      "Platform": "",
+      "As": "service_image",
+      "From": {
+        "Image": "$BASE_IMAGE"
+      },
+      "Commands": [
+        {
+          "Key": "BASE_IMAGE",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Labels": [
+            {
+              "Key": "base_image",
+              "Value": "$BASE_IMAGE"
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "owner_team",
+              "Value": "OPS"
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Chown": "root:root",
+          "From": "os_config_image",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/etc/passwd",
+            "/etc/group",
+            "/etc/"
+          ]
+        },
+        {
+          "Chown": "root:root",
+          "From": "build_image",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/go/bin/app",
+            "/app"
+          ]
+        },
+        {
+          "Name": "user",
+          "User": "app_user:app_user"
+        },
+        {
+          "Key": "LISTEN_PORT",
+          "Name": "arg",
+          "Value": "\"8111\""
+        },
+        {
+          "Env": [
+            {
+              "Key": "ASM_BINDADDRESS",
+              "Value": "\":$LISTEN_PORT\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "$LISTEN_PORT"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/app"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

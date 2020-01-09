@@ -1,0 +1,142 @@
+MetaArgs:
+- DefaultValue: '"ubuntu:18.04"'
+  Key: build_image
+  ProvidedValue: null
+  Value: '"ubuntu:18.04"'
+- DefaultValue: '"ubuntu:18.04"'
+  Key: app_image
+  ProvidedValue: null
+  Value: '"ubuntu:18.04"'
+Stages:
+- As: build
+  BaseName: ${build_image}
+  Commands:
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y build-essential git
+    Name: run
+    PrependShell: true
+  - Key: cuda
+    Name: arg
+    Value: "0"
+  - Key: cuda_tc
+    Name: arg
+    Value: "0"
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - git clone -n https://github.com/AlexeyAB/darknet.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src/darknet
+  - CmdLine:
+    - git checkout 4c315ea26b56c2bf20ebc240d94386c6e3cc83db
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e "s!OPENMP=0!OPENMP=1!g" Makefile &&     sed -i -e "s!AVX=0!AVX=1!g"
+      Makefile &&     sed -i -e "s!LIBSO=0!LIBSO=1!g" Makefile &&     sed -i -e "s!GPU=0!GPU=${cuda}!g"
+      Makefile &&     sed -i -e "s!CUDNN=0!CUDNN=${cuda}!g" Makefile &&     sed -i
+      -e "s!CUDNN_HALF=0!CUDNN_HALF=${cuda_tc}!g" Makefile &&     make
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${build_image}
+  Name: build
+  Platform: ""
+  SourceCode: FROM ${build_image} AS build
+- BaseName: ${app_image}
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install -y libgomp1 wget &&     apt-get install
+      -y --no-install-recommends python3-pip &&     apt-get install -y python3-setuptools
+      &&     pip3 install --no-cache-dir wheel &&     rm -rf /var/lib/apt/lists
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /src/darknet/libdarknet.so
+    - .
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /src/darknet/build/darknet/x64/darknet.py
+    - .
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /src/darknet/cfg
+    - data/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /src/darknet/data
+    - data/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - app.py
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - swagger.yaml
+    - .
+  - CmdLine:
+    - pip3 install --no-cache-dir -r requirements.txt
+    Name: run
+    PrependShell: true
+  - Key: weights_file
+    Name: arg
+    Value: '"yolov3.weights"'
+  - Key: config_file
+    Name: arg
+    Value: '"data/yolov3.cfg"'
+  - Key: meta_file
+    Name: arg
+    Value: '"data/coco.data"'
+  - Env:
+    - Key: weights_file
+      Value: ${weights_file}
+    Name: env
+  - Env:
+    - Key: config_file
+      Value: ${config_file}
+    Name: env
+  - Env:
+    - Key: meta_file
+      Value: ${meta_file}
+    Name: env
+  - CmdLine:
+    - wget https://pjreddie.com/media/files/${weights_file}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python3
+    - app.py
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ${app_image}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${app_image}

@@ -1,0 +1,119 @@
+MetaArgs: null
+Stages:
+- As: logd-builder
+  BaseName: golang:latest
+  Commands:
+  - CmdLine:
+    - go get "github.com/nk-designz/metrodb/services/logd/server"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static"' -o /bin/logd
+      /go/src/github.com/nk-designz/metroDB/services/logd/server
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: logd-builder
+  Platform: ""
+  SourceCode: FROM golang:latest AS logd-builder
+- As: mond-builder
+  BaseName: golang:latest
+  Commands:
+  - CmdLine:
+    - go get "github.com/nk-designz/metrodb/services/mond"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static"' -o /bin/mond
+      /go/src/github.com/nk-designz/metroDB/services/mond
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: mond-builder
+  Platform: ""
+  SourceCode: FROM golang:latest AS mond-builder
+- As: mapd-builder
+  BaseName: golang:latest
+  Commands:
+  - CmdLine:
+    - go get "github.com/nk-designz/metrodb/services/mapd/server"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static"' -o /bin/mapd
+      /go/src/github.com/nk-designz/metroDB/services/mapd/server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get "github.com/nk-designz/metrodb/services/mapd/cmd"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static"' -o /bin/mapd-util
+      /go/src/github.com/nk-designz/metroDB/services/mapd/cmd
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: mapd-builder
+  Platform: ""
+  SourceCode: FROM golang:latest AS mapd-builder
+- BaseName: registry.access.redhat.com/ubi8/ubi-minimal:latest
+  Commands:
+  - CmdLine:
+    - mkdir /var/metrodb
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: logd-builder
+    Name: copy
+    SourcesAndDest:
+    - /bin/logd
+    - /bin/logd
+  - CmdLine:
+    - mkdir /var/metrodb/logd
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LOGD_DB_PATH
+      Value: /opt/metrodb/logd
+    Name: env
+  - Name: expose
+    Ports:
+    - "7558"
+  - Chown: ""
+    From: mond-builder
+    Name: copy
+    SourcesAndDest:
+    - /bin/mond
+    - /bin/mond
+  - Chown: ""
+    From: mapd-builder
+    Name: copy
+    SourcesAndDest:
+    - /bin/mapd
+    - /bin/mapd
+  - Chown: ""
+    From: mapd-builder
+    Name: copy
+    SourcesAndDest:
+    - /bin/mapd-util
+    - /bin/mapd-util
+  - CmdLine:
+    - mkdir /var/metrodb/mapd
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MAPD_DB_PATH
+      Value: /opt/metrodb/mapd
+    Name: env
+  - Name: expose
+    Ports:
+    - "7550"
+  From:
+    Image: registry.access.redhat.com/ubi8/ubi-minimal:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM registry.access.redhat.com/ubi8/ubi-minimal:latest

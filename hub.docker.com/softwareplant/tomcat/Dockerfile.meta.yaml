@@ -1,0 +1,150 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:16.04
+  Commands:
+  - Key: PHANTOM_JS
+    Name: arg
+    Value: phantomjs-2.1.1-linux-x86_64
+  - CmdLine:
+    - rm /bin/sh && ln -s /bin/bash /bin/sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y gettext wget less curl build-essential
+      software-properties-common python-software-properties vim unzip &&         add-apt-repository
+      ppa:openjdk-r/ppa &&         apt-get update &&         apt-get -y install openjdk-8-jdk
+      &&         update-alternatives --config java &&         export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk-amd64/jre
+      &&         export JRE_HOME=/usr/lib/jvm/java-1.8.0-openjdk-amd64/jre
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/java-8-openjdk-amd64/jre
+    Name: env
+  - CmdLine:
+    - set -x         && wget --progress=dot:mega https://bitbucket.org/ariya/phantomjs/downloads/$PHANTOM_JS.tar.bz2         &&
+      tar xvjf $PHANTOM_JS.tar.bz2         && mv $PHANTOM_JS /usr/local/share         &&
+      ln -sf /usr/local/share/$PHANTOM_JS/bin/phantomjs /usr/local/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd tomcat &&         useradd -s /bin/false -g tomcat -d /opt/tomcat tomcat
+      &&         cd /tmp &&         wget --progress=dot:mega https://archive.apache.org/dist/tomcat/tomcat-8/v8.5.30/bin/apache-tomcat-8.5.30.tar.gz
+      &&         mkdir /opt/tomcat &&         tar xzvf apache-tomcat-8*tar.gz -C /opt/tomcat
+      --strip-components=1 &&         cd /opt/tomcat &&         chgrp -R tomcat /opt/tomcat
+      &&         chmod -R g+r conf &&         chmod g+x conf &&         chown -R tomcat
+      /opt/tomcat
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+      && \t\tdpkg -i google-chrome-stable_current_amd64.deb; apt-get -fy install &&
+      \        curl -sL https://deb.nodesource.com/setup_10.x | bash - &&         apt-get
+      install -y nodejs &&         npm install -g --allow-root --unsafe-perm=true
+      puppeteer@1.0.0 &&         chmod -R a+rwx /usr/lib/node_modules/puppeteer/.local-chromium
+      &&         cd /opt/tomcat/temp/ &&         npm link puppeteer && \tnpm install
+      --global yarn@1.17.3 &&         echo \"export NODE_PATH=$(npm root --quiet -g)\"
+      >> /etc/profile.d/lib.sh &&         echo \"alias node='node -e \\\"\\`cat $1
+      | sed \\\"s/var config = {};/var config = {args: \\[\\'--no-sandbox\\'\\]};/\\\"\\`'
+      \" >> /etc/profile.d/lib.sh"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - tomcat-users.xml
+    - /opt/tomcat/conf/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - manager.xml
+    - /opt/tomcat/conf/Catalina/localhost/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - server.xml
+    - /opt/tomcat/conf/
+  - Env:
+    - Key: CATALINA_HOME
+      Value: /opt/tomcat
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:$CATALINA_HOME/bin
+    Name: env
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: expose
+    Ports:
+    - "8009"
+  - Name: volume
+    Volumes:
+    - '"/opt/tomcat/webapps"'
+  - Name: workdir
+    Path: /opt/tomcat
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - m3-java-capstone-1.0.war
+    - /opt/tomcat/webapps/m3-java-capstone-1.0.war
+  - CmdLine:
+    - add-apt-repository "deb http://apt.postgresql.org/pub/repos/apt/ xenial-pgdg
+      main" &&         wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc
+      | apt-key add - &&         apt-get update && apt-get install -y postgresql-9.6
+      postgresql-client-9.6 postgresql-contrib-9.6
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: postgres
+  - CmdLine:
+    - /etc/init.d/postgresql start &&        psql --command "CREATE USER cloud WITH
+      SUPERUSER PASSWORD 'cloud';" &&        createdb -O cloud cloud -E 'UTF8'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - run.sh
+    - /bin
+  - CmdLine:
+    - chmod 755 /bin/run.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - pg_hba.conf
+    - /etc/postgresql/9.6/main/
+  - CmdLine:
+    - echo "listen_addresses='*'" >> /etc/postgresql/9.6/main/postgresql.conf
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "5432"
+  - Name: volume
+    Volumes:
+    - /etc/postgresql
+    - /var/log/postgresql
+    - /var/lib/postgresql/data
+  - CmdLine:
+    - ln -sf /usr/share/zoneinfo/Europe/Warsaw /etc/localtime
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/run.sh
+    Name: entrypoint
+    PrependShell: true
+  - CmdLine:
+    - bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:16.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04

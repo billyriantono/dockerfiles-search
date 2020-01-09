@@ -1,0 +1,114 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.10-alpine
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: BUILD_TYPE
+    Name: arg
+    Value: null
+  - Key: BUILD_VERSION
+    Name: arg
+    Value: null
+  - Key: ETCD_VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk update --no-cache &&   apk upgrade --no-cache &&   apk add     bash git
+      make zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - export GOPATH=/opt/go &&   echo "get sources ..." &&   go get github.com/coreos/etcd
+      || true &&   cd ${GOPATH}/src/github.com/coreos/etcd &&   if [ "${BUILD_TYPE}"
+      == "stable" ] ; then     echo "switch to stable Tag v${ETCD_VERSION}" &&     git
+      checkout tags/v${ETCD_VERSION} 2> /dev/null ;   fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - export GOPATH=/opt/go &&   export PATH=${GOPATH}/bin:${PATH} &&   cd ${GOPATH}/src/github.com/coreos/etcd
+      &&   export GOMAXPROCS=4 &&   make &&   cp -v bin/etcd* /usr/bin/ &&   cp -v
+      etcd.conf.yml.sample /etc/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: golang:1.10-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.10-alpine as builder
+- BaseName: alpine:latest
+  Commands:
+  - Name: expose
+    Ports:
+    - "2379"
+    - "2380"
+  - Labels:
+    - Key: version
+      Value: '"${BUILD_VERSION}"'
+    - Key: maintainer
+      Value: '"Bodo Schulz <bodo@boone-schulz.de>"'
+    - Key: org.label-schema.build-date
+      Value: ${BUILD_DATE}
+    - Key: org.label-schema.name
+      Value: '"Consul Docker Image"'
+    - Key: org.label-schema.description
+      Value: '"Inofficial Consul Docker Image"'
+    - Key: org.label-schema.url
+      Value: '"https://coreos.com/etcd"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/bodsch/docker-etcd"'
+    - Key: org.label-schema.vendor
+      Value: '"Bodo Schulz"'
+    - Key: org.label-schema.version
+      Value: ${ETCD_VERSION}
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: com.microscaling.docker.dockerfile
+      Value: '"/Dockerfile"'
+    - Key: com.microscaling.license
+      Value: '"The Unlicense"'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/etcd*
+    - /usr/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/etcd.conf.yml.sample
+    - /etc/
+  - CmdLine:
+    - 'echo ''hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4'' >> /etc/nsswitch.conf
+      &&   mkdir -p /var/etcd/ /var/lib/etcd/'
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - CmdLine:
+    - /usr/bin/etcd
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --data-dir
+    - /data
+    - --listen-client-urls
+    - '''http://0.0.0.0:2379'''
+    - --advertise-client-urls
+    - http://0.0.0.0:2380
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

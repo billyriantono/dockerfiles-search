@@ -1,0 +1,46 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8-jre-alpine
+  Commands:
+  - CmdLine:
+    - apk add --update     curl     maven     && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - settings.xml
+    - /hapi-fhir/hapi-fhir-cli/settings.xml
+  - CmdLine:
+    - curl -Ls https://github.com/jamesagnew/hapi-fhir/archive/v2.5.tar.gz     | tar
+      xfzv - -C /hapi-fhir --strip-components=1 &&     find /hapi-fhir/hapi-fhir-cli/hapi-fhir-cli-jpaserver/src/main/java/ca/uhn/fhir/jpa/demo         -name
+      "FhirServerConfig*.java"         -exec sed -i 's/DaoConfig retVal = new DaoConfig();/DaoConfig
+      retVal = new DaoConfig();retVal.setReuseCachedSearchResultsForMillis(null);/g'
+      {} + &&     cd /hapi-fhir/hapi-fhir-cli &&     mvn install -q -s /hapi-fhir/hapi-fhir-cli/settings.xml
+      &&     mv /hapi-fhir/hapi-fhir-cli/hapi-fhir-cli-app/target/hapi-fhir-cli.jar
+      /root/hapi-fhir-cli.jar &&     rm -rf /hapi-fhir
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root
+  - Env:
+    - Key: HAPI_FHIR_PORT
+      Value: "8080"
+    Name: env
+  - Health:
+      Test:
+      - CMD-SHELL
+      - curl http://localhost:$HAPI_FHIR_PORT/baseDstu3/Patient
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - $HAPI_FHIR_PORT
+  - CmdLine:
+    - java -jar hapi-fhir-cli.jar run-server -p $HAPI_FHIR_PORT
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: openjdk:8-jre-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre-alpine

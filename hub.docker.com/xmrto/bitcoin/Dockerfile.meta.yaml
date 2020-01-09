@@ -1,0 +1,229 @@
+MetaArgs:
+- DefaultValue: '"${DEBIAN_VERSION:-stable-slim}"'
+  Key: DEBIAN_VERSION
+  ProvidedValue: null
+  Value: '"${DEBIAN_VERSION:-stable-slim}"'
+Stages:
+- As: dependencies1
+  BaseName: debian:${DEBIAN_VERSION}
+  Commands:
+  - Name: workdir
+    Path: /data
+  - Key: SUEXEC_VERSION
+    Name: arg
+    Value: v0.2
+  - Key: SUEXEC_HASH
+    Name: arg
+    Value: f85e5bde1afef399021fbc2a99c837cf851ceafa
+  - Env:
+    - Key: CFLAGS
+      Value: '''-fPIC -O2 -g'''
+    Name: env
+  - Env:
+    - Key: CXXFLAGS
+      Value: '''-fPIC -O2 -g'''
+    Name: env
+  - Env:
+    - Key: LDFLAGS
+      Value: '''-static-libstdc++'''
+    Name: env
+  - CmdLine:
+    - 'apt-get update -qq && apt-get --no-install-recommends -yqq install         ca-certificates         g++         g++-multilib         make         pkg-config         doxygen         git         curl         libtool-bin         autoconf         automake         patch         bzip2         binutils-gold         bsdmainutils         python3         build-essential         libprotobuf-dev
+      protobuf-compiler         unzip > /dev/null     && cd /data || exit 1     &&
+      echo "\e[32mbuilding: su-exec\e[39m"     && git clone --branch ${SUEXEC_VERSION}
+      --single-branch --depth 1 https://github.com/ncopa/su-exec.git su-exec.git >
+      /dev/null     && cd su-exec.git || exit 1     && test `git rev-parse HEAD` =
+      ${SUEXEC_HASH} || exit 1     && make -j2 > /dev/null     && cp su-exec /data     &&
+      cd /data || exit 1     && rm -rf /data/su-exec.git'
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:${DEBIAN_VERSION}
+  Name: dependencies1
+  Platform: ""
+  SourceCode: FROM debian:${DEBIAN_VERSION} as dependencies1
+- As: builder
+  BaseName: index.docker.io/xmrto/bitcoin:dependencies1
+  Commands:
+  - Name: workdir
+    Path: /data
+  - Key: PROJECT_URL
+    Name: arg
+    Value: https://github.com/bitcoin/bitcoin.git
+  - Key: BRANCH
+    Name: arg
+    Value: master
+  - Key: BUILD_PATH
+    Name: arg
+    Value: /bitcoin.git/build/release/bin
+  - Env:
+    - Key: BASE_DIR
+      Value: /usr/local
+    Name: env
+  - Env:
+    - Key: CFLAGS
+      Value: '''-fPIC -O2 -g'''
+    Name: env
+  - Env:
+    - Key: CXXFLAGS
+      Value: '''-fPIC -O2 -g'''
+    Name: env
+  - Env:
+    - Key: LDFLAGS
+      Value: '''-static-libstdc++'''
+    Name: env
+  - CmdLine:
+    - 'echo "\e[32mcloning: $PROJECT_URL on branch: $BRANCH\e[39m"     && git clone
+      --branch "$BRANCH" --single-branch --recursive $PROJECT_URL bitcoin.git > /dev/null     &&
+      cd bitcoin.git || exit 1     && echo "\e[32mbuilding static binaries\e[39m"     &&
+      ldconfig > /dev/null     && ./autogen.sh > /dev/null     && cd depends || exit
+      1     && make -j2 HOST=x86_64-pc-linux-gnu NO_QT=1 NO_UPNP=1 > /dev/null     &&
+      cd .. || exit 1     && ./configure --prefix=${PWD}/depends/x86_64-pc-linux-gnu
+      --enable-glibc-back-compat LDFLAGS="$LDFLAGS" --without-miniupnpc --enable-reduce-exports
+      --disable-bench --without-gui > /dev/null     && make -j2 HOST=x86_64-pc-linux-gnu
+      NO_QT=1 NO_UPNP=1 > /dev/null     && echo "\e[32mcopy and clean up\e[39m"     &&
+      mv /data/bitcoin.git/src/bitcoind /data/     && chmod +x /data/bitcoind     &&
+      mv /data/bitcoin.git/src/bitcoin-cli /data/     && chmod +x /data/bitcoin-cli     &&
+      cd /data || exit 1     && rm -rf /data/bitcoin.git     && apt-get purge -yqq         g++         g++-multilib         make         pkg-config         doxygen         git         curl         libtool-bin         autoconf         automake         patch         bzip2         binutils-gold         bsdmainutils         python3         build-essential         libprotobuf-dev
+      protobuf-compiler         unzip > /dev/null     && apt-get autoremove --purge
+      -yqq > /dev/null     && apt-get clean > /dev/null     && rm -rf /var/tmp/* /tmp/*
+      /var/lib/apt/* > /dev/null'
+    Name: run
+    PrependShell: true
+  From:
+    Image: index.docker.io/xmrto/bitcoin:dependencies1
+  Name: builder
+  Platform: ""
+  SourceCode: FROM index.docker.io/xmrto/bitcoin:dependencies1 as builder
+- BaseName: debian:stable-slim
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /data/bitcoind
+    - /usr/local/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /data/bitcoin-cli
+    - /usr/local/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /data/su-exec
+    - /usr/local/bin/
+  - CmdLine:
+    - apt-get autoremove --purge -yqq > /dev/null     && apt-get clean > /dev/null     &&
+      rm -rf /var/tmp/* /tmp/* /var/lib/apt > /dev/null
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - chmod +x /entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - inputrc
+    - /etc/inputrc
+  - Name: workdir
+    Path: /bitcoin
+  - CmdLine:
+    - bitcoind --version > /version.txt     && cat /etc/os-release > /system.txt     &&
+      cat /proc/version >> /system.txt     && ldd $(command -v bitcoind) > /dependencies.txt
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /bitcoin
+  - Env:
+    - Key: USER_ID
+      Value: "1000"
+    Name: env
+  - Env:
+    - Key: LOG_LEVEL
+      Value: "0"
+    Name: env
+  - Env:
+    - Key: DAEMON_HOST
+      Value: 127.0.0.1
+    Name: env
+  - Env:
+    - Key: DAEMON_PORT
+      Value: "28081"
+    Name: env
+  - Env:
+    - Key: RPC_USER
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: RPC_PASSWD
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: RPC_LOGIN
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: RPC_AUTH_KEY
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: RPC_BIND_IP
+      Value: 0.0.0.0
+    Name: env
+  - Env:
+    - Key: RPC_BIND_PORT
+      Value: "18332"
+    Name: env
+  - Env:
+    - Key: P2P_BIND_IP
+      Value: 0.0.0.0
+    Name: env
+  - Env:
+    - Key: P2P_BIND_PORT
+      Value: "18333"
+    Name: env
+  - Env:
+    - Key: ZMQ_PUB_RAW_BLOCK_IP
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: ZMQ_PUB_RAW_BLOCK_PORT
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: ZMQ_PUB_RAW_BLOCK
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: ZMQ_PUB_RAW_TX_IP
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: ZMQ_PUB_RAW_TX_PORT
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: ZMQ_PUB_RAW_TX
+      Value: '""'
+    Name: env
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:stable-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stable-slim

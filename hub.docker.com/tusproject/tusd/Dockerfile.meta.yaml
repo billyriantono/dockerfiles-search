@@ -1,0 +1,62 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12-alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/tus/tusd/
+  - Name: workdir
+    Path: /go/src/github.com/tus/tusd
+  - CmdLine:
+    - apk add --no-cache         git gcc libc-dev     && go get -d -v ./...     &&
+      version="$(git tag -l --points-at HEAD)"     && commit=$(git log --format="%H"
+      -n 1)     && GOOS=linux GOARCH=amd64 go build         -ldflags="-X github.com/tus/tusd/cmd/tusd/cli.VersionName=${version}
+      -X github.com/tus/tusd/cmd/tusd/cli.GitCommit=${commit} -X 'github.com/tus/tusd/cmd/tusd/cli.BuildDate=$(date
+      --utc)'"         -o "/go/bin/tusd" ./cmd/tusd/main.go     && rm -r /go/src/*     &&
+      apk del git
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12-alpine AS builder
+- BaseName: alpine:3.9
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/tusd
+    - /usr/local/bin/tusd
+  - CmdLine:
+    - apk add --no-cache ca-certificates jq gcc     && addgroup -g 1000 tusd     &&
+      adduser -u 1000 -G tusd -s /bin/sh -D tusd     && mkdir -p /srv/tusd-hooks     &&
+      mkdir -p /srv/tusd-data     && chown tusd:tusd /srv/tusd-data
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /srv/tusd-data
+  - Name: expose
+    Ports:
+    - "1080"
+  - CmdLine:
+    - tusd
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --hooks-dir
+    - /srv/tusd-hooks
+    Name: cmd
+    PrependShell: false
+  - Name: user
+    User: tusd
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

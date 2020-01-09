@@ -1,0 +1,114 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:buster
+  Commands:
+  - Maintainer: Francois Scala "github@arcenik.net"
+    Name: maintainer
+  - CmdLine:
+    - apt-get update &&  DEBIAN_FRONTEND=noninteractive apt-get install -yq     wget
+      dh-exec libkrb5-dev libssl-dev libtool bison libdb-dev libldap2-dev     libxml2-dev
+      libcap2-dev libgeoip-dev dpkg-dev python3 dh-systemd     autotools-dev dh-autoreconf
+      gpg
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: BIND_VERSION
+      Value: '"9.14.5"'
+    Name: env
+  - Env:
+    - Key: BIND_FILE
+      Value: '"${BIND_VERSION}.tgz"'
+    Name: env
+  - Env:
+    - Key: BIND_SHA512_FILE
+      Value: '"${BIND_VERSION}.tgz.sha512.asc"'
+    Name: env
+  - Env:
+    - Key: BIND_URL
+      Value: '"https://ftp.isc.org/isc/bind9/${BIND_VERSION}/bind-${BIND_VERSION}.tar.gz"'
+    Name: env
+  - Env:
+    - Key: BIND_SHA512_URL
+      Value: '"https://ftp.isc.org/isc/bind9/${BIND_VERSION}/bind-${BIND_VERSION}.tar.gz.sha512.asc"'
+    Name: env
+  - Env:
+    - Key: ISC_KEY_FILE
+      Value: '"isc-2019-2020.asc"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ${ISC_KEY_FILE}
+    - /tmp
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - set -xe &&  gpg --import ${ISC_KEY_FILE} &&  wget ${BIND_URL} -O ${BIND_FILE}
+      &&  wget ${BIND_SHA512_URL} -O ${BIND_SHA512_FILE} &&  gpg --verify ${BIND_SHA512_FILE}
+      ${BIND_FILE}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src
+  - CmdLine:
+    - set -xe &&  tar xfz /tmp/${BIND_FILE} &&  ln -vs bind-9* bind-9-current &&  cd
+      bind-9-current &&  ./configure       --enable-full-report       --prefix=/opt/bind9/       --without-python       2>&1
+      | tee configure.log &&  make  2>&1 | tee make.log &&  make install  2>&1 | tee
+      make-install.log
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:buster
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:buster
+- BaseName: francois75/docker-authfromhost:debian-stretch-slim
+  Commands:
+  - CmdLine:
+    - set -xe &&  apt-get update &&  DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade
+      -yq &&  DEBIAN_FRONTEND=noninteractive apt-get install -yq openssl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /opt/bind9
+    - /opt/bind9
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/bind-9-current/make.log
+    - /root/make.log
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/bind-9-current/make-install.log
+    - /root/make-install.log
+  - CmdLine:
+    - mkdir /var/cache/bind
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /etc/bind
+  - Name: expose
+    Ports:
+    - "53"
+    - 53/udp
+  - CmdLine:
+    - /opt/bind9/sbin/named
+    - -f
+    - -c
+    - /etc/bind/named.conf
+    - "-4"
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: francois75/docker-authfromhost:debian-stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM francois75/docker-authfromhost:debian-stretch-slim

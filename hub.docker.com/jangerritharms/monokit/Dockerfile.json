@@ -1,0 +1,198 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "dev",
+      "BaseName": "node:10.15.0-alpine",
+      "SourceCode": "FROM node:10.15.0-alpine as dev",
+      "Platform": "",
+      "As": "dev",
+      "From": {
+        "Image": "node:10.15.0-alpine"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk --no-cache add curl"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /home/node/app  \u0026\u0026 chown -R node:node /home/node/app"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "YARN_VERSION",
+              "Value": "1.12.3"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "curl -fSLO --compressed \"https://yarnpkg.com/downloads/$YARN_VERSION/yarn-v$YARN_VERSION.tar.gz\"     \u0026\u0026 tar -xzf yarn-v$YARN_VERSION.tar.gz -C /opt/     \u0026\u0026 ln -snf /opt/yarn-v$YARN_VERSION/bin/yarn /usr/local/bin/yarn     \u0026\u0026 ln -snf /opt/yarn-v$YARN_VERSION/bin/yarnpkg /usr/local/bin/yarnpkg     \u0026\u0026 rm yarn-v$YARN_VERSION.tar.gz"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/home/node/app"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "package.json",
+            "/home/node/app/package.json"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "yarn.lock",
+            "/home/node/app/yarn.lock"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "packages/api/package.json",
+            "/home/node/app/packages/api/package.json"
+          ]
+        },
+        {
+          "CmdLine": [
+            "set -ex;     touch yarn-error.log;     mkdir -p -m 777 node_modules         packages/api/node_modules         packages/api/dist         /home/node/.cache/yarn;     chown -R node:node node_modules         packages/api/node_modules         packages/api/dist         package.json         yarn.lock         yarn-error.log         /home/node/.cache/yarn;"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "PATH",
+              "Value": "/home/node/app/node_modules/.bin:$PATH"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Name": "user",
+          "User": "node"
+        },
+        {
+          "CmdLine": [
+            "./scripts/api.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    },
+    {
+      "Name": "test",
+      "BaseName": "dev",
+      "SourceCode": "FROM dev AS test",
+      "Platform": "",
+      "As": "test",
+      "From": {
+        "Stage": {
+          "Named": "dev",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "yarn --frozen-lockfile --no-cache"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "packages/api",
+            "/home/node/app/packages/api"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "build",
+      "BaseName": "test",
+      "SourceCode": "FROM test AS build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Stage": {
+          "Named": "test",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "yarn workspace @monokit/api build"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "production",
+      "BaseName": "dev",
+      "SourceCode": "FROM dev as production",
+      "Platform": "",
+      "As": "production",
+      "From": {
+        "Stage": {
+          "Named": "dev",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "scripts/api.sh",
+            "/home/node/app/scripts/api.sh"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/home/node/app/packages/api/dist",
+            "/home/node/app/packages/api/dist"
+          ]
+        },
+        {
+          "CmdLine": [
+            "yarn install --frozen-lockfile --no-cache --production"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: ubuntu:18.04
+  Commands:
+  - Env:
+    - Key: SYSTEMD_VERSION
+      Value: "242"
+    Name: env
+  - CmdLine:
+    - apt update &&     apt install -y wget unzip meson python3-pip m4 gperf libcap-dev
+      pkg-config libmount-dev liblz4-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip3 install meson
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - wget -q https://github.com/systemd/systemd/archive/v${SYSTEMD_VERSION}.zip &&      unzip
+      -q v${SYSTEMD_VERSION}.zip &&      cd systemd-${SYSTEMD_VERSION} &&      ./configure
+      &&      make &&      make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as builder
+- BaseName: ubuntu:18.04
+  Commands:
+  - Env:
+    - Key: GROK_EXPORTER_VERSION
+      Value: 0.2.8
+    Name: env
+  - CmdLine:
+    - apt update &&     apt install -y wget unzip libcap-dev liblz4-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp &&     wget -q https://github.com/fstab/grok_exporter/releases/download/v${GROK_EXPORTER_VERSION}/grok_exporter-${GROK_EXPORTER_VERSION}.linux-amd64.zip
+      &&     unzip -q grok_exporter-${GROK_EXPORTER_VERSION}.linux-amd64.zip &&     cp
+      -r grok_exporter-${GROK_EXPORTER_VERSION}.linux-amd64 /grok &&     rm -rf grok_exporter-${GROK_EXPORTER_VERSION}.linux-amd64*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /bin/journalctl
+    - /bin
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /lib/systemd/libsystemd-*
+    - /lib/systemd/
+  - Name: workdir
+    Path: /grok
+  - CmdLine:
+    - journalctl -f -D /var/log/journal | ./grok_exporter -config /grok/config.yml
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

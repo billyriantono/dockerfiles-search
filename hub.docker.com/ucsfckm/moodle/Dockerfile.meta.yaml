@@ -1,0 +1,110 @@
+MetaArgs: null
+Stages:
+- As: git
+  BaseName: alpine/git
+  Commands:
+  - CmdLine:
+    - apk update && apk add rsync
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /moodle-git
+  - CmdLine:
+    - set -xe         && cd /moodle-git         && echo "COMMIT=$(git rev-parse HEAD)"
+      > cle-release         && rsync -aq --exclude-from=./.gitignore                      --exclude=.git                      --exclude=.gitignore                      --exclude=.gitmodules                      --exclude=.gitattributes                      --exclude=Dockerfile                      --exclude=docker-compose.yml                      --exclude=docker-moodle-entrypoint                      --exclude=hooks/*                      ./
+      /moodle-html
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine/git
+  Name: git
+  Platform: ""
+  SourceCode: FROM alpine/git as git
+- BaseName: php:7.1-apache
+  Commands:
+  - Env:
+    - Key: PHP_EXT
+      Value: mysqli opcache soap
+    Name: env
+  - Env:
+    - Key: PHP_EXT
+      Value: ${PHP_EXT} gd
+    Name: env
+  - Env:
+    - Key: PHP_EXT_DEP
+      Value: libpng-dev libjpeg-dev libfreetype6-dev
+    Name: env
+  - Env:
+    - Key: PHP_EXT
+      Value: ${PHP_EXT} intl
+    Name: env
+  - Env:
+    - Key: PHP_EXT_DEP
+      Value: ${PHP_EXT_DEP} libicu-dev
+    Name: env
+  - Env:
+    - Key: PHP_EXT
+      Value: ${PHP_EXT} ldap
+    Name: env
+  - Env:
+    - Key: PHP_EXT_DEP
+      Value: ${PHP_EXT_DEP} libldap2-dev
+    Name: env
+  - Env:
+    - Key: PHP_EXT
+      Value: ${PHP_EXT} xmlrpc
+    Name: env
+  - Env:
+    - Key: PHP_EXT_DEP
+      Value: ${PHP_EXT_DEP} libxml2-dev
+    Name: env
+  - Env:
+    - Key: PHP_EXT
+      Value: ${PHP_EXT} zip
+    Name: env
+  - Env:
+    - Key: PHP_EXT_DEP
+      Value: ${PHP_EXT_DEP} zlib1g-dev
+    Name: env
+  - CmdLine:
+    - set -xe         && apt-get update && apt-get install -y ${PHP_EXT_DEP} --no-install-recommends         &&
+      echo "Configure GD extension"         && docker-php-ext-configure gd --with-freetype-dir=/usr/include/
+      --with-jpeg-dir=/usr/include/         && echo "Configure LDAP extension"         &&
+      docker-php-ext-configure ldap --with-libdir=lib/x86_64-linux-gnu/         &&
+      docker-php-ext-install -j$(nproc) ${PHP_EXT}         && apt-get remove --purge
+      -y ${PHP_EXT_DEP}         && apt-get clean         && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: git
+    Name: copy
+    SourcesAndDest:
+    - /moodle-html
+    - .
+  - CmdLine:
+    - set -xe && mkdir -p /var/www/moodledata
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: git
+    Name: copy
+    SourcesAndDest:
+    - /moodle-git/docker-moodle-entrypoint
+    - /usr/local/bin/
+  - CmdLine:
+    - docker-moodle-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - apache2-foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:7.1-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.1-apache

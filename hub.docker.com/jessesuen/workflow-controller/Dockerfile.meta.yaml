@@ -1,0 +1,184 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.11.5
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y     git     make     wget     gcc     zip
+      &&     apt-get clean &&     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - Env:
+    - Key: DOCKER_CHANNEL
+      Value: stable
+    Name: env
+  - Env:
+    - Key: DOCKER_VERSION
+      Value: 18.09.1
+    Name: env
+  - CmdLine:
+    - wget -O docker.tgz "https://download.docker.com/linux/static/${DOCKER_CHANNEL}/x86_64/docker-${DOCKER_VERSION}.tgz"
+      &&     tar --extract --file docker.tgz --strip-components 1 --directory /usr/local/bin/
+      &&     rm docker.tgz
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DEP_VERSION
+      Value: 0.5.0
+    Name: env
+  - CmdLine:
+    - wget https://github.com/golang/dep/releases/download/v${DEP_VERSION}/dep-linux-amd64
+      -O /usr/local/bin/dep &&     chmod +x /usr/local/bin/dep
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOLANGCI_LINT_VERSION
+      Value: 1.16.0
+    Name: env
+  - CmdLine:
+    - curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/v$GOLANGCI_LINT_VERSION/install.sh|
+      sh -s -- -b $(go env GOPATH)/bin v$GOLANGCI_LINT_VERSION
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOMETALINTER_VERSION
+      Value: 2.0.12
+    Name: env
+  - CmdLine:
+    - curl -sLo- https://github.com/alecthomas/gometalinter/releases/download/v${GOMETALINTER_VERSION}/gometalinter-${GOMETALINTER_VERSION}-linux-amd64.tar.gz
+      |     tar -xzC "$GOPATH/bin" --exclude COPYING --exclude README.md --strip-components
+      1 -f- &&     ln -s $GOPATH/bin/gometalinter $GOPATH/bin/gometalinter.v2
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11.5
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.11.5 as builder
+- As: argoexec-base
+  BaseName: debian:9.6-slim
+  Commands:
+  - Env:
+    - Key: KUBECTL_VERSION
+      Value: 1.15.1
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get install -y curl jq procps git tar mime-support
+      &&     rm -rf /var/lib/apt/lists/* &&     curl -L -o /usr/local/bin/kubectl
+      -LO https://storage.googleapis.com/kubernetes-release/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl
+      &&     chmod +x /usr/local/bin/kubectl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/ssh_known_hosts
+    - /etc/ssh/ssh_known_hosts
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/docker
+    - /usr/local/bin/
+  From:
+    Image: debian:9.6-slim
+  Name: argoexec-base
+  Platform: ""
+  SourceCode: FROM debian:9.6-slim as argoexec-base
+- As: argo-build
+  BaseName: builder
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gopkg.toml
+    - ${GOPATH}/src/dummy/Gopkg.toml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gopkg.lock
+    - ${GOPATH}/src/dummy/Gopkg.lock
+  - CmdLine:
+    - cd ${GOPATH}/src/dummy &&     dep ensure -vendor-only &&     mv vendor/* ${GOPATH}/src/
+      &&     rmdir vendor
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/argoproj/argo
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Key: MAKE_TARGET
+    Name: arg
+    Value: '"controller executor cli-linux-amd64"'
+  - CmdLine:
+    - make $MAKE_TARGET
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: builder
+  Name: argo-build
+  Platform: ""
+  SourceCode: FROM builder as argo-build
+- As: argoexec
+  BaseName: argoexec-base
+  Commands:
+  - Chown: ""
+    From: argo-build
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/argoproj/argo/dist/argoexec
+    - /usr/local/bin/
+  From:
+    Stage:
+      Index: 1
+      Named: argoexec-base
+  Name: argoexec
+  Platform: ""
+  SourceCode: FROM argoexec-base as argoexec
+- As: workflow-controller
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: argo-build
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/argoproj/argo/dist/workflow-controller
+    - /bin/
+  - CmdLine:
+    - workflow-controller
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: workflow-controller
+  Platform: ""
+  SourceCode: FROM scratch as workflow-controller
+- As: argocli
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: argo-build
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/argoproj/argo/dist/argo-linux-amd64
+    - /bin/argo
+  - CmdLine:
+    - argo
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: argocli
+  Platform: ""
+  SourceCode: FROM scratch as argocli

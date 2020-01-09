@@ -1,0 +1,16 @@
+FROM python:3.6-stretch
+
+USER root
+# Dependencies specific to barcode reading
+RUN apt-get update && apt-get install -y --no-install-recommends \
+		libzbar-dev \
+		libzbar0
+
+COPY requirements.txt ./
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+ADD AWS_Vin_ver3.py ./
+
+CMD [ "python", "./AWS_Vin_ver3.py" ]
+

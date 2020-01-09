@@ -1,0 +1,70 @@
+MetaArgs: null
+Stages:
+- As: deps
+  BaseName: python:3.7.1
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - /
+  - CmdLine:
+    - mkdir /install && pip install --install-option="--prefix=/install" -r /requirements.txt
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.7.1
+  Name: deps
+  Platform: ""
+  SourceCode: FROM python:3.7.1 as deps
+- As: base
+  BaseName: python:3.7.1-alpine
+  Commands:
+  - Chown: ""
+    From: deps
+    Name: copy
+    SourcesAndDest:
+    - /install
+    - /usr/local
+  - CmdLine:
+    - apk update && apk add --no-cache --virtual .build-deps     gcc     python3-dev     musl-dev     &&
+      apk add --no-cache postgresql-dev     && pip install --no-cache-dir psycopg2     &&
+      apk del .build-deps
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /ara
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ara.cfg
+    - ./
+  - Env:
+    - Key: ANSIBLE_CONFIG
+      Value: /ara/ara.cfg
+    Name: env
+  - Env:
+    - Key: GUNICORN_WORKERS
+      Value: "4"
+    Name: env
+  - Env:
+    - Key: GUNICORN_BIND_ADDRESS
+      Value: 0.0.0.0
+    Name: env
+  - Name: volume
+    Volumes:
+    - /ara
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - gunicorn -w ${GUNICORN_WORKERS} -b ${GUNICORN_BIND_ADDRESS}:8000 ara.wsgi:application
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: python:3.7.1-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM python:3.7.1-alpine as base

@@ -1,0 +1,1 @@
+from containous/traefik:latest

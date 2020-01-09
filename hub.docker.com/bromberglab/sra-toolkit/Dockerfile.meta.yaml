@@ -1,0 +1,124 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: ubuntu:18.04
+  Commands:
+  - Chown: ""
+    From: bromberglab/bio-node
+    Name: copy
+    SourcesAndDest:
+    - /bio-node
+    - /bio-node
+  - Labels:
+    - Key: maintainer
+      Value: mmiller@bromberglab.org
+    - Key: description
+      Value: '"NCBI sra-toolkit optimization for faster and more reliable (batch)
+        downloads of SRA read files"'
+    Name: label
+  - Labels:
+    - Key: bio-node
+      Value: v1.0
+    - Key: input_1
+      Value: '"sra_id,,optional,content"'
+    - Key: input_2
+      Value: '"sra_ids,--sralist,optional,filename"'
+    - Key: output
+      Value: '"sra_folder,--outdir,"'
+    - Key: parameters
+      Value: '"--split-files"'
+    Name: label
+  - CmdLine:
+    - apt-get update && apt-get install -y     wget     curl     && apt-get clean
+      && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: base
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as base
+- As: builder
+  BaseName: base
+  Commands:
+  - Key: SRA_TOOLKIT_RELEASE
+    Name: arg
+    Value: current
+  - Key: ASPERA_CONNECT_RELEASE
+    Name: arg
+    Value: 3.9.8
+  - Key: ASPERA_CONNECT_BUILD
+    Name: arg
+    Value: "176272"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app
+  - CmdLine:
+    - useradd -ms /bin/bash builder &&     mkdir /install && chmod 777 /install &&     chown
+      -R builder:builder /app
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: builder
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - mkdir /install/bin &&     mkdir /install/share &&     wget -q --output-document
+      src1.tar.gz https://ftp-trace.ncbi.nlm.nih.gov/sra/sdk/${SRA_TOOLKIT_RELEASE}/sratoolkit.${SRA_TOOLKIT_RELEASE}-ubuntu64.tar.gz
+      &&     tar -xzf src1.tar.gz &&     SRA=$(ls | grep sratoolkit) &&     cp -r
+      $SRA/bin/* /install/bin &&     wget -q --output-document src2.tar.gz https://download.asperasoft.com/download/sw/connect/${ASPERA_CONNECT_RELEASE}/ibm-aspera-connect-${ASPERA_CONNECT_RELEASE}.${ASPERA_CONNECT_BUILD}-linux-g2.12-64.tar.gz
+      &&     tar -xzf src2.tar.gz &&     ASPERA=$(ls | grep ibm-aspera-connect) &&     bash
+      $ASPERA > /dev/null &&     mv ~/.aspera /install/share/aspera &&     mv /app/default.kfg
+      /install/bin/ncbi/default.kfg
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base as builder
+- BaseName: base
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /install
+    - /usr/local
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /app
+  - Name: workdir
+    Path: /app
+  - Env:
+    - Key: SRA_TMP_DIR
+      Value: /tmp
+    - Key: INPUT_PATH
+      Value: /input
+    - Key: OUTPUT_PATH
+      Value: /output
+    Name: env
+  - CmdLine:
+    - bash
+    - /app/evenfasterq-dump.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

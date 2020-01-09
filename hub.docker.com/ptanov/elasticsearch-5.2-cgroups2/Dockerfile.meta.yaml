@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- As: es-patch-builder
+  BaseName: openjdk:8-jdk
+  Commands:
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - git clone https://github.com/elastic/elasticsearch.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src/elasticsearch
+  - CmdLine:
+    - git checkout v5.2.2
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - wget https://downloads.gradle.org/distributions/gradle-2.13-bin.zip && unzip
+      gradle-2.13-bin.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install patch
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - OsProbe.patch
+    - /build/
+  - CmdLine:
+    - patch /src/elasticsearch/core/src/main/java/org/elasticsearch/monitor/os/OsProbe.java
+      /build/OsProbe.patch
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - OsProbeTests.patch
+    - /build/
+  - CmdLine:
+    - patch /src/elasticsearch/core/src/test/java/org/elasticsearch/monitor/os/OsProbeTests.java
+      /build/OsProbeTests.patch
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src/elasticsearch
+  - CmdLine:
+    - /build/gradle-2.13/bin/gradle assemble -Dbuild.snapshot=false
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip /src/elasticsearch/distribution/zip/build/distributions/elasticsearch-5.2.2.zip
+      elasticsearch-5.2.2/lib/elasticsearch-5.2.2.jar -d /tmp/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip /tmp/elasticsearch-5.2.2/lib/elasticsearch-5.2.2.jar org/elasticsearch/monitor/os/OsProbe.class
+      -d /tmp/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: docker.elastic.co/elasticsearch/elasticsearch:5.2.2
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/elasticsearch/lib/elasticsearch-5.2.2.jar
+    - /tmp/
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - jar uf /tmp/elasticsearch-5.2.2.jar org/elasticsearch/monitor/os/OsProbe.class
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8-jdk
+  Name: es-patch-builder
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk as es-patch-builder
+- BaseName: docker.elastic.co/elasticsearch/elasticsearch:5.2.2
+  Commands:
+  - Chown: ""
+    From: es-patch-builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/elasticsearch-5.2.2.jar
+    - /usr/share/elasticsearch/lib/elasticsearch-5.2.2.jar
+  From:
+    Image: docker.elastic.co/elasticsearch/elasticsearch:5.2.2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM docker.elastic.co/elasticsearch/elasticsearch:5.2.2

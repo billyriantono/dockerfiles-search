@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine3.10
+  Commands:
+  - CmdLine:
+    - adduser -D -g '' myuser
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH/src/github.com/sinfo/deck2
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - apk --no-cache add ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /go/bin/deck2
+      ./src/*.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine3.10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine3.10 AS builder
+- As: swagger-builder
+  BaseName: quay.io/goswagger/swagger
+  Commands:
+  - Name: workdir
+    Path: $GOPATH/src/github.com/sinfo/deck2
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - swagger flatten ./swagger/swagger.json --compact -o /go/bin/swagger.json
+    Name: run
+    PrependShell: true
+  From:
+    Image: quay.io/goswagger/swagger
+  Name: swagger-builder
+  Platform: ""
+  SourceCode: FROM quay.io/goswagger/swagger AS swagger-builder
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/passwd
+    - /etc/passwd
+  - Name: workdir
+    Path: /go/bin
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/deck2
+    - /go/bin/deck2
+  - Chown: ""
+    From: swagger-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/swagger.json
+    - /go/bin/static/swagger.json
+  - Name: user
+    User: myuser
+  - CmdLine:
+    - /go/bin/deck2
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

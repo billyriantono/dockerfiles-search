@@ -1,0 +1,154 @@
+MetaArgs: null
+Stages:
+- As: node-builder
+  BaseName: node:11.15.0
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - Name: workdir
+    Path: /work
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./client
+    - /work/client
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./package.json
+    - /work/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./package-lock.json
+    - /work/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./webpack.config.prd.js
+    - /work/
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./node_modules/webpack/bin/webpack.js --config webpack.config.prd.js
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:11.15.0
+  Name: node-builder
+  Platform: ""
+  SourceCode: FROM node:11.15.0 AS node-builder
+- As: go-builder
+  BaseName: golang:latest
+  Commands:
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Env:
+    - Key: GOPROXY
+      Value: https://goproxy.io
+    Name: env
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - Name: workdir
+    Path: /work
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./main.go
+    - /work/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./server
+    - /work/server
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./go.mod
+    - /work/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./go.sum
+    - /work/
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build main.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: go-builder
+  Platform: ""
+  SourceCode: FROM golang:latest AS go-builder
+- BaseName: scratch
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - Env:
+    - Key: GIN_MODE
+      Value: release
+    Name: env
+  - Env:
+    - Key: INSIDE_DOCKER
+      Value: "true"
+    Name: env
+  - Name: workdir
+    Path: /output
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/server.json
+    - /output/config/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./server/templates
+    - /output/server/templates
+  - Chown: ""
+    From: node-builder
+    Name: copy
+    SourcesAndDest:
+    - /work/client/public
+    - /output/client/public
+  - Chown: ""
+    From: go-builder
+    Name: copy
+    SourcesAndDest:
+    - /work/main
+    - /output/
+  - Name: expose
+    Ports:
+    - "11011"
+  - CmdLine:
+    - ./main
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

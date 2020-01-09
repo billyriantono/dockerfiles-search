@@ -1,0 +1,168 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: ubuntu:16.04
+  Commands:
+  - Name: user
+    User: root
+  - CmdLine:
+    - apt-get update   && apt-get install -y curl jq python build-essential unzip   &&
+      apt-get install -y libboost1.58-all-dev zlib1g-dev   && apt-get clean
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root/
+  - CmdLine:
+    - mkdir -p /root/dist
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -O -L "http://nlp.ist.i.kyoto-u.ac.jp/DLcounter/lime.cgi?down=http://nlp.ist.i.kyoto-u.ac.jp/nl-resource/juman/juman-7.01.tar.bz2"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar jxvf juman-7.01.tar.bz2   && cd juman-7.01; ./configure   && make   && make
+      install   && make install DESTDIR=/root/dist   && ldconfig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "# build juman++"   && curl -O -L "http://nlp.ist.i.kyoto-u.ac.jp/DLcounter/lime.cgi?down=http://lotus.kuee.kyoto-u.ac.jp/nl-resource/jumanpp/jumanpp-1.02.tar.xz"   &&
+      tar xJvf jumanpp-1.02.tar.xz   && cd jumanpp-1.02; ./configure   && make   &&
+      make install DESTDIR=/root/dist   && rm /root/dist/usr/local/share/jumanpp/*   &&
+      ldconfig   && echo "# jumanpp-dictパッケージ"   && cd dict-build   && rm -f *.mdic
+      jumanpp_dic   && cd ../jumanpp-resource   && rm -f lang.mdl.direct *.map   &&
+      rm -f dic.base dic.bin dic.da dic.form dic.form_type dic.imis dic.pos dic.read
+      dic.rep dic.spos version   && cd ../   && mkdir -p /root/dist/home && mkdir
+      -p /root/dist/home/ubuntu && mkdir -p /root/dist/home/ubuntu/knp_dict   && tar
+      -jcvf /root/dist/home/ubuntu/jumanpp-dict.tar.bz2 dict-build/ jumanpp-resource   &&
+      cd /root && rm -r jumanpp-1.02.tar.xz jumanpp-1.02/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "# build KNP"   && curl -O -L "http://nlp.ist.i.kyoto-u.ac.jp/DLcounter/lime.cgi?down=http://nlp.ist.i.kyoto-u.ac.jp/nl-resource/knp/knp-4.18.tar.bz2"   &&
+      tar jxvf knp-4.18.tar.bz2   && cd knp-4.18   && ./configure   && make   && make
+      install DESTDIR=/root/dist   && cd ..   && echo '## knp-dictパッケージ'   && mkdir
+      -p /root/dist/home && mkdir -p /root/dist/home/ubuntu && mkdir -p /root/dist/home/ubuntu/knp_dict   &&
+      rm -r /root/dist/usr/local/share/knp/dict   && (cd knp-4.18/dict/; make clean)   &&
+      tar -jcvf /root/dist/home/ubuntu/knp-dict.tar.bz2 knp-4.18/dict/ knp-4.18/Makefile*
+      knp-4.18/config.status knp-4.18/configure knp-4.18/configure.ac knp-4.18/aclocal.m4
+      knp-4.18/system/make_db knp-4.18/system/make_cf_index   && echo '## knpユーザ辞書'   &&
+      cp knp-4.18/system/make_db knp-4.18/system/make_cf_index /usr/local/bin   &&
+      cp knp-4.18/dict/auto/auto.dat knp-4.18/dict/auto/wikipedia.dat /root/dist/home/ubuntu/knp_dict   &&
+      gzip -9 /root/dist/home/ubuntu/knp_dict/auto.dat /root/dist/home/ubuntu/knp_dict/wikipedia.dat   &&
+      rm -r knp-4.18.tar.bz2 knp-4.18/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip /root/dist/usr/local/bin/jumanpp /root/dist/usr/local/bin/mkdarts_jumanpp
+      /root/dist/usr/local/bin/knp
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.04
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04 as builder
+- BaseName: ubuntu:16.04
+  Commands:
+  - Maintainer: Naoto Kato <naoto.kato@plaid.co.jp>
+    Name: maintainer
+  - Env:
+    - Key: NPM_CONFIG_LOGLEVEL
+      Value: info
+    Name: env
+  - Env:
+    - Key: NODE_VERSION
+      Value: 8.8.1
+    Name: env
+  - Env:
+    - Key: NPM_VERSION
+      Value: 3.8.9
+    Name: env
+  - Env:
+    - Key: YARN_VERSION
+      Value: 1.2.1
+    Name: env
+  - Name: workdir
+    Path: /root/
+  - Name: user
+    User: root
+  - CmdLine:
+    - apt-get update   && apt-get install -y curl jq python unzip sudo tzdata git
+      bzip2 make   && apt-get install -y zlib1g   && apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -SLO "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.gz"   &&
+      tar -xf "node-v$NODE_VERSION-linux-x64.tar.gz" -C /usr/local --strip-components=1   &&
+      rm "node-v$NODE_VERSION-linux-x64.tar.gz"   && ln -s /usr/local/bin/node /usr/local/bin/nodejs   &&
+      npm install -g npm@$NPM_VERSION yarn@$YARN_VERSION   && npm cache clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -m -d /home/ubuntu -s /bin/bash ubuntu &&   echo 'ubuntu:ubuntu' | chpasswd
+      &&   echo "ubuntu ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers &&   mkdir /home/ubuntu/.ssh
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ubuntu
+  - Name: workdir
+    Path: /home/ubuntu
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /root/dist
+    - /
+  - CmdLine:
+    - sudo ldconfig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo chown ubuntu:ubuntu /home/ubuntu
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - knp_user.dat
+    - /home/ubuntu/knp_dict/user.dat
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - init_dicts.sh
+    - /home/ubuntu/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - update_knp_auto_dict.sh
+    - /home/ubuntu/knp_dict/
+  - CmdLine:
+    - git clone --depth 1 --branch master --single-branch https://github.com/otolab/halumi-core.git
+      halumi   && rm -fr halumi/.git halumi/docker
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/ubuntu/halumi
+  - CmdLine:
+    - yarn install && yarn cache clean
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /home/ubuntu/
+  - CmdLine:
+    - /home/ubuntu/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:16.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04

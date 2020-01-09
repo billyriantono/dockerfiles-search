@@ -1,0 +1,243 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "wheel-deps",
+      "BaseName": "quay.io/pypa/manylinux2010_x86_64",
+      "SourceCode": "FROM quay.io/pypa/manylinux2010_x86_64 AS wheel-deps",
+      "Platform": "",
+      "As": "wheel-deps",
+      "From": {
+        "Image": "quay.io/pypa/manylinux2010_x86_64"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "/opt/python/cp37-cp37m/bin/pip wheel --no-deps --no-cache-dir     lscsoft-glue     ligo-segments     python-ligo-lw     git+https://github.com/mher/flower@1a291b31423faa19450a272c6ef4ef6fe8daa286 \u0026\u0026     ls *.whl | xargs -L 1 auditwheel repair \u0026\u0026     mv *none-any.whl /wheelhouse \u0026\u0026     rm *.whl"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "wheel-self",
+      "BaseName": "quay.io/pypa/manylinux2010_x86_64",
+      "SourceCode": "FROM quay.io/pypa/manylinux2010_x86_64 AS wheel-self",
+      "Platform": "",
+      "As": "wheel-self",
+      "From": {
+        "Image": "quay.io/pypa/manylinux2010_x86_64"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "/src"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/opt/python/cp37-cp37m/bin/pip wheel --no-deps --no-cache-dir -w /wheelhouse /src"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "apt-install",
+      "BaseName": "debian:stable-slim",
+      "SourceCode": "FROM debian:stable-slim AS apt-install",
+      "Platform": "",
+      "As": "apt-install",
+      "From": {
+        "Image": "debian:stable-slim"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get -y install --no-install-recommends     ipython3     gunicorn3     openssh-client     python3-astropy     python3-celery     python3-dateutil     python3-ephem     python3-flask     python3-flask-login     python3-flask-sqlalchemy     python3-future     python3-gevent     python3-healpy     python3-humanize     python3-h5py     python3-lxml     python3-flask-mail     python3-freezegun     python3-matplotlib     python3-networkx     python3-numpy     python3-pandas     python3-passlib     python3-phonenumbers     python3-pip     python3-psycopg2     python3-redis     python3-scipy     python3-seaborn     python3-setuptools     python3-socks     python3-shapely     python3-sqlalchemy-utils     python3-tornado     python3-twilio     python3-tz     python3-wtforms \u0026\u0026     rm -rf /var/lib/apt/lists/* \u0026\u0026     pip3 install --upgrade --no-cache-dir pip"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "pip-install-deps",
+      "BaseName": "apt-install",
+      "SourceCode": "FROM apt-install AS pip-install-deps",
+      "Platform": "",
+      "As": "pip-install-deps",
+      "From": {
+        "Stage": {
+          "Named": "apt-install",
+          "Index": 2
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "requirements.txt",
+            "/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "wheel-deps",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/wheelhouse",
+            "/wheelhouse"
+          ]
+        },
+        {
+          "CmdLine": [
+            "pip3 install --no-cache-dir -f /wheelhouse     flower     -r /requirements.txt"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "pip-install-self",
+      "BaseName": "apt-install",
+      "SourceCode": "FROM apt-install AS pip-install-self",
+      "Platform": "",
+      "As": "pip-install-self",
+      "From": {
+        "Stage": {
+          "Named": "apt-install",
+          "Index": 2
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "wheel-self",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/wheelhouse",
+            "/wheelhouse"
+          ]
+        },
+        {
+          "CmdLine": [
+            "pip3 install --no-cache-dir --no-deps /wheelhouse/*.whl"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "apt-install",
+      "SourceCode": "FROM apt-install",
+      "Platform": "",
+      "From": {
+        "Stage": {
+          "Named": "apt-install",
+          "Index": 2
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "pip-install-deps",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local",
+            "/usr/local"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "pip-install-self",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local",
+            "/usr/local"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "LC_ALL",
+              "Value": "C.UTF-8"
+            },
+            {
+              "Key": "LANG",
+              "Value": "C.UTF-8"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "useradd -mr growth-too-marshal \u0026\u0026     echo IdentityFile /run/secrets/id_rsa \u003e\u003e /etc/ssh/ssh_config \u0026\u0026     mkdir -p /usr/var/growth.too.flask-instance \u0026\u0026     mkdir -p /usr/var/growth.too.flask-instance/catalog \u0026\u0026     mkdir -p /usr/var/growth.too.flask-instance/input \u0026\u0026     ln -s /run/secrets/application.cfg.d /usr/var/growth.too.flask-instance/application.cfg.d \u0026\u0026     ln -s /run/secrets/htpasswd /usr/var/growth.too.flask-instance/htpasswd \u0026\u0026     ln -s /run/secrets/GROWTH-India.tess /usr/var/growth.too.flask-instance/input/GROWTH-India.tess \u0026\u0026     ln -s /run/secrets/CLU.hdf5 /usr/var/growth.too.flask-instance/catalog/CLU.hdf5"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "docker/etc/ssh/ssh_known_hosts",
+            "/etc/ssh/ssh_known_hosts"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "docker/usr/var/growth.too.flask-instance/application.cfg",
+            "/usr/var/growth.too.flask-instance/application.cfg"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "docker/entrypoint.sh",
+            "/entrypoint.sh"
+          ]
+        },
+        {
+          "Name": "user",
+          "User": "growth-too-marshal:growth-too-marshal"
+        },
+        {
+          "Name": "workdir",
+          "Path": "/home/growth-too-marshal"
+        },
+        {
+          "CmdLine": [
+            "growth-too iers"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "/entrypoint.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

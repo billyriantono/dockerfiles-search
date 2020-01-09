@@ -1,0 +1,268 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "DEPLOY_DIR",
+      "DefaultValue": "/opt/om-parser-stw-potsdam-v2",
+      "ProvidedValue": null,
+      "Value": "/opt/om-parser-stw-potsdam-v2"
+    },
+    {
+      "Key": "LISTEN_PORT",
+      "DefaultValue": "3080",
+      "ProvidedValue": null,
+      "Value": "3080"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "buildsys",
+      "BaseName": "python:2.7-alpine",
+      "SourceCode": "FROM python:2.7-alpine as buildsys",
+      "Platform": "",
+      "As": "buildsys",
+      "From": {
+        "Image": "python:2.7-alpine"
+      },
+      "Commands": [
+        {
+          "Key": "DEPLOY_DIR",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "CmdLine": [
+            "apk add make"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "pip install pipenv"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "adduser -D flaskd"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir -p ${DEPLOY_DIR}"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "${DEPLOY_DIR}"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "stw_potsdam/",
+            "./stw_potsdam"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "tests",
+            "./tests"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "Makefile",
+            "."
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "Pipfile",
+            "."
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "Pipfile.lock",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "chown -R flaskd:flaskd ."
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "user",
+          "User": "flaskd"
+        },
+        {
+          "CmdLine": [
+            "pipenv install --two --dev"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "make test"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "python:2.7-alpine",
+      "SourceCode": "FROM python:2.7-alpine",
+      "Platform": "",
+      "From": {
+        "Image": "python:2.7-alpine"
+      },
+      "Commands": [
+        {
+          "Key": "DEPLOY_DIR",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "LISTEN_PORT",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Env": [
+            {
+              "Key": "LISTEN_PORT",
+              "Value": "$LISTEN_PORT"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "LISTEN",
+              "Value": "0.0.0.0:$LISTEN_PORT"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache uwsgi uwsgi-python curl"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "pip install pipenv"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "adduser -D flaskd"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "buildsys",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "${DEPLOY_DIR}",
+            "${DEPLOY_DIR}"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "${DEPLOY_DIR}"
+        },
+        {
+          "CmdLine": [
+            "rm -rf ./tests ./Makefile"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "chown -R flaskd:flaskd ."
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "user",
+          "User": "flaskd"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PIPENV_VENV_IN_PROJECT",
+              "Value": "1"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "pipenv install --two --deploy"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "$LISTEN_PORT"
+          ]
+        },
+        {
+          "CmdLine": [
+            "pipenv run uwsgi --master --http11-socket $LISTEN --plugins python --protocol uwsgi --wsgi stw_potsdam.views:app --virtualenv ./.venv"
+          ],
+          "Name": "cmd",
+          "PrependShell": true
+        },
+        {
+          "Health": {
+            "Interval": 15000000000,
+            "Test": [
+              "CMD-SHELL",
+              "curl -f http://127.0.0.1:$LISTEN_PORT/health_check || exit 1"
+            ],
+            "Timeout": 3000000000
+          },
+          "Name": "healthcheck"
+        }
+      ]
+    }
+  ]
+}

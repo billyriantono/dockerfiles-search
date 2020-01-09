@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- BaseName: php:7.0-apache
+  Commands:
+  - CmdLine:
+    - set -ex;   apt-get update;   apt-get install -y --no-install-recommends     ssl-cert   ;     if
+      command -v a2enmod; then     a2enmod       expires       rewrite       ssl     ;   fi;     if
+      command -v a2ensite; then     a2ensite       default-ssl     ;   fi;   rm -rf
+      /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'set -ex;   savedAptMark="$(apt-mark showmanual)";     apt-get update;   apt-get
+      install -y --no-install-recommends     libjpeg-dev     libpng-dev     libpq-dev   ;   docker-php-ext-configure
+      gd --with-png-dir=/usr --with-jpeg-dir=/usr;   mkdir /usr/src/php/ext/uploadprogress;   curl
+      -fSL https://github.com/php/pecl-php-uploadprogress/archive/master.tar.gz |
+      tar xvz -C /usr/src/php/ext/uploadprogress --strip 1;     docker-php-ext-install
+      -j "$(nproc)"     gd     opcache     pdo_mysql     zip   ;     apt-mark auto
+      ''.*'' > /dev/null;   apt-mark manual $savedAptMark;   ldd "$(php -r ''echo
+      ini_get("extension_dir");'')"/*.so     | awk ''/=>/ { print $3 }''     | sort
+      -u     | xargs -r dpkg-query -S     | cut -d: -f1     | sort -u     | xargs
+      -rt apt-mark manual;     apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false;   rm
+      -rf /var/lib/apt/lists/*'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex;   {     echo 'opcache.memory_consumption=128';     echo 'opcache.interned_strings_buffer=8';     echo
+      'opcache.max_accelerated_files=4000';     echo 'opcache.revalidate_freq=60';     echo
+      'opcache.fast_shutdown=1';     echo 'opcache.enable_cli=1';   } > /usr/local/etc/php/conf.d/opcache-recommended.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex;   apt-get update;   apt-get install -y --no-install-recommends     libmagickwand-dev     imagemagick   ;   rm
+      -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex;   apt-get update;   apt-get install -y --no-install-recommends     mysql-client     rsync   ;   rm
+      -rf /var/lib/apt/lists/*;     php -r "readfile('https://github.com/drush-ops/drush/releases/download/8.1.16/drush.phar');"
+      > /usr/local/bin/drush;   chmod +x /usr/local/bin/drush;   drush -y init
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex;     apt-get update;   apt-get install -y --no-install-recommends     ssmtp     mailutils   ;   rm
+      -rf /var/lib/apt/lists/*;     echo "FromLineOverride = YES" >> /etc/ssmtp/ssmtp.conf;   echo
+      "sendmail_path = \"/usr/sbin/sendmail -t -i\"" >> /usr/local/etc/php/php.ini
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/apache2/conf-available/remote-file-server.conf
+    - /etc/apache2/conf-available/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: workdir
+    Path: /var/www
+  - Name: expose
+    Ports:
+    - "443"
+  - CmdLine:
+    - apache2-foreground
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 300000000000
+      Test:
+      - CMD-SHELL
+      - drush -r /var/www/html status bootstrap | grep -q Successful
+      Timeout: 3000000000
+    Name: healthcheck
+  From:
+    Image: php:7.0-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.0-apache

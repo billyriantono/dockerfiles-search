@@ -1,0 +1,134 @@
+MetaArgs:
+- DefaultValue: null
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: null
+- DefaultValue: null
+  Key: BEAT_DOCKER_IMAGE
+  ProvidedValue: null
+  Value: null
+Stages:
+- As: beats
+  BaseName: golang:${GO_VERSION}
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Daichi Sakai <daisaru11@gmail.com>"'
+    Name: label
+  - Key: GO_VERSION
+    Name: arg
+    Value: null
+  - Key: GO_PLATFORM
+    Name: arg
+    Value: null
+  - Key: BEATS_VERSION
+    Name: arg
+    Value: null
+  - Key: BEAT_NAME
+    Name: arg
+    Value: null
+  - CmdLine:
+    - git clone --depth=1 -b v${BEATS_VERSION} https://github.com/elastic/beats /go/src/github.com/elastic/beats
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/elastic/beats/${BEAT_NAME}
+  - CmdLine:
+    - make ${BEAT_NAME}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p target  && mv ${BEAT_NAME} "target/${BEAT_NAME}-${BEATS_VERSION}-go${GO_VERSION}-${GO_PLATFORM}"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:${GO_VERSION}
+  Name: beats
+  Platform: ""
+  SourceCode: FROM golang:${GO_VERSION} AS beats
+- As: beats_aws_ecs
+  BaseName: golang:${GO_VERSION}
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Daichi Sakai <daisaru11@gmail.com>"'
+    Name: label
+  - Key: GO_VERSION
+    Name: arg
+    Value: null
+  - Key: GO_PLATFORM
+    Name: arg
+    Value: null
+  - Key: BEATS_VERSION
+    Name: arg
+    Value: null
+  - Key: BEATS_AWS_ECS_VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - git clone --depth=1 -b v${BEATS_VERSION} https://github.com/elastic/beats /go/src/github.com/elastic/beats
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/pkg/errors
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/daisaru11/beats-aws-ecs
+  - Name: workdir
+    Path: /go/src/github.com/daisaru11/beats-aws-ecs
+  - CmdLine:
+    - CGO_ENABLED=1 GOOS=linux go build -buildmode=plugin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p target  && mv beats-aws-ecs.so "target/beats-aws-ecs-${BEATS_AWS_ECS_VERSION}-${BEATS_VERSION}-go${GO_VERSION}-${GO_PLATFORM}.so"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:${GO_VERSION}
+  Name: beats_aws_ecs
+  Platform: ""
+  SourceCode: FROM golang:${GO_VERSION} AS beats_aws_ecs
+- BaseName: ${BEAT_DOCKER_IMAGE}
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Daichi Sakai <daisaru11@gmail.com>"'
+    Name: label
+  - Key: GO_VERSION
+    Name: arg
+    Value: null
+  - Key: GO_PLATFORM
+    Name: arg
+    Value: null
+  - Key: BEATS_VERSION
+    Name: arg
+    Value: null
+  - Key: BEAT_NAME
+    Name: arg
+    Value: null
+  - Key: BEATS_AWS_ECS_VERSION
+    Name: arg
+    Value: null
+  - Chown: ""
+    From: beats
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/elastic/beats/${BEAT_NAME}/target/${BEAT_NAME}-${BEATS_VERSION}-go${GO_VERSION}-${GO_PLATFORM}
+    - /usr/share/${BEAT_NAME}/${BEAT_NAME}
+  - Chown: ""
+    From: beats_aws_ecs
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/daisaru11/beats-aws-ecs/target/beats-aws-ecs-${BEATS_AWS_ECS_VERSION}-${BEATS_VERSION}-go${GO_VERSION}-${GO_PLATFORM}.so
+    - /usr/share/${BEAT_NAME}/beats-aws-ecs.so
+  From:
+    Image: ${BEAT_DOCKER_IMAGE}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${BEAT_DOCKER_IMAGE}

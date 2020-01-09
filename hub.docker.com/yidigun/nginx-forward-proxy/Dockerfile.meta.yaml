@@ -1,0 +1,61 @@
+MetaArgs: null
+Stages:
+- As: buildimg
+  BaseName: centos:7
+  Commands:
+  - CmdLine:
+    - yum install -y gcc make patch pcre-devel zlib-devel git &&     cd /usr/src &&     curl
+      http://nginx.org/download/nginx-1.17.3.tar.gz | tar zxf - &&     git clone https://github.com/chobits/ngx_http_proxy_connect_module
+      &&     cd nginx-1.17.3 &&     cat ../ngx_http_proxy_connect_module/patch/proxy_connect_rewrite_101504.patch
+      | patch -p1 &&     ./configure --prefix=/usr/local/nginx --add-module=../ngx_http_proxy_connect_module
+      &&     make &&     make install &&     cd /usr/local/nginx &&     rmdir logs
+      &&     mkdir /var/log/nginx &&     ln -s /var/log/nginx logs
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx-whitelist.conf
+    - nginx-blacklist.conf
+    - /usr/local/nginx/conf/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx-blacklist.conf
+    - /usr/local/nginx/conf/nginx.conf
+  From:
+    Image: centos:7
+  Name: buildimg
+  Platform: ""
+  SourceCode: FROM centos:7 AS buildimg
+- BaseName: alpine
+  Commands:
+  - Chown: ""
+    From: buildimg
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/nginx
+    - /usr/local/nginx
+  - CmdLine:
+    - apk add --update pcre libc6-compat &&     rm -rf /var/cache/apk/* &&     mkdir
+      /var/log/nginx &&     cd /var/log/nginx &&     ln -s /dev/stdout access.log
+      &&     ln -s /dev/stderr error.log
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/nginx/sbin/nginx
+    Name: cmd
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8888"
+  - Name: volume
+    Volumes:
+    - /var/log/nginx
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

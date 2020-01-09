@@ -1,0 +1,135 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: ubuntu:18.04
+  Commands:
+  - Env:
+    - Key: LANG
+      Value: '"C.UTF-8"'
+    Name: env
+  - Key: UBUNTU_MIRROR
+    Name: arg
+    Value: null
+  - CmdLine:
+    - '{ [ ! "$UBUNTU_MIRROR" ] || sed -i "s|http://\(\w*\.\)*archive\.ubuntu\.com/ubuntu/\?
+      |$UBUNTU_MIRROR |" /etc/apt/sources.list; } &&     apt-get -q update &&     apt-get
+      -q dist-upgrade -y &&     DEBIAN_FRONTEND=noninteractive         apt-get -q
+      install --no-install-recommends -y ca-certificates git locales lsb-release python3
+      sudo tzdata'
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: base
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as base
+- As: build
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - useradd -d /home/zulip -m zulip &&     echo 'zulip ALL=(ALL:ALL) NOPASSWD:ALL'
+      >> /etc/sudoers
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: zulip
+  - Name: workdir
+    Path: /home/zulip
+  - Key: ZULIP_GIT_URL
+    Name: arg
+    Value: https://github.com/zulip/zulip.git
+  - Key: ZULIP_GIT_REF
+    Name: arg
+    Value: 2.1.1
+  - CmdLine:
+    - git clone "$ZULIP_GIT_URL" &&     cd zulip &&     git checkout -b current "$ZULIP_GIT_REF"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/zulip/zulip
+  - Key: CUSTOM_CA_CERTIFICATES
+    Name: arg
+    Value: null
+  - CmdLine:
+    - ./tools/provision --production-travis
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - . /srv/zulip-py3-venv/bin/activate &&     ./tools/build-release-tarball docker
+      &&     mv /tmp/tmp.*/zulip-server-docker.tar.gz /tmp/zulip-server-docker.tar.gz
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: build
+  Platform: ""
+  SourceCode: FROM base as build
+- BaseName: base
+  Commands:
+  - Env:
+    - Key: DATA_DIR
+      Value: '"/data"'
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/zulip-server-docker.tar.gz
+    - /root/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - custom_zulip_files/
+    - /root/custom_zulip
+  - Key: CUSTOM_CA_CERTIFICATES
+    Name: arg
+    Value: null
+  - CmdLine:
+    - dpkg-divert --add --rename /etc/init.d/nginx &&     ln -s /bin/true /etc/init.d/nginx
+      &&     mkdir -p "$DATA_DIR" &&     cd /root &&     tar -xf zulip-server-docker.tar.gz
+      &&     rm -f zulip-server-docker.tar.gz &&     mv zulip-server-docker zulip
+      &&     cp -rf /root/custom_zulip/* /root/zulip &&     rm -rf /root/custom_zulip
+      &&     export PUPPET_CLASSES="zulip::dockervoyager"            DEPLOYMENT_TYPE="dockervoyager"            ADDITIONAL_PACKAGES="expect"
+      &&     /root/zulip/scripts/setup/install --hostname="$(hostname)" --email="docker-zulip"
+      --no-init-db &&     rm -f /etc/zulip/zulip-secrets.conf /etc/zulip/settings.py
+      &&     apt-get -qq autoremove --purge -y &&     apt-get -qq clean &&     rm
+      -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /sbin/entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - certbot-deploy-hook
+    - /sbin/certbot-deploy-hook
+  - Name: volume
+    Volumes:
+    - $DATA_DIR
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - CmdLine:
+    - /sbin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - app:run
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

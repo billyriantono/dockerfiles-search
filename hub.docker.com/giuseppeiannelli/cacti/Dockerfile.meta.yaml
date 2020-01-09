@@ -1,0 +1,101 @@
+MetaArgs: null
+Stages:
+- BaseName: nginx:stable-alpine
+  Commands:
+  - Labels:
+    - Key: mantainer
+      Value: '"Giuseppe Iannelli"'
+    Name: label
+  - Env:
+    - Key: CACTI_VERSION
+      Value: 0.8.8h
+    - Key: SNMP_PORT
+      Value: "161"
+    - Key: SNMP_PORT_PROTO
+      Value: udp
+    - Key: DB_TYPE
+      Value: mysql
+    - Key: DB_PORT
+      Value: "3306"
+    - Key: DB_SSL
+      Value: "false"
+    Name: env
+  - CmdLine:
+    - apk add --no-cache --virtual .static_deps python supervisor openssl php5 php5-fpm
+      php5-dom php5-gd php5-ldap php5-mysql php5-mysqli php5-odbc php5-openssl php5-pdo
+      php5-pdo_mysql php5-pdo_odbc php5-pear php5-snmp php5-sockets php5-xml net-snmp
+      net-snmp-dev net-snmp-tools net-snmp-libs net-snmp-agent-libs mariadb-client
+      mysql-client mariadb-client-libs mariadb-dev rrdtool rrdtool-cached rrdtool-cgi
+      rrdtool-utils wget patch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache --virtual .spine-build-deps     autoconf     file     g++     gcc     libc-dev     make
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/share/nginx/
+  - CmdLine:
+    - set -x && mkdir -p /usr/share/nginx/cacti && rm -rf /usr/share/nginx/html &&
+      wget --no-check-certificate https://www.cacti.net/downloads/cacti-"$CACTI_VERSION".tar.gz
+      && tar xzvf cacti-"$CACTI_VERSION".tar.gz  -C /usr/share/nginx/ && mv cacti-"$CACTI_VERSION"/*
+      cacti/ && rm -rf cacti-"$CACTI_VERSION".tar.gz cacti-"$CACTI_VERSION"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/share/nginx/
+  - CmdLine:
+    - set -x && wget --no-check-certificate https://www.cacti.net/downloads/spine/cacti-spine-"$CACTI_VERSION".tar.gz
+      && tar xvzf cacti-spine-"$CACTI_VERSION".tar.gz && cd cacti-spine-"$CACTI_VERSION"
+      && ./configure && make && make install && cd /usr/share/nginx/ && rm -rf cacti-spine-"$CACTI_VERSION"
+      cacti-spine-"$CACTI_VERSION".tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk del .spine-build-deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/
+    - /docker/
+  - CmdLine:
+    - set -x && cp /docker/configurations/nginx/default.conf /etc/nginx/conf.d/default.conf
+      && cp /docker/configurations/nginx/mime.types /etc/nginx/mime.types && cp /docker/configurations/php-fpm/php-fpm.conf
+      /etc/php5/php-fpm.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x && mkdir -p /usr/share/nginx/cacti/rra/backup/ /usr/share/nginx/cacti/rra/archive/
+      /usr/share/nginx/cacti/cache && chown -R nginx:nginx /usr/share/nginx/cacti
+      && cp /docker/configurations/cacti/config.php /usr/share/nginx/cacti/include/config.php
+      && cp /docker/configurations/cacti/global.php /usr/share/nginx/cacti/include/global.php
+      && echo  "*/5 * * * * php /usr/share/nginx/cacti/poller.php > /dev/null 2>&1"
+      > /var/spool/cron/crontabs/nginx && sh /docker/scripts/install_cacti_extras.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - $SNMP_PORT/$SNMP_PORT_PROTO
+  - Name: workdir
+    Path: /usr/share/nginx/cacti
+  - CmdLine:
+    - set -x && mkdir -p /var/log/supervisord && touch /var/log/supervisord/supervisord.log
+      && chmod +x /docker/entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /docker/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - cacti
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginx:stable-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx:stable-alpine

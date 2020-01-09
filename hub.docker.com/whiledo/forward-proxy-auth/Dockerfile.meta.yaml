@@ -1,0 +1,134 @@
+MetaArgs: null
+Stages:
+- As: go-env
+  BaseName: golang:1.11.1-alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk add curl git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/kekru/forward-proxy-auth/
+  - CmdLine:
+    - ln -s /go/src/github.com/kekru/forward-proxy-auth/ /fpa
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11.1-alpine
+  Name: go-env
+  Platform: ""
+  SourceCode: FROM golang:1.11.1-alpine as go-env
+- As: builder
+  BaseName: go-env
+  Commands:
+  - Key: RUN_ENSURE
+    Name: arg
+    Value: "1"
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - if [ $RUN_ENSURE -eq 1 ]; then dep ensure; fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dep check
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -o forward-proxy-auth .
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: go-env
+  Name: builder
+  Platform: ""
+  SourceCode: FROM go-env AS builder
+- As: certificatefetcher
+  BaseName: alpine:3.6
+  Commands:
+  - CmdLine:
+    - apk add -U --no-cache ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.6
+  Name: certificatefetcher
+  Platform: ""
+  SourceCode: FROM alpine:3.6 as certificatefetcher
+- BaseName: scratch
+  Commands:
+  - Key: SOURCE_COMMIT
+    Name: arg
+    Value: null
+  - Key: SOURCE_TAG
+    Name: arg
+    Value: null
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.name
+      Value: '"kekru forward-proxy-auth"'
+    - Key: org.label-schema.description
+      Value: '"forward authentication service for use with traefik"'
+    - Key: org.label-schema.vendor
+      Value: '"Kevin Krummenauer"'
+    - Key: org.label-schema.url
+      Value: '"https://github.com/kekru/forward-proxy-auth"'
+    - Key: org.label-schema.vcs-ref
+      Value: $SOURCE_COMMIT
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/kekru/forward-proxy-auth"'
+    - Key: org.label-schema.usage
+      Value: '"https://github.com/kekru/forward-proxy-auth"'
+    - Key: org.label-schema.version
+      Value: $SOURCE_TAG
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/kekru/forward-proxy-auth/forward-proxy-auth
+    - /
+  - Chown: ""
+    From: certificatefetcher
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.yml
+    - /config.yml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - static
+    - /static
+  - CmdLine:
+    - /forward-proxy-auth
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

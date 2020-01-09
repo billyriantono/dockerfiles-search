@@ -1,0 +1,142 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: node:8.16.1
+  Commands:
+  - Key: PORT
+    Name: arg
+    Value: "3001"
+  - Env:
+    - Key: PORT
+      Value: $PORT
+    Name: env
+  - Env:
+    - Key: HOME
+      Value: /opt/scheduler-service
+    Name: env
+  - CmdLine:
+    - mkdir -p $HOME
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $HOME
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - ./
+  From:
+    Image: node:8.16.1
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:8.16.1 as BASE
+- As: dependencies
+  BaseName: BASE
+  Commands:
+  - CmdLine:
+    - npm install --silent --only=production
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -R node_modules prod_node_modules
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install --silent
+    Name: run
+    PrependShell: true
+  From:
+    Image: BASE
+  Name: dependencies
+  Platform: ""
+  SourceCode: FROM BASE as DEPENDENCIES
+- As: test
+  BaseName: dependencies
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .eslintrc.json
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /src
+    - ./src/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /test
+    - ./test/
+  - CmdLine:
+    - npm run lint && npm run test
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: dependencies
+  Name: test
+  Platform: ""
+  SourceCode: FROM dependencies AS TEST
+- As: release
+  BaseName: node:8.16.1-alpine
+  Commands:
+  - Key: PORT
+    Name: arg
+    Value: "3001"
+  - Env:
+    - Key: PORT
+      Value: $PORT
+    Name: env
+  - Env:
+    - Key: HOME
+      Value: /opt/scheduler-service
+    Name: env
+  - CmdLine:
+    - mkdir -p $HOME
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $HOME
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - index.js
+    - package.json
+    - ./
+  - Chown: ""
+    From: dependencies
+    Name: copy
+    SourcesAndDest:
+    - $HOME/prod_node_modules
+    - ./node_modules
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /src
+    - ./src/
+  - Name: expose
+    Ports:
+    - $PORT
+  - CmdLine:
+    - npm
+    - run
+    - start
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: node:8.16.1-alpine
+  Name: release
+  Platform: ""
+  SourceCode: FROM node:8.16.1-alpine as RELEASE

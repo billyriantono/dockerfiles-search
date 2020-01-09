@@ -1,0 +1,67 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:bionic
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"yu-ji"'
+    Name: label
+  - Env:
+    - Key: UNIT_VERSION
+      Value: 1.2-1~bionic
+    Name: env
+  - Env:
+    - Key: PHP_VERSION
+      Value: 7.2.5-*
+    Name: env
+  - CmdLine:
+    - 'set -x     && apt-get update     && DEBIAN_FRONTEND=noninteractive apt-get
+      install --no-install-recommends --no-install-suggests -y gnupg1 apt-transport-https
+      ca-certificates     &&     NGINX_GPGKEY=573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62;     found='''';     for
+      server in         ha.pool.sks-keyservers.net         hkp://keyserver.ubuntu.com:80         hkp://p80.pool.sks-keyservers.net:80         pgp.mit.edu     ;
+      do         echo "Fetching GPG key $NGINX_GPGKEY from $server";         apt-key
+      adv --keyserver "$server" --keyserver-options timeout=10 --recv-keys "$NGINX_GPGKEY"
+      && found=yes && break;     done;     test -z "$found" && echo >&2 "error: failed
+      to fetch GPG key $NGINX_GPGKEY" && exit 1;     apt-get remove --purge --auto-remove
+      -y gnupg1 && rm -rf /var/lib/apt/lists/*     && dpkgArch="$(dpkg --print-architecture)"     &&
+      unitPackages="unit=${UNIT_VERSION} unit-php=${UNIT_VERSION}"     && phpPackages="php7.2-mysql=${PHP_VERSION}
+      php7.2-curl=${PHP_VERSION} php7.2-zip=${PHP_VERSION}"     && case "$dpkgArch"
+      in         amd64|i386)             echo "deb https://packages.nginx.org/unit/ubuntu/
+      bionic unit" >> /etc/apt/sources.list.d/unit.list             && apt-get update             ;;         *)             echo
+      "deb-src https://packages.nginx.org/unit/ubuntu/ bionic unit" >> /etc/apt/sources.list.d/unit.list                         &&
+      tempDir="$(mktemp -d)"             && chmod 777 "$tempDir"                         &&
+      savedAptMark="$(apt-mark showmanual)"                         && apt-get update             &&
+      apt-get build-dep -y $unitPackages             && (                 cd "$tempDir"                 &&
+      DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)"                     apt-get source
+      --compile $unitPackages             )                         && apt-mark showmanual
+      | xargs apt-mark auto > /dev/null             && { [ -z "$savedAptMark" ] ||
+      apt-mark manual $savedAptMark; }                         && ls -lAFh "$tempDir"             &&
+      ( cd "$tempDir" && dpkg-scanpackages . > Packages )             && grep ''^Package:
+      '' "$tempDir/Packages"             && echo "deb [ trusted=yes ] file://$tempDir
+      ./" > /etc/apt/sources.list.d/temp.list             && apt-get -o Acquire::GzipIndexes=false
+      update             ;;     esac         && DEBIAN_FRONTEND=noninteractive apt-get
+      install --no-install-recommends --no-install-suggests -y         $unitPackages         $phpPackages         curl
+      git     && apt-get remove --purge --auto-remove -y apt-transport-https && rm
+      -rf /var/lib/apt/lists/* /etc/apt/sources.list.d/unit.list         && if [ -n
+      "$tempDir" ]; then         apt-get purge -y --auto-remove         && rm -rf
+      "$tempDir" /etc/apt/sources.list.d/temp.list;     fi'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sf /dev/stdout /var/log/unit.log
+    Name: run
+    PrependShell: true
+  - Name: stopsignal
+    Signal: SIGTERM
+  - CmdLine:
+    - unitd
+    - --no-daemon
+    - --control
+    - unix:/var/run/control.unit.sock
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:bionic
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic

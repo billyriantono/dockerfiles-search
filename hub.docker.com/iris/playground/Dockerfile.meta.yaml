@@ -1,0 +1,177 @@
+MetaArgs: null
+Stages:
+- BaseName: opensuse:13.1
+  Commands:
+  - Maintainer: Péter Szilágyi <peterke@gmail.com>
+    Name: maintainer
+  - CmdLine:
+    - zypper ar -f http://download.opensuse.org/repositories/devel:/languages:/go/openSUSE_13.1/              Go         &&   zypper
+      ar -f http://download.opensuse.org/repositories/devel:/languages:/python3/openSUSE_13.1          Python     &&   zypper
+      ar -f http://download.opensuse.org/repositories/devel:/languages:/erlang:/Factory/openSUSE_13.1/
+      Erlang     &&   zypper ar -f http://download.opensuse.org/repositories/Java:/Factory/openSUSE_13.1/                     Java       &&   zypper
+      ar -f http://download.opensuse.org/repositories/devel:/tools:/building/openSUSE_13.1/            BuildTools
+      &&   zypper --gpg-auto-import-keys --non-interactive ref                                                                &&   zypper
+      --non-interactive dup                                                                                       &&   zypper
+      --non-interactive install go erlang java-1_8_0-openjdk java-1_8_0-openjdk-devel
+      maven python3 python3-devel        python3-pip libzmq3 zeromq-devel wget tar
+      git mercurial                                                          &&   pip
+      install circus
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: FETCH
+      Value: ./fetch.sh
+    Name: env
+  - CmdLine:
+    - echo '#!/bin/bash'                   > $FETCH &&   echo 'set -e'                       >>
+      $FETCH &&   echo 'file=`basename $1`'           >> $FETCH &&   echo 'echo "Downloading
+      $1..."'     >> $FETCH &&   echo 'wget -q $1'                   >> $FETCH &&   echo
+      'echo "$2  $file" > $file.sum' >> $FETCH &&   echo 'sha1sum -c $file.sum'         >>
+      $FETCH &&   echo 'rm $file.sum'                 >> $FETCH &&   chmod +x $FETCH
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SCALA_HOME
+      Value: /usr/local/share/scala
+    Name: env
+  - CmdLine:
+    - export SCALA_VER=2.11.2                                                     &&   export
+      SCALA_TAR=scala-$SCALA_VER.tgz                                       &&   export
+      SCALA_SHA=904e9ee3bb96e8350b1e0f2502a704f836c0cdf1                   &&   $FETCH
+      http://downloads.typesafe.com/scala/$SCALA_VER/$SCALA_TAR $SCALA_SHA &&     mkdir
+      -p $SCALA_HOME                                             &&   tar -xvf $SCALA_TAR
+      --directory $SCALA_HOME --strip-components=1
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: $PATH:$SCALA_HOME/bin
+    Name: env
+  - CmdLine:
+    - git config --global url."https://".insteadOf git://
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: IRIS
+      Value: iris-v0.3.2-linux-amd64
+    Name: env
+  - CmdLine:
+    - $FETCH http://iris.karalabe.com/downloads/$IRIS 111c781c26b1df04e9366009cce773b415afe1ed
+      &&   chmod +x $IRIS
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOPATH
+      Value: /binds/go
+    Name: env
+  - CmdLine:
+    - go get gopkg.in/project-iris/iris-go.v1
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ERL_LIBS
+      Value: /binds/erlang
+    Name: env
+  - CmdLine:
+    - export ERLTEMP=/binds/erltmp                   &&   mkdir -p $ERLTEMP                              &&   cd
+      $ERLTEMP                                    &&   wget https://github.com/rebar/rebar/wiki/rebar
+      &&   chmod +x rebar                                 &&     echo '{deps, [{iris,
+      ".*", {git, "https://github.com/project-iris/iris-erl.git", {branch, "v1"}}}]}.'  >
+      rebar.config &&   ./rebar get-deps                                                                                                      &&   ./rebar
+      compile                                                                                                       &&     mv
+      ./deps $ERL_LIBS &&   rm -rf $ERLTEMP
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CLASSPATH
+      Value: /binds/java
+    Name: env
+  - CmdLine:
+    - export JAR_VER=1.0.0 &&   mkdir -p $CLASSPATH  &&   cd $CLASSPATH        &&     wget
+      http://repo1.maven.org/maven2/com/karalabe/iris/iris/$JAR_VER/iris-$JAR_VER.pom
+      &&   mvn org.apache.maven.plugins:maven-dependency-plugin:2.8:copy-dependencies     -f
+      $CLASSPATH/iris-$JAR_VER.pom                                              -DoutputDirectory=$CLASSPATH                                          &&     rm
+      -f $CLASSPATH/iris-$JAR_VER.pom                         &&   mvn org.apache.maven.plugins:maven-dependency-plugin:2.8:copy     -Dartifact=com.karalabe.iris:iris:$JAR_VER                      -DoutputDirectory=$CLASSPATH
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CLASSPATH
+      Value: $CLASSPATH/*
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - patches
+    - /patches
+  - CmdLine:
+    - go get code.google.com/p/go.tools/cmd/present     &&   cd $GOPATH/src/code.google.com/p/go.tools         &&   hg
+      import --no-commit /patches/playground.diff    &&   go install code.google.com/p/go.tools/cmd/present
+      &&     useradd -MU present
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - base
+    - /present/base
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - binds
+    - /present/root/talks/binds
+  - Env:
+    - Key: ORIGHOST
+      Value: play.iris.karalabe.com
+    Name: env
+  - Env:
+    - Key: CIRCUS_INI
+      Value: circus.ini
+    Name: env
+  - CmdLine:
+    - echo '[circus]'                                                                        >
+      $CIRCUS_INI &&   echo 'statsd = 1'                                                                     >>
+      $CIRCUS_INI &&   echo                                                                                  >>
+      $CIRCUS_INI &&   echo '[watcher:iris]'                                                                 >>
+      $CIRCUS_INI &&   echo 'cmd = $(circus.env.IRIS)'                                                       >>
+      $CIRCUS_INI &&   echo 'args = -dev'                                                                    >>
+      $CIRCUS_INI &&   echo 'stdout_stream.class    = FileStream'                                            >>
+      $CIRCUS_INI &&   echo 'stdout_stream.filename = $(circus.env.IRIS).out.log'                            >>
+      $CIRCUS_INI &&   echo 'stderr_stream.class    = FileStream'                                            >>
+      $CIRCUS_INI &&   echo 'stderr_stream.filename = $(circus.env.IRIS).err.log'                            >>
+      $CIRCUS_INI &&   echo                                                                                  >>
+      $CIRCUS_INI &&   echo '[watcher:present]'                                                              >>
+      $CIRCUS_INI &&   echo 'cmd = $(circus.env.GOPATH)/bin/present'                                         >>
+      $CIRCUS_INI &&   echo 'working_dir = /present/root'                                                    >>
+      $CIRCUS_INI &&   echo 'args = -base=/present/base -http=0.0.0.0:3999 -orighost=$(circus.env.ORIGHOST)'
+      >> $CIRCUS_INI &&   echo 'uid = present'                                                                  >>
+      $CIRCUS_INI &&   echo 'gid = present'                                                                  >>
+      $CIRCUS_INI &&   echo 'copy_env = True'                                                                >>
+      $CIRCUS_INI &&   echo 'stdout_stream.class    = FileStream'                                            >>
+      $CIRCUS_INI &&   echo 'stdout_stream.filename = present.out.log'                                       >>
+      $CIRCUS_INI &&   echo 'stderr_stream.class    = FileStream'                                            >>
+      $CIRCUS_INI &&   echo 'stderr_stream.filename = present.err.log'                                       >>
+      $CIRCUS_INI &&   echo                                                                                  >>
+      $CIRCUS_INI &&   echo '[env:present]'                                                                  >>
+      $CIRCUS_INI &&   echo 'HOME=/'                                                                         >>
+      $CIRCUS_INI &&   echo                                                                                  >>
+      $CIRCUS_INI &&   echo '[watcher:portal]'                                                               >>
+      $CIRCUS_INI &&   echo 'cmd = go'                                                                       >>
+      $CIRCUS_INI &&   echo 'args = run /present/root/talks/binds/go.v1/src/portalhidden.go'                 >>
+      $CIRCUS_INI &&   echo 'copy_env = True'                                                                >>
+      $CIRCUS_INI &&   echo 'stdout_stream.class    = FileStream'                                            >>
+      $CIRCUS_INI &&   echo 'stdout_stream.filename = portal.out.log'                                        >>
+      $CIRCUS_INI &&   echo 'stderr_stream.class    = FileStream'                                            >>
+      $CIRCUS_INI &&   echo 'stderr_stream.filename = portal.err.log'                                        >>
+      $CIRCUS_INI
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - circusd
+    - circus.ini
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: opensuse:13.1
+  Name: ""
+  Platform: ""
+  SourceCode: FROM opensuse:13.1

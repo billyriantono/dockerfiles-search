@@ -1,0 +1,246 @@
+MetaArgs:
+- DefaultValue: python
+  Key: ARG_FROM_IMAGE
+  ProvidedValue: null
+  Value: python
+- DefaultValue: 3.8-alpine
+  Key: ARG_FROM_IMAGE_TAG
+  ProvidedValue: null
+  Value: 3.8-alpine
+Stages:
+- As: builder
+  BaseName: python:3.8
+  Commands:
+  - Key: ARG_VENDOR
+    Name: arg
+    Value: veracode
+  - Env:
+    - Key: ENV_VENDOR
+      Value: ${ARG_VENDOR}
+    Name: env
+  - Name: workdir
+    Path: /usr/src/app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '"./${ENV_VENDOR}/requirements.txt"'
+    - '"/usr/src/app/${ENV_VENDOR}/requirements.txt"'
+  - Env:
+    - Key: PATH
+      Value: /root/.local/bin:$PATH
+    Name: env
+  - CmdLine:
+    - pip3 install --user -r "${ENV_VENDOR}/requirements.txt"
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM python:3.8 AS builder
+- As: ci
+  BaseName: builder
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./requirements.txt
+    - /usr/src/app/requirements.txt
+  - CmdLine:
+    - pip3 install --user -r requirements.txt
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: builder
+  Name: ci
+  Platform: ""
+  SourceCode: FROM builder AS ci
+- As: lint_docker
+  BaseName: hadolint/hadolint:v1
+  Commands:
+  - Name: workdir
+    Path: /usr/src/app/
+  - CmdLine:
+    - hadolint
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - Dockerfile
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: hadolint/hadolint:v1
+  Name: lint_docker
+  Platform: ""
+  SourceCode: FROM hadolint/hadolint:v1 AS lint_docker
+- As: lint_git
+  BaseName: ci
+  Commands:
+  - CmdLine:
+    - gitlint
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --commits
+    - HEAD
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: ci
+  Name: lint_git
+  Platform: ""
+  SourceCode: FROM ci AS lint_git
+- As: lint_make
+  BaseName: cytopia/checkmake:0.1.0
+  Commands:
+  - Name: workdir
+    Path: /usr/src/app/
+  - CmdLine:
+    - checkmake
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - Makefile
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: cytopia/checkmake:0.1.0
+  Name: lint_make
+  Platform: ""
+  SourceCode: FROM cytopia/checkmake:0.1.0 AS lint_make
+- As: lint_python
+  BaseName: ci
+  Commands:
+  - CmdLine:
+    - find . -type f -name '*.py' -exec pylint -j 0 {} +
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: ci
+  Name: lint_python
+  Platform: ""
+  SourceCode: FROM ci AS lint_python
+- As: lint_yaml
+  BaseName: ci
+  Commands:
+  - CmdLine:
+    - find . -type f \( -name '*.yml' -o -name '*.yaml' \) -exec yamllint {} +
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: ci
+  Name: lint_yaml
+  Platform: ""
+  SourceCode: FROM ci AS lint_yaml
+- As: test_unit
+  BaseName: ci
+  Commands:
+  - CmdLine:
+    - coverage
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - run
+    - -m
+    - unittest
+    - discover
+    - -s
+    - tests
+    - -p
+    - test_*.py
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: ci
+  Name: test_unit
+  Platform: ""
+  SourceCode: FROM ci AS test_unit
+- As: test_security
+  BaseName: ci
+  Commands:
+  - CmdLine:
+    - find . -type f -name '*.py' -exec bandit {} + &&   trufflehog --regex --entropy=False
+      file:///usr/src/app/ --exclude_paths .truffleHog-exclude.txt
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: ci
+  Name: test_security
+  Platform: ""
+  SourceCode: FROM ci AS test_security
+- As: final
+  BaseName: '"${ARG_FROM_IMAGE}":"${ARG_FROM_IMAGE_TAG}"'
+  Commands:
+  - Key: ARG_VERSION
+    Name: arg
+    Value: null
+  - Key: ARG_VENDOR
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: MAINTAINER
+      Value: '"Seiso"'
+    Name: label
+  - Labels:
+    - Key: AUTHOR
+      Value: '"Jon Zeolla"'
+    Name: label
+  - Labels:
+    - Key: COPYRIGHT
+      Value: '"(c) 2020 Seiso, LLC"'
+    Name: label
+  - Labels:
+    - Key: LICENSE
+      Value: '"BSD-3-Clause"'
+    Name: label
+  - Labels:
+    - Key: VERSION
+      Value: '"${ARG_VERSION}"'
+    Name: label
+  - Name: workdir
+    Path: /usr/src/app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '"./${ARG_VENDOR}"'
+    - '"${ARG_VENDOR}"'
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./main.py
+    - main.py
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /root/.local
+    - /root/.local
+  - Env:
+    - Key: PATH
+      Value: '"/root/.local/bin:${PATH}"'
+    Name: env
+  - CmdLine:
+    - /usr/src/app/main.py
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: '"${ARG_FROM_IMAGE}":"${ARG_FROM_IMAGE_TAG}"'
+  Name: final
+  Platform: ""
+  SourceCode: FROM "${ARG_FROM_IMAGE}":"${ARG_FROM_IMAGE_TAG}" AS Final

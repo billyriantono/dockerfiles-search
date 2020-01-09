@@ -1,0 +1,120 @@
+MetaArgs:
+- DefaultValue: ""
+  Key: REGISTRY
+  ProvidedValue: null
+  Value: ""
+- DefaultValue: ""
+  Key: REPOSITORY
+  ProvidedValue: null
+  Value: ""
+- DefaultValue: latest
+  Key: TAG
+  ProvidedValue: null
+  Value: latest
+- DefaultValue: ""
+  Key: HTTP_PROXY
+  ProvidedValue: null
+  Value: ""
+- DefaultValue: ""
+  Key: HTTPS_PROXY
+  ProvidedValue: null
+  Value: ""
+Stages:
+- As: protos
+  BaseName: grpc/python
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - voltha/protos/*.proto
+    - /voltha/protos/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - voltha/protos/third_party/google/api/*.proto
+    - /voltha/protos/third_party/google/api/
+  - CmdLine:
+    - python -m grpc.tools.protoc -I/voltha/protos -I/voltha/protos/third_party --include_imports
+      --include_source_info --descriptor_set_out=/proto.pb /voltha/protos/*.proto
+    Name: run
+    PrependShell: true
+  From:
+    Image: grpc/python
+  Name: protos
+  Platform: ""
+  SourceCode: FROM grpc/python as protos
+- As: build
+  BaseName: ${REGISTRY}${REPOSITORY}voltha-go-builder:${TAG}
+  Commands:
+  - Env:
+    - Key: http_proxy
+      Value: ${HTTP_PROXY}
+    Name: env
+  - Env:
+    - Key: https_proxy
+      Value: ${HTTPS_PROXY}
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - envoy/go/envoyd/*.go
+    - /src/
+  - CmdLine:
+    - mkdir /output
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - OUTPUT=/ /build.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ls /output
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${REGISTRY}${REPOSITORY}voltha-go-builder:${TAG}
+  Name: build
+  Platform: ""
+  SourceCode: FROM ${REGISTRY}${REPOSITORY}voltha-go-builder:${TAG} as build
+- BaseName: lyft/envoy:29361deae91575a1d46c7a21e913f19e75622ebe
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get -q install -y curl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - envoy/front-proxy
+    - /envoy
+  - Chown: ""
+    From: protos
+    Name: copy
+    SourcesAndDest:
+    - /proto.pb
+    - /envoy/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pki
+    - /envoy/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /envoyd
+    - /usr/local/bin/envoyd
+  - CmdLine:
+    - /usr/local/bin/envoy -c /envoy/front-proxy/voltha-grpc-proxy.json
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: lyft/envoy:29361deae91575a1d46c7a21e913f19e75622ebe
+  Name: ""
+  Platform: ""
+  SourceCode: FROM lyft/envoy:29361deae91575a1d46c7a21e913f19e75622ebe

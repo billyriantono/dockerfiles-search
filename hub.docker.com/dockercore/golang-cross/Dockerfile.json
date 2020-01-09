@@ -1,0 +1,298 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "GO_VERSION",
+      "DefaultValue": "1.12.14",
+      "ProvidedValue": null,
+      "Value": "1.12.14"
+    },
+    {
+      "Key": "OSX_SDK",
+      "DefaultValue": "MacOSX10.10.sdk",
+      "ProvidedValue": null,
+      "Value": "MacOSX10.10.sdk"
+    },
+    {
+      "Key": "OSX_SDK_SUM",
+      "DefaultValue": "631b4144c6bf75bf7a4d480d685a9b5bda10ee8d03dbf0db829391e2ef858789",
+      "ProvidedValue": null,
+      "Value": "631b4144c6bf75bf7a4d480d685a9b5bda10ee8d03dbf0db829391e2ef858789"
+    },
+    {
+      "Key": "OSX_VERSION_MIN",
+      "DefaultValue": "10.10",
+      "ProvidedValue": null,
+      "Value": "10.10"
+    },
+    {
+      "Key": "OSX_CROSS_COMMIT",
+      "DefaultValue": "a9317c18a3a457ca0a657f08cc4d0d43c6cf8953",
+      "ProvidedValue": null,
+      "Value": "a9317c18a3a457ca0a657f08cc4d0d43c6cf8953"
+    },
+    {
+      "Key": "LIBTOOL_VERSION",
+      "DefaultValue": "2.4.6",
+      "ProvidedValue": null,
+      "Value": "2.4.6"
+    },
+    {
+      "Key": "OSX_CODENAME",
+      "DefaultValue": "yosemite",
+      "ProvidedValue": null,
+      "Value": "yosemite"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "base",
+      "BaseName": "golang:${GO_VERSION}-buster",
+      "SourceCode": "FROM golang:${GO_VERSION}-buster AS base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Image": "golang:${GO_VERSION}-buster"
+      },
+      "Commands": [
+        {
+          "Key": "APT_MIRROR",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "CmdLine": [
+            "sed -ri \"s/(httpredir|deb).debian.org/${APT_MIRROR:-deb.debian.org}/g\" /etc/apt/sources.list  \u0026\u0026 sed -ri \"s/(security).debian.org/${APT_MIRROR:-security.debian.org}/g\" /etc/apt/sources.list"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "OSX_CROSS_PATH",
+              "Value": "/osxcross"
+            }
+          ],
+          "Name": "env"
+        }
+      ]
+    },
+    {
+      "Name": "osx-sdk",
+      "BaseName": "base",
+      "SourceCode": "FROM base AS osx-sdk",
+      "Platform": "",
+      "As": "osx-sdk",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Key": "OSX_SDK",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "OSX_SDK_SUM",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "https://s3.dockerproject.org/darwin/v2/${OSX_SDK}.tar.xz",
+            "\"${OSX_CROSS_PATH}/tarballs/${OSX_SDK}.tar.xz\""
+          ]
+        },
+        {
+          "CmdLine": [
+            "echo \"${OSX_SDK_SUM}\"  \"${OSX_CROSS_PATH}/tarballs/${OSX_SDK}.tar.xz\" | sha256sum -c -"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "osx-cross-base",
+      "BaseName": "base",
+      "SourceCode": "FROM base AS osx-cross-base",
+      "Platform": "",
+      "As": "osx-cross-base",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Key": "DEBIAN_FRONTEND",
+          "Name": "arg",
+          "Value": "noninteractive"
+        },
+        {
+          "CmdLine": [
+            "apt-get update -qq \u0026\u0026 apt-get install -y -q --no-install-recommends     clang     file     llvm     patch     xz-utils  \u0026\u0026 rm -rf /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "osx-cross",
+      "BaseName": "osx-cross-base",
+      "SourceCode": "FROM osx-cross-base AS osx-cross",
+      "Platform": "",
+      "As": "osx-cross",
+      "From": {
+        "Stage": {
+          "Named": "osx-cross-base",
+          "Index": 2
+        }
+      },
+      "Commands": [
+        {
+          "Key": "OSX_CROSS_COMMIT",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Name": "workdir",
+          "Path": "\"${OSX_CROSS_PATH}\""
+        },
+        {
+          "CmdLine": [
+            "git clone https://github.com/tpoechtrager/osxcross.git .  \u0026\u0026 git checkout -q \"${OSX_CROSS_COMMIT}\"  \u0026\u0026 rm -rf ./.git"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "osx-sdk",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "\"${OSX_CROSS_PATH}/.\"",
+            "\"${OSX_CROSS_PATH}/\""
+          ]
+        },
+        {
+          "Key": "OSX_VERSION_MIN",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "CmdLine": [
+            "UNATTENDED=yes OSX_VERSION_MIN=${OSX_VERSION_MIN} ./build.sh"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "libtool",
+      "BaseName": "base",
+      "SourceCode": "FROM base AS libtool",
+      "Platform": "",
+      "As": "libtool",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Key": "LIBTOOL_VERSION",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "OSX_CODENAME",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "OSX_SDK",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "CmdLine": [
+            "mkdir -p \"${OSX_CROSS_PATH}/target/SDK/${OSX_SDK}/usr/\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "curl -fsSL \"https://homebrew.bintray.com/bottles/libtool-${LIBTOOL_VERSION}.${OSX_CODENAME}.bottle.tar.gz\" \t| gzip -dc | tar xf - \t\t-C \"${OSX_CROSS_PATH}/target/SDK/${OSX_SDK}/usr/\" \t\t--strip-components=2 \t\t\"libtool/${LIBTOOL_VERSION}/include/\" \t\t\"libtool/${LIBTOOL_VERSION}/lib/\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "final",
+      "BaseName": "osx-cross-base",
+      "SourceCode": "FROM osx-cross-base AS final",
+      "Platform": "",
+      "As": "final",
+      "From": {
+        "Stage": {
+          "Named": "osx-cross-base",
+          "Index": 2
+        }
+      },
+      "Commands": [
+        {
+          "Key": "DEBIAN_FRONTEND",
+          "Name": "arg",
+          "Value": "noninteractive"
+        },
+        {
+          "CmdLine": [
+            "apt-get update -qq \u0026\u0026 apt-get install -y -q --no-install-recommends     libltdl-dev     gcc-mingw-w64     parallel  \u0026\u0026 rm -rf /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "osx-cross",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "\"${OSX_CROSS_PATH}/.\"",
+            "\"${OSX_CROSS_PATH}/\""
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "libtool",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "\"${OSX_CROSS_PATH}/.\"",
+            "\"${OSX_CROSS_PATH}/\""
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "PATH",
+              "Value": "${OSX_CROSS_PATH}/target/bin:$PATH"
+            }
+          ],
+          "Name": "env"
+        }
+      ]
+    }
+  ]
+}

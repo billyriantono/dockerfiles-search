@@ -1,0 +1,124 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:3.9
+  Commands:
+  - Labels:
+    - Key: MAINTAINER
+      Value: '''dogbutcat@hotmail.com'''
+    Name: label
+  - Env:
+    - Key: ARIA2_VERSION
+      Value: 1.35.0
+    Name: env
+  - Env:
+    - Key: ARIA2
+      Value: https://github.com/aria2/aria2/releases/download/release-${ARIA2_VERSION}/aria2-${ARIA2_VERSION}.tar.gz
+    Name: env
+  - Name: workdir
+    Path: /opt/builder
+  - CmdLine:
+    - "apk add openssl-dev nettle-dev gmp-dev g++ make binutils\tlibssh2-dev c-ares-dev
+      expat-dev zlib-dev sqlite-dev sqlite-static pkgconfig"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -qO- ${ARIA2} | tar xvzf -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd aria2-${ARIA2_VERSION} && sed -i'' \"443s/16/4096/g\" src/OptionHandlerFactory.cc
+      &&\t./configure ARIA2_STATIC=yes --without-gnutls --with-openssl && make -j
+      8 &&\tmkdir ../../aria2 && cp ./src/aria2c ../../aria2 && strip ../../aria2/aria2c"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as builder
+- As: resolver
+  BaseName: alpine:3.9
+  Commands:
+  - Env:
+    - Key: VERSION
+      Value: "1.1"
+    Name: env
+  - Env:
+    - Key: UI_VERSION
+      Value: 1.1.4
+    Name: env
+  - Name: workdir
+    Path: /opt/builder
+  - Env:
+    - Key: WEBUI
+      Value: https://github.com/mayswind/AriaNg/releases/download/${UI_VERSION}/AriaNg-${UI_VERSION}-AllInOne.zip
+    Name: env
+  - CmdLine:
+    - "wget $WEBUI -O ui.zip \t&& mkdir ../ui \t&& unzip ui.zip -d ../ui"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: resolver
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as resolver
+- BaseName: nginx:1.15.10-alpine
+  Commands:
+  - Name: workdir
+    Path: /opt/aria2
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: expose
+    Ports:
+    - "80"
+  - Chown: ""
+    From: resolver
+    Name: copy
+    SourcesAndDest:
+    - /opt/ui
+    - /usr/share/nginx/html
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/aria2/aria2c
+    - /usr/sbin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts
+    - ./scripts
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config
+    - config
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .aria2
+    - .aria2
+  - CmdLine:
+    - ./scripts/start.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --enable-rpc=true
+    - --conf-path
+    - ./config/aria2.conf
+    - --rpc-secret
+    - aadd6df9284fa9becd2eb3b51818c5c2
+    - --rpc-listen-port
+    - "8080"
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginx:1.15.10-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx:1.15.10-alpine

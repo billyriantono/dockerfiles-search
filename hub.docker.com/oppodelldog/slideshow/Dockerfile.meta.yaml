@@ -1,0 +1,152 @@
+MetaArgs:
+- DefaultValue: '"/app"'
+  Key: APP_DIR
+  ProvidedValue: null
+  Value: '"/app"'
+- DefaultValue: '"www"'
+  Key: SLIDESHOW_SERVER_WEB_DIR
+  ProvidedValue: null
+  Value: '"www"'
+- DefaultValue: '"www"'
+  Key: SLIDESHOW_ADMIN_BUILD_DIR
+  ProvidedValue: null
+  Value: '"www"'
+- DefaultValue: '"slideshow-server"'
+  Key: SLIDESHOW_SERVER_BINARY
+  ProvidedValue: null
+  Value: '"slideshow-server"'
+Stages:
+- As: serverbuilder
+  BaseName: golang:1.12.5
+  Commands:
+  - Key: APP_DIR
+    Name: arg
+    Value: null
+  - Key: SLIDESHOW_SERVER_BINARY
+    Name: arg
+    Value: null
+  - Key: TMP_DIR
+    Name: arg
+    Value: '"/tmp"'
+  - Key: SLIDESHOW_SERVER_VERSION
+    Name: arg
+    Value: '"v0.1.1"'
+  - Key: SLIDESHOW_SERVER_REGISTRY
+    Name: arg
+    Value: '"Oppodelldog"'
+  - Key: SLIDESHOW_SERVER_REPOSITORY
+    Name: arg
+    Value: '"slideshow-server"'
+  - Name: workdir
+    Path: ${TMP_DIR}
+  - CmdLine:
+    - git clone https://github.com/${SLIDESHOW_SERVER_REGISTRY}/${SLIDESHOW_SERVER_REPOSITORY}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${TMP_DIR}/${SLIDESHOW_SERVER_REPOSITORY}
+  - CmdLine:
+    - git checkout ${SLIDESHOW_SERVER_VERSION} &&     make build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${APP_DIR} &&     cp .build/${SLIDESHOW_SERVER_BINARY} ${APP_DIR}/${SLIDESHOW_SERVER_BINARY}
+      &&     chmod u+x ${APP_DIR}/${SLIDESHOW_SERVER_BINARY} &&     cp slideshows.json
+      ${APP_DIR}/slideshows.json
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.5
+  Name: serverbuilder
+  Platform: ""
+  SourceCode: FROM golang:1.12.5 as ServerBuilder
+- As: adminbuilder
+  BaseName: node:8.9.0
+  Commands:
+  - Key: APP_DIR
+    Name: arg
+    Value: null
+  - Key: SLIDESHOW_ADMIN_BUILD_DIR
+    Name: arg
+    Value: null
+  - Key: TMP_DIR
+    Name: arg
+    Value: '"/tmp"'
+  - Key: SLIDESHOW_ADMIN_VERSION
+    Name: arg
+    Value: '"v0.1.0"'
+  - Key: SLIDESHOW_ADMIN_APP_INDEX_PAGE
+    Name: arg
+    Value: '"index.html"'
+  - Key: SLIDESHOW_ADMIN_APP_REGISTRY
+    Name: arg
+    Value: '"Oppodelldog"'
+  - Key: SLIDESHOW_ADMIN_APP_REPOSITORY
+    Name: arg
+    Value: '"slideshow-admin"'
+  - Name: workdir
+    Path: ${TMP_DIR}
+  - CmdLine:
+    - git clone https://github.com/${SLIDESHOW_ADMIN_APP_REGISTRY}/${SLIDESHOW_ADMIN_APP_REPOSITORY}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${TMP_DIR}/${SLIDESHOW_ADMIN_APP_REPOSITORY}
+  - CmdLine:
+    - git checkout ${SLIDESHOW_ADMIN_VERSION} &&     ./build.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${APP_DIR} &&     cp -rp ${SLIDESHOW_ADMIN_BUILD_DIR} ${APP_DIR}/${SLIDESHOW_ADMIN_BUILD_DIR}
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8.9.0
+  Name: adminbuilder
+  Platform: ""
+  SourceCode: FROM node:8.9.0 as AdminBuilder
+- BaseName: ubuntu:latest
+  Commands:
+  - Key: APP_DIR
+    Name: arg
+    Value: null
+  - Key: SLIDESHOW_ADMIN_BUILD_DIR
+    Name: arg
+    Value: null
+  - Key: SLIDESHOW_SERVER_WEB_DIR
+    Name: arg
+    Value: null
+  - Key: SLIDESHOW_SERVER_BINARY
+    Name: arg
+    Value: null
+  - Key: SLIDESHOW_ADMIN_APP_TARGET_DIR
+    Name: arg
+    Value: '"admin"'
+  - Name: workdir
+    Path: ${APP_DIR}
+  - CmdLine:
+    - echo "#!/bin/bash \n exec ${APP_DIR}/${SLIDESHOW_SERVER_BINARY}" > /${APP_DIR}/entrypoint.sh
+      &&     chmod u+x  ${APP_DIR}/entrypoint.sh &&     mkdir -p ${APP_DIR}/${SLIDESHOW_ADMIN_APP_TARGET_DIR}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ServerBuilder
+    Name: copy
+    SourcesAndDest:
+    - ${APP_DIR}
+    - ${APP_DIR}
+  - Chown: ""
+    From: AdminBuilder
+    Name: copy
+    SourcesAndDest:
+    - ${APP_DIR}/${SLIDESHOW_ADMIN_BUILD_DIR}
+    - ${APP_DIR}/${SLIDESHOW_SERVER_WEB_DIR}/${SLIDESHOW_ADMIN_APP_TARGET_DIR}
+  - CmdLine:
+    - /app/entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:latest

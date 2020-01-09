@@ -1,0 +1,108 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - set -ex; apk add --no-cache tomcat-native
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9
+- BaseName: nearpod/alpine-jvm:3.8-adoptopenjdk-jdk8
+  Commands:
+  - Key: JIRA_HOME
+    Name: arg
+    Value: /var/atlassian/jira
+  - Key: JIRA_INSTALL
+    Name: arg
+    Value: /opt/atlassian/jira
+  - Key: JIRA_VERSION
+    Name: arg
+    Value: 7.13.1
+  - Key: JDBC_MYSQL_VERSION
+    Name: arg
+    Value: 5.1.47
+  - Key: JDBC_POSTGRES_VERSION
+    Name: arg
+    Value: 42.2.5
+  - Env:
+    - Key: JIRA_VERSION
+      Value: $JIRA_VERSION
+    - Key: JIRA_HOME
+      Value: $JIRA_HOME
+    - Key: JIRA_INSTALL
+      Value: $JIRA_INSTALL
+    Name: env
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/libtcnative-1.so.0.2*
+    - /usr/lib
+  - CmdLine:
+    - set -ex;   ln -nsf /usr/lib/libtcnative-1.so.0.2* /usr/lib/libtcnative-1.so;   ln
+      -nsf /usr/lib/libtcnative-1.so.0.2* /usr/lib/libtcnative-1.so.0;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex;   apk --no-cache add xmlstarlet java-cacerts java-common apr libcrypto1.1
+      libssl1.1 openssl fontconfig ttf-dejavu;   mkdir -p /usr/lib/jvm;   ln -nsf
+      /opt/java/openjdk /usr/lib/jvm/default-jvm;   echo "version=1" > "${JAVA_HOME}/lib/fontconfig.properties";   echo
+      "sequence.allfonts=default" >> "${JAVA_HOME}/lib/fontconfig.properties";   mkdir
+      -p "${JIRA_HOME}";   mkdir -p "${JIRA_INSTALL}/conf/Catalina";   curl -q -sSL
+      "https://www.atlassian.com/software/jira/downloads/binary/atlassian-jira-software-${JIRA_VERSION}.tar.gz"
+      | tar -xz --directory "${JIRA_INSTALL}" --strip-components=1 --no-same-owner;   curl
+      -q -sSLO "http://central.maven.org/maven2/mysql/mysql-connector-java/$JDBC_MYSQL_VERSION/mysql-connector-java-$JDBC_MYSQL_VERSION.jar";   curl
+      -q -sSLO "http://central.maven.org/maven2/mysql/mysql-connector-java/$JDBC_MYSQL_VERSION/mysql-connector-java-$JDBC_MYSQL_VERSION.jar.md5";   echo
+      "$(cat mysql-connector-java-$JDBC_MYSQL_VERSION.jar.md5)  mysql-connector-java-$JDBC_MYSQL_VERSION.jar"
+      | md5sum -c;   mkdir -p "$KEYCLOAK_HOME/modules/system/layers/base/com/mysql/jdbc/main/";   mv
+      "mysql-connector-java-$JDBC_MYSQL_VERSION.jar" "${JIRA_INSTALL}/lib/";   curl
+      -q -sSLO "http://central.maven.org/maven2/org/postgresql/postgresql/$JDBC_POSTGRES_VERSION/postgresql-$JDBC_POSTGRES_VERSION.jar";   curl
+      -q -sSLO "http://central.maven.org/maven2/org/postgresql/postgresql/$JDBC_POSTGRES_VERSION/postgresql-$JDBC_POSTGRES_VERSION.jar.md5";   echo
+      "$(cat postgresql-$JDBC_POSTGRES_VERSION.jar.md5)  postgresql-$JDBC_POSTGRES_VERSION.jar"
+      | md5sum -c;   rm -f "${JIRA_INSTALL}/lib/postgresql-9.1-903.jdbc4-atlassian-hosted.jar";   mv
+      "postgresql-$JDBC_POSTGRES_VERSION.jar" "${JIRA_INSTALL}/lib/postgresql-${POSTGRES_JDBC_VERSION}.jar";   mkdir
+      -p /var/atlassian/jira;   rm -f "mysql-connector-java-$JDBC_MYSQL_VERSION.jar.md5"
+      "postgresql-$JDBC_POSTGRES_VERSION.jar.md5";   chmod -R 700 "${JIRA_INSTALL}/"
+      /var/atlassian/jira;   chown -R daemon:daemon  "${JIRA_INSTALL}/" /var/atlassian/jira;   echo
+      -e "\njira.home=$JIRA_HOME" >> "${JIRA_INSTALL}/atlassian-jira/WEB-INF/classes/jira-application.properties";   sed
+      -i -e 's/JVM_MINIMUM_MEMORY="384m"/[ -z "${JVM_MINIMUM_MEMORY}" ] \&\& JVM_MINIMUM_MEMORY="384m"/g'
+      "${JIRA_INSTALL}/bin/setenv.sh";   sed -i -e 's/JVM_MAXIMUM_MEMORY="768m"/[
+      -z "${JVM_MAXIMUM_MEMORY}" ] \&\& JVM_MAXIMUM_MEMORY="768m"/g' "${JIRA_INSTALL}/bin/setenv.sh";   touch
+      -d "@0" "${JIRA_INSTALL}/conf/server.xml"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: daemon:daemon
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: volume
+    Volumes:
+    - /var/atlassian/jira
+    - /opt/atlassian/jira/logs
+  - Name: workdir
+    Path: /var/atlassian/jira
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '"docker-entrypoint.sh"'
+    - '"/"'
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /opt/atlassian/jira/bin/catalina.sh
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nearpod/alpine-jvm:3.8-adoptopenjdk-jdk8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nearpod/alpine-jvm:3.8-adoptopenjdk-jdk8

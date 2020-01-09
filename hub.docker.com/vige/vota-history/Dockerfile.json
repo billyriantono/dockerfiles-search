@@ -1,0 +1,92 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "",
+      "BaseName": "openjdk:13.0.1-jdk",
+      "SourceCode": "FROM openjdk:13.0.1-jdk",
+      "Platform": "",
+      "From": {
+        "Image": "openjdk:13.0.1-jdk"
+      },
+      "Commands": [
+        {
+          "Name": "expose",
+          "Ports": [
+            "8643"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/mongodb-org-4.2.repo",
+            "/etc/yum.repos.d"
+          ]
+        },
+        {
+          "CmdLine": [
+            "yum -y update \u0026\u0026 \tyum -y install sudo mongodb-org \u0026\u0026     echo \"%wheel ALL=(ALL) NOPASSWD: ALL\" \u003e\u003e /etc/sudoers \u0026\u0026     useradd -u 1000 -G users,wheel -d /home/votinguser --shell /bin/bash -m votinguser \u0026\u0026     echo \"votinguser:secret\" | chpasswd \u0026\u0026     yum -y update \u0026\u0026     yum clean all \u0026\u0026     yum -y autoremove"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "user",
+          "User": "votinguser"
+        },
+        {
+          "Env": [
+            {
+              "Key": "TERM",
+              "Value": "xterm"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Name": "workdir",
+          "Path": "/workspace"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/",
+            "/workspace/vota"
+          ]
+        },
+        {
+          "CmdLine": [
+            "sudo chown -R votinguser:votinguser /workspace"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd vota \u0026\u0026 ./gradlew build -x test"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "rm -Rf /home/votinguser/.gradle \u0026\u0026 \tmv /workspace/vota/build/libs/history*.jar /workspace/vota.jar \u0026\u0026 \trm -Rf /workspace/vota \u0026\u0026 \tmkdir /workspace/mongodb \u0026\u0026 \techo \"nohup /usr/bin/mongod --bind_ip_all --dbpath /workspace/mongodb \u0026\" \u003e /workspace/start_mongo.sh \u0026\u0026 \tchmod 775 /workspace/start_mongo.sh \u0026\u0026     keytool -genkey -alias tomcat -storetype PKCS12 -keyalg RSA -keysize 2048 -keystore /workspace/keystore.p12 -validity 3650 -dname \"CN=vota-history.vige.it, OU=Vige, O=Vige, L=Rome, S=Italy, C=IT\" -storepass secret -keypass secret"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "/workspace/start_mongo.sh \u0026\u0026 \tjava -jar /workspace/vota.jar --server.port=8643 --server.ssl.key-store=/workspace/keystore.p12 --server.ssl.key-store-password=secret --server.ssl.keyStoreType=PKCS12 --server.ssl.keyAlias=tomcat --spring.profiles.active=prod \u0026\u0026 \ttail -f /dev/null"
+          ],
+          "Name": "cmd",
+          "PrependShell": true
+        }
+      ]
+    }
+  ]
+}

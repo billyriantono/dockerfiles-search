@@ -1,0 +1,132 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.11.4-alpine3.8
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Giuseppe Valente gvalente@arista.com"'
+    Name: label
+  - Env:
+    - Key: CFSSLVERSION
+      Value: 1.3.2
+    Name: env
+  - CmdLine:
+    - apk add git gcc libc-dev     && wget https://github.com/cloudflare/cfssl/archive/${CFSSLVERSION}.tar.gz     &&
+      echo "aba27a282c8ca8e95769996aea7e5300b0c3f8fea7ae26484d19a7e1a0330f0b3a0649407062f1a10e8c93136693954e3b24c92456f69db3abee509f982ba554  ${CFSSLVERSION}.tar.gz"
+      | sha512sum -c -     && tar xvf ${CFSSLVERSION}.tar.gz     && mkdir -p /go/src/github.com/cloudflare     &&
+      mv cfssl-${CFSSLVERSION} /go/src/github.com/cloudflare/cfssl     && go install
+      github.com/cloudflare/cfssl/cmd/...
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11.4-alpine3.8
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.11.4-alpine3.8 as build
+- BaseName: aristanetworks/base:2.0
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Giuseppe Valente gvalente@arista.com"'
+    Name: label
+  - CmdLine:
+    - apk add     bash     git     libffi     libpq     libressl     openssh-client     py3-pip     python3     util-linux   &&
+      apk add --virtual build-dependencies     gcc     libffi-dev     make     musl-dev     libressl-dev     postgresql-dev     python3-dev   &&
+      pip3 install --upgrade pip   && pip3 install     cryptography==2.4.2     ansible==2.8.1     apache-libcloud     netaddr     openshift     passlib     psycopg2     PyYAML   &&
+      apk del build-dependencies   && ln -s /usr/bin/python3 /usr/bin/python
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HELM_VERSION
+      Value: 2.12.0-k8sauthpatch
+    Name: env
+  - Env:
+    - Key: HELM_HOME
+      Value: /home/prod/.helm
+    Name: env
+  - CmdLine:
+    - cd /tmp   && wget -nv https://github.com/asetty/helm/releases/download/v2.12.0-k8sauthpatch/helm-v${HELM_VERSION}-linux-amd64.tar.gz   &&
+      echo "8a3251fa569655499642ee1ce7dfd39215de3d255b88241ac377905c969aedb9 helm-v${HELM_VERSION}-linux-amd64.tar.gz"     |
+      sha256sum -   && tar xvf helm-v${HELM_VERSION}-linux-amd64.tar.gz   && cp linux-amd64/helm
+      /usr/bin/helm   && cp linux-amd64/tiller /usr/bin/tiller   && rm -rf helm-v${HELM_VERSION}-linux-amd64.tar.gz
+      linux-amd64   && mkdir -p ${HELM_HOME}/plugins   && helm plugin install https://github.com/rimusz/helm-tiller   &&
+      helm init --client-only   && helm repo update   && helm tiller install   &&
+      chmod -R a+w /home/prod/.helm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "wget -nv https://storage.googleapis.com/kubernetes-release/release/v1.12.2/bin/linux/amd64/kubectl
+      \  \t-O /usr/bin/kubectl   && echo \"8e94e8bafdcd919a183143d6f3364b75278e277d
+      \ /usr/bin/kubectl\" | sha1sum -c -   && chmod +x /usr/bin/kubectl"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/cfssl
+    - /usr/bin
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/cfssl-bundle
+    - /usr/bin
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/cfssl-certinfo
+    - /usr/bin
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/cfssl-newkey
+    - /usr/bin
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/cfssl-scan
+    - /usr/bin
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/cfssljson
+    - /usr/bin
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/mkbundle
+    - /usr/bin
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/multirootca
+    - /usr/bin
+  - Env:
+    - Key: GCLOUD_VERSION
+      Value: 246.0.0
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:/usr/lib/google-cloud-sdk/bin
+    Name: env
+  - CmdLine:
+    - wget -nv https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-${GCLOUD_VERSION}-linux-x86_64.tar.gz     -O
+      google-cloud-sdk.tar.gz   && echo "832567cbd0046fd6c80f55196c5c2a8ee3a0f1e1e2587b4a386232bd13abc45b  google-cloud-sdk.tar.gz"
+      | sha256sum -   && tar xvf google-cloud-sdk.tar.gz -C /usr/lib   && rm google-cloud-sdk.tar.gz   &&
+      gcloud config set disable_usage_reporting true   && gcloud components install
+      --quiet alpha beta
+    Name: run
+    PrependShell: true
+  From:
+    Image: aristanetworks/base:2.0
+  Name: ""
+  Platform: ""
+  SourceCode: FROM aristanetworks/base:2.0

@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.7
+  Commands:
+  - Maintainer: Evgeniy Kulikov "im@kulikov.im"
+    Name: maintainer
+  - Env:
+    - Key: NGINX_VERSION
+      Value: 1.13.7
+    Name: env
+  - Env:
+    - Key: STICKY_VERSION
+      Value: 1.2.6
+    Name: env
+  - CmdLine:
+    - "GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 \t&& CONFIG=\"\t\t--prefix=/etc/nginx
+      \t\t--sbin-path=/usr/sbin/nginx \t\t--modules-path=/usr/lib/nginx/modules \t\t--conf-path=/etc/nginx/nginx.conf
+      \t\t--error-log-path=/var/log/nginx/error.log \t\t--http-log-path=/var/log/nginx/access.log
+      \t\t--pid-path=/var/run/nginx.pid \t\t--lock-path=/var/run/nginx.lock \t\t--http-client-body-temp-path=/var/cache/nginx/client_temp
+      \t\t--http-proxy-temp-path=/var/cache/nginx/proxy_temp \t\t--http-fastcgi-temp-path=/var/cache/nginx/fastcgi_temp
+      \t\t--http-uwsgi-temp-path=/var/cache/nginx/uwsgi_temp \t\t--http-scgi-temp-path=/var/cache/nginx/scgi_temp
+      \t\t--user=nginx \t\t--group=nginx \t\t--with-http_realip_module \t\t--with-http_addition_module
+      \t\t--with-http_sub_module \t\t--with-http_gunzip_module \t\t--with-http_gzip_static_module
+      \t\t--with-threads \t\t--with-stream \t\t--with-stream_realip_module \t\t--with-compat
+      \t\t--with-http_ssl_module     \t\t--add-module=/usr/src/nginx-sticky-module
+      \t\" \t&& addgroup -S nginx \t&& adduser -D -S -h /var/cache/nginx -s /sbin/nologin
+      -G nginx nginx \t&& apk add --no-cache --virtual .build-deps \t\tgcc \t\tlibc-dev
+      \t\tmake     pcre \t\tpcre-dev \t\tzlib-dev \t\tcurl \t\tgnupg     libressl
+      \    libressl-dev     unzip   && curl -sfSL https://bitbucket.org/nginx-goodies/nginx-sticky-module-ng/get/$STICKY_VERSION.zip
+      -o sticky.zip \t&& curl -sfSL http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz
+      -o nginx.tar.gz \t&& curl -sfSL http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz.asc
+      \ -o nginx.tar.gz.asc \t&& export GNUPGHOME=\"$(mktemp -d)\" \t&& gpg --keyserver
+      ha.pool.sks-keyservers.net --recv-keys \"$GPG_KEYS\" \t&& gpg --batch --verify
+      nginx.tar.gz.asc nginx.tar.gz \t&& rm -rf \"$GNUPGHOME\" nginx.tar.gz.asc \t&&
+      mkdir -p /usr/src   && unzip -j sticky.zip -d /usr/src/nginx-sticky-module   &&
+      sed -i '/#include <ngx_sha1.h>/a#include <openssl/md5.h>' /usr/src/nginx-sticky-module/ngx_http_sticky_misc.c
+      \  && sed -i '/#include <ngx_sha1.h>/a#include <openssl/sha.h>' /usr/src/nginx-sticky-module/ngx_http_sticky_misc.c
+      \  && cat /usr/src/nginx-sticky-module/ngx_http_sticky_misc.c | head -n 15 \t&&
+      tar -zxC /usr/src -f nginx.tar.gz \t&& rm -rf nginx.tar.gz \t&& cd /usr/src/nginx-$NGINX_VERSION
+      \t&& ./configure $CONFIG --with-debug \t&& make -j$(getconf _NPROCESSORS_ONLN)
+      \t&& mv objs/nginx objs/nginx-debug \t&& ./configure $CONFIG \t&& make -j$(getconf
+      _NPROCESSORS_ONLN) \t&& make install \t&& rm -rf /etc/nginx/html/ \t&& mkdir
+      /etc/nginx/conf.d/   && mkdir /etc/nginx/sites.d/ \t&& mkdir -p /usr/share/nginx/html/
+      \t&& install -m644 html/index.html /usr/share/nginx/html/ \t&& install -m644
+      html/50x.html /usr/share/nginx/html/ \t&& install -m755 objs/nginx-debug /usr/sbin/nginx-debug
+      \t&& ln -s ../../usr/lib/nginx/modules /etc/nginx/modules \t&& (strip /usr/sbin/nginx*
+      || exit 2) \t&& (strip /usr/lib/nginx/modules/*.so || echo \"no modules\")   &&
+      (strip /usr/lib/nginx/addons/*.so  || echo \"no addons\") \t&& rm -rf /usr/src/nginx-$NGINX_VERSION
+      \t&& apk add --no-cache --virtual .gettext gettext \t&& mv /usr/bin/envsubst
+      /tmp/ \t\t&& runDeps=\"$( \t\tscanelf --needed --nobanner /usr/sbin/nginx /usr/lib/nginx/modules/*.so
+      /tmp/envsubst \t\t\t| awk '{ gsub(/,/, \"\\nso:\", $2); print \"so:\" $2 }'
+      \t\t\t| sort -u \t\t\t| xargs -r apk info --installed \t\t\t| sort -u \t)\"
+      \t&& apk add --no-cache --virtual .nginx-rundeps $runDeps \t&& apk del .build-deps
+      \t&& apk del .gettext \t&& mv /tmp/envsubst /usr/local/bin/ \t&& (rm -rf /var/cache/apk
+      2> /dev/null || echo \"OK\") \t&& (rm -rf /tmp/* 2> /dev/null || echo \"OK\")
+      \t&& (rm -rf /tmp/.* 2> /dev/null || echo \"OK\") \t&& (rm -rf /root/* 2> /dev/null
+      || echo \"OK\") \t&& (rm -rf /root/.* 2> /dev/null || echo \"OK\") \t&& mkdir
+      -p /var/log/nginx \t&& ln -sf /dev/stdout /var/log/nginx/access.log \t&& ln
+      -sf /dev/stderr /var/log/nginx/error.log"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx.main.conf
+    - /etc/nginx/nginx.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx.basic.conf
+    - /etc/nginx/conf.d/01-basic.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx.gzip.conf
+    - /etc/nginx/conf.d/02-gzip.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx.default-vh.conf
+    - /etc/nginx/conf.d/03-default.conf
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - CmdLine:
+    - nginx
+    - -g
+    - daemon off;
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

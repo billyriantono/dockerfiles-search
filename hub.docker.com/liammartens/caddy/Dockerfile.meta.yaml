@@ -1,0 +1,103 @@
+MetaArgs:
+- DefaultValue: www-data
+  Key: USER
+  ProvidedValue: null
+  Value: www-data
+Stages:
+- As: builder
+  BaseName: abiosoft/caddy:builder
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: '"0.10.11"'
+  - Key: PLUGINS
+    Name: arg
+    Value: '"cache,cgi,cors,expires,ipfilter,minify,nobots,proxyprotocol,ratelimit"'
+  - CmdLine:
+    - VERSION=${VERSION} PLUGINS=${PLUGINS} /bin/sh /usr/bin/builder.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: abiosoft/caddy:builder
+  Name: builder
+  Platform: ""
+  SourceCode: FROM abiosoft/caddy:builder AS builder
+- BaseName: liammartens/alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Liam Martens <hi@liammartens.com>"'
+    Name: label
+  - Key: PING_PORT
+    Name: arg
+    Value: null
+  - Env:
+    - Key: CADDYPATH
+      Value: /etc/certificates
+    Name: env
+  - Env:
+    - Key: PING_PORT
+      Value: ${PING_PORT:-65535}
+    Name: env
+  - Name: user
+    User: root
+  - CmdLine:
+    - apk add tar libcap
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /etc/certificates /var/www
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .docker
+    - ${DOCKER_DIR}/
+  - CmdLine:
+    - own
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R ${USER}:${USER} /etc/certificates /var/www
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod -R 750 /var/www
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod -R 700 /etc/certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /install/caddy
+    - /usr/bin/caddy
+  - CmdLine:
+    - setcap 'cap_net_bind_service=+ep' $(which caddy)
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - setcap 'cap_net_bind_service=+ep' $(which supervisord)
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${USER}
+  - Health:
+      Interval: 30000000000
+      Retries: 2
+      StartPeriod: 5000000000
+      Test:
+      - CMD-SHELL
+      - curl localhost:${PING_PORT} || exit 1
+      Timeout: 30000000000
+    Name: healthcheck
+  From:
+    Image: liammartens/alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM liammartens/alpine

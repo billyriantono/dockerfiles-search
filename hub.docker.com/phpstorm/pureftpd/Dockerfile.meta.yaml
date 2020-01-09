@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:latest
+  Commands:
+  - CmdLine:
+    - cp /etc/apt/sources.list /etc/apt/sources.list~  &&     sed -Ei 's/^# deb-src
+      /deb-src /' /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install pure-ftpd openssl libpam-dev libcap2-dev libldap2-dev
+      libmysqlclient-dev default-libmysqlclient-dev libpq-dev libssl-dev po-debconf
+      dpkg-dev debhelper -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir /tmp/pure-ftpd/ && \tcd /tmp/pure-ftpd/ && \tapt-get source pure-ftpd
+      && \tcd pure-ftpd-* && \tsed -i '/^optflags=/ s/$/ --without-capabilities/g'
+      ./debian/rules && \tdpkg-buildpackage -b -uc"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dpkg -i /tmp/pure-ftpd/pure-ftpd-common*.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y install openbsd-inetd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dpkg -i /tmp/pure-ftpd/pure-ftpd_*.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-mark hold pure-ftpd pure-ftpd-common
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /etc/pure-ftpd && mkdir /home/ftp && echo yes > ./conf/ChrootEveryone &&
+      echo yes > ./conf/DontResolve && echo yes > ./conf/NoChmod && echo yes > ./conf/ProhibitDotFilesWrite
+      && echo yes > ./conf/CustomerProof && echo '30020 30029' > ./conf/PassivePortRange
+      && echo ',21' > ./conf/Bind && echo '2' > ./conf/TLS
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd ftpgroup
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -u 1001 -g ftpgroup -d /home/ftpusers -s /dev/null ftpuser
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PUBLICHOST
+      Value: localhost
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - pure-ftpd.pem
+    - /etc/ssl/private/pure-ftpd.pem
+  - CmdLine:
+    - (echo jetbrains; echo jetbrains) | pure-pw useradd jetbrains -u ftpuser -d /home/ftpusers/jetbrains
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pure-pw mkdb
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "21"
+    - 30020-30029
+  - CmdLine:
+    - /usr/sbin/pure-ftpd -l puredb:/etc/pure-ftpd/pureftpd.pdb -P $PASV_ADDRESS -x
+      -u 30 -H -S ,21 -O clf:/var/log/pure-ftpd/transfer.log -Z -A -p 30020:30029
+      -E -R -8 UTF-8 -Y 2
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:latest

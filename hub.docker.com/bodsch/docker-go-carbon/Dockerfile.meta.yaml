@@ -1,0 +1,152 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1-alpine
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: BUILD_VERSION
+    Name: arg
+    Value: null
+  - Key: BUILD_TYPE
+    Name: arg
+    Value: null
+  - Key: GOCARBON_VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: GOPATH
+      Value: /opt/go
+    Name: env
+  - CmdLine:
+    - apk update  --quiet --no-cache &&   apk upgrade --quiet --no-cache &&   apk
+      add     --quiet     g++ git make musl-dev &&   echo "export BUILD_DATE=${BUILD_DATE}"  >
+      /etc/profile.d/go-carbon.sh &&   echo "export BUILD_TYPE=${BUILD_TYPE}" >> /etc/profile.d/go-carbon.sh
+      &&   echo "export VERSION=${VERSION}"       >> /etc/profile.d/go-carbon.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p     ${GOPATH}     /var/log/go-carbon &&   cd ${GOPATH} &&   export
+      PATH="${PATH}:${GOPATH}/bin" &&   git clone https://github.com/lomik/go-carbon.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'cd ${GOPATH} &&   export PATH="${PATH}:${GOPATH}/bin" &&   cd go-carbon &&   if
+      [ "${BUILD_TYPE}" == "stable" ] ; then     echo "switch to stable Tag v${GOCARBON_VERSION}"
+      &&     git checkout tags/v${GOCARBON_VERSION} 2> /dev/null ;   fi &&   version=$(git
+      describe --tags --always | sed ''s/^v//'') &&   echo "build version: ${version}"
+      &&   make'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /go-carbon/etc &&   mv ${GOPATH}/go-carbon/go-carbon                       /go-carbon/go-carbon
+      &&   mv ${GOPATH}/go-carbon/deploy/go-carbon.conf           /go-carbon/etc/go-carbon.conf
+      &&   mv ${GOPATH}/go-carbon/deploy/storage-schemas.conf     /go-carbon/etc/go-carbon_storage-schemas.conf
+      &&   mv ${GOPATH}/go-carbon/deploy/storage-aggregation.conf /go-carbon/etc/go-carbon_storage-aggregation.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: golang:1-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1-alpine as builder
+- BaseName: alpine:3.8
+  Commands:
+  - Env:
+    - Key: TZ
+      Value: '''Europe/Berlin'''
+    Name: env
+  - Name: expose
+    Ports:
+    - "2003"
+    - 2003/udp
+    - "2004"
+    - "7002"
+    - "7003"
+    - "7007"
+    - "8080"
+  - CmdLine:
+    - apk update --quiet --no-cache &&   apk add    --quiet --no-cache --virtual .build-deps     shadow
+      tzdata &&   cp /usr/share/zoneinfo/${TZ} /etc/localtime &&   echo ${TZ} > /etc/timezone
+      &&   /usr/sbin/useradd --system -U -s /bin/false -c "User for Graphite daemon"
+      carbon &&   mkdir /var/log/go-carbon &&   apk del --quiet --purge .build-deps
+      &&   rm -rf     /tmp/*     /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/profile.d/go-carbon.sh
+    - /etc/profile.d/go-carbon.sh
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go-carbon/etc
+    - /etc/go-carbon/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go-carbon/go-carbon
+    - /usr/bin/go-carbon
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs/
+    - /
+  - Name: workdir
+    Path: /
+  - Name: volume
+    Volumes:
+    - /srv
+  - Health:
+      Interval: 5000000000
+      Retries: 12
+      Test:
+      - CMD-SHELL
+      - ps ax | grep -v grep | grep -c go-carbon || exit 1
+      Timeout: 2000000000
+    Name: healthcheck
+  - CmdLine:
+    - /init/run.sh
+    Name: cmd
+    PrependShell: false
+  - Labels:
+    - Key: version
+      Value: '"${BUILD_TYPE}"'
+    - Key: maintainer
+      Value: '"Bodo Schulz <bodo@boone-schulz.de>"'
+    - Key: org.label-schema.build-date
+      Value: ${BUILD_DATE}
+    - Key: org.label-schema.name
+      Value: '"go carbon Docker Image"'
+    - Key: org.label-schema.description
+      Value: '"Inofficial go carbon Docker Image"'
+    - Key: org.label-schema.url
+      Value: '"https://github.com/lomik/go-carbon"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/bodsch/docker-go-carbon"'
+    - Key: org.label-schema.vendor
+      Value: '"Bodo Schulz"'
+    - Key: org.label-schema.version
+      Value: ${GOCARBON_VERSION}
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: com.microscaling.docker.dockerfile
+      Value: '"/Dockerfile"'
+    - Key: com.microscaling.license
+      Value: '"The Unlicense"'
+    Name: label
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

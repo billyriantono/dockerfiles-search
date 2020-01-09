@@ -1,0 +1,73 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12.8
+  Commands:
+  - Env:
+    - Key: SERVICE_NAME
+      Value: rancher-catalog-stats
+    Name: env
+  - Name: workdir
+    Path: /go/src/github.com/rawmind0/rancher-catalog-stats/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src
+    - .
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ${SERVICE_NAME} .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12.8 AS builder
+- BaseName: rawmind/alpine-base:3.8-1
+  Commands:
+  - Maintainer: Raul Sanchez <rawmind@gmail.com>
+    Name: maintainer
+  - Env:
+    - Key: SERVICE_NAME
+      Value: rancher-catalog-stats
+    - Key: SERVICE_HOME
+      Value: /opt/rancher-catalog-stats
+    - Key: SERVICE_USER
+      Value: rancher
+    - Key: SERVICE_UID
+      Value: "10012"
+    - Key: SERVICE_GROUP
+      Value: rancher
+    - Key: SERVICE_GID
+      Value: "10012"
+    - Key: GOMAXPROCS
+      Value: "2"
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: ${PATH}:${SERVICE_HOME}
+    Name: env
+  - Name: workdir
+    Path: $SERVICE_HOME
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/rawmind0/rancher-catalog-stats/${SERVICE_NAME}
+    - ${SERVICE_HOME}
+  - CmdLine:
+    - curl -sS http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz
+      | gunzip -c - | tar -xf - &&     mv GeoLite2-City_*/GeoLite2-City.mmdb . &&     rm
+      -rf GeoLite2-City_* &&     addgroup -g ${SERVICE_GID} ${SERVICE_GROUP} &&     adduser
+      -g "${SERVICE_NAME} user" -D -h ${SERVICE_HOME} -G ${SERVICE_GROUP} -s /sbin/nologin
+      -u ${SERVICE_UID} ${SERVICE_USER} &&     chown -R ${SERVICE_USER}:${SERVICE_GROUP}
+      ${SERVICE_HOME}
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $SERVICE_USER
+  From:
+    Image: rawmind/alpine-base:3.8-1
+  Name: ""
+  Platform: ""
+  SourceCode: FROM rawmind/alpine-base:3.8-1

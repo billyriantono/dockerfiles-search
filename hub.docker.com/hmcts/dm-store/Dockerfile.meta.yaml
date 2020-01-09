@@ -1,0 +1,75 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: gradle:jdk8
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /home/gradle/app
+  - Name: user
+    User: root
+  - CmdLine:
+    - chown -R gradle:gradle /home/gradle/app
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: gradle
+  - Name: workdir
+    Path: /home/gradle/app
+  - CmdLine:
+    - mkdir -p application/src/main/resources/META-INF && echo "build.version=$(gradle
+      -q printVersion)" > application/src/main/resources/META-INF/build-info.properties
+      && echo "build.number=${BUILD_NUMBER:=docker}" >> application/src/main/resources/META-INF/build-info.properties
+      && echo "build.commit=$(git rev-parse HEAD)" >> application/src/main/resources/META-INF/build-info.properties
+      && echo "build.date=$(date)" >> application/src/main/resources/META-INF/build-info.properties
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gradle installDist
+    Name: run
+    PrependShell: true
+  From:
+    Image: gradle:jdk8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM gradle:jdk8 as builder
+- BaseName: openjdk:8-jre
+  Commands:
+  - Maintainer: '"HMCTS Evidence Team <https://github.com/hmcts>"'
+    Name: maintainer
+  - Labels:
+    - Key: maintainer
+      Value: = "HMCTS Evidence Team <https://github.com/hmcts>"
+    Name: label
+  - Name: workdir
+    Path: /opt/app
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/gradle/app/application/build/install/application
+    - .
+  - Health:
+      Interval: 10000000000
+      Retries: 10
+      Test:
+      - CMD-SHELL
+      - http_proxy="" curl --silent --fail http://localhost:8080/health
+      Timeout: 10000000000
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - "5005"
+    - "8080"
+  - CmdLine:
+    - /opt/app/bin/application
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:8-jre
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre

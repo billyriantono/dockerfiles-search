@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: builderfront
+  BaseName: node:11-alpine
+  Commands:
+  - Name: workdir
+    Path: /npm/src/docktor
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client
+    - .
+  - CmdLine:
+    - npm install     && CI=true npm run test     && npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:11-alpine
+  Name: builderfront
+  Platform: ""
+  SourceCode: FROM node:11-alpine as builderFront
+- As: builderback
+  BaseName: golang:1.11
+  Commands:
+  - Name: workdir
+    Path: /go/src/docktor/server
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server
+    - .
+  - CmdLine:
+    - go get -u github.com/golang/dep/cmd/dep     && dep ensure     && go test     &&
+      CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -o app
+      .     && chmod +x app
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11
+  Name: builderback
+  Platform: ""
+  SourceCode: FROM golang:1.11 as builderBack
+- BaseName: scratch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"TheCampagnards <konstantin.sidorenko@orange.fr>"'
+    Name: label
+  - Name: workdir
+    Path: /docktor
+  - Chown: ""
+    From: builderFront
+    Name: copy
+    SourcesAndDest:
+    - /npm/src/docktor/build
+    - client
+  - Chown: ""
+    From: builderBack
+    Name: copy
+    SourcesAndDest:
+    - /go/src/docktor/server/app
+    - .
+  - Chown: ""
+    From: builderBack
+    Name: copy
+    SourcesAndDest:
+    - /go/src/docktor/server/assets
+    - assets
+  - CmdLine:
+    - ./app
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "8080"
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

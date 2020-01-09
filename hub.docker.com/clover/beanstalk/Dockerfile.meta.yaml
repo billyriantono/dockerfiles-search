@@ -1,0 +1,93 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: clover/base
+  Commands:
+  - CmdLine:
+    - groupadd         --gid 50         --system         beanstalkd  && useradd         --home-dir
+      /var/lib/beanstalkd         --no-create-home         --system         --shell
+      /bin/false         --uid 50         --gid 50         beanstalkd
+    Name: run
+    PrependShell: true
+  From:
+    Image: clover/base
+  Name: base
+  Platform: ""
+  SourceCode: FROM clover/base AS base
+- As: build
+  BaseName: library/ubuntu:bionic
+  Commands:
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - CmdLine:
+    - export DEBIAN_FRONTEND=noninteractive  && apt-get update  && apt-get install
+      -y         software-properties-common         apt-utils
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /build /rootfs
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - apt-get download         beanstalkd         libsystemd0         libgcrypt20         liblz4-1         liblzma5         libgpg-error0
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find *.deb | xargs -I % dpkg-deb -x % /rootfs
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /rootfs
+  - CmdLine:
+    - rm -rf         etc/default         etc/init.d         lib/systemd         usr/share
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: base
+    Name: copy
+    SourcesAndDest:
+    - /etc/group
+    - /etc/gshadow
+    - /etc/passwd
+    - /etc/shadow
+    - etc/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - init/
+    - etc/init/
+  - Name: workdir
+    Path: /
+  From:
+    Image: library/ubuntu:bionic
+  Name: build
+  Platform: ""
+  SourceCode: FROM library/ubuntu:bionic AS build
+- BaseName: clover/common
+  Commands:
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /rootfs
+    - /
+  - Name: volume
+    Volumes:
+    - /var/lib/beanstalkd
+  - Name: expose
+    Ports:
+    - "11300"
+  From:
+    Image: clover/common
+  Name: ""
+  Platform: ""
+  SourceCode: FROM clover/common

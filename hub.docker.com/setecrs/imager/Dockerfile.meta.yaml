@@ -1,0 +1,128 @@
+MetaArgs: null
+Stages:
+- As: npmbuilder
+  BaseName: alpine:edge
+  Commands:
+  - CmdLine:
+    - apk add --no-cache       nodejs       nodejs-npm
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - app/package.json
+    - .
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - app/
+    - .
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: npmbuilder
+  Platform: ""
+  SourceCode: FROM alpine:edge as npmbuilder
+- As: gobuilder
+  BaseName: golang:alpine
+  Commands:
+  - Name: workdir
+    Path: /go/src/github.com/setecrs/imager
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - CGO_ENABLED=0 go build -o /go/bin/imager .
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/setecrs/imager/notify
+  - CmdLine:
+    - CGO_ENABLED=0 go build -o /go/bin/notify .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: gobuilder
+  Platform: ""
+  SourceCode: FROM golang:alpine as gobuilder
+- BaseName: alpine:edge
+  Commands:
+  - Env:
+    - Key: GRAPHQL_URL
+      Value: http://wekan-hooks-noauth
+    Name: env
+  - Env:
+    - Key: UDEV_LISTEN
+      Value: localhost:8080
+    Name: env
+  - Env:
+    - Key: LISTEN
+      Value: 0.0.0.0:80
+    Name: env
+  - Name: expose
+    Ports:
+    - "80"
+  - Chown: ""
+    From: gobuilder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/imager
+    - /root/imager
+  - Chown: ""
+    From: gobuilder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/notify
+    - /root/notify
+  - Chown: ""
+    From: npmbuilder
+    Name: copy
+    SourcesAndDest:
+    - /root/app/build
+    - /root/app/build
+  - CmdLine:
+    - apk add --no-cache       git       smartmontools       eudev       coreutils       bash       tmux       hdparm       ddrescue
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - 99-imager-notify.rules
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - install.sh
+    - .
+  - CmdLine:
+    - ./install.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./imager
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:edge

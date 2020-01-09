@@ -1,0 +1,272 @@
+MetaArgs: null
+Stages:
+- As: pybuild
+  BaseName: python:3.6.6-slim-stretch
+  Commands:
+  - CmdLine:
+    - mkdir -p /usr/share/man/man1 /usr/share/man/man7     && apt-get update     &&
+      apt-get install --no-install-recommends -y         git         nano         postgresql-client     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install pipenv
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Pipfile
+    - Pipfile.lock
+    - /app/
+  - CmdLine:
+    - apt-get update     && apt-get install --no-install-recommends -y       build-essential       libpq-dev     &&
+      pipenv install --dev --system --deploy     && apt-get remove --purge -y       libpq-dev       build-essential     &&
+      apt-get autoremove -y     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python -m nltk.downloader -d /usr/local/share/nltk_data vader_lexicon
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.6.6-slim-stretch
+  Name: pybuild
+  Platform: ""
+  SourceCode: FROM python:3.6.6-slim-stretch AS pybuild
+- As: integration-test-deps
+  BaseName: pybuild
+  Commands:
+  - CmdLine:
+    - pip install capybara-py selenium
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update     && bash -c 'apt-get install -y --no-install-recommends $(apt-cache
+      depends firefox-esr | awk "/Depends:/{print\$2}")'     && apt-get install --no-install-recommends
+      -y         curl         xauth         xvfb         bzip2     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L https://download-installer.cdn.mozilla.net/pub/firefox/releases/61.0/linux-x86_64/en-US/firefox-61.0.tar.bz2         |
+      tar jx -C /opt         && ln -s /opt/firefox/firefox /usr/bin/firefox
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L https://github.com/mozilla/geckodriver/releases/download/v0.21.0/geckodriver-v0.21.0-linux64.tar.gz         |
+      tar zx -C /usr/bin/         && chmod +x /usr/bin/geckodriver
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: pybuild
+  Name: integration-test-deps
+  Platform: ""
+  SourceCode: FROM pybuild AS integration-test-deps
+- As: jsbuild
+  BaseName: node:10.1.0-slim
+  Commands:
+  - CmdLine:
+    - mkdir /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - package-lock.json
+    - /app/
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - webpack.config.js
+    - setupJest.js
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - __mocks__/
+    - /app/__mocks__/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/
+    - /app/assets/
+  - CmdLine:
+    - npm test
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - node_modules/.bin/webpack -p
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.1.0-slim
+  Name: jsbuild
+  Platform: ""
+  SourceCode: FROM node:10.1.0-slim AS jsbuild
+- As: base
+  BaseName: pybuild
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets/
+    - /app/assets/
+  - Chown: ""
+    From: jsbuild
+    Name: copy
+    SourcesAndDest:
+    - /app/assets/bundles/
+    - /app/assets/bundles/
+  - Chown: ""
+    From: jsbuild
+    Name: copy
+    SourcesAndDest:
+    - /app/webpack-stats.json
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cjworkbench/
+    - /app/cjworkbench/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server/
+    - /app/server/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/
+    - /app/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates/
+    - /app/templates/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - manage.py
+    - /app/
+  - CmdLine:
+    - ./manage.py test -v2
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: pybuild
+  Name: base
+  Platform: ""
+  SourceCode: FROM pybuild AS base
+- As: migrate
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - bin/migrate-prod
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 3
+      Named: base
+  Name: migrate
+  Platform: ""
+  SourceCode: FROM base AS migrate
+- As: backend
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - ./manage.py
+    - run-background-loop
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 3
+      Named: base
+  Name: backend
+  Platform: ""
+  SourceCode: FROM base AS backend
+- As: frontend
+  BaseName: base
+  Commands:
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - ./manage.py
+    - runserver
+    - --insecure
+    - 0.0.0.0:8080
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 3
+      Named: base
+  Name: frontend
+  Platform: ""
+  SourceCode: FROM base AS frontend
+- As: integration-test
+  BaseName: integration-test-deps
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cjworkbench/
+    - /app/cjworkbench/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server/
+    - /app/server/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - integrationtests/
+    - /app/integrationtests/
+  - CmdLine:
+    - sh
+    - -c
+    - xvfb-run -a -s '-screen 0 1200x768x24' python -m unittest discover -v integrationtests
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: integration-test-deps
+  Name: integration-test
+  Platform: ""
+  SourceCode: FROM integration-test-deps AS integration-test

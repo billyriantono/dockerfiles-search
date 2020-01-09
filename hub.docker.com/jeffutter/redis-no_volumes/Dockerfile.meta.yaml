@@ -1,0 +1,78 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie-slim
+  Commands:
+  - CmdLine:
+    - groupadd -r redis && useradd -r -g redis redis
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOSU_VERSION
+      Value: "1.10"
+    Name: env
+  - CmdLine:
+    - "set -ex; \t\tfetchDeps='ca-certificates wget'; \tapt-get update; \tapt-get
+      install -y --no-install-recommends $fetchDeps; \trm -rf /var/lib/apt/lists/*;
+      \t\tdpkgArch=\"$(dpkg --print-architecture | awk -F- '{ print $NF }')\"; \twget
+      -O /usr/local/bin/gosu \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch\";
+      \twget -O /usr/local/bin/gosu.asc \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch.asc\";
+      \texport GNUPGHOME=\"$(mktemp -d)\"; \tgpg --keyserver ha.pool.sks-keyservers.net
+      --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4; \tgpg --batch --verify
+      /usr/local/bin/gosu.asc /usr/local/bin/gosu; \trm -r \"$GNUPGHOME\" /usr/local/bin/gosu.asc;
+      \tchmod +x /usr/local/bin/gosu; \tgosu nobody true; \t\tapt-get purge -y --auto-remove
+      $fetchDeps"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: REDIS_VERSION
+      Value: 3.2.11
+    Name: env
+  - Env:
+    - Key: REDIS_DOWNLOAD_URL
+      Value: http://download.redis.io/releases/redis-3.2.11.tar.gz
+    Name: env
+  - Env:
+    - Key: REDIS_DOWNLOAD_SHA
+      Value: 31ae927cab09f90c9ca5954aab7aeecc3bb4da6087d3d12ba0a929ceb54081b5
+    Name: env
+  - CmdLine:
+    - "set -ex; \t\tbuildDeps=' \t\twget \t\t\t\tgcc \t\tlibc6-dev \t\tmake \t'; \tapt-get
+      update; \tapt-get install -y $buildDeps --no-install-recommends; \trm -rf /var/lib/apt/lists/*;
+      \t\twget -O redis.tar.gz \"$REDIS_DOWNLOAD_URL\"; \techo \"$REDIS_DOWNLOAD_SHA
+      *redis.tar.gz\" | sha256sum -c -; \tmkdir -p /usr/src/redis; \ttar -xzf redis.tar.gz
+      -C /usr/src/redis --strip-components=1; \trm redis.tar.gz; \t\tgrep -q '^#define
+      CONFIG_DEFAULT_PROTECTED_MODE 1$' /usr/src/redis/src/server.h; \tsed -ri 's!^(#define
+      CONFIG_DEFAULT_PROTECTED_MODE) 1$!\\1 0!' /usr/src/redis/src/server.h; \tgrep
+      -q '^#define CONFIG_DEFAULT_PROTECTED_MODE 0$' /usr/src/redis/src/server.h;
+      \t\tmake -C /usr/src/redis -j \"$(nproc)\"; \tmake -C /usr/src/redis install;
+      \t\trm -r /usr/src/redis; \t\tapt-get purge -y --auto-remove $buildDeps"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /data && chown redis:redis /data
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /data
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "6379"
+  - CmdLine:
+    - redis-server
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie-slim

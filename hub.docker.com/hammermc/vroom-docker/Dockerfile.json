@@ -1,0 +1,118 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "buildstage",
+      "BaseName": "debian:buster-slim",
+      "SourceCode": "FROM debian:buster-slim as buildstage",
+      "Platform": "",
+      "As": "buildstage",
+      "From": {
+        "Image": "debian:buster-slim"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "BUMP",
+              "Value": "2019012401"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "VROOM_VERSION",
+              "Value": "v1.3.0"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "apt update \u0026\u0026     apt install -y git         pkg-config \u0026\u0026     git clone --depth 1 --single-branch https://github.com/Project-OSRM/osrm-backend.git"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "cd osrm-backend \u0026\u0026     apt-get update \u0026\u0026     apt-get -y --no-install-recommends install cmake make git gcc g++ libbz2-dev libstxxl-dev libstxxl1v5 libxml2-dev     libzip-dev libboost-all-dev lua5.2 liblua5.2-dev libtbb-dev -o APT::Install-Suggests=0 -o APT::Install-Recommends=0 \u0026\u0026     echo \"Building OSRM ${DOCKER_TAG}\" \u0026\u0026     git show --format=\"%H\" | head -n1 \u003e /opt/OSRM_GITSHA \u0026\u0026     echo \"Building OSRM gitsha $(cat /opt/OSRM_GITSHA)\" \u0026\u0026     mkdir -p build \u0026\u0026     cd build \u0026\u0026     BUILD_TYPE=\"Release\" \u0026\u0026     ENABLE_ASSERTIONS=\"Off\" \u0026\u0026     BUILD_TOOLS=\"Off\" \u0026\u0026     case ${DOCKER_TAG} in *\"-debug\"*) BUILD_TYPE=\"Debug\";; esac \u0026\u0026     case ${DOCKER_TAG} in *\"-assertions\"*) BUILD_TYPE=\"RelWithDebInfo\" \u0026\u0026 ENABLE_ASSERTIONS=\"On\" \u0026\u0026 BUILD_TOOLS=\"On\";; esac \u0026\u0026     echo \"Building ${BUILD_TYPE} with ENABLE_ASSERTIONS=${ENABLE_ASSERTIONS} BUILD_TOOLS=${BUILD_TOOLS}\" \u0026\u0026     cmake .. -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DENABLE_ASSERTIONS=${ENABLE_ASSERTIONS} -DBUILD_TOOLS=${BUILD_TOOLS} -DENABLE_LTO=On \u0026\u0026     make install \u0026\u0026     cd ../profiles \u0026\u0026     cp -r * /opt \u0026\u0026         ldconfig \u0026\u0026     git clone --depth 1 --single-branch --branch $VROOM_VERSION https://github.com/VROOM-Project/vroom.git \u0026\u0026     mkdir vroom/bin \u0026\u0026     cd vroom/src \u0026\u0026     make \u0026\u0026     rm -rf /usr/local/lib/libosrm* \u0026\u0026     cp ../bin/* /usr/local/bin \u0026\u0026     strip /usr/local/bin/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "runstage",
+      "BaseName": "debian:buster-slim",
+      "SourceCode": "FROM debian:buster-slim as runstage",
+      "Platform": "",
+      "As": "runstage",
+      "From": {
+        "Image": "debian:buster-slim"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "buildstage",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local",
+            "/usr/local"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "buildstage",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/opt",
+            "/opt"
+          ]
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /src \u0026\u0026     mkdir -p /opt \u0026\u0026     apt-get update \u0026\u0026     apt-get install -y --no-install-recommends         curl         expat         git         gosu         libboost-chrono1.67.0         libboost-date-time1.67.0         libboost-filesystem1.67.0         libboost-iostreams1.67.0         libboost-program-options1.67.0         libboost-regex1.67.0         libboost-thread1.67.0         liblua5.2-0         libtbb2         netcat         npm         postgresql-client \u0026\u0026     git clone --depth 1 https://github.com/VROOM-Project/vroom-express.git \u0026\u0026     useradd -m -s /bin/bash osm \u0026\u0026     useradd -m -s /bin/bash osrm \u0026\u0026     useradd -m -s /bin/bash vroom \u0026\u0026     mkfifo -m 600 /vroom-express/logpipe \u0026\u0026     chown vroom /vroom-express/logpipe \u0026\u0026     ln -sf /vroom-express/logpipe /vroom-express/access.log \u0026\u0026     ln -sf /vroom-express/logpipe /vroom-express/error.log \u0026\u0026     sed -ri \"s/(osrm_address:).*,/\\1 \\\"osrm-backend\\\",/\" /vroom-express/src/index.js \u0026\u0026     cd /vroom-express \u0026\u0026     npm install \u0026\u0026     apt purge -y git \u0026\u0026     apt autoremove --purge -y \u0026\u0026     apt clean \u0026\u0026     rm -rf /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "vroom-express.sh",
+            "/usr/local/bin/vroom-express.sh"
+          ]
+        },
+        {
+          "CmdLine": [
+            "vroom-express.sh"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        },
+        {
+          "Name": "workdir",
+          "Path": "/opt"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "5000"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "3000"
+          ]
+        }
+      ]
+    }
+  ]
+}

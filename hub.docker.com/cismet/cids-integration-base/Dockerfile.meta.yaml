@@ -1,0 +1,188 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:trusty
+  Commands:
+  - Maintainer: Jean-Michel Ruiz "jean.ruiz@cismet.de"
+    Name: maintainer
+  - Labels:
+    - Key: de.cismet.cids.integration.base.name
+      Value: '"cids-integration-base PostgeSQL image"'
+    - Key: de.cismet.cids.integration.base.version
+      Value: '"postgres-9.0.3-2.0"'
+    - Key: de.cismet.cids.integration.base.tag.docker
+      Value: '"postgres-9.0.3-2.0"'
+    - Key: de.cismet.cids.integration.base.tag.git
+      Value: '"postgres-9.0.3-2.0"'
+    - Key: de.cismet.cids.integration.base.descripton
+      Value: '"PostgeSQL 9.0.3 Runtime Image v2"'
+    Name: label
+  - Env:
+    - Key: POSTGRES_PASSWORD
+      Value: postgres
+    Name: env
+  - Env:
+    - Key: CIDS_INTEGRATION_BASE_DIR
+      Value: /cidsIntegrationBase
+    Name: env
+  - Env:
+    - Key: PG_DATA_DIR
+      Value: ${CIDS_INTEGRATION_BASE_DIR}/pg_data
+    Name: env
+  - Env:
+    - Key: IMPORT_DIR
+      Value: /import/cidsIntegrationBase
+    Name: env
+  - Env:
+    - Key: PG_VERSION
+      Value: 9.0.3
+    Name: env
+  - Env:
+    - Key: GEOS_VERSION
+      Value: 3.3.5
+    Name: env
+  - Env:
+    - Key: PROJ4_VERSION
+      Value: 4.8.0
+    Name: env
+  - Env:
+    - Key: LIBXML_VERSION
+      Value: 2.9.4
+    Name: env
+  - Env:
+    - Key: POSTGIS_VERSION
+      Value: 1.5.5
+    Name: env
+  - Env:
+    - Key: LOCALE
+      Value: de_DE
+    Name: env
+  - Env:
+    - Key: ENCODING
+      Value: UTF-8
+    Name: env
+  - Env:
+    - Key: PGCLIENTENCODING
+      Value: UTF-8
+    Name: env
+  - Env:
+    - Key: PGPORT
+      Value: "5432"
+    Name: env
+  - Name: workdir
+    Path: /usr/local/
+  - CmdLine:
+    - echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections   &&
+      apt-get update   && apt-get install -y build-essential gcc-4.7 libreadline6-dev
+      libxml2-dev locales zlib1g-dev curl autoconf xsltproc git libcunit1 libcunit1-doc
+      libcunit1-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - localedef -i $LOCALE -c -f $ENCODING -A /usr/share/locale/locale.alias ${LOCALE}.${ENCODING}     &&
+      locale-gen ${LOCALE}.${ENCODING}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd src/ ; curl -fsSL https://ftp.postgresql.org/pub/source/v${PG_VERSION}/postgresql-${PG_VERSION}.tar.bz2
+      | tar -xj     && cd postgresql-${PG_VERSION} ; ./configure CC='gcc-4.7 -m64'
+      --prefix=/usr/local --with-pgport=5432     && make     && make install     &&
+      make all     && cd contrib ; make install     && ldconfig     && pwd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd src/ ; curl -fsSL http://download.osgeo.org/geos/geos-${GEOS_VERSION}.tar.bz2
+      | tar -xj     && cd geos-${GEOS_VERSION} ; ./configure     && make     && make
+      install     && ldconfig     && pwd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd src/ ; curl -fsSL http://download.osgeo.org/proj/proj-${PROJ4_VERSION}.tar.gz
+      | tar -xz     && cd proj-${PROJ4_VERSION} ; ./configure     && make     && make
+      install     && ldconfig     && pwd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd src/ ; curl -fsSL http://xmlsoft.org/sources/libxml2-${LIBXML_VERSION}.tar.gz
+      | tar -xz     && cd libxml2-${LIBXML_VERSION} ; ./configure     && make     &&
+      make install     && ldconfig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd src/ ; curl -fsSL http://download.osgeo.org/postgis/source/postgis-${POSTGIS_VERSION}.tar.gz
+      | tar -xz     && cd postgis-${POSTGIS_VERSION} ; ./autogen.sh     && ./configure     &&
+      make     && make install     && ldconfig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd postgres     && useradd -r postgres -g postgres     && echo "postgres:${POSTGRES_PASSWORD}"
+      | chpasswd -e
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cidsIntegrationBase
+    - ${CIDS_INTEGRATION_BASE_DIR}
+  - CmdLine:
+    - mkdir -p import/cidsIntegrationBase     && mkdir -p ${PG_DATA_DIR}     && echo
+      ${PG_DATA_DIR}     && chown postgres:postgres ${PG_DATA_DIR}     && chmod 700
+      ${PG_DATA_DIR}
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: postgres
+  - CmdLine:
+    - initdb   --encoding=${ENCODING}   --locale=${LOCALE}.${ENCODING}   --lc-collate=${LOCALE}.${ENCODING}   --lc-monetary=${LOCALE}.${ENCODING}   --lc-numeric=${LOCALE}.${ENCODING}   --lc-time=${LOCALE}.${ENCODING}   -D
+      ${PG_DATA_DIR}
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - echo "host all all 0.0.0.0/0 md5" >> ${PG_DATA_DIR}/pg_hba.conf     && echo
+      "listen_addresses='*'" >> ${PG_DATA_DIR}/postgresql.conf
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: postgres
+  - CmdLine:
+    - pg_ctl -w -D ${PG_DATA_DIR} start   && psql -c "alter role postgres password
+      '${POSTGRES_PASSWORD}'"   && createdb template_postgis   && psql template_postgis
+      -f src/postgis-${POSTGIS_VERSION}/postgis/postgis.sql   && psql template_postgis
+      -f src/postgis-${POSTGIS_VERSION}/spatial_ref_sys.sql   && pg_ctl -w -D ${PG_DATA_DIR}
+      stop
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - apt-get remove --purge --auto-remove -y build-essential gcc-4.7 libreadline6-dev
+      libxml2-dev zlib1g-dev autoconf xsltproc git libcunit1 libcunit1-doc libcunit1-dev     &&
+      rm -rf /var/lib/apt/lists/* src/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "5432"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - import/container_ctl.sh
+    - /
+  - Name: workdir
+    Path: ${CIDS_INTEGRATION_BASE_DIR}
+  - CmdLine:
+    - /container_ctl.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - start
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:trusty
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:trusty

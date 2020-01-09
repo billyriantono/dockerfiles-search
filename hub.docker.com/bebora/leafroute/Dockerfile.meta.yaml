@@ -1,0 +1,75 @@
+MetaArgs: null
+Stages:
+- As: build-stage
+  BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk update &&     apk add --no-cache         boost-dev         build-base         cmake         curl         curl-dev         git         libexecinfo-dev         ninja         openssl-dev         websocket++         zlib-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/Microsoft/cpprestsdk.git &&     cd cpprestsdk &&     mkdir
+      build-cpprestsdk &&     cd build-cpprestsdk &&     cmake -G Ninja ..         -DCMAKE_BUILD_TYPE=Release         -DBUILD_TESTS=OFF         -DBUILD_SAMPLES=OFF
+      &&     ninja &&     ninja install &&     cd ../.. &&     rm -rf cpprestsdk &&     mkdir
+      build &&     git clone https://github.com/awslabs/aws-lambda-cpp /tmp/aws-lambda-cpp
+      &&     cd /tmp/aws-lambda-cpp &&     mkdir build &&     cd build &&     cmake
+      ..         -DCMAKE_BUILD_TYPE=Release         -DCMAKE_INSTALL_PREFIX=/usr &&     make
+      && make install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /leafrouting
+  - CmdLine:
+    - cd /leafrouting/routesfetcher/external &&     if [ "$(ls -A arlib)" ];         then
+      echo "Arlib found";         else echo "Arlib missing, cloning" && git clone
+      https://github.com/leonardoarcari/arlib ;     fi &&     if [ "$(ls -A json11)"
+      ];             then echo "json11 found";             else echo "json11 missing,
+      cloning" && git clone https://github.com/dropbox/json11 ;     fi &&     cd ../..
+      &&     mkdir build-main &&     cd build-main &&     cmake .. &&     make cppserver
+      &&     mv /leafrouting/build-main/cpprestsdk/cppserver /build/cppserver &&     rm
+      -rf /leafrouting &&     cd /build &&     curl https://leafroute.tk/ids -o ids
+      &&     curl https://leafroute.tk/weights -o weights
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: build-stage
+  Platform: ""
+  SourceCode: FROM alpine:3.9 AS build-stage
+- As: deploy-stage
+  BaseName: alpine:3.9
+  Commands:
+  - Chown: ""
+    From: build-stage
+    Name: copy
+    SourcesAndDest:
+    - /build
+    - /leafroute-built
+  - Chown: ""
+    From: build-stage
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib64/
+    - /usr/local/lib64/
+  - CmdLine:
+    - apk update &&     apk add --no-cache boost-system boost-program_options libstdc++
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "1337"
+  - Name: workdir
+    Path: /leafroute-built
+  - CmdLine:
+    - ./cppserver
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: deploy-stage
+  Platform: ""
+  SourceCode: FROM alpine:3.9 AS deploy-stage

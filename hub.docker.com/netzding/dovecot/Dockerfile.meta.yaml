@@ -1,0 +1,190 @@
+MetaArgs:
+- DefaultValue: latest
+  Key: ALPINE_TAG
+  ProvidedValue: null
+  Value: latest
+Stages:
+- As: build
+  BaseName: alpine:${ALPINE_TAG}
+  Commands:
+  - CmdLine:
+    - apk add --no-cache shadow ca-certificates curl coreutils automake autoconf g++
+      libtool expat-dev make libressl-dev libcap-dev json-c-dev libbz2 lz4-dev xz-dev
+      zlib postgresql-dev mariadb-dev sqlite-dev openldap-dev krb5-dev heimdal-libs
+      cmake git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/build/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -o dovecot.tar.gz https://www.dovecot.org/releases/2.3/dovecot-2.3.4.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar -xzvf dovecot.tar.gz -C /opt/build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/build/dovecot-2.3.4/
+  - CmdLine:
+    - ./configure -prefix=/opt/dovecot/ --with-ssl=openssl --with-lz4 --with-lzma
+      --with-libcap --with-sql=plugin --with-pgsql --with-mysql --with-sqlite --with-ldap=plugin
+      --with-solr --with-gssapi=plugin --with-rundir=/run/dovecot --localstatedir=/var
+      --sysconfdir=/etc && make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/build
+  - CmdLine:
+    - curl -o pigeonhole.tar.gz https://pigeonhole.dovecot.org/releases/2.3/dovecot-2.3-pigeonhole-0.5.4.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar -xzvf pigeonhole.tar.gz -C /opt/build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/build/dovecot-2.3-pigeonhole-0.5.4
+  - CmdLine:
+    - ./configure -prefix=/opt/dovecot/ --with-dovecot=/opt/build/dovecot-2.3.4/ --with-ldap=plugin
+      && make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/build
+  - CmdLine:
+    - git clone https://github.com/atkinsj/fts-elasticsearch.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/build/fts-elasticsearch
+  - CmdLine:
+    - ./autogen.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./configure -prefix=/opt/dovecot/ --with-dovecot=/opt/build/dovecot-2.3.4/ &&
+      make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/build
+  - CmdLine:
+    - git clone https://github.com/st3fan/dovecot-xaps-plugin.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /opt/build/dovecot-xaps-plugin/build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/build/dovecot-xaps-plugin/build
+  - CmdLine:
+    - ln -s /opt/dovecot/include/dovecot /usr/include/dovecot
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git checkout tags/v0.6
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cmake .. -DCMAKE_BUILD_TYPE=Release -DLIBDOVECOT=/opt/dovecot/include/dovecot
+      -DLIBDOVECOTSTORAGE=/opt/dovecot/include/dovecot
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /opt/dovecot/ -name '*.la' | xargs rm -f
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:${ALPINE_TAG}
+  Name: build
+  Platform: ""
+  SourceCode: FROM alpine:${ALPINE_TAG} AS build
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache shadow ca-certificates libcap expat mariadb-connector-c
+      libpq sqlite-libs
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /opt/dovecot/
+    - /opt/dovecot/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/dovecot/modules/
+    - /opt/dovecot/lib/dovecot/
+  - Env:
+    - Key: PATH
+      Value: '"/opt/dovecot/bin:${PATH}"'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"/opt/dovecot/sbin:${PATH}"'
+    Name: env
+  - CmdLine:
+    - groupadd -g 5000 vmail
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -r -u 5000 -g vmail vmail
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd -g 2525 postfix
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -r -u 2525 -g postfix postfix
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd -g 2500 dovecot
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd -g 2501 dovenull
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -r -M -d /opt/dovecot/lib/dovecot -s /bin/false -g dovecot dovecot
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -r -M -d /nonexistent -s /bin/false -g dovenull dovenull
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dovecot
+    - -F
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

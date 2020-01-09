@@ -1,0 +1,134 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "base_builder",
+      "BaseName": "golang:1.11-alpine",
+      "SourceCode": "FROM golang:1.11-alpine as base_builder",
+      "Platform": "",
+      "As": "base_builder",
+      "From": {
+        "Image": "golang:1.11-alpine"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add ca-certificates git"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/go/src/github.com/Templum/rabbitmq-connector/"
+        },
+        {
+          "Env": [
+            {
+              "Key": "GO111MODULE",
+              "Value": "on"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "go.mod",
+            "go.sum",
+            "./"
+          ]
+        },
+        {
+          "CmdLine": [
+            "go mod download"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "builder",
+      "BaseName": "base_builder",
+      "SourceCode": "FROM base_builder as builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Stage": {
+          "Named": "base_builder",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "VERSION=$(git describe --all --exact-match `git rev-parse HEAD` | grep tags | sed 's/tags\\///') \u0026\u0026   GIT_COMMIT=$(git describe --always) \u0026\u0026   CGO_ENABLED=0 GOOS=linux go build -ldflags \"-s -w   -X github.com/Templum/openfaas-rabbitmq-connector/pkg/version.Version=${VERSION}   -X github.com/Templum/openfaas-rabbitmq-connector/pkg/version.GitCommit=${GIT_COMMIT}\"   -a -installsuffix cgo -o rmq-connector ."
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "alpine:3.8",
+      "SourceCode": "FROM alpine:3.8",
+      "Platform": "",
+      "From": {
+        "Image": "alpine:3.8"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "addgroup -S app     \u0026\u0026 adduser -S -g app app     \u0026\u0026 apk --no-cache add ca-certificates"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/home/app"
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/go/src/github.com/Templum/rabbitmq-connector/rmq-connector",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "chown -R app:app ./"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "user",
+          "User": "app"
+        },
+        {
+          "CmdLine": [
+            "./rmq-connector"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

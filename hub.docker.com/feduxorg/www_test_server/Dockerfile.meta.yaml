@@ -1,0 +1,255 @@
+MetaArgs: null
+Stages:
+- As: generator
+  BaseName: golang:1.11
+  Commands:
+  - CmdLine:
+    - go get -u github.com/subfuzion/envtpl/...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - install -m 0755 -D $GOPATH/bin/envtpl /usr/local/bin/envtpl
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11
+  Name: generator
+  Platform: ""
+  SourceCode: FROM golang:1.11 as generator
+- As: base
+  BaseName: ruby:2.6
+  Commands:
+  - CmdLine:
+    - apt-get update -y       && apt-get install -y memcached libmemcached-tools dumb-init
+      libssl1.1 libpq5 ncdu postgresql-client-common
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo deb http://http.us.debian.org/debian testing main non-free contrib >> /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo deb http://security.debian.org/ testing/updates main contrib non-free >>
+      /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update -y       && apt-get install -y -t testing libsqlite3-0       &&
+      apt-get install -y -t testing file
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get autoclean   && apt-get clean   && apt-get autoremove   && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: ruby:2.6
+  Name: base
+  Platform: ""
+  SourceCode: FROM ruby:2.6 as base
+- As: build
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: DOCKER_BUILD
+      Value: '"1"'
+    Name: env
+  - Key: RAILS_ENV
+    Name: arg
+    Value: production
+  - Env:
+    - Key: RAILS_ENV
+      Value: '"${RAILS_ENV}"'
+    Name: env
+  - Env:
+    - Key: RACK_HOST
+      Value: '"0.0.0.0"'
+    Name: env
+  - Env:
+    - Key: RACK_PORT
+      Value: "3000"
+    Name: env
+  - Env:
+    - Key: DEFAULT_MAIL_URL_HOST
+      Value: '"http://localhost:3000"'
+    Name: env
+  - Env:
+    - Key: DATABASE_URL
+      Value: '"sqlite3:/db/${RAILS_ENV}.sqlite3?timeout=10000"'
+    Name: env
+  - Name: volume
+    Volumes:
+    - /db
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - bin
+    - /srv/app/bin/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - env.sh
+    - /srv/app/
+  - Name: workdir
+    Path: /srv/app
+  - CmdLine:
+    - apt-get update -y       && apt-get install -y libsqlite3-dev libssl-dev libpq-dev       &&
+      apt-get install -y -t testing libmagic-dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/Gemfile
+    - /srv/app/Gemfile
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/Gemfile.lock
+    - /srv/app/Gemfile.lock
+  - Name: workdir
+    Path: /srv/app
+  - CmdLine:
+    - gem install -v 1.17.3 bundler
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bundle config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bundle install --jobs 8
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bundle show
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/
+    - /srv/app
+  - CmdLine:
+    - bin/rails assets:clobber     && bin/rails assets:precompile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo "Build on $(date ''+%Y-%m-%d %H:%M:%S'')" > /release.txt   && echo -n
+      "App Version: " >> /release.txt'
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: base
+  Name: build
+  Platform: ""
+  SourceCode: FROM base as build
+- BaseName: base
+  Commands:
+  - Maintainer: dev@fedux.org
+    Name: maintainer
+  - Env:
+    - Key: DOCKER_BUILD
+      Value: '"1"'
+    Name: env
+  - Key: RAILS_ENV
+    Name: arg
+    Value: production
+  - Env:
+    - Key: RAILS_ENV
+      Value: '"${RAILS_ENV}"'
+    Name: env
+  - Env:
+    - Key: RACK_HOST
+      Value: '"0.0.0.0"'
+    Name: env
+  - Env:
+    - Key: RACK_PORT
+      Value: "3000"
+    Name: env
+  - Env:
+    - Key: DEFAULT_MAIL_URL_HOST
+      Value: '"http://localhost:3000"'
+    Name: env
+  - Env:
+    - Key: DATABASE_URL
+      Value: '"sqlite3:db/${RAILS_ENV}.sqlite3?timeout=10000"'
+    Name: env
+  - Env:
+    - Key: CLAMAV_CLAMD_TCP_SOCKET
+      Value: '"3310"'
+    Name: env
+  - Env:
+    - Key: CLAMAV_CLAMD_TCP_ADDRESS
+      Value: '"clamav-1"'
+    Name: env
+  - Env:
+    - Key: LOGIN_VIA_SSL
+      Value: '"true"'
+    Name: env
+  - CmdLine:
+    - apt-get update -y   && apt-get install -y clamdscan
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get autoclean -y   && apt-get clean -y   && apt-get autoremove -y    &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /srv/app
+    - /srv/app
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bundle
+    - /usr/local/bundle
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /release.txt
+    - /release.txt
+  - Chown: ""
+    From: generator
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/envtpl
+    - /usr/local/bin/envtpl
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/latest/root
+    - /
+  - Name: workdir
+    Path: /srv/app
+  - CmdLine:
+    - touch /tmp/.env-intentionally-left-blank
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - /usr/bin/dumb-init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - ruby
+    - /srv/app/Init
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

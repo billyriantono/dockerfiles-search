@@ -1,0 +1,165 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.5
+  Commands:
+  - Maintainer: '[Nicolas Degory <ndegory@axway.com>][Mathias Kaufmann <me@stei.gr>]'
+    Name: maintainer
+  - CmdLine:
+    - echo "@edge http://nl.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories  &&  echo
+      "@testing http://nl.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories  &&  echo
+      "@community http://nl.alpinelinux.org/alpine/v3.5/community" >> /etc/apk/repositories
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk upgrade --no-cache  &&  apk --no-cache add --virtual .runtime-dep curl su-exec@testing
+      bash  &&  rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -Lo /tmp/tini.apk http://nl.alpinelinux.org/alpine/edge/community/x86_64/tini-0.14.0-r0.apk  &&  apk
+      add --virtual .runtime-dep /tmp/tini.apk  &&  rm -rf /tmp/tini.apk
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L https://github.com/subfuzion/envtpl/blob/master/envtpl?raw=true      |
+      install -m 0755 -o root -g root /dev/stdin /usr/bin/envtpl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --no-cache add --virtual .runtime-dep nodejs
+    Name: run
+    PrependShell: true
+  - Key: GRAFANA_VERSION
+    Name: arg
+    Value: ${GRAFANA_VERSION:-v4.1.2}
+  - CmdLine:
+    - apk upgrade --no-cache  &&  apk --no-cache add --virtual .runtime-dep fontconfig  &&  rm
+      -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - export GOPATH=/go  &&  apk upgrade --no-cache  &&  apk --no-cache add --virtual
+      .build-dep build-base go git gcc python musl-dev make nodejs-dev fontconfig-dev  &&  mkdir
+      -p $GOPATH/src/github.com/grafana  &&  sh -xc "[[ '${GRAFANA_VERSION:0:1}' =
+      'v' ]] || GRAFANA_VERSION=master; git clone https://github.com/grafana/grafana.git
+      -b ${GRAFANA_VERSION} $GOPATH/src/github.com/grafana/grafana"  &&  cd $GOPATH/src/github.com/grafana/grafana  &&  npm
+      install -g yarn@0.19.0  &&  npm install -g grunt-cli@1.2.0  &&  go run build.go
+      setup  &&  go run build.go build  &&  yarn install  &&  npm run build  &&  npm
+      uninstall -g yarn  &&  npm uninstall -g grunt-cli  &&  npm cache clear  &&  mv
+      ./bin/grafana-server ./bin/grafana-cli /bin/  &&  mkdir -p /etc/grafana/json               /var/lib/grafana/plugins               /var/log/grafana               /usr/share/grafana  &&  mv
+      ./public_gen /usr/share/grafana/public  &&  mv ./conf /usr/share/grafana/conf  &&  apk
+      del .build-dep  &&  cd /  &&  rm -rf /var/cache/apk/*             /usr/local/share/.cache             $GOPATH
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/lib/grafana
+    - /var/lib/grafana/plugins
+    - /var/log/grafana
+  - Name: expose
+    Ports:
+    - "3000"
+  - Env:
+    - Key: TINI_SUBREAPER
+      Value: ""
+    - Key: INFLUXDB_HOST
+      Value: localhost
+    - Key: INFLUXDB_PORT
+      Value: "8086"
+    - Key: INFLUXDB_PROTO
+      Value: http
+    - Key: INFLUXDB_USER
+      Value: grafana
+    - Key: INFLUXDB_PASS
+      Value: changeme
+    - Key: GRAFANA_USER
+      Value: admin
+    - Key: GRAFANA_PASS
+      Value: changeme
+    Name: env
+  - Health:
+      Interval: 5000000000
+      Retries: 5
+      Test:
+      - CMD-SHELL
+      - curl -u $GRAFANA_USER:$GRAFANA_PASS 127.0.0.1:3000/api/org 2>/dev/null | grep
+        -q '"id":'
+      Timeout: 2000000000
+    Name: healthcheck
+  - CmdLine:
+    - addgroup -S grafana  &&  adduser -S -g grafana grafana
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tini
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /run.sh
+    Name: cmd
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./run.sh
+    - /run.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./grafana.ini
+    - /usr/share/grafana/conf/defaults.ini.tpl
+  - Key: LABEL_NAME
+    Name: arg
+    Value: '"${LABEL_NAME:-grafana}"'
+  - Key: LABEL_DESCRIPTION
+    Name: arg
+    Value: '"${LABEL_DESCRIPTION:-Beautiful metric & analytic dashboards}"'
+  - Key: LABEL_BUILD_DATE
+    Name: arg
+    Value: '"${LABEL_BUILD_DATE:-2017/3/1}"'
+  - Key: LABEL_VCS_REF
+    Name: arg
+    Value: '"${LABEL_VCS_REF:-unknown}"'
+  - Key: LABEL_VCS_URL
+    Name: arg
+    Value: '"${LABEL_VCS_URL:-https://github.com/steigr/docker-grafana}"'
+  - Key: LABEL_URL
+    Name: arg
+    Value: '"${LABEL_URL:-https://grafana.org}"'
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: '"${LABEL_BUILD_DATE}"'
+    - Key: org.label-schema.name
+      Value: '"${LABEL_NAME}"'
+    - Key: org.label-schema.description
+      Value: '"${LABEL_DESCRIPTION}"'
+    - Key: org.label-schema.usage
+      Value: '"${LABEL_VCS_URL}/blob/${GRAFANA_VERSION}/README.md"'
+    - Key: org.label-schema.url
+      Value: '"${LABEL_URL}"'
+    - Key: org.label-schema.vcs-ref
+      Value: '"${LABEL_VCS_REF}"'
+    - Key: org.label-schema.vcs-url
+      Value: '"${LABEL_VCS_URL}"'
+    - Key: org.label-schema.version
+      Value: '"${GRAFANA_VERSION}"'
+    - Key: org.label-schema.docker.cmd
+      Value: '"docker run --detach --name=${LABEL_NAME} --publish=3000:3000 --volume=${LABEL_NAME}:/var/lib/grafana
+        --volume=${LABEL_NAME}-plugins:/var/lib/grafana/plugins steigr/${LABEL_NAME}:${GRAFANA_VERSION}"'
+    - Key: org.label-schema.docker.params
+      Value: '"INFLUXDB_HOST=hostname or address of influxdb server,                                      INFLUXDB_PORT=portnumber
+        where influxdb is listening,                                      INFLUXDB_PROTO=protocol
+        used for influxdb connection,                                      INFLUXDB_USER=influxdb
+        username,                                      INFLUXDB_PASS=influxdb password,                                      GRAFANA_USER=administration
+        username,                                      GRAFANA_PASS=grafana administrator
+        password,                                      GRAFANA_BASE_URL=url of this
+        grafana instance,                                      FORCE_HOSTNAME=force
+        this hostname"'
+    Name: label
+  From:
+    Image: alpine:3.5
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.5

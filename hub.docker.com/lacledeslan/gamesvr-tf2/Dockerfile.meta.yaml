@@ -1,0 +1,133 @@
+MetaArgs: null
+Stages:
+- As: tf2-builder
+  BaseName: lacledeslan/steamcmd:linux
+  Commands:
+  - Key: contentServer
+    Name: arg
+    Value: content.lacledeslan.net
+  - CmdLine:
+    - if [ "$contentServer" = false ] ; then         echo "\n\nSkipping custom LL
+      content\n\n";     else         echo "\nDownloading custom LL content from $contentServer"
+      &&            mkdir --parents /tmp/maps/ /output &&            cd /tmp/maps/
+      &&            wget -rkpN -l 1 -nH  --no-verbose --cut-dirs=3 -R "*.htm*" -e
+      robots=off "http://"$contentServer"/fastDownloads/tf2/maps/" &&        echo
+      "Decompressing files" &&            bzip2 --decompress /tmp/maps/*.bz2 &&        echo
+      "Moving uncompressed files to destination" &&            mkdir --parents /output/tf/maps/
+      &&            mv -n *.bsp /output/tf/maps/;     fi;
+    Name: run
+    PrependShell: true
+  From:
+    Image: lacledeslan/steamcmd:linux
+  Name: tf2-builder
+  Platform: ""
+  SourceCode: FROM lacledeslan/steamcmd:linux as tf2-builder
+- BaseName: debian:stretch-slim
+  Commands:
+  - Key: BUILDNODE
+    Name: arg
+    Value: unspecified
+  - Key: SKIP_STEAMCMD
+    Name: arg
+    Value: "false"
+  - Key: SOURCE_COMMIT
+    Name: arg
+    Value: unspecified
+  - Health:
+      Test:
+      - NONE
+    Name: healthcheck
+  - CmdLine:
+    - dpkg --add-architecture i386 &&    apt-get update && apt-get install -y         ca-certificates
+      lib32gcc1 lib32tinfo5 libcurl4-gnutls-dev:i386 libstdc++6 libstdc++6:i386 libtcmalloc-minimal4:i386
+      locales locales-all tmux &&    apt-get clean &&    echo "LC_ALL=en_US.UTF-8"
+      >> /etc/environment &&    rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/*;
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    - Key: LANGUAGE
+      Value: en_US.UTF-8
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    Name: env
+  - Labels:
+    - Key: maintainer
+      Value: '"Laclede''s LAN <contact @lacledeslan.com>"'
+    - Key: com.lacledeslan.build-node
+      Value: $BUILDNODE
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.url
+      Value: '"https://github.com/LacledesLAN/README.1ST"'
+    - Key: org.label-schema.vcs-ref
+      Value: $SOURCE_COMMIT
+    - Key: org.label-schema.vendor
+      Value: '"Laclede''s LAN"'
+    - Key: org.label-schema.description
+      Value: '"Team Fortress 2 Dedicated Server"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/LacledesLAN/gamesvr-tf2"'
+    Name: label
+  - CmdLine:
+    - useradd --home /app --gid root --system TF2 &&    mkdir -p /app/ll-tests &&    chown
+      TF2:root -R /app;
+    Name: run
+    PrependShell: true
+  - Chown: TF2:root
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./steamcmd-cache
+    - /app
+  - Chown: TF2:root
+    From: tf2-builder
+    Name: copy
+    SourcesAndDest:
+    - /output
+    - /app
+  - Chown: TF2:root
+    From: tf2-builder
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /app/steamcmd
+  - Chown: TF2:root
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./ll-tests
+    - /app/ll-tests
+  - CmdLine:
+    - chmod +x /app/ll-tests/*.sh;
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: TF2
+  - CmdLine:
+    - if [ "$SKIP_STEAMCMD" = true ] ; then         echo "\n\nSkipping SteamCMD install
+      -- using only contents from steamcmd-cache\n\n";     else         echo "\n\nDownloading
+      TF2 Dedicated Server via SteamCMD";         /app/steamcmd/steamcmd.sh             +login
+      anonymous             +force_install_dir /app             +app_update 232250
+      validate             +quit;     fi;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo $'\n\nLinking steamclient.so to prevent srcds_run errors' &&        mkdir
+      -p /app/.steam/sdk32 &&        ln -s /app/bin/steamclient.so /app/.steam/sdk32/steamclient.so;
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  - Expression: USER root
+    Name: onbuild
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

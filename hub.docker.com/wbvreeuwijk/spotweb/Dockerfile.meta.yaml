@@ -1,0 +1,109 @@
+MetaArgs: null
+Stages:
+- BaseName: php:7.1.1-fpm-alpine
+  Commands:
+  - CmdLine:
+    - "apk add --no-cache --virtual .spotweb-rundeps \t\tnginx \t\tfreetype \t\tgd
+      \t\tgettext-libs \t\tgmp \t\tlibldap \t\tlibsasl \t\tmariadb-client \t\tpostgresql-libs
+      \t\tsupervisor \t\t&& { \t\t\techo 'pid /tmp/nginx.pid;'; \t\t\techo 'worker_processes
+      \ 1;'; \t\t\techo 'daemon off;'; \t\t\techo 'events {'; \t\t\techo '    worker_connections
+      \ 1024;'; \t\t\techo '}'; \t\t\techo 'http {'; \t\t\techo '    include       mime.types;';
+      \t\t\techo '    default_type  application/octet-stream;'; \t\t\techo '    sendfile
+      \       on;'; \t\t\techo '    keepalive_timeout  65;'; \t\t\techo 'server {';
+      \t\t\techo '\tlisten 80;'; \t\t\techo; \t\t\techo '\troot /var/www/html;'; \t\t\techo
+      '\tindex index.php index.html index.htm;'; \t\t\techo ''; \t\t\techo '\tlocation
+      / {'; \t\t\techo '\t\ttry_files $uri $uri/ /index.php;'; \t\t\techo '\t}'; \t\t\techo
+      ''; \t\t\techo '\tlocation = / {'; \t\t\techo '\t\trewrite ^ /spotweb/ permanent;';
+      \t\t\techo '\t}'; \t\t\techo; \t\t\techo '\tlocation /doc/ {'; \t\t\techo '\t\talias
+      /usr/share/doc/;'; \t\t\techo '\t\tautoindex on;'; \t\t\techo '\t\tallow 127.0.0.1;';
+      \t\t\techo '\t\tallow ::1;'; \t\t\techo '\t\tdeny all;'; \t\t\techo '\t}'; \t\t\techo;
+      \t\t\techo '\tlocation /spotweb {'; \t\t\techo '\t\tif ($uri !~ \"api/\"){';
+      \t\t\techo '\t\t\trewrite api/?$ /spotweb/index.php?page=newznabapi last;';
+      \t\t\techo '\t\t}'; \t\t\techo '\t}'; \t\t\techo; \t\t\techo '\tlocation ~ \\.php$
+      {'; \t\t\techo '\t\tfastcgi_split_path_info ^(.+\\.php)(/.+)$;'; \t\t\techo
+      '\t\tfastcgi_pass localhost:9000;'; \t\t\techo '\t\tfastcgi_index index.php;';
+      \t\t\techo '\t\tfastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;';
+      \t\t\techo '\t\tinclude fastcgi_params;'; \t\t\techo '\t}'; \t\t\techo; \t\t\techo
+      '\tlocation ~ /\\.ht {'; \t\t\techo '\t\tdeny all;'; \t\t\techo '\t}'; \t\t\techo
+      '}'; \t\t\techo; \t\t\techo '}'; \t\t} | tee /etc/nginx/nginx.conf"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apk add --no-cache --virtual .spotweb-builddeps \t\tgmp-dev \t\tgettext-dev
+      \t\tfreetype-dev \t\tlibpng-dev \t\tlibjpeg-turbo-dev \t\tpostgresql-dev \t&&
+      docker-php-ext-configure gd \t\t--with-freetype-dir=/usr/include/ \t\t--with-jpeg-dir=/usr/include/
+      \t&& docker-php-ext-install \t\tpdo \t\tpdo_mysql \t\tpdo_pgsql \t\tmbstring
+      \t\tgd \t\tzip \t\tgettext \t\tgmp \t\tbcmath \t\topcache \t&& apk del .spotweb-builddeps
+      \t&& { \t\techo 'date.timezone=Europe/Amsterdam'; \t\techo 'memory_limit=256M'
+      ; \t} | tee /usr/local/etc/php/conf.d/spotweb.ini && \t{ \t\techo 'opcache.memory_consumption=128';
+      \t\techo 'opcache.interned_strings_buffer=8'; \t\techo 'opcache.max_accelerated_files=4000';
+      \t\techo 'opcache.revalidate_freq=60'; \t\techo 'opcache.fast_shutdown=1'; \t\techo
+      'opcache.enable_cli=1'; \t} | tee /usr/local/etc/php/conf.d/opcache.ini"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "echo '0 * * * * (. /root/profile.sh && cd /var/www/html/spotweb && /usr/local/bin/php
+      retrieve.php) > /dev/null 2>&1' | crontab - \t&& { \t\techo 'export MYSQL_PORT_3306_TCP_ADDR=$MYSQL_PORT_3306_TCP_ADDR';
+      \t\techo 'export MYSQL_ENV_MYSQL_DATABASE=$MYSQL_ENV_MYSQL_DATABASE'; \t\techo
+      'export MYSQL_ENV_MYSQL_USER=$MYSQL_ENV_MYSQL_USER'; \t\techo 'export MYSQL_ENV_MYSQL_PASSWORD=$MYSQL_ENV_MYSQL_PASSWORD'
+      ; \t} | tee /root/profile.sh \t&& chmod 700 /root/profile.sh"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "{ \techo '[supervisord]'; \techo 'nodaemon=true' ; \techo; \techo '[program:cron]';
+      \techo 'command=/usr/sbin/crond -f'; \techo; \techo '[program:php-fpm]'; \techo
+      'command=/usr/local/sbin/php-fpm'; \techo; \techo '[program:nginx]'; \techo
+      'command=/usr/sbin/nginx'; \t} | tee /etc/supervisord.conf"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apk add --no-cache --virtual .spotweb-deploydeps git \t&& git clone https://github.com/spotweb/spotweb.git
+      /var/www/html/spotweb \t&& mkdir -m777 /var/www/html/spotweb/cache \t&& { \t\techo
+      '<?php'; \t\techo '$dbsettings[\"engine\"] = \"mysql\";'; \t\techo '$dbsettings[\"host\"]
+      = getenv(\"MYSQL_PORT_3306_TCP_ADDR\");'; \t\techo '$dbsettings[\"dbname\"]
+      = getenv(\"MYSQL_ENV_MYSQL_DATABASE\");'; \t\techo '$dbsettings[\"user\"] =
+      getenv(\"MYSQL_ENV_MYSQL_USER\");'; \t\techo '$dbsettings[\"pass\"] = getenv(\"MYSQL_ENV_MYSQL_PASSWORD\");';
+      \t\techo '?>'; \t\t} | tee /var/www/html/spotweb/dbsettings.inc.php \t&& apk
+      del .spotweb-deploydeps \t&& { \t\techo '#!/bin/sh'; \t\techo; \t\techo 'MYSQL=\"mysql
+      -h${MYSQL_PORT_3306_TCP_ADDR} -u${MYSQL_ENV_MYSQL_USER} -p${MYSQL_ENV_MYSQL_PASSWORD}
+      ${MYSQL_ENV_MYSQL_DATABASE} -s\"'; \t\techo; \t\techo 'echo \"Check if db is
+      online ...\"'; \t\techo 'while [ 1 ]; do'; \t\techo '  echo \"select 1\" | $MYSQL
+      > /dev/null 2>&1 && break'; \t\techo '  echo \"Retrying ...\"'; \t\techo '  sleep
+      1'; \t\techo 'done'; \t\techo; \t\techo 'echo \"Db is online\"'; \t\techo '#
+      Check if tables exists and create them if not'; \t\techo 'echo \"select count(*)
+      from settings\" | $MYSQL > /dev/null 2>&1'; \t\techo 'retval=$?'; \t\techo 'if
+      [ $retval == 1 ]; then'; \t\techo '   echo \"Initializing database\"'; \t\techo
+      '   # Run upgrade-db.php twice to update global options ...'; \t\techo '   /usr/local/bin/php
+      /var/www/html/spotweb/bin/upgrade-db.php'; \t\techo '   /usr/local/bin/php /var/www/html/spotweb/bin/upgrade-db.php
+      --reset-password admin'; \t\techo; \t\techo '   echo \"update settings set value
+      = \\\"http://jijhaatmij.hopto.me/blacklist.txt\\\" where name = \\\"blacklist_url\\\"\"
+      | $MYSQL'; \t\techo '   echo \"update settings set value = \\\"http://jijhaatmij.hopto.me/whitelist.txt\\\"
+      where name = \\\"whitelist_url\\\"\" | $MYSQL'; \t\techo '   echo \"update settings
+      set value = 1 where name = \\\"external_blacklist\\\" or name = \\\"external_whitelist\\\"\"
+      | $MYSQL'; \t\techo 'else'; \t\techo '   echo \"Database already exists\"';
+      \t\techo '   /usr/local/bin/php /var/www/html/spotweb/bin/upgrade-db.php'; \t\techo
+      'fi'; \t\techo; \t\techo 'exit 0'; \t} | tee /root/init_db.sh \t&& chmod +x
+      /root/init_db.sh"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "{ \techo '#!/bin/sh'; \techo '/root/init_db.sh'; \techo 'chown -R www-data:
+      /var/www/html/spotweb/cache'; \techo '/usr/bin/supervisord'; \t} | tee /entrypoint.sh
+      \t&& chmod +x /entrypoint.sh"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/www/html/spotweb/cache
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:7.1.1-fpm-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.1.1-fpm-alpine

@@ -1,0 +1,124 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: spritsail/debian-builder
+  Commands:
+  - Key: ARCH
+    Name: arg
+    Value: x86_64
+  - Key: ARCH_ALT
+    Name: arg
+    Value: i686
+  - Key: GLIBC_VER
+    Name: arg
+    Value: "2.27"
+  - Key: BUSYB_VER
+    Name: arg
+    Value: 1.28.1
+  - Key: SU_EXEC_VER
+    Name: arg
+    Value: v0.3
+  - Key: TINI_VER
+    Name: arg
+    Value: v0.17.0
+  - Key: PREFIX
+    Name: arg
+    Value: /output
+  - Name: workdir
+    Path: $PREFIX
+  - CmdLine:
+    - mkdir -p dev etc home proc root tmp usr/{bin,lib/pkgconfig,lib32} var &&     ln
+      -sv usr/lib lib64 &&     ln -sv usr/lib lib &&     ln -sv usr/bin bin &&     ln
+      -sv usr/bin sbin &&     ln -sv bin usr/sbin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fL https://github.com/frebib/su-exec/releases/download/${SU_EXEC_VER}/su-exec-x86_64
+      > sbin/su-exec &&     curl -fL https://github.com/krallin/tini/releases/download/${TINI_VER}/tini-amd64
+      > sbin/tini &&     chmod +x sbin/su-exec sbin/tini
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/glibc/build
+  - CmdLine:
+    - apt install -y bison &&     curl -fL https://ftp.gnu.org/gnu/glibc/glibc-${GLIBC_VER}.tar.xz         |
+      tar xJ --strip-components=1 -C .. &&         echo "slibdir=/usr/lib" >> configparms
+      &&     echo "rtlddir=/usr/lib" >> configparms &&     echo "sbindir=/bin" >>
+      configparms &&     echo "rootsbindir=/sbin" >> configparms &&     echo "build-programs=yes"
+      >> configparms &&         ../configure         --prefix=/usr         --libdir=/usr/lib         --libexecdir=/usr/lib         --enable-add-ons         --enable-obsolete-rpc         --enable-kernel=3.10.0         --enable-bind-now         --disable-profile         --enable-stackguard-randomization         --enable-stack-protector=strong         --enable-lock-elision         --enable-multi-arch         --disable-werror
+      &&     make -j "$(nproc)" &&     make -j "$(nproc)" install_root="$(pwd)/out"
+      install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip -s out/sbin/ldconfig &&     sed -i '1s/.*/#!\/bin\/sh/' out/usr/bin/ldd
+      &&     sed -i 's/lib64/lib/g' out/usr/bin/ldd &&     cp -d out/usr/lib/*.so*
+      "${PREFIX}/usr/lib" &&     cp -d out/usr/bin/ldd "${PREFIX}/bin" &&     cp -d
+      out/sbin/ldconfig "${PREFIX}/sbin" &&         echo /usr/lib32 > "${PREFIX}/etc/ld.so.conf"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/busybox
+  - CmdLine:
+    - curl -fL https://busybox.net/downloads/busybox-${BUSYB_VER}.tar.bz2         |
+      tar xj --strip-components=1 &&     make defconfig &&     make -j "$(nproc)"
+      &&     cp busybox "${PREFIX}/bin" &&     ./busybox --list-full | xargs -i ln
+      -s /bin/busybox "${PREFIX}/{}"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $PREFIX
+  - CmdLine:
+    - ${PREFIX}/sbin/ldconfig -r ${PREFIX} &&     cp /usr/share/zoneinfo/Etc/UTC etc/
+    Name: run
+    PrependShell: true
+  From:
+    Image: spritsail/debian-builder
+  Name: builder
+  Platform: ""
+  SourceCode: FROM spritsail/debian-builder as builder
+- BaseName: scratch
+  Commands:
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /output/
+    - /
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - skel/*
+    - /etc/
+  - CmdLine:
+    - chmod 1777 /tmp
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://gist.githubusercontent.com/frebib/2b4ba154a9d62b31b1edcb50477e7f01/raw/647c3f8ee4dc7e325cd41f40fe47735f75a7f607/ppwd.sh
+    - /usr/bin/ppwd
+  - CmdLine:
+    - chmod 755 /usr/bin/ppwd
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ENV
+      Value: '"/etc/profile"'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /usr/local/sbin:/usr/local/bin:/usr/bin
+    Name: env
+  - CmdLine:
+    - /bin/sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

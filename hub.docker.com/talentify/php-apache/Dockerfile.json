@@ -1,0 +1,224 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "base",
+      "BaseName": "talentify/phalcon-framework:3.3-php-7.1-apache-stretch",
+      "SourceCode": "FROM talentify/phalcon-framework:3.3-php-7.1-apache-stretch AS base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Image": "talentify/phalcon-framework:3.3-php-7.1-apache-stretch"
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "version",
+              "Value": "\"1.0.0\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Labels": [
+            {
+              "Key": "description",
+              "Value": "\"Image for Flux application.\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get install -y         libcurl3         libfreetype6-dev         libjpeg62-turbo-dev         libpng-dev         libyaml-dev         mysql-client         ssl-cert         libxml2-dev         librabbitmq-dev         libssh-dev         \u0026\u0026 docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/         \u0026\u0026 docker-php-ext-install -j$(nproc) gd         \u0026\u0026 docker-php-ext-install mysqli         pdo_mysql         soap         \u0026\u0026 pecl install redis         yaml         mailparse         amqp         \u0026\u0026 docker-php-ext-enable redis         yaml         mailparse         amqp"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "a2enmod rewrite ssl"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "www-data",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "sites-enable/*",
+            "/etc/apache2/sites-enabled/"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "443"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "FLUX_USER",
+              "Value": "flux"
+            },
+            {
+              "Key": "FLUX_GROUP",
+              "Value": "flux"
+            },
+            {
+              "Key": "FLUX_USER_ID",
+              "Value": "1000"
+            },
+            {
+              "Key": "FLUX_USER_GID",
+              "Value": "1000"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "APACHE_RUN_USER",
+              "Value": "flux"
+            },
+            {
+              "Key": "APACHE_RUN_GROUP",
+              "Value": "flux"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "set -eux; \tapt-get update; \tapt-get install -y gosu; \trm -rf /var/lib/apt/lists/*; \tgosu nobody true"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "flux-entrypoint",
+            "/usr/local/bin"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "flux-run",
+            "/usr/local/bin"
+          ]
+        },
+        {
+          "CmdLine": [
+            "flux-entrypoint"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "CmdLine": [
+            "apache2-foreground"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        },
+        {
+          "Name": "workdir",
+          "Path": "/var/www/"
+        }
+      ]
+    },
+    {
+      "Name": "development",
+      "BaseName": "base",
+      "SourceCode": "FROM base AS development",
+      "Platform": "",
+      "As": "development",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "mv \"$PHP_INI_DIR/php.ini-development\" \"$PHP_INI_DIR/php.ini\" \u0026\u0026    pecl config-set php_ini \"$PHP_INI_DIR/php.ini\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "xdebug.ini",
+            "/tmp"
+          ]
+        },
+        {
+          "CmdLine": [
+            "pecl install xdebug-2.6.0         \u0026\u0026 docker-php-ext-enable xdebug         \u0026\u0026 cat /tmp/xdebug.ini | grep -v '^#' \u003e\u003e \"$PHP_INI_DIR/conf.d/docker-php-ext-xdebug.ini\"         \u0026\u0026 rm /tmp/xdebug.ini"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "composer:latest",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/bin/composer",
+            "/usr/bin/composer"
+          ]
+        },
+        {
+          "CmdLine": [
+            "flux-run composer global require hirak/prestissimo"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "ci",
+      "BaseName": "base",
+      "SourceCode": "FROM base AS ci",
+      "Platform": "",
+      "As": "ci",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update     \u0026\u0026 apt-get install --assume-yes gnupg     \u0026\u0026 curl -sL https://deb.nodesource.com/setup_9.x | bash -"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "apt-get install ruby-dev rubygems     git     nodejs     python-dev python-pip    ssh sshpass     zip --assume-yes     \u0026\u0026 gem update --system     \u0026\u0026 gem install sass --no-user-install     \u0026\u0026 npm install -g grunt-cli     \u0026\u0026 pip install awsebcli --upgrade     \u0026\u0026 curl -sOL https://github.com/jwilder/dockerize/releases/download/v0.6.1/dockerize-linux-amd64-v0.6.1.tar.gz     \u0026\u0026 tar -C /usr/local/bin -xzvf dockerize-linux-amd64-v0.6.1.tar.gz     \u0026\u0026 rm dockerize-linux-amd64-v0.6.1.tar.gz"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    }
+  ]
+}

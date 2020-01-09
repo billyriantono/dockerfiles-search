@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:stretch-slim
+  Commands:
+  - CmdLine:
+    - "set -ex \t&& apt-get update \t&& apt-get install -qq --no-install-recommends
+      ca-certificates dirmngr gpg wget"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: BITCOIN_VERSION
+      Value: 0.18.0
+    Name: env
+  - Env:
+    - Key: BITCOIN_URL
+      Value: https://bitcoincore.org/bin/bitcoin-core-$BITCOIN_VERSION/bitcoin-$BITCOIN_VERSION-x86_64-linux-gnu.tar.gz
+    - Key: BITCOIN_SHA256
+      Value: 5146ac5310133fbb01439666131588006543ab5364435b748ddfc95a8cb8d63f
+    - Key: BITCOIN_ASC_URL
+      Value: https://bitcoincore.org/bin/bitcoin-core-$BITCOIN_VERSION/SHA256SUMS.asc
+    - Key: BITCOIN_PGP_KEY
+      Value: 01EA5486DE18A882D4C2684590C8019E36C2E964
+    Name: env
+  - CmdLine:
+    - "set -ex \t&& cd /tmp \t&& wget -qO bitcoin.tar.gz \"$BITCOIN_URL\" \t&& echo
+      \"$BITCOIN_SHA256 bitcoin.tar.gz\" | sha256sum -c - \t&& gpg --no-tty --keyserver
+      keyserver.ubuntu.com --recv-keys \"$BITCOIN_PGP_KEY\" \t&& wget -qO bitcoin.asc
+      \"$BITCOIN_ASC_URL\" \t&& gpg --verify bitcoin.asc \t&& tar -xzvf bitcoin.tar.gz
+      -C /usr/local --strip-components=1 --exclude=*-qt"
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim as builder
+- BaseName: debian:stretch-slim
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/bitcoind
+    - /usr/local/bin/bitcoin-cli
+    - /usr/local/bin/
+  - CmdLine:
+    - "groupadd -r bitcoin && useradd -r -m -g bitcoin bitcoin \t&& ln -s /usr/local/bin/bitcoin-cli
+      /usr/local/bin/c"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: BITCOIN_DATA
+      Value: /data
+    Name: env
+  - CmdLine:
+    - "mkdir \"$BITCOIN_DATA\" \t&& chown -R bitcoin:bitcoin \"$BITCOIN_DATA\" \t&&
+      ln -sfn \"$BITCOIN_DATA\" /home/bitcoin/.bitcoin \t&& chown -h bitcoin:bitcoin
+      /home/bitcoin/.bitcoin"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /entrypoint.sh
+  - Name: user
+    User: bitcoin
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - bitcoind
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

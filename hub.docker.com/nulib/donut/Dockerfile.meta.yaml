@@ -1,0 +1,189 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: ruby:2.4.4-slim-jessie
+  Commands:
+  - Labels:
+    - Key: edu.northwestern.library.app
+      Value: DONUT
+    - Key: edu.northwestern.library.role
+      Value: support
+    Name: label
+  - Env:
+    - Key: BUILD_DEPS
+      Value: '"build-essential libpq-dev libsqlite3-dev tzdata locales git curl unzip"'
+    - Key: DEBIAN_FRONTEND
+      Value: '"noninteractive"'
+    - Key: RAILS_ENV
+      Value: '"production"'
+    - Key: LANG
+      Value: '"en_US.UTF-8"'
+    - Key: FITS_VERSION
+      Value: '"1.0.5"'
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://s3.amazonaws.com/nul-repo-deploy/ffmpeg-release-64bit-static.tar.xz
+    - /tmp
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://s3.amazonaws.com/nul-repo-deploy/fits-${FITS_VERSION}.zip
+    - /tmp
+  - CmdLine:
+    - useradd -m -U app &&     su -s /bin/bash -c "mkdir -p /home/app/current" app
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update -qq &&     apt-get install -y $BUILD_DEPS --no-install-recommends
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dpkg-reconfigure -f noninteractive tzdata &&     sed -i -e 's/# en_US.UTF-8
+      UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen &&     echo 'LANG="en_US.UTF-8"'>/etc/default/locale
+      &&     dpkg-reconfigure --frontend=noninteractive locales &&     update-locale
+      LANG=en_US.UTF-8 &&         mkdir -p /tmp/stage/bin &&         mkdir -p /tmp/ffmpeg
+      &&     cd /tmp/ffmpeg &&     tar xJf /tmp/ffmpeg-release-64bit-static.tar.xz
+      &&     cp `find . -type f -executable` /tmp/stage/bin/ &&         cd /tmp/stage
+      &&     unzip -o /tmp/fits-${FITS_VERSION}.zip
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/app/current
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gemfile
+    - /home/app/current/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gemfile.lock
+    - /home/app/current/
+  - CmdLine:
+    - chown -R app:app /home/app/current &&     su -c "bundle install --jobs 20 --retry
+      5 --with aws:postgres --without development:test --path vendor/gems" app &&     rm
+      -rf vendor/gems/ruby/*/cache/* vendor/gems/ruby/*/bundler/gems/*/.git
+    Name: run
+    PrependShell: true
+  From:
+    Image: ruby:2.4.4-slim-jessie
+  Name: base
+  Platform: ""
+  SourceCode: FROM ruby:2.4.4-slim-jessie as base
+- As: app
+  BaseName: ruby:2.4.4-slim-jessie
+  Commands:
+  - Labels:
+    - Key: edu.northwestern.library.app
+      Value: DONUT
+    - Key: edu.northwestern.library.role
+      Value: app
+    Name: label
+  - CmdLine:
+    - useradd -m -U app &&     su -s /bin/bash -c "mkdir -p /home/app/current/vendor/gems"
+      app
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: RUNTIME_DEPS
+      Value: '"clamav imagemagick libexif12 libexpat1 libgif4 glib-2.0 libgsf-1-114
+        libjpeg62-turbo libpng12-0 libpoppler-glib8 libpq5 libreoffice-core librsvg2-2
+        libsqlite3-0 libtiff5 locales nodejs openjdk-7-jre tzdata yarn"'
+    - Key: DEBIAN_FRONTEND
+      Value: '"noninteractive"'
+    - Key: RAILS_ENV
+      Value: '"production"'
+    - Key: LANG
+      Value: '"en_US.UTF-8"'
+    - Key: FITS_VERSION
+      Value: '"1.0.5"'
+    Name: env
+  - CmdLine:
+    - apt-get update -qq &&     apt-get install -y curl gnupg2 --no-install-recommends
+      &&     curl -sL https://deb.nodesource.com/setup_10.x | bash - &&     curl -sS
+      https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - &&     echo "deb http://dl.yarnpkg.com/debian/
+      stable main" | tee /etc/apt/sources.list.d/yarn.list &&     apt-get update -qq
+      &&     apt-get install -y $RUNTIME_DEPS --no-install-recommends &&     apt-get
+      clean -y &&     rm -rf /var/lib/apt/lists/* &&     alias nodejs=node &&     yarn
+      add webpack
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dpkg-reconfigure -f noninteractive tzdata &&     sed -i -e 's/# en_US.UTF-8
+      UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen &&     echo 'LANG="en_US.UTF-8"'>/etc/default/locale
+      &&     dpkg-reconfigure --frontend=noninteractive locales &&     update-locale
+      LANG=en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp &&     curl -O https://s3.amazonaws.com/nul-repo-deploy/vips_8.6.3-1_amd64.deb
+      &&     dpkg -i /tmp/vips_8.6.3-1_amd64.deb &&     rm /tmp/vips_8.6.3-1_amd64.deb
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: base
+    Name: copy
+    SourcesAndDest:
+    - /tmp/stage/bin/*
+    - /usr/local/bin/
+  - Chown: ""
+    From: base
+    Name: copy
+    SourcesAndDest:
+    - /tmp/stage/fits-${FITS_VERSION}
+    - /usr/local/fits
+  - Chown: ""
+    From: base
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bundle
+    - /usr/local/bundle
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /home/app/current/
+  - CmdLine:
+    - chown -R app:staff /usr/local/bundle &&     chown -R app:app /home/app/current
+      &&     mkdir /var/log/puma && chown root:app /var/log/puma && chmod 0775 /var/log/puma
+      &&     mkdir /var/run/puma && chown root:app /var/run/puma && chmod 0775 /var/run/puma
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  - Name: workdir
+    Path: /home/app/current
+  - Chown: ""
+    From: base
+    Name: copy
+    SourcesAndDest:
+    - /home/app/current/vendor/gems/
+    - /home/app/current/vendor/gems/
+  - CmdLine:
+    - bundle exec rake assets:precompile SECRET_KEY_BASE=$(ruby -r 'securerandom'
+      -e 'puts SecureRandom.hex(64)')
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - bin/boot_container
+    Name: cmd
+    PrependShell: true
+  - Health:
+      StartPeriod: 60000000000
+      Test:
+      - CMD-SHELL
+      - curl -f http://localhost:3000/
+    Name: healthcheck
+  From:
+    Image: ruby:2.4.4-slim-jessie
+  Name: app
+  Platform: ""
+  SourceCode: FROM ruby:2.4.4-slim-jessie as app

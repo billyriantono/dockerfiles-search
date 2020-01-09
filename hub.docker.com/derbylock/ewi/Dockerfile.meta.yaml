@@ -1,0 +1,129 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.13
+  Commands:
+  - CmdLine:
+    - go version
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server/ewi-server/*.go
+    - /go/src/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server/ewi-server/*.mod
+    - /go/src/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server/ewi-server/*.sum
+    - /go/src/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server/ewi-server/vendor
+    - /go/src/vendor
+  - Name: workdir
+    Path: /go/src/
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod vendor -a -o app .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/lib/ewi-server/repo
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.13 AS builder
+- As: build-deps
+  BaseName: node:11.10.1
+  Commands:
+  - Key: EWI_SERVER_PATH
+    Name: arg
+    Value: http://localhost:8888/
+  - Name: workdir
+    Path: /usr/src/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ui/ewi-ui/package.json
+    - ui/ewi-ui/yarn.lock
+    - ./
+  - CmdLine:
+    - yarn
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ui/ewi-ui/src
+    - ./src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ui/ewi-ui/public
+    - ./public
+  - CmdLine:
+    - REACT_APP_EWI_SERVER_PATH="${EWI_SERVER_PATH}" yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:11.10.1
+  Name: build-deps
+  Platform: ""
+  SourceCode: FROM node:11.10.1 as build-deps
+- BaseName: alpine:3.10.2
+  Commands:
+  - CmdLine:
+    - apk --no-cache add ca-certificates
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/app
+    - .
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /var/lib/ewi-server/repo
+    - /var/lib/ewi-server/repo
+  - Name: volume
+    Volumes:
+    - /var/lib/ewi-server/repo
+  - Chown: ""
+    From: build-deps
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/build
+    - /var/lib/ewi-server/static
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - ./app
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.10.2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10.2

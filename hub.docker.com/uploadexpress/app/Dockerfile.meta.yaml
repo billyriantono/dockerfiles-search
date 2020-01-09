@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- As: build-backend
+  BaseName: golang:1.12
+  Commands:
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/uploadexpress/app/
+  - Name: workdir
+    Path: /go/src/github.com/uploadexpress/app/
+  - CmdLine:
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o main ./cmd/server/main.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12
+  Name: build-backend
+  Platform: ""
+  SourceCode: FROM golang:1.12 as build-backend
+- As: build-frontend
+  BaseName: node:latest
+  Commands:
+  - Name: workdir
+    Path: /usr/src/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - www/package.json
+    - www/yarn.lock
+    - ./
+  - CmdLine:
+    - yarn
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./www
+    - ./
+  - CmdLine:
+    - yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:latest
+  Name: build-frontend
+  Platform: ""
+  SourceCode: FROM node:latest as build-frontend
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk update && apk add ca-certificates && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: build-backend
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/uploadexpress/app/main
+    - .
+  - Chown: ""
+    From: build-backend
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/uploadexpress/app/templates
+    - ./templates
+  - Chown: ""
+    From: build-frontend
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/build
+    - ./front
+  - Name: expose
+    Ports:
+    - "4000"
+  - CmdLine:
+    - chmod +x ./main
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./main
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Env:
+    - Key: HORIZON_VERSION
+      Value: eb8599c75aebcbe2fbf89fba3a5d9e13a4402201
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - initial_balance_fix.patch
+    - /
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - healthcheck.patch
+    - /
+  - CmdLine:
+    - mkdir -p /go/src/github.com/stellar/     && apk add --no-cache git wget glide
+      mercurial gcc musl-dev ca-certificates     && git clone https://github.com/stellar/go.git
+      /go/src/github.com/stellar/go     && cd /go/src/github.com/stellar/go     &&
+      git checkout $HORIZON_VERSION     && git apply /initial_balance_fix.patch     &&
+      git apply /healthcheck.patch     && glide install     && go install github.com/stellar/go/services/bifrost
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -nv -O /usr/local/bin/confd     https://github.com/kelseyhightower/confd/releases/download/v0.14.0/confd-0.14.0-linux-amd64     &&
+      chmod +x /usr/local/bin/confd
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - initbifrost
+    - /go/src/github.com/stellar/initbifrost
+  - CmdLine:
+    - go get github.com/lib/pq     && go install github.com/stellar/initbifrost
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- BaseName: alpine:latest
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - confd
+    - /etc/confd
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/bifrost
+    - /go/bin/bifrost
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/initbifrost
+    - /go/bin/initbifrost
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/stellar/go/services/bifrost/database/migrations/01_init.sql
+    - /go/src/github.com/stellar/go/services/bifrost/database/migrations/01_init.sql
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/confd
+    - /usr/local/bin/confd
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - entry.sh
+    - /entry.sh
+  - CmdLine:
+    - chmod +x /entry.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entry.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "8000"
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

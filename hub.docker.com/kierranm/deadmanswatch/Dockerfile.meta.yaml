@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.10
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"kierranm@gmail.com"'
+    - Key: description
+      Value: '"Forwards prometheus DeadMansSwitch alerts to CloudWatch"'
+    - Key: version
+      Value: '"0.0.2"'
+    Name: label
+  - CmdLine:
+    - useradd -u 10001 deadmanswatch
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH/src/github.com/KierranM/deadmanswatch
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./vendor
+    - $GOPATH/src/github.com/KierranM/deadmanswatch/vendor
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./main.go
+    - $GOPATH/src/github.com/KierranM/deadmanswatch/main.go
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./cmd
+    - $GOPATH/src/github.com/KierranM/deadmanswatch/cmd
+  - CmdLine:
+    - go test ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix nocgo -o /deadmanswatch
+      .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.10 AS builder
+- As: cacerts
+  BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk add --update ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: cacerts
+  Platform: ""
+  SourceCode: FROM alpine:latest AS cacerts
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /deadmanswatch
+    - ./
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/passwd
+    - /etc/passwd
+  - Chown: ""
+    From: cacerts
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Name: user
+    User: deadmanswatch
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - ./deadmanswatch
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

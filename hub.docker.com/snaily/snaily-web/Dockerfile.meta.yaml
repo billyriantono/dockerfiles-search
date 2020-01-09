@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12.4-alpine3.9
+  Commands:
+  - CmdLine:
+    - mkdir /user &&     echo 'nobody:x:65534:65534:nobody:/:' > /user/passwd &&     echo
+      'nobody:x:65534:' > /user/group
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache ca-certificates git
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.4-alpine3.9
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12.4-alpine3.9 as builder
+- As: builder2
+  BaseName: builder
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: builder
+  Name: builder2
+  Platform: ""
+  SourceCode: FROM builder as builder2
+- As: builder3
+  BaseName: builder2
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app .
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: builder2
+  Name: builder3
+  Platform: ""
+  SourceCode: FROM builder2 as builder3
+- As: final
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder3
+    Name: copy
+    SourcesAndDest:
+    - /user/group
+    - /user/passwd
+    - /etc/
+  - Chown: ""
+    From: builder3
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: builder3
+    Name: copy
+    SourcesAndDest:
+    - /src/app
+    - /app
+  - Name: user
+    User: nobody:nobody
+  - CmdLine:
+    - /app
+    - -addrToProxy=http://snaily-static:80
+    - -pgport=5432
+    - -pghost=spg
+    - -nsqd=nsq_nsqd:4150
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: final
+  Platform: ""
+  SourceCode: FROM scratch as final

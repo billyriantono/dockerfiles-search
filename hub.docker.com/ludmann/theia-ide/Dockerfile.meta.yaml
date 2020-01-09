@@ -1,0 +1,91 @@
+MetaArgs:
+- DefaultValue: "10"
+  Key: NODE_VERSION
+  ProvidedValue: null
+  Value: "10"
+Stages:
+- BaseName: node:${NODE_VERSION}-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache make gcc g++ python
+    Name: run
+    PrependShell: true
+  - Key: THEIA_VERSION
+    Name: arg
+    Value: latest
+  - Name: workdir
+    Path: /opt/theia
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - ./package.json
+  - CmdLine:
+    - sed -i "s/THEIA_VERSION/$THEIA_VERSION/g" ./package.json
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn --pure-lockfile &&     NODE_OPTIONS="--max_old_space_size=4096" yarn theia
+      build &&     yarn --production &&     yarn autoclean --init &&     echo *.ts
+      >> .yarnclean &&     echo *.ts.map >> .yarnclean &&     echo *.spec.* >> .yarnclean
+      &&     yarn autoclean --force &&     yarn cache clean
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:${NODE_VERSION}-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:${NODE_VERSION}-alpine
+- BaseName: node:${NODE_VERSION}-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git openssh bash tini curl
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/theia
+  - CmdLine:
+    - mkdir /workspace &&     chown -R node:node /workspace &&     chown -R node:node
+      /opt/theia
+    Name: run
+    PrependShell: true
+  - Chown: node:node
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /opt/theia
+    - /opt/theia
+  - CmdLine:
+    - mkdir -p /opt/theia/plugins && cd /opt/theia/plugins &&     curl -sSLO https://github.com/redhat-developer/vscode-yaml/releases/download/0.5.3-beta/vscode-yaml.vsix
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HOME
+      Value: /home/node
+    - Key: SHELL
+      Value: /bin/bash
+    - Key: USE_LOCAL_GIT
+      Value: "true"
+    - Key: THEIA_DEFAULT_PLUGINS
+      Value: local-dir:/opt/theia/plugins
+    Name: env
+  - Name: expose
+    Ports:
+    - "3000"
+  - Name: user
+    User: node
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - node
+    - /opt/theia/src-gen/backend/main.js
+    - /workspace
+    - --hostname=0.0.0.0
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: node:${NODE_VERSION}-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:${NODE_VERSION}-alpine

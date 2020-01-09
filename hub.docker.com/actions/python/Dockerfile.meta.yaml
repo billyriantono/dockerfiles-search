@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: ubuntu:bionic
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: "3.7"
+  - Key: REQUIRED_PACKAGES
+    Name: arg
+    Value: '"python${VERSION}-minimal libpython${VERSION}-minimal libpython${VERSION}-stdlib"'
+  - Env:
+    - Key: ROOTFS
+      Value: /build/rootfs
+    Name: env
+  - Env:
+    - Key: BUILD_DEBS
+      Value: /build/debs
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - bash -c 'mkdir -p ${BUILD_DEBS} ${ROOTFS}/{usr/local/bin}'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -Rv 100:root $BUILD_DEBS
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update   && cd ${BUILD_DEBS}   && for pkg in $REQUIRED_PACKAGES; do        apt-get
+      download $pkg          && apt-cache depends --recurse --no-recommends --no-suggests
+      --no-conflicts --no-breaks --no-replaces --no-enhances --no-pre-depends -i $pkg
+      | grep '^[a-zA-Z0-9]' | xargs apt-get download ;      done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ "x$(ls ${BUILD_DEBS}/)" = "x" ]; then       echo No required packages specified;     else       for
+      pkg in ${BUILD_DEBS}/*.deb; do         echo Unpacking $pkg;         dpkg -x
+      $pkg ${ROOTFS};       done;     fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s python${VERSION} ${ROOTFS}/usr/bin/python3
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - ${ROOTFS}/usr/local/bin/entrypoint.sh
+  - CmdLine:
+    - chmod +x ${ROOTFS}/usr/local/bin/entrypoint.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:bionic
+  Name: build
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic as build
+- BaseName: actions/bash:4.4.18-1
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: = "ilja+docker@bobkevic.com"
+    Name: label
+  - Key: ROOTFS
+    Name: arg
+    Value: /build/rootfs
+  - Env:
+    - Key: LC_ALL
+      Value: C.UTF-8
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - ${ROOTFS}
+    - /
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: actions/bash:4.4.18-1
+  Name: ""
+  Platform: ""
+  SourceCode: FROM actions/bash:4.4.18-1

@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:stable-20181112
+  Commands:
+  - CmdLine:
+    - apt-get update  && apt-get install -y curl=7.52.1-5+deb9u8
+    Name: run
+    PrependShell: true
+  - Key: VERSION
+    Name: arg
+    Value: 1.4.197
+  - CmdLine:
+    - curl "http://central.maven.org/maven2/com/h2database/h2/${VERSION}/h2-${VERSION}.jar"
+      -o /opt/h2.jar
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stable-20181112
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:stable-20181112 as builder
+- BaseName: openjdk:8u181-jdk-alpine3.8
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Sylvain Brocard sbrocard@enovacom.fr"'
+    Name: label
+  - CmdLine:
+    - addgroup -S h2 && adduser -S -G h2 h2
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: h2
+  - CmdLine:
+    - mkdir /home/h2/data
+    Name: run
+    PrependShell: true
+  - Chown: h2:h2
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/h2.jar
+    - /home/h2/h2.jar
+  - Name: expose
+    Ports:
+    - "9092"
+  - Name: volume
+    Volumes:
+    - /home/h2/data
+  - Env:
+    - Key: JAVA_TOOL_OPTIONS
+      Value: '"-Xms16m -Xmx128m"'
+    Name: env
+  - Health:
+      Interval: 10000000000
+      StartPeriod: 60000000000
+      Test:
+      - CMD-SHELL
+      - nc -z localhost 9092 || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - java
+    - -server
+    - -XX:+UnlockExperimentalVMOptions
+    - -XX:+UseCGroupMemoryLimitForHeap
+    - -cp
+    - /home/h2/h2.jar
+    - org.h2.tools.Server
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -tcp
+    - -tcpAllowOthers
+    - -tcpPort
+    - "9092"
+    - -baseDir
+    - /home/h2/data
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8u181-jdk-alpine3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8u181-jdk-alpine3.8

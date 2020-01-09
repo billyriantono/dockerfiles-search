@@ -1,0 +1,171 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:10
+  Commands:
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -exo
+    - pipefail
+    - -c
+  - CmdLine:
+    - "apt-get update ;\tDEBIAN_FRONTEND=noninteractive apt-get install --no-install-{recommends,suggests}
+      -y \t\tapt-transport-https gnupg2 dirmngr ca-certificates ;\tapt-get clean ;\trm
+      -vrf /var/lib/apt/lists/* ;\tapt-key adv --fetch-keys \t\t'https://packages.icinga.com/icinga.key'
+      \t\t'https://repos.influxdata.com/influxdb.key' \t\t'https://packages.grafana.com/gpg.key'
+      ;\tDEBIAN_FRONTEND=noninteractive apt-get purge -y gnupg2 dirmngr ;\tDEBIAN_FRONTEND=noninteractive
+      apt-get autoremove --purge -y"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - apt-ext.list
+    - /etc/apt/sources.list.d/ext.list
+  - CmdLine:
+    - "apt-get update ;\tDEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends
+      --no-install-suggests -y \ticinga2-{bin,ido-mysql} dbconfig-no-thanks mariadb-server
+      \tapache2 icingaweb2{,-module-monitoring} php7.3-{intl,imagick,mysql,curl} locales
+      \tinfluxdb grafana git ;\tpushd /usr/share/icingaweb2/modules ;\tgit clone https://github.com/Mikesch-mp/icingaweb2-module-grafana.git
+      grafana ;\tpushd grafana ;\tgit checkout dfce2c20708442d558ee90c5c3287bbdf624c435
+      ;\trm -rf .git ;\tpopd ;\tpopd ;\tDEBIAN_FRONTEND=noninteractive apt-get purge
+      -y git ;\tDEBIAN_FRONTEND=noninteractive apt-get autoremove --purge -y ;\tapt-get
+      clean ;\trm -vrf /var/lib/apt/lists/* /etc/icinga2/conf.d/* /etc/icingaweb2/*
+      ;\ta2dissite 000-default ;\tperl -pi -e 's~//~~ if /const NodeName/' /etc/icinga2/constants.conf
+      ;\tperl -pi -e 's~//~~' /etc/icinga2/features-available/influxdb.conf ;\tperl
+      -pi -e 'if (!%locales) { %locales = (); for my $d (\"\", \"/modules/monitoring\")
+      { for my $f (glob \"/usr/share/icingaweb2${d}/application/locale/*_*\") { if
+      ($f =~ m~/(\\w+)$~) { $locales{$1} = undef } } } } s/^# ?// if (/ UTF-8$/ &&
+      /^# (\\w+)/ && exists $locales{$1})' /etc/locale.gen"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: grandmaster/nosu:latest
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/nosu
+    - /usr/local/bin/nosu
+  - CmdLine:
+    - "set -a; . /etc/default/icinga2; set +a ;\t/usr/lib/icinga2/prepare-dirs /etc/default/icinga2"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - install -m 755 -o mysql -g root -d /var/run/mysqld
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - grafana.ini
+    - /etc/grafana/
+  - CmdLine:
+    - install -o grafana -g grafana -d /var/run/grafana
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mysqld -u mysql & \tMYSQLD_PID=\"$!\" ;\twhile ! mysql <<<''; do sleep 1; done
+      ;\tmysql <<<\"CREATE DATABASE icinga2; USE icinga2; $(< /usr/share/icinga2-ido-mysql/schema/mysql.sql)
+      GRANT ALL ON icinga2.* TO nagios@localhost IDENTIFIED VIA unix_socket; GRANT
+      SELECT ON icinga2.* TO 'www-data'@localhost IDENTIFIED VIA unix_socket;\" ;\tkill
+      \"$MYSQLD_PID\" ;\twhile test -e \"/proc/$MYSQLD_PID\"; do sleep 1; done"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "bash -exo pipefail -c 'set -a; . /etc/default/influxdb; set +a; exec nosu influxdb
+      influxdb influxd -config /etc/influxdb/influxdb.conf $INFLUXD_OPTS' & \tINFLUXD_PID=\"$!\"
+      ;\twhile ! perl -e 'use IO::Socket; IO::Socket::INET->new(\"127.0.0.1:8086\")
+      or die $@'; do sleep 1; done ;\tperl -e 'use IO::Socket; for my $q (\"create+database+icinga2\",
+      \"create+user+icinga2+with+password+%27icinga2%27\", \"grant+all+on+icinga2+to+icinga2\")
+      { my $s = IO::Socket::INET->new(\"127.0.0.1:8086\") or die $@; $s->send(\"POST
+      /query?chunked=true&db=&epoch=ns&q=${q} HTTP/1.0\\r\\nHost: localhost:8086\\r\\nUser-Agent:
+      InfluxDBShell/1.0.2\\r\\nContent-Length: 0\\r\\n\\r\\n\") or die $@; sleep 1
+      }' ;\tkill \"$INFLUXD_PID\" ;\twhile test -e \"/proc/$INFLUXD_PID\"; do sleep
+      1; done"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "bash -exo pipefail -c 'cd /usr/share/grafana; set -a; . /etc/default/grafana-server;
+      set +a; exec nosu grafana grafana grafana-server \"--config=$CONF_FILE\" \"--pidfile=/var/run/grafana/grafana-server.pid\"
+      \"cfg:default.paths.logs=$LOG_DIR\" \"cfg:default.paths.data=$DATA_DIR\" \"cfg:default.paths.plugins=$PLUGINS_DIR\"
+      \"cfg:default.paths.provisioning=$PROVISIONING_CFG_DIR\"' & \tGRAFANA_PID=\"$!\"
+      ;\twhile ! perl -e 'use IO::Socket; IO::Socket::INET->new(\"127.0.0.1:3000\")
+      or die $@'; do sleep 1; done ;\tperl -e 'use IO::Socket; { local $/ = undef;
+      local @ARGV = (\"/usr/share/icingaweb2/modules/grafana/dashboards/influxdb/icinga2-default.json\");
+      $db1 = <> } for my $r ([\"datasources\", \"{\\\"name\\\":\\\"Icinga 2\\\",\\\"type\\\":\\\"influxdb\\\",\\\"url\\\":\\\"http://127.0.0.1:8086\\\",\\\"access\\\":\\\"proxy\\\",\\\"jsonData\\\":{},\\\"isDefault\\\":true,\\\"database\\\":\\\"icinga2\\\",\\\"user\\\":\\\"icinga2\\\",\\\"password\\\":\\\"icinga2\\\"}\"],
+      [\"dashboards/db\", \"{\\\"dashboard\\\":\".($db1 =~ s/\"\\$\\{DS_ICINGA2\\}\"/null/gr).\",\\\"folderId\\\":0,\\\"overwrite\\\":false}\"])
+      { my $s = IO::Socket::INET->new(\"127.0.0.1:3000\") or die $@; $s->send(\"POST
+      /api/\".${$r}[0].\" HTTP/1.0\\r\\nAccept: application/json\\r\\nContent-Type:
+      application/json\\r\\nContent-Length: \".length(${$r}[1]).\"\\r\\n\\r\\n\".${$r}[1])
+      or die $@; sleep 1 }' ;\tkill \"$GRAFANA_PID\" ;\twhile test -e \"/proc/$GRAFANA_PID\";
+      do sleep 1; done"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - icinga2-ido.conf
+    - /etc/icinga2/features-available/ido-mysql.conf
+  - CmdLine:
+    - "set -a; . /etc/default/icinga2; set +a ;\tfor f in command influxdb ido-mysql;
+      do icinga2 feature enable $f; done"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php-icingaweb2.ini
+    - /etc/php/7.3/apache2/conf.d/99-icingaweb2.ini
+  - Chown: www-data:icingaweb2
+    Name: add
+    SourcesAndDest:
+    - icingaweb2
+    - /etc/icingaweb2
+  - CmdLine:
+    - "install -o root -g icingaweb2 -m 02770 -d /var/log/icingaweb2 ;\tinstall -o
+      www-data -g icingaweb2 -m 02770 -d /etc/icingaweb2/enabledModules ;\tln -vs
+      /usr/share/icingaweb2/modules/monitoring /etc/icingaweb2/enabledModules/monitoring
+      ;\tln -vs /usr/share/icingaweb2/modules/grafana /etc/icingaweb2/enabledModules/grafana
+      ;\tlocale-gen -j 4"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - apache2-site.conf
+    - /etc/apache2/sites-available/check-plugins-demo.conf
+  - CmdLine:
+    - "mkdir -p /etc/apache2/sites-available/check-plugins-demo.d ;\ta2enmod proxy;
+      a2enmod proxy_http; a2ensite check-plugins-demo"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ochinchina/supervisord:latest
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/supervisord
+    - /usr/local/bin/supervisord
+  - CmdLine:
+    - mkdir -p /etc/supervisord/conf.d
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/supervisord/
+  - CmdLine:
+    - /usr/local/bin/supervisord
+    - -c
+    - /etc/supervisord/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:10

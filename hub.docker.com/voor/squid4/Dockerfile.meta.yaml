@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:bionic
+  Commands:
+  - CmdLine:
+    - cat /etc/apt/sources.list | grep -v '^#' | sed /^$/d | sort | uniq > sources.tmp.1
+      &&     cat /etc/apt/sources.list | sed s/deb\ /deb-src\ /g | grep -v '^#' |
+      sed /^$/d | sort | uniq > sources.tmp.2 &&     cat sources.tmp.1 sources.tmp.2
+      > /etc/apt/sources.list &&     rm -f sources.tmp.1 sources.tmp.2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&     DEBIAN_FRONTEND=noninteractive apt-get build-dep -y squid
+      &&     DEBIAN_FRONTEND=noninteractive apt-get install -y curl tar xz-utils libssl-dev
+    Name: run
+    PrependShell: true
+  - Key: SQUID_VERSION
+    Name: arg
+    Value: "4.6"
+  - Key: SQUID_SHA1
+    Name: arg
+    Value: 0396fe8077049000407d13aca8efdd9228e69d98
+  - CmdLine:
+    - mkdir /src     && cd /src     && curl -o squid.tar.xz -SsL http://www.squid-cache.org/Versions/v4/squid-$SQUID_VERSION.tar.xz     &&
+      bash -c "echo \"${SQUID_SHA1} /src/squid.tar.xz\" >> /src/checksum.txt"     &&
+      sha1sum -c /src/checksum.txt     && mkdir squid     && tar -C squid --strip-components=1
+      -xvf squid.tar.xz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir -p /var/cache/squid4 /var/spool/squid4/ /pid \t&& chown -R proxy: /var/cache/squid4
+      /var/spool/squid4 /pid \t&& chmod -R 750 /var/cache/squid4 /var/spool/squid4
+      /pid"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd /src/squid &&     ./configure \t\t--prefix=/usr \t\t--datadir=${prefix}/share/squid4
+      \t\t--exec-prefix=/usr \t\t--libexecdir=${prefix}/lib/squid \t\t--localstatedir=/var
+      \t\t--sysconfdir=/etc/squid4 \t\t--sharedstatedir=/var/lib \t\t--localstatedir=/var
+      \t\t--libdir=/usr/lib64 \t\t--datadir=/usr/share/squid \t\t--with-logdir=/var/log/squid
+      \t\t--with-pidfile=/var/run/squid.pid \t\t--with-default-user=proxy \t\t--disable-dependency-tracking
+      \t\t--enable-linux-netfilter \t\t--with-openssl \t\t--enable-ssl \t\t--enable-ssl-crtd
+      \t\t--disable-arch-native \t\t--enable-async-io=8 \t\t--with-swapdir=/var/spool/squid4
+      \t\t--with-large-files"
+    Name: run
+    PrependShell: true
+  - Key: CONCURRENCY
+    Name: arg
+    Value: "1"
+  - CmdLine:
+    - cd /src/squid &&     make -j$CONCURRENCY &&     make install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/bin/entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - squid.conf
+    - /etc/squid4/squid.conf
+  - Name: expose
+    Ports:
+    - "3128"
+  - Name: expose
+    Ports:
+    - "3130"
+  - CmdLine:
+    - "apt-get purge --auto-remove -y \t&& rm -rf /var/lib/apt/lists/*     && rm -rf
+      /src/"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SSL_CERTIFICATE_DISK_STORAGE
+      Value: 200MB
+    Name: env
+  - CmdLine:
+    - /usr/bin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:bionic
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic

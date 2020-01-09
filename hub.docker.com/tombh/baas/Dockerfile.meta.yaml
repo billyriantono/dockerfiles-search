@@ -1,0 +1,143 @@
+MetaArgs:
+- DefaultValue: null
+  Key: BROWSH_IMAGE_TAG
+  ProvidedValue: null
+  Value: null
+Stages:
+- BaseName: bitnami/minideb:stretch
+  Commands:
+  - CmdLine:
+    - install_packages       curl       ca-certificates       git       autoconf       automake       g++       protobuf-compiler       zlib1g-dev       libncurses5-dev       libssl-dev       pkg-config       libprotobuf-dev       make
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Env:
+    - Key: GOROOT
+      Value: $GOPATH
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $GOPATH/bin:$PATH
+    Name: env
+  - CmdLine:
+    - curl -L -o go.tar.gz https://dl.google.com/go/go1.9.2.linux-amd64.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $GOPATH/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $GOPATH/src/browsh_ssh_server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar -C / -xzf go.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/mobile-shell/mosh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd mosh && git checkout 10dca75fb21ce2e3b
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd mosh && ./autogen.sh && ./configure && make && make install
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOLANG_DEP_VERSION
+      Value: 0.3.2
+    Name: env
+  - Env:
+    - Key: dep_url
+      Value: https://github.com/golang/dep/releases/download/v$GOLANG_DEP_VERSION/dep-linux-amd64
+    Name: env
+  - CmdLine:
+    - curl -L -o $GOPATH/bin/dep $dep_url
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x $GOPATH/bin/dep
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH/src/browsh_ssh_server
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ssh-server/
+    - $GOPATH/src/browsh_ssh_server
+  - CmdLine:
+    - dep ensure
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -o browsh-ssh-server ssh-server.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: bitnami/minideb:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM bitnami/minideb:stretch
+- BaseName: browsh/browsh$BROWSH_IMAGE_TAG
+  Commands:
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /go/src/browsh_ssh_server/browsh-ssh-server
+    - /usr/local/bin
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/mosh-server
+    - /usr/local/bin
+  - Name: user
+    User: root
+  - CmdLine:
+    - install_packages       locales       libprotobuf10       htop       netcat
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen &&     dpkg-reconfigure
+      --frontend=noninteractive locales &&     update-locale LANG=en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - Name: user
+    User: user
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ssh-server/start-browsh-session.sh
+    - /usr/local/bin/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .browsh_version
+    - /app
+  - CmdLine:
+    - touch /app/debug.log && echo "Browsh logs start" > /app/debug.log
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - browsh-ssh-server -host-key /etc/browsh/id_rsa & touch /app/debug.log && tail
+      -f /app/debug.log
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: browsh/browsh$BROWSH_IMAGE_TAG
+  Name: ""
+  Platform: ""
+  SourceCode: FROM browsh/browsh$BROWSH_IMAGE_TAG

@@ -1,0 +1,272 @@
+MetaArgs: null
+Stages:
+- BaseName: centos:centos7
+  Commands:
+  - Maintainer: Jan Pazdziora
+    Name: maintainer
+  - Env:
+    - Key: FREEIPA_VERSION
+      Value: 4.5.0-22.el7.centos
+    Name: env
+  - CmdLine:
+    - groupadd -g 288 kdcproxy ; useradd -u 288 -g 288 -c 'IPA KDC Proxy User' -d
+      '/var/lib/kdcproxy' -s '/sbin/nologin' kdcproxy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd -g 289 ipaapi; useradd -u 289 -g 289 -c 'IPA Framework User' -d / -s
+      '/sbin/nologin' ipaapi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum install -y ipa-server-${FREEIPA_VERSION} ipa-server-dns-${FREEIPA_VERSION}
+      ipa-server-trust-ad-${FREEIPA_VERSION} && yum clean all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i '/installutils.verify_fqdn(config.master_host_name, options.no_host_dns)/s/)/,
+      local_hostname=False)/' /usr/lib/python2.7/site-packages/ipaserver/install/server/replicainstall.py
+      && python -m compileall /usr/lib/python2.7/site-packages/ipaserver/install/server/replicainstall.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/ips.append(ipautil.CheckedIPAddress(ha, match_local=True))/ips.append(ipautil.CheckedIPAddress(ha,
+      match_local=False))/' /usr/lib/python2.7/site-packages/ipaserver/install/installutils.py
+      && python -m compileall /usr/lib/python2.7/site-packages/ipaserver/install/installutils.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/getaddrinfo(fqdn/getaddrinfo(fqdn.rstrip(".")/' /usr/lib/python2.7/site-packages/ipaserver/install/installutils.py
+      && python -m compileall /usr/lib/python2.7/site-packages/ipaserver/install/installutils.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'd2090704dc077e75a70420a5ee2534b7148bb35d /etc/systemd/system/sssd.service.d/journal.conf'
+      | sha1sum --quiet -c && rm -vf /etc/systemd/system/sssd.service.d/journal.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /etc/systemd/system/* '!' -name '*.wants' | xargs rm -rvf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - for i in basic.target sysinit.target network.service netconsole.service ; do
+      rm -f /usr/lib/systemd/system/$i && ln -s /dev/null /usr/lib/systemd/system/$i
+      ; done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -E 's/(Requires=proc-fs-nfsd.mount)/#\1/'  /usr/lib/systemd/system/gssproxy.service
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo LANG=C > /etc/locale.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /sbin/ldconfig -X
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - init-data
+    - /usr/local/sbin/init
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ipa-server-configure-first
+    - ipa-server-status-check
+    - exit-with-status
+    - ipa-volume-upgrade-*
+    - /usr/sbin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - install.sh
+    - uninstall.sh
+    - /bin/
+  - CmdLine:
+    - mv /bin/hostnamectl /bin/hostnamectl.orig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /usr/bin/domainname /usr/bin/domainname.orig
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - hostnamectl-wrapper
+    - /bin/hostnamectl
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - hostnamectl-wrapper
+    - /usr/bin/domainname
+  - CmdLine:
+    - chmod -v +x /usr/local/sbin/init /usr/sbin/ipa-server-configure-first /usr/sbin/ipa-server-status-check
+      /usr/sbin/exit-with-status /usr/sbin/ipa-volume-upgrade-* /bin/install.sh /bin/uninstall.sh
+      /bin/hostnamectl /usr/bin/domainname
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - container-ipa.target
+    - ipa-server-configure-first.service
+    - ipa-server-upgrade.service
+    - ipa-server-update-self-ip-address.service
+    - /usr/lib/systemd/system/
+  - CmdLine:
+    - "rmdir -v /etc/systemd/system/multi-user.target.wants \t&& mkdir /etc/systemd/system/container-ipa.target.wants
+      \t&& ln -s /etc/systemd/system/container-ipa.target.wants /etc/systemd/system/multi-user.target.wants"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - systemctl set-default container-ipa.target
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - systemctl enable ipa-server-configure-first.service
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - exit-via-chroot.conf
+    - /usr/lib/systemd/system/systemd-poweroff.service.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - atomic-install-help
+    - /usr/share/ipa/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - volume-data-list
+    - volume-data-mv-list
+    - volume-data-autoupdate
+    - /etc/
+  - CmdLine:
+    - set -e ; cd / ; mkdir /data-template ; cat /etc/volume-data-list | while read
+      i ; do echo $i ; if [ -e $i ] ; then tar cf - .$i | ( cd /data-template && tar
+      xf - ) ; else mkdir -p /data-template$( dirname $i ) ; fi ; mkdir -p $( dirname
+      $i ) ; if [ "$i" == /var/log/ ] ; then mv /var/log /var/log-removed ; else rm
+      -rf $i ; fi ; ln -sf /data${i%/} ${i%/} ; done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /var/log-removed
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's!^d /var/log.*!L /var/log - - - - /data/var/log!' /usr/lib/tmpfiles.d/var.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -f /data-template/var/lib/systemd/random-seed
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 1.1 > /etc/volume-version
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: container
+      Value: docker
+    Name: env
+  - Name: expose
+    Ports:
+    - 123/udp
+    - "389"
+    - "443"
+    - "464"
+    - 464/udp
+    - "53"
+    - 53/udp
+    - "636"
+    - "7389"
+    - "80"
+    - "88"
+    - 88/udp
+    - "9443"
+    - "9444"
+    - "9445"
+  - Name: volume
+    Volumes:
+    - /tmp
+    - /run
+    - /data
+    - /var/log/journal
+  - Name: stopsignal
+    Signal: RTMIN+3
+  - CmdLine:
+    - /usr/local/sbin/init
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - uuidgen > /data-template/build-id
+    Name: run
+    PrependShell: true
+  - Labels:
+    - Key: install
+      Value: '''docker run -ti --rm --privileged -v /:/host -e HOST=/host -e DATADIR=/var/lib/${NAME}
+        -e NAME=${NAME} -e IMAGE=${IMAGE} ${IMAGE} /bin/install.sh'''
+    Name: label
+  - Labels:
+    - Key: run
+      Value: '''docker run ${RUN_OPTS} --name ${NAME} -v /var/lib/${NAME}:/data:Z
+        -v /sys/fs/cgroup:/sys/fs/cgroup:ro --tmpfs /run --tmpfs /tmp -v /dev/urandom:/dev/random:ro
+        ${IMAGE}'''
+    Name: label
+  - Labels:
+    - Key: RUN_OPTS_FILE
+      Value: '''/var/lib/${NAME}/docker-run-opts'''
+    Name: label
+  - Labels:
+    - Key: stop
+      Value: '''docker stop ${NAME}'''
+    Name: label
+  - Labels:
+    - Key: uninstall
+      Value: '''docker run --rm --privileged -v /:/host -e HOST=/host -e DATADIR=/var/lib/${NAME}
+        ${IMAGE} /bin/uninstall.sh'''
+    Name: label
+  - Labels:
+    - Key: summary
+      Value: '"Identity Management (IdM) for Linux provides centralized management
+        of identities and policies for Atomic Host"'
+    Name: label
+  - Labels:
+    - Key: description
+      Value: '"IPA is an integrated solution to provide centrally managed Identity
+        (users, hosts, services), Authentication (SSO, 2FA), and Authorization (host
+        access control, SELinux user roles, services). The solution provides features
+        for further integration with Linux based clients (SUDO, automount) and integration
+        with Active Directory based infrastructures (Trusts)."'
+    Name: label
+  - Labels:
+    - Key: io.k8s.display-name
+      Value: '"Identity Management (IdM) for Linux"'
+    Name: label
+  - Labels:
+    - Key: io.k8s.description
+      Value: '"IPA is an integrated solution to provide centrally managed Identity
+        (users, hosts, services), Authentication (SSO, 2FA), and Authorization (host
+        access control, SELinux user roles, services). The solution provides features
+        for further integration with Linux based clients (SUDO, automount) and integration
+        with Active Directory based infrastructures (Trusts)."'
+    Name: label
+  From:
+    Image: centos:centos7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:centos7

@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:latest
+  Commands:
+  - Maintainer: Roberto Andrade <roberto@cloud.com>
+    Name: maintainer
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: TERM
+      Value: xterm
+    Name: env
+  - Env:
+    - Key: LOG
+      Value: /var/log/jitsi/jvb.log
+    Name: env
+  - Env:
+    - Key: NGINX_CONF
+      Value: /etc/nginx/sites-enabled/*.conf
+    Name: env
+  - Env:
+    - Key: AUTHBIND_CONF
+      Value: /etc/authbind/byport/443
+    Name: env
+  - Env:
+    - Key: SIP_CONF_DIR
+      Value: /usr/share/jitsi-videobridge/.sip-communicator
+    Name: env
+  - Env:
+    - Key: SIP_CONF_FILE
+      Value: sip-communicator.properties
+    Name: env
+  - CmdLine:
+    - "apt-get update && \tapt-get install -y wget dnsutils vim telnet prosody apt-transport-https
+      && \trm /etc/prosody/conf.*/localhost.cfg.lua"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "echo 'deb http://download.jitsi.org/nightly/deb unstable/' >> /etc/apt/sources.list
+      && \twget -qO - https://download.jitsi.org/nightly/deb/unstable/archive.key
+      | apt-key add - && \tapt-get update && \tapt-get -y install jitsi-meet && \tapt-get
+      clean"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "echo 'deb http://http.debian.net/debian jessie-backports main' >> /etc/apt/sources.list
+      && \tapt-get update && \tapt-get install -y openjdk-8-jdk && \tupdate-alternatives
+      --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "touch $LOG && \tchown jvb:jitsi $LOG && \tchmod +xr -R /var/log/jitsi && \tmkdir
+      /etc/ssl/nginx && \tcp /var/lib/prosody/localhost.* /etc/ssl/nginx && \tcat
+      $NGINX_CONF \t\t| tr '\\n' '\\r' \t\t| sed -e 's/server_name localhost;/server_name
+      ~.*$;/' \t\t| sed -e 's/listen 443 ssl;/listen 4443 ssl;/' \t\t| sed -e 's/\\/var\\/lib\\/prosody/\\/etc\\/ssl\\/nginx/g'
+      \t\t| sed -e 's/proxy_set_header Host $http_host;/proxy_set_header Host localhost;/'
+      \t\t| tr '\\r' '\\n' \t\t> /tmp/nginx.conf && \tcp /tmp/nginx.conf $NGINX_CONF
+      && \tsed \"s/\\/\\/localhost\\//\\/\\/'\\+document.location.host\\+'\\//g; s/channelLastN:
+      -1,/channelLastN: 3,/g\" -i /etc/jitsi/meet/*.js && \tsed 's/JVB_OPTS=\"\"/JVB_OPTS=\"--apis=rest,xmpp\"\\nAUTHBIND=yes/'
+      -i /etc/jitsi/videobridge/config && \ttouch $AUTHBIND_CONF && \tchown jvb:jitsi
+      $AUTHBIND_CONF && \tchmod u+x $AUTHBIND_CONF"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "443"
+    - "4443"
+    - "80"
+  - CmdLine:
+    - "mkdir -p /app/src && \tmkdir -p $SIP_CONF_DIR/log && \tchown -R jvb:jitsi $SIP_CONF_DIR/"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - $SIP_CONF_FILE
+    - $SIP_CONF_DIR/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - jitsi-meet.sh
+    - /app/src/
+  - CmdLine:
+    - /app/src/run.sh
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: debian:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:latest

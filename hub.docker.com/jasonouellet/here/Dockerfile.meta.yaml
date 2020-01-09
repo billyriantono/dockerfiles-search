@@ -1,0 +1,92 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: mcr.microsoft.com/dotnet/core/aspnet:3.0
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Name: expose
+    Ports:
+    - "8080"
+  From:
+    Image: mcr.microsoft.com/dotnet/core/aspnet:3.0
+  Name: base
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/aspnet:3.0 AS base
+- As: build
+  BaseName: mcr.microsoft.com/dotnet/core/sdk:3.0
+  Commands:
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Here.Api/Here.Api.csproj
+    - Here.Api/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Here.Core/Here.Core.csproj
+    - Here.Core/
+  - CmdLine:
+    - dotnet restore "Here.Api/Here.Api.csproj"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Name: workdir
+    Path: '"/Here.Api"'
+  - CmdLine:
+    - dotnet build "Here.Api.csproj" -c Release -o /app/build
+    Name: run
+    PrependShell: true
+  From:
+    Image: mcr.microsoft.com/dotnet/core/sdk:3.0
+  Name: build
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/sdk:3.0 AS build
+- As: publish
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - dotnet publish "Here.Api.csproj" -c Release -o /app/publish
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build AS publish
+- As: final
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app/publish
+    - .
+  - Name: user
+    User: "1001"
+  - CmdLine:
+    - dotnet
+    - Here.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: final
+  Platform: ""
+  SourceCode: FROM base AS final

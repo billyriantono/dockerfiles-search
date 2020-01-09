@@ -1,0 +1,203 @@
+MetaArgs: null
+Stages:
+- As: build_lumisportal_11.2.0.190404
+  BaseName: centos:centos7.6.1810
+  Commands:
+  - Name: workdir
+    Path: /usr/local/lumisportal
+  - CmdLine:
+    - yum install unzip -y     && curl https://lumisportal-repo.s3.amazonaws.com/lumisportal_11.2.0.190404.zip
+      --output lumisportal_11.2.0.190404.zip     && unzip lumisportal_11.2.0.190404.zip     &&
+      rm -f lumisportal_11.2.0.190404.zip     && rm -fr lptf opt .LumisPortalFiles
+      setup development .classpath .project readme.txt
+    Name: run
+    PrependShell: true
+  From:
+    Image: centos:centos7.6.1810
+  Name: build_lumisportal_11.2.0.190404
+  Platform: ""
+  SourceCode: FROM centos:centos7.6.1810 as build_lumisportal_11.2.0.190404
+- As: build_tomcat
+  BaseName: centos:centos7.6.1810
+  Commands:
+  - CmdLine:
+    - mkdir -p /usr/local/tomcat     && curl https://archive.apache.org/dist/tomcat/tomcat-9/v9.0.20/bin/apache-tomcat-9.0.20.tar.gz
+      --output apache-tomcat-9.0.20.tar.gz     && tar -zxf apache-tomcat-9.0.20.tar.gz     &&
+      mv apache-tomcat-9.0.20/* /usr/local/tomcat     && rm -fr apache-tomcat-9.0.20.tar.gz     &&
+      rm -fr apache-tomcat-9.0.20
+    Name: run
+    PrependShell: true
+  From:
+    Image: centos:centos7.6.1810
+  Name: build_tomcat
+  Platform: ""
+  SourceCode: FROM centos:centos7.6.1810 as build_tomcat
+- BaseName: centos:7.6.1810
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"jeduoliveira81@gmail.com"'
+    Name: label
+  - Labels:
+    - Key: version
+      Value: '"1.0"'
+    Name: label
+  - Env:
+    - Key: TZ
+      Value: '"America/Sao_Paulo"'
+    Name: env
+  - Env:
+    - Key: ES_HOME
+      Value: /usr/share/elasticsearch
+    Name: env
+  - Env:
+    - Key: LUMIS_HOME
+      Value: /usr/local/lumisportal
+    Name: env
+  - Env:
+    - Key: LUMIS_HOME_WWW
+      Value: ${LUMIS_HOME}/www
+    Name: env
+  - Env:
+    - Key: LUMIS_HTDOCS
+      Value: /usr/local/htdocs
+    Name: env
+  - Env:
+    - Key: LUMIS_DB_MINIMUM_IDLE
+      Value: "25"
+    Name: env
+  - Env:
+    - Key: LUMIS_DB_MAXIMUM_POOL_SIZE
+      Value: "60"
+    Name: env
+  - Env:
+    - Key: TOMCAT_AJP_MAX_THREADS
+      Value: "25"
+    Name: env
+  - Env:
+    - Key: TOMCAT_HTTP_MAX_THREADS
+      Value: "5"
+    Name: env
+  - Env:
+    - Key: TOMCAT_HEAP
+      Value: 512m
+    Name: env
+  - Env:
+    - Key: CATALINA_HOME
+      Value: /usr/local/tomcat
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: ${CATALINA_HOME}/bin:${PATH}
+    Name: env
+  - Env:
+    - Key: TOMCAT_NATIVE_LIBDIR
+      Value: ${CATALINA_HOME}/native-jni-lib
+    Name: env
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: ${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}${TOMCAT_NATIVE_LIBDIR}
+    Name: env
+  - CmdLine:
+    - yum -y install mysql java-1.9.0-openjdk
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build_lumisportal_11.2.0.190404
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lumisportal/
+    - /usr/local/lumisportal
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./11.2.0.190404/
+    - .
+  - Name: workdir
+    Path: ${CATALINA_HOME}
+  - Chown: ""
+    From: build_tomcat
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/tomcat
+    - /usr/local/tomcat
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./tomcat/
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./elasticsearch/config/lumis-analysis
+    - ${ES_HOME}/config/lumis-analysis
+  - CmdLine:
+    - set -x     && groupadd elasticsearch     && useradd -s /bin/nologin -g elasticsearch
+      -d ${ES_HOME} elasticsearch     && mkdir -p ${LUMIS_HOME}/lumisdata/shared/data/elasticsearch     &&
+      ln -s ${ES_HOME}/config/lumis-analysis ${LUMIS_HOME}/lumisdata/shared/data/elasticsearch/lumis-analysis     &&
+      chown -R elasticsearch:root $ES_HOME     && chmod +x ${CATALINA_HOME}/bin/*.sh     &&
+      mkdir -p ${LUMIS_HTDOCS}     && cp -r ${LUMIS_HOME}/www/lumis* ${LUMIS_HTDOCS}     &&
+      find . -name "*.jsp" -exec rm -rf {} \;     && ln -snf /usr/share/zoneinfo/${TZ}
+      /etc/localtime     && echo ${TZ} > /etc/timezone     && chown -R elasticsearch:root
+      ${ES_HOME}/config/lumis-analysis     && chmod -R 755 ${ES_HOME}/config/lumis-analysis
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - ${LUMIS_HOME}/lumisdata/data
+  - Name: volume
+    Volumes:
+    - ${LUMIS_HOME}/lumisdata/shared
+  - Name: volume
+    Volumes:
+    - ${ES_HOME}/config/lumis-analysis
+  - Name: volume
+    Volumes:
+    - ${LUMIS_HTDOCS}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - wait-for-mysql.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - initialize-lumis.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.sql
+    - /
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: expose
+    Ports:
+    - "8009"
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - bin/catalina.sh
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos:7.6.1810
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:7.6.1810

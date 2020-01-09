@@ -1,0 +1,180 @@
+MetaArgs: null
+Stages:
+- As: graylog-downloader
+  BaseName: debian:stretch-slim
+  Commands:
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: GRAYLOG_VERSION
+    Name: arg
+    Value: null
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - apt-get update  > /dev/null &&   apt-get install --assume-yes     ca-certificates     curl
+      > /dev/null
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl     --silent     --location     --retry 3     --output "/tmp/graylog-${GRAYLOG_VERSION}.tgz"     "https://packages.graylog2.org/releases/graylog/graylog-${GRAYLOG_VERSION}.tgz"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl     --silent     --location     --retry 3     --output "/tmp/graylog-${GRAYLOG_VERSION}.tgz.sha256.txt"     "https://packages.graylog2.org/releases/graylog/graylog-${GRAYLOG_VERSION}.tgz.sha256.txt"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sha256sum --check "graylog-${GRAYLOG_VERSION}.tgz.sha256.txt"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /opt/graylog &&   tar --extract --gzip --file "/tmp/graylog-${GRAYLOG_VERSION}.tgz"
+      --strip-components=1 --directory /opt/graylog
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - install     --directory     --mode=0750     /opt/graylog/data     /opt/graylog/data/journal     /opt/graylog/data/log     /opt/graylog/data/config     /opt/graylog/data/plugin     /opt/graylog/data/data
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch-slim
+  Name: graylog-downloader
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim as graylog-downloader
+- BaseName: openjdk:8-jre-slim
+  Commands:
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: GRAYLOG_VERSION
+    Name: arg
+    Value: null
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: GRAYLOG_HOME
+    Name: arg
+    Value: /usr/share/graylog
+  - Key: GRAYLOG_USER
+    Name: arg
+    Value: graylog
+  - Key: GRAYLOG_UID
+    Name: arg
+    Value: "1100"
+  - Key: GRAYLOG_GROUP
+    Name: arg
+    Value: graylog
+  - Key: GRAYLOG_GID
+    Name: arg
+    Value: "1100"
+  - Chown: ""
+    From: graylog-downloader
+    Name: copy
+    SourcesAndDest:
+    - /opt/graylog
+    - ${GRAYLOG_HOME}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config
+    - ${GRAYLOG_HOME}/data/config
+  - Name: workdir
+    Path: ${GRAYLOG_HOME}
+  - CmdLine:
+    - echo "export JAVA_HOME=/usr/local/openjdk-8"     > /etc/profile.d/graylog.sh
+      &&   echo "export BUILD_DATE=${BUILD_DATE}"           >> /etc/profile.d/graylog.sh
+      &&   echo "export GRAYLOG_VERSION=${GRAYLOG_VERSION}" >> /etc/profile.d/graylog.sh
+      &&   echo "export GRAYLOG_SERVER_JAVA_OPTS='-XX:+UnlockExperimentalVMOptions
+      -XX:+UseCGroupMemoryLimitForHeap -XX:NewRatio=1 -XX:MaxMetaspaceSize=256m -server
+      -XX:+ResizeTLAB -XX:+UseConcMarkSweepGC -XX:+CMSConcurrentMTEnabled -XX:+CMSClassUnloadingEnabled
+      -XX:+UseParNewGC -XX:-OmitStackTraceInFastThrow'" >> /etc/profile.d/graylog.sh
+      &&   echo "export GRAYLOG_HOME=${GRAYLOG_HOME}"       >> /etc/profile.d/graylog.sh
+      &&   echo "export GRAYLOG_USER=${GRAYLOG_USER}"       >> /etc/profile.d/graylog.sh
+      &&   echo "export GRAYLOG_GROUP=${GRAYLOG_GROUP}"     >> /etc/profile.d/graylog.sh
+      &&   echo "export GRAYLOG_UID=${GRAYLOG_UID}"         >> /etc/profile.d/graylog.sh
+      &&   echo "export GRAYLOG_GID=${GRAYLOG_GID}"         >> /etc/profile.d/graylog.sh
+      &&   echo "export PATH=${GRAYLOG_HOME}/bin:${PATH}"   >> /etc/profile.d/graylog.sh
+      &&   apt-get update  > /dev/null &&   apt-get install --no-install-recommends
+      --assume-yes     curl     tini     libcap2-bin     libglib2.0-0     fontconfig
+      > /dev/null &&   addgroup     --gid "${GRAYLOG_GID}"     --quiet     "${GRAYLOG_GROUP}"
+      &&   adduser     --disabled-password     --disabled-login     --gecos ''     --home
+      ${GRAYLOG_HOME}     --uid "${GRAYLOG_UID}"     --gid "${GRAYLOG_GID}"     --quiet     "${GRAYLOG_USER}"
+      &&   chown --recursive "${GRAYLOG_USER}":"${GRAYLOG_GROUP}" ${GRAYLOG_HOME}
+      &&   setcap 'cap_net_bind_service=+ep' "${JAVA_HOME}/bin/java" &&   apt-get
+      remove --assume-yes --purge     apt-utils > /dev/null &&   rm -f /etc/apt/sources.list.d/*
+      &&   apt-get clean > /dev/null &&   apt autoremove --assume-yes > /dev/null
+      &&   rm -rf     /tmp/*     /var/cache/debconf/*     /var/lib/apt/lists/*     /var/log/*     /usr/share/X11     /usr/share/doc/*
+      2> /dev/null
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - health_check.sh
+    - /
+  - Name: expose
+    Ports:
+    - "9000"
+  - Name: user
+    User: ${GRAYLOG_USER}
+  - Name: volume
+    Volumes:
+    - ${GRAYLOG_HOME}/data
+  - CmdLine:
+    - tini
+    - --
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - graylog
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 10000000000
+      Retries: 12
+      Test:
+      - CMD-SHELL
+      - /health_check.sh
+      Timeout: 2000000000
+    Name: healthcheck
+  - Labels:
+    - Key: maintainer
+      Value: '"Graylog, Inc. <hello@graylog.com>"'
+    - Key: org.label-schema.name
+      Value: '"Graylog Docker Image"'
+    - Key: org.label-schema.description
+      Value: '"Official Graylog Docker image"'
+    - Key: org.label-schema.url
+      Value: '"https://www.graylog.org/"'
+    - Key: org.label-schema.vcs-ref
+      Value: ${VCS_REF}
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/Graylog2/graylog-docker"'
+    - Key: org.label-schema.vendor
+      Value: '"Graylog, Inc."'
+    - Key: org.label-schema.version
+      Value: ${GRAYLOG_VERSION}
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.build-date
+      Value: ${BUILD_DATE}
+    - Key: com.microscaling.docker.dockerfile
+      Value: '"/Dockerfile"'
+    - Key: com.microscaling.license
+      Value: '"Apache 2.0"'
+    Name: label
+  From:
+    Image: openjdk:8-jre-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre-slim

@@ -1,0 +1,124 @@
+MetaArgs:
+- DefaultValue: 3.6.1-jdk-8
+  Key: MAVEN_TAG
+  ProvidedValue: null
+  Value: 3.6.1-jdk-8
+- DefaultValue: metabrainz/solr
+  Key: SOLR_NAME
+  ProvidedValue: null
+  Value: metabrainz/solr
+- DefaultValue: 7.7.2-alpine
+  Key: SOLR_TAG
+  ProvidedValue: null
+  Value: 7.7.2-alpine
+Stages:
+- As: builder
+  BaseName: maven:${MAVEN_TAG}
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./mb-solr/pom.xml
+    - mb-solr/pom.xml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./mmd-schema/brainz-mmd2-jaxb/pom.xml
+    - brainz-mmd2-jaxb/pom.xml
+  - CmdLine:
+    - cd brainz-mmd2-jaxb &&     mvn verify clean --fail-never &&     cd ../mb-solr
+      &&     mvn verify clean --fail-never &&     cd ..
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./mmd-schema/brainz-mmd2-jaxb
+    - brainz-mmd2-jaxb
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./mb-solr
+    - mb-solr
+  - CmdLine:
+    - cd brainz-mmd2-jaxb &&     mvn install &&     cd ../mb-solr &&     mvn package
+      -DskipTests
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:${MAVEN_TAG}
+  Name: builder
+  Platform: ""
+  SourceCode: FROM maven:${MAVEN_TAG} AS builder
+- BaseName: ${SOLR_NAME}:${SOLR_TAG}
+  Commands:
+  - Key: MAVEN_TAG
+    Name: arg
+    Value: null
+  - Key: SOLR_NAME
+    Name: arg
+    Value: null
+  - Key: SOLR_TAG
+    Name: arg
+    Value: null
+  - Key: MB_SOLR_VERSION
+    Name: arg
+    Value: null
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: '"${BUILD_DATE}"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0.0-rc1"'
+    - Key: org.label-schema.vcs-ref
+      Value: '"${VCS_REF}"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/metabrainz/mb-solr.git"'
+    - Key: org.label-schema.vendor
+      Value: '"MetaBrainz Foundation"'
+    - Key: org.metabrainz.based-on-image
+      Value: '"${SOLR_NAME}:${SOLR_TAG}"'
+    - Key: org.metabrainz.builder-image
+      Value: '"maven:${MAVEN_TAG}"'
+    - Key: org.metabrainz.mb-solr.version
+      Value: '"${MB_SOLR_VERSION}"'
+    Name: label
+  - Name: user
+    User: root
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - mb-solr/target/mb-solr-0.0.1-SNAPSHOT-jar-with-dependencies.jar
+    - /opt/solr/lib/
+  - Env:
+    - Key: SOLR_HOME
+      Value: /opt/solr/server/solr
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./mbsssss
+    - $SOLR_HOME/mycores/mbsssss
+  - CmdLine:
+    - sed -i'' 's|</solr>|<str name="sharedLib">/opt/solr/lib</str></solr>|'         /opt/solr/server/solr/solr.xml
+      &&     mkdir $SOLR_HOME/data &&     chown -R solr:solr /opt/solr
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $SOLR_USER
+  From:
+    Image: ${SOLR_NAME}:${SOLR_TAG}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${SOLR_NAME}:${SOLR_TAG}

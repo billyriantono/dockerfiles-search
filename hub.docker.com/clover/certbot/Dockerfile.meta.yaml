@@ -1,0 +1,113 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: clover/base
+  Commands:
+  - CmdLine:
+    - groupadd         --gid 50         --system         certbot  && useradd         --home-dir
+      /var/lib/letsencrypt         --no-create-home         --system         --shell
+      /bin/false         --uid 50         --gid 50         certbot
+    Name: run
+    PrependShell: true
+  From:
+    Image: clover/base
+  Name: base
+  Platform: ""
+  SourceCode: FROM clover/base AS base
+- As: build
+  BaseName: library/ubuntu:bionic
+  Commands:
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - CmdLine:
+    - export DEBIAN_FRONTEND=noninteractive  && apt-get update  && apt-get install
+      -y         software-properties-common         apt-utils
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - export DEBIAN_FRONTEND=noninteractive  && add-apt-repository -y ppa:certbot/certbot  &&
+      apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /build /rootfs
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - apt-get download         python3-certbot         python3-acme         python3-requests         python3-certifi         python3-chardet         python3-idna         python3-urllib3         python3-configargparse         python3-configobj         python3-cryptography         python3-asn1crypto         python3-josepy         python3-pkg-resources         python3-mock         python3-pbr         python3-openssl         python3-parsedatetime         python3-requests-toolbelt         python3-future         python3-rfc3339         python3-six         python3-tz         python3-zope.component         python3-zope.hookable         python3-zope.event         python3-zope.interface         python3-cffi-backend         certbot
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find *.deb | xargs -I % dpkg-deb -x % /rootfs
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /rootfs
+  - CmdLine:
+    - rm -rf         etc/cron*         etc/logrotate.d         lib/systemd         usr/share/doc         usr/share/lintian         usr/share/man  &&
+      mkdir -p         var/www/.well-known/acme-challenge         var/log/letsencrypt         var/lib/letsencrypt  &&
+      touch var/www/.well-known/acme-challenge/.keep
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: base
+    Name: copy
+    SourcesAndDest:
+    - /etc/group
+    - /etc/gshadow
+    - /etc/passwd
+    - /etc/shadow
+    - etc/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - certbot
+    - etc/cron.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - init/
+    - etc/init/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cli.ini
+    - etc/letsencrypt/
+  - Name: workdir
+    Path: /
+  From:
+    Image: library/ubuntu:bionic
+  Name: build
+  Platform: ""
+  SourceCode: FROM library/ubuntu:bionic AS build
+- BaseName: clover/python:3.6
+  Commands:
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /rootfs
+    - /
+  - Name: volume
+    Volumes:
+    - /etc/letsencrypt
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  From:
+    Image: clover/python:3.6
+  Name: ""
+  Platform: ""
+  SourceCode: FROM clover/python:3.6

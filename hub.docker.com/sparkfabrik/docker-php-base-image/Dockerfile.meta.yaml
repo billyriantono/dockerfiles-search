@@ -1,0 +1,138 @@
+MetaArgs: null
+Stages:
+- BaseName: php:7.0.33-apache
+  Commands:
+  - Maintainer: paolo.mainardi@sparkfabrik.com
+    Name: maintainer
+  - Env:
+    - Key: REFRESHED_AT
+      Value: "2016-06-30"
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - a2enmod rewrite
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: XDEBUG_VERSION
+      Value: 2.5.4
+    Name: env
+  - Env:
+    - Key: DRUSH_VERSION
+      Value: 8.0.5
+    Name: env
+  - Env:
+    - Key: VAR_DUMPER_VERSION
+      Value: 3.0.3
+    Name: env
+  - Env:
+    - Key: GOSU_VERSION
+      Value: "1.7"
+    Name: env
+  - Env:
+    - Key: MAILHOG_VERSION
+      Value: v0.1.9
+    Name: env
+  - Env:
+    - Key: TIMEZONE
+      Value: '"Europe/Rome"'
+    Name: env
+  - CmdLine:
+    - apt-get update   && apt-get install -y   curl   cron   rsyslog   supervisor   mysql-client   libpng-dev   libjpeg-dev   libxml2-dev   ruby   ruby2.3   ruby2.3-dev  git   unzip   vim   libicu-dev   libssl-dev   &&
+      gem install bundler   && pecl install xdebug-${XDEBUG_VERSION}   && docker-php-ext-configure
+      gd --with-png-dir=/usr --with-jpeg-dir=/usr   && docker-php-ext-configure intl   &&
+      docker-php-ext-configure pcntl   && docker-php-ext-install soap gd mbstring
+      pdo pdo_mysql zip intl pcntl   && echo "${TIMEZONE}" > /etc/timezone   && dpkg-reconfigure
+      -f noninteractive tzdata   && apt-get autoremove -y   && rm -rf /var/lib/apt/lists/*
+      /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: COMPOSER_HOME
+      Value: /composer-libs
+    Name: env
+  - CmdLine:
+    - mkdir /composer-libs     && curl -sS https://getcomposer.org/installer | php     &&
+      mv composer.phar /usr/local/bin/composer     && composer global require symfony/var-dumper:${VAR_DUMPER_VERSION}     &&
+      chown -R www-data:www-data /composer-libs     && curl -fSL "https://github.com/drush-ops/drush/releases/download/${DRUSH_VERSION}/drush.phar"
+      -o /usr/bin/drush     && chmod +x /usr/bin/drush     && drush @none dl registry_rebuild-7.x-2.3     &&
+      echo "PS1='\[\033[1;36m\]\u\[\033[1;31m\]@\[\033[1;32m\]\h:\[\033[1;35m\]\w\[\033[1;31m\]\$\[\033[0m\]
+      '" >> /etc/bash.bashrc     && echo "export TERM=xterm" >> /etc/bash.bashrc     &&
+      echo "umask 000" >> /etc/bash.bashrc     && curl -fSL "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg
+      --print-architecture)" -o /usr/bin/gosu
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fSL "https://github.com/mailhog/MailHog/releases/download/${MAILHOG_VERSION}/MailHog_linux_amd64"
+      -o /usr/local/bin/mailhog     && chmod +x /usr/local/bin/mailhog
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/docker/php/*.ini
+    - /usr/local/etc/php/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/docker/apache/*.conf
+    - /etc/apache2/conf-enabled/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/docker/supervisord/*.conf
+    - /etc/supervisor/conf.d/
+  - CmdLine:
+    - mkdir -p /usr/local/etc/php/apache2 &&     cp -R /usr/local/etc/php/conf.d /usr/local/etc/php/apache2
+      &&     echo 'export PHP_INI_SCAN_DIR=/usr/local/etc/php/apache2/conf.d' >> /etc/apache2/envvars
+      &&     echo 'stage:$apr1$g6T0GvU3$6cxYQhCZvI.1aEFYr1uOd/' > /var/www/.htpasswd
+      &&     rm -rf /etc/apache2/sites-enabled/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/docker/cron/crontab
+    - /etc/cron.d/cron
+  - CmdLine:
+    - rm -Rf /etc/cron.daily  &&     rm -Rf /etc/cron.weekly &&     rm -Rf /etc/cron.monthly
+      &&     rm -Rf /etc/cron.hourly &&     chmod a+x /etc/cron.d/cron
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - export VERSION=`php -r "echo PHP_MAJOR_VERSION.PHP_MINOR_VERSION;"`     && mkdir
+      -p ${PHP_INI_DIR}     && curl -A "Docker" -o /tmp/blackfire-probe.tar.gz -D
+      - -L -s https://blackfire.io/api/v1/releases/probe/php/linux/amd64/${VERSION}     &&
+      tar zxpf /tmp/blackfire-probe.tar.gz -C /tmp     && mv /tmp/blackfire-*.so `php
+      -r "echo ini_get('extension_dir');"`/blackfire.so     && echo "extension=blackfire.so\nblackfire.agent_socket=tcp://blackfire:8707"
+      > $PHP_INI_DIR/blackfire.ini
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip
+    - /ngrok.zip
+  - CmdLine:
+    - unzip /ngrok.zip -d /bin &&  rm -f ngrok.zip &&  touch /.ngrok
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - exec supervisord -n
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: php:7.0.33-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.0.33-apache

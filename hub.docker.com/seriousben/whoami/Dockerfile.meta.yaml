@@ -1,0 +1,86 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:latest
+  Commands:
+  - Name: workdir
+    Path: /go/src/github.com/seriousben/whoamI
+  - CmdLine:
+    - go get -u github.com/golang/dep/cmd/dep
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - CmdLine:
+    - dep ensure && CGO_ENABLED=0 GOOS=linux go build -a .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:latest AS builder
+- As: base
+  BaseName: alpine:3.6
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.6
+  Name: base
+  Platform: ""
+  SourceCode: FROM alpine:3.6 AS base
+- BaseName: scratch
+  Commands:
+  - Health:
+      Interval: 10000000000
+      Retries: 3
+      Test:
+      - CMD
+      - /whoamI
+      - healthcheck
+      - --port
+      - "8080"
+      Timeout: 3000000000
+    Name: healthcheck
+  - Chown: ""
+    From: base
+    Name: copy
+    SourcesAndDest:
+    - /etc/passwd
+    - /etc/passwd
+  - Chown: ""
+    From: base
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/ca-certificates.crt
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/seriousben/whoamI/whoamI
+    - /whoamI
+  - Name: user
+    User: nobody
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - /whoamI
+    - serve
+    - --port
+    - "8080"
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

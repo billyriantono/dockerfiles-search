@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:12-jdk-oraclelinux7
+  Commands:
+  - Name: expose
+    Ports:
+    - "10090"
+    - "8000"
+    - "8080"
+    - "8180"
+    - "8443"
+    - "8543"
+    - "9990"
+  - CmdLine:
+    - "yum -y update && \tyum -y install sudo wget initscripts &&     echo \"%wheel
+      ALL=(ALL) NOPASSWD: ALL\" >> /etc/sudoers &&     useradd -u 1000 -G users,wheel
+      -d /home/wildfly --shell /bin/bash -m wildfly &&     echo \"wildfly:secret\"
+      | chpasswd &&     yum -y update &&     yum clean all &&     yum -y autoremove"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: wildfly
+  - Env:
+    - Key: MAVEN_VERSION
+      Value: 3.6.0
+    Name: env
+  - CmdLine:
+    - "mkdir /home/wildfly/apache-maven-$MAVEN_VERSION &&   \twget -qO- \"http://apache.ip-connect.vn.ua/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz\"
+      | tar -zx --strip-components=1 -C /home/wildfly/apache-maven-$MAVEN_VERSION/"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TERM
+      Value: xterm
+    Name: env
+  - Env:
+    - Key: SCHOOL_URL
+      Value: localhost
+    Name: env
+  - Env:
+    - Key: KEYCLOAK_URL
+      Value: localhost
+    Name: env
+  - Name: workdir
+    Path: /workspace
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /workspace/school
+  - CmdLine:
+    - sudo chown -R wildfly:wildfly /workspace
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd school && /home/wildfly/apache-maven-$MAVEN_VERSION/bin/mvn install -Pproduction
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd school && /home/wildfly/apache-maven-$MAVEN_VERSION/bin/mvn package -Pproduction,prepare-school-jsf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd school && /home/wildfly/apache-maven-$MAVEN_VERSION/bin/mvn package -Pproduction,prepare-keycloak
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "rm -Rf /home/wildfly/.m2 && \trm -Rf /home/wildfly/apache-maven-$MAVEN_VERSION
+      && \tsudo mv /workspace/school/school-keycloak/target/keycloak-run/wildfly*
+      /opt/keycloak && \tsudo mv /workspace/school/school-app/school-app-jsf/target/school-run/wildfly*
+      /opt/school && \tsudo chown -R wildfly:wildfly /opt/keycloak && \tsudo chown
+      -R wildfly:wildfly /opt/school && \tsudo echo \"export JBOSS_OPTS=\\\"-b 0.0.0.0
+      -Djboss.socket.binding.port-offset=100 -Dkeycloak.migration.action=import -Dkeycloak.migration.provider=dir
+      -Dkeycloak.migration.dir=/opt/keycloak/realm-config/execution -Dkeycloak.migration.strategy=IGNORE_EXISTING\\\"\"
+      > /workspace/school/keycloak && \tsudo mv /workspace/school/keycloak /etc/default/keycloak
+      && \tsudo echo \"export JBOSS_OPTS=\\\"-b 0.0.0.0\\\"\" > /workspace/school/school
+      && \tsudo mv /workspace/school/school /etc/default/school && \tsudo cp /opt/keycloak/docs/contrib/scripts/init.d/wildfly-init-redhat.sh
+      /etc/init.d/keycloak && \tsudo cp /opt/keycloak/docs/contrib/scripts/init.d/wildfly-init-redhat.sh
+      /etc/init.d/school && \trm -Rf /workspace/school"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir -p /opt/keycloak/realm-config/execution && \tcp /opt/keycloak/realm-config/school-domain-realm.json
+      /opt/keycloak/realm-config/execution && \tsed -i -e 's/MAVEN_REPLACER_SCHOOL_SERVER_URL/'\"$SCHOOL_URL\"'/g'
+      /opt/keycloak/realm-config/execution/school-domain-realm.json && \tsudo service
+      keycloak start && \tcp /opt/school/keycloak/keycloak.json /opt/school/standalone/deployments/school.war/WEB-INF
+      && \tsed -i -e 's/MAVEN_REPLACER_AUTH_SERVER_URL/'\"$KEYCLOAK_URL\"'/g' /opt/school/standalone/deployments/school.war/WEB-INF/keycloak.json
+      && \tsudo service school start &&     tail -f /dev/null"
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: openjdk:12-jdk-oraclelinux7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:12-jdk-oraclelinux7

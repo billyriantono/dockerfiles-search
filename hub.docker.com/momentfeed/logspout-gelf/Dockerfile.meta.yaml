@@ -1,0 +1,78 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:alpine
+  Commands:
+  - Maintainer: timo.taskinen@vincit.com
+    Name: maintainer
+  - Labels:
+    - Key: maintainer
+      Value: '"timo.taskinen@vincit.com"'
+    Name: label
+  - Env:
+    - Key: LOGSPOUT_VERSION
+      Value: 3.2.4
+    Name: env
+  - Env:
+    - Key: LOGSPOUT_DOWNLOAD_SHA256
+      Value: bcf4661c751eeaadec310f829acb0abd4ed2f0b4001d6eef10ba52016210dc4b
+    Name: env
+  - CmdLine:
+    - mkdir -p /go/src
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src
+  - Name: volume
+    Volumes:
+    - /mnt/routes
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - apk --no-cache add curl git gcc musl-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fSL -o logspout.tar.gz "https://github.com/gliderlabs/logspout/archive/v${LOGSPOUT_VERSION}.tar.gz"     &&
+      echo "$LOGSPOUT_DOWNLOAD_SHA256 *logspout.tar.gz" | sha256sum -c -     && tar
+      -zxvf logspout.tar.gz     && rm logspout.tar.gz     && mkdir -p /go/src/github.com/gliderlabs/     &&
+      mv logspout-${LOGSPOUT_VERSION} /go/src/github.com/gliderlabs/logspout
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/gliderlabs/logspout
+  - CmdLine:
+    - echo 'import ( _ "github.com/micahhausler/logspout-gelf" )' >> /go/src/github.com/gliderlabs/logspout/modules.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -d -v ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -v -ldflags "-X main.Version=$(cat VERSION)" -o ./bin/logspout
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:alpine as build
+- BaseName: alpine:latest
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/gliderlabs/logspout/bin/logspout
+    - /go/bin/logspout
+  - CmdLine:
+    - /go/bin/logspout
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

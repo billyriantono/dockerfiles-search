@@ -1,0 +1,107 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: microsoft/dotnet:2.2-sdk
+  Commands:
+  - Env:
+    - Key: CONFIGURATION
+      Value: Release
+    Name: env
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./app/
+    - ./
+  - CmdLine:
+    - dotnet build   --configuration ${CONFIGURATION}  && dotnet test    --configuration
+      ${CONFIGURATION}  && dotnet publish --configuration ${CONFIGURATION} --output
+      out
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.2-sdk
+  Name: build
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2-sdk AS build
+- BaseName: microsoft/dotnet:2.2-aspnetcore-runtime
+  Commands:
+  - Env:
+    - Key: ASPNETCORE_URLS
+      Value: http://+:5000
+    Name: env
+  - Env:
+    - Key: PING
+      Value: http://localhost:5000/api/health
+    Name: env
+  - Env:
+    - Key: USER
+      Value: langbot
+    Name: env
+  - Env:
+    - Key: GROUP
+      Value: langbot
+    Name: env
+  - Env:
+    - Key: UID
+      Value: "2000"
+    Name: env
+  - Env:
+    - Key: GID
+      Value: "2000"
+    Name: env
+  - Env:
+    - Key: HOME
+      Value: /home/langbot
+    Name: env
+  - CmdLine:
+    - echo "add ${USER} user"  && groupadd --system --gid "${GID}" "${GROUP}"  &&
+      useradd --system --uid "${UID}" --home-dir "${HOME}" --create-home --gid "${GID}"
+      "${USER}"  && echo "install packages"  && apt-get --quiet update  && apt-get
+      install --yes --no-install-recommends gosu  && rm -rf /var/lib/apt/lists/*  &&
+      echo "install tini"  && curl --silent --show-error --location --output /usr/local/bin/tini
+      "https://github.com/krallin/tini/releases/download/v0.18.0/tini-amd64"  && echo
+      "12d20136605531b09a2c2dac02ccee85e1b874eb322ef6baf7561cd93f93c855 /usr/local/bin/tini"
+      | sha256sum --check -  && chmod +x /usr/local/bin/tini  && tini -s true
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app/web/out
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts
+    - /usr/local/bin/
+  - Name: expose
+    Ports:
+    - "5000"
+  - CmdLine:
+    - /usr/local/bin/tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - run-root.sh
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 60000000000
+      Test:
+      - CMD-SHELL
+      - run-health.sh || exit 1
+      Timeout: 1000000000
+    Name: healthcheck
+  From:
+    Image: microsoft/dotnet:2.2-aspnetcore-runtime
+  Name: ""
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2-aspnetcore-runtime

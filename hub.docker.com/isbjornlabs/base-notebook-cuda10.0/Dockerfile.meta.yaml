@@ -1,0 +1,169 @@
+MetaArgs:
+- DefaultValue: nvidia/cuda:10.0-cudnn7-devel@sha256:ead2a34e7d344731e0007822437f60310f3baaf331d4350f795c004aade64125
+  Key: BASE_CONTAINER
+  ProvidedValue: null
+  Value: nvidia/cuda:10.0-cudnn7-devel@sha256:ead2a34e7d344731e0007822437f60310f3baaf331d4350f795c004aade64125
+Stages:
+- BaseName: $BASE_CONTAINER
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Ole Mussmann <ole@isbjornlabs.com>"'
+    Name: label
+  - Key: NB_USER
+    Name: arg
+    Value: '"jovyan"'
+  - Key: NB_UID
+    Name: arg
+    Value: '"1000"'
+  - Key: NB_GID
+    Name: arg
+    Value: '"100"'
+  - Name: user
+    User: root
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update  && apt-get install -yq --no-install-recommends     bzip2     ca-certificates     fonts-liberation     locales     sudo     wget  &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "en_US.UTF-8 UTF-8" > /etc/locale.gen &&     locale-gen
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CONDA_DIR
+      Value: /opt/conda
+    - Key: SHELL
+      Value: /bin/bash
+    - Key: NB_USER
+      Value: $NB_USER
+    - Key: NB_UID
+      Value: $NB_UID
+    - Key: NB_GID
+      Value: $NB_GID
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    - Key: LANG
+      Value: en_US.UTF-8
+    - Key: LANGUAGE
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $CONDA_DIR/bin:$PATH
+    - Key: HOME
+      Value: /home/$NB_USER
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - fix-permissions
+    - /usr/local/bin/fix-permissions
+  - CmdLine:
+    - sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd wheel -g 11 &&     echo "auth required pam_wheel.so use_uid" >> /etc/pam.d/su
+      &&     useradd -m -s /bin/bash -N -u $NB_UID $NB_USER &&     mkdir -p $CONDA_DIR
+      &&     chown $NB_USER:$NB_GID $CONDA_DIR &&     chmod g+w /etc/passwd &&     fix-permissions
+      $HOME &&     fix-permissions "$(dirname $CONDA_DIR)"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $NB_UID
+  - CmdLine:
+    - mkdir /home/$NB_USER/work &&     fix-permissions /home/$NB_USER
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MINICONDA_VERSION
+      Value: 4.6.14
+    Name: env
+  - Env:
+    - Key: CONDA_VERSION
+      Value: 4.6.14
+    Name: env
+  - CmdLine:
+    - cd /tmp &&     wget --quiet https://repo.continuum.io/miniconda/Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh
+      &&     echo "718259965f234088d785cad1fbd7de03 *Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh"
+      | md5sum -c - &&     /bin/bash Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh
+      -f -b -p $CONDA_DIR &&     rm Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh
+      &&     $CONDA_DIR/bin/conda config --system --set auto_update_conda false &&     $CONDA_DIR/bin/conda
+      config --system --set show_channel_urls true &&     $CONDA_DIR/bin/conda install
+      --quiet --yes conda="${CONDA_VERSION}.*" &&     $CONDA_DIR/bin/conda update
+      --all --quiet --yes &&     conda clean --all &&     rm -rf /home/$NB_USER/.cache/yarn
+      &&     fix-permissions $CONDA_DIR &&     fix-permissions /home/$NB_USER
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - conda install --quiet --yes 'tini==0.18.0' &&     conda list tini | grep tini
+      | tr -s ' ' | cut -d ' ' -f 1,2 >> $CONDA_DIR/conda-meta/pinned &&     conda
+      clean --all &&     fix-permissions $CONDA_DIR &&     fix-permissions /home/$NB_USER
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - conda install --quiet --yes -c conda-forge     'jupyterhub==1.0.0'     'jupyterlab==0.35.6'     'notebook==5.7.8'     &&
+      conda clean --all &&     jupyter labextension install @jupyterlab/hub-extension@^0.12.0
+      &&     jupyter lab build &&     npm cache clean --force &&     jupyter notebook
+      --generate-config &&     rm -rf $CONDA_DIR/share/jupyter/lab/staging &&     rm
+      -rf /home/$NB_USER/.cache/yarn &&     fix-permissions $CONDA_DIR &&     fix-permissions
+      /home/$NB_USER
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - Name: expose
+    Ports:
+    - "8888"
+  - Name: workdir
+    Path: $HOME
+  - CmdLine:
+    - tini
+    - -g
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - start-notebook.sh
+    Name: cmd
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start-notebook.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start-singleuser.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - jupyter_notebook_config.py
+    - /etc/jupyter/
+  - CmdLine:
+    - fix-permissions /etc/jupyter/
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $NB_UID
+  From:
+    Image: $BASE_CONTAINER
+  Name: ""
+  Platform: ""
+  SourceCode: FROM $BASE_CONTAINER

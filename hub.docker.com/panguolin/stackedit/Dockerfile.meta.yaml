@@ -1,0 +1,150 @@
+MetaArgs:
+- DefaultValue: "3.8"
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: "3.8"
+- DefaultValue: 1.11.4
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: 1.11.4
+- DefaultValue: v5.13.3
+  Key: STACKEDIT_VERSION
+  ProvidedValue: null
+  Value: v5.13.3
+Stages:
+- As: builder
+  BaseName: golang:${GO_VERSION}-alpine${ALPINE_VERSION}
+  Commands:
+  - CmdLine:
+    - apk --update add git build-base upx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -u -v golang.org/x/vgo
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/gobuild
+  From:
+    Image: golang:${GO_VERSION}-alpine${ALPINE_VERSION}
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS builder
+- As: final
+  BaseName: scratch
+  Commands:
+  - Key: STACKEDIT_VERSION
+    Name: arg
+    Value: null
+  - Name: expose
+    Ports:
+    - "8000"
+  - Health:
+      Interval: 100000000000
+      Retries: 1
+      StartPeriod: 1000000000
+      Test:
+      - CMD
+      - /server
+      - healthcheck
+      Timeout: 2000000000
+    Name: healthcheck
+  - Name: user
+    User: "1000"
+  - CmdLine:
+    - /server
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: final
+  Platform: ""
+  SourceCode: FROM scratch AS final
+- As: stackedit
+  BaseName: alpine:${ALPINE_VERSION}
+  Commands:
+  - Key: STACKEDIT_VERSION
+    Name: arg
+    Value: null
+  - Name: workdir
+    Path: /stackedit
+  - CmdLine:
+    - apk add -q --progress --update --no-cache git npm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q https://github.com/benweet/stackedit/archive/${STACKEDIT_VERSION}.tar.gz
+      -O stackedit.tar.gz &&     tar -xzf stackedit.tar.gz --strip-components=1 &&     rm
+      stackedit.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:${ALPINE_VERSION}
+  Name: stackedit
+  Platform: ""
+  SourceCode: FROM alpine:${ALPINE_VERSION} AS stackedit
+- As: server
+  BaseName: builder
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - go.sum
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.go'
+    - ./
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-s
+      -w" -o app .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - upx -v --best --ultra-brute --overlay=strip app && upx -t app
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: builder
+  Name: server
+  Platform: ""
+  SourceCode: FROM builder AS server
+- BaseName: final
+  Commands:
+  - Chown: "1000"
+    From: stackedit
+    Name: copy
+    SourcesAndDest:
+    - /stackedit/dist
+    - /html
+  - Chown: "1000"
+    From: server
+    Name: copy
+    SourcesAndDest:
+    - /tmp/gobuild/app
+    - /server
+  From:
+    Stage:
+      Index: 1
+      Named: final
+  Name: ""
+  Platform: ""
+  SourceCode: FROM final

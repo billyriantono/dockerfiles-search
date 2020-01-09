@@ -1,0 +1,111 @@
+MetaArgs: null
+Stages:
+- As: runtime
+  BaseName: php:7-fpm
+  Commands:
+  - CmdLine:
+    - set -ex  && apt-get update -y  && apt-get upgrade -y  && apt-get install -y
+      libzip4 libzip-dev libpng-tools libpng16-16 libpng-dev libxml2-dev zlib1g-dev
+      libldap2-dev  && curl -sS -o /tmp/icu.tar.gz -L http://download.icu-project.org/files/icu4c/62.1/icu4c-62_1-src.tgz  &&
+      tar -zxf /tmp/icu.tar.gz -C /tmp  && cd /tmp/icu/source  && ./configure --prefix=/usr/local  &&
+      make  && make install  && rm -rf /tmp/icu*  && docker-php-ext-configure intl
+      --with-icu-dir=/usr/local  && docker-php-ext-install opcache pdo_mysql ldap
+      zip xml gd intl  && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
+      -o APT::AutoRemove::SuggestsImportant=false     libzip-dev libpng-dev libxml2-dev
+      zlib1g-dev libldap2-dev  && apt-get -y clean  && rm -rf /usr/src/*  && rm -rf
+      /tmp/*  && rm -rf /var/tmp/*  && for logs in `find /var/log -type f`; do > ${logs};
+      done  && rm -rf /var/lib/apt/lists/*  && rm -f /var/cache/apt/*.bin  && rm -rf
+      /usr/share/man/* /usr/share/groff/* /usr/share/info/* /usr/share/lintian/* /usr/share/linda/*
+      /var/cache/man/* /usr/share/doc/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: php:7-fpm
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM php:7-fpm AS runtime
+- As: builder
+  BaseName: runtime
+  Commands:
+  - CmdLine:
+    - apt-get update -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y git unzip curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sS https://getcomposer.org/installer | php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv composer.phar /usr/local/bin/composer
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /var/www/html
+  - CmdLine:
+    - cd /var/www/html && composer install --no-dev --no-ansi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/www/html/app/logs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/www/html/app/cache
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod ugo+rwX /var/www/html/app/logs /var/www/html/app/cache
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: runtime
+  Name: builder
+  Platform: ""
+  SourceCode: FROM runtime AS builder
+- BaseName: runtime
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /var/www/html
+    - /var/www/html/
+  - CmdLine:
+    - echo "#!/bin/sh\nset -e\n/usr/sbin/update-ca-certificates\nexec \"\$@\"" > /usr/local/bin/docker-php-entrypoint  &&
+      echo "short_open_tag = off" >> /usr/local/etc/php/conf.d/symfony.ini
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/www/html/app/logs
+    - /var/www/html/app/cache
+  - Name: expose
+    Ports:
+    - "9000"
+  - Name: workdir
+    Path: /var/www/html
+  - CmdLine:
+    - docker-php-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - php-fpm
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: runtime
+  Name: ""
+  Platform: ""
+  SourceCode: FROM runtime

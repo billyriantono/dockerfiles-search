@@ -1,0 +1,135 @@
+MetaArgs:
+- DefaultValue: "3.7"
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: "3.7"
+Stages:
+- As: builder
+  BaseName: alpine:${ALPINE_VERSION}
+  Commands:
+  - Key: ALPINE_VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk --no-cache add alpine-sdk coreutils
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -G abuild -D builder &&     echo "builder ALL=(ALL) NOPASSWD:ALL" >>
+      /etc/sudoers
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/builder/pkg
+  - CmdLine:
+    - chown builder:abuild .
+    Name: run
+    PrependShell: true
+  - Chown: builder:abuild
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pkg/
+    - ./
+  - Name: user
+    User: builder
+  - CmdLine:
+    - PACKAGER='Daniel Miranda <daniel@cobli.co>' abuild-keygen -a
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - abuild-apk update && abuild -r
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:${ALPINE_VERSION}
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:${ALPINE_VERSION} AS builder
+- BaseName: alpine:${ALPINE_VERSION}
+  Commands:
+  - CmdLine:
+    - apk add coreutils openssl ca-certificates --no-cache
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/builder/.abuild/*.rsa.pub
+    - /etc/apk/keys/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/builder/packages/builder/*/squid-4.*.apk
+    - /tmp/
+  - CmdLine:
+    - apk add /tmp/squid-4.*.apk --no-cache
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/local/bin/squid-entrypoint
+  - CmdLine:
+    - chmod 755 /usr/local/bin/squid-entrypoint
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - squid-tail-logs
+    - /usr/local/bin/squid-tail-logs
+  - CmdLine:
+    - chmod 755 /usr/local/bin/squid-tail-logs
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - gen-ca.sh
+    - /usr/local/bin/squid-gen-ca
+  - CmdLine:
+    - chmod 755 /usr/local/bin/squid-gen-ca
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /etc/squid/squid.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - squid.conf.template
+    - /etc/squid/
+  - Name: volume
+    Volumes:
+    - /etc/squid/ssl
+  - Name: volume
+    Volumes:
+    - /var/spool/squid
+  - Name: expose
+    Ports:
+    - "3128"
+  - CmdLine:
+    - /usr/local/bin/squid-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - squid-tail-logs
+    - squid
+    - -N
+    - -C
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:${ALPINE_VERSION}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:${ALPINE_VERSION}

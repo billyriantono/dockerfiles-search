@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- As: react-builder
+  BaseName: node:current-alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./ui
+    - /ui
+  - Name: workdir
+    Path: /ui
+  - CmdLine:
+    - yarn &&     yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:current-alpine
+  Name: react-builder
+  Platform: ""
+  SourceCode: FROM node:current-alpine as react-builder
+- As: aspnet-builder
+  BaseName: mcr.microsoft.com/dotnet/core/sdk:3.0
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./backend
+    - /backend
+  - Name: workdir
+    Path: /backend
+  - CmdLine:
+    - dotnet restore &&     dotnet publish -c Release -o build &&     rm build/ui/index.html
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: react-builder
+    Name: copy
+    SourcesAndDest:
+    - /ui/build
+    - /backend/build/ui
+  From:
+    Image: mcr.microsoft.com/dotnet/core/sdk:3.0
+  Name: aspnet-builder
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/sdk:3.0 as aspnet-builder
+- As: runtime
+  BaseName: mcr.microsoft.com/dotnet/core/aspnet:3.0
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: aspnet-builder
+    Name: copy
+    SourcesAndDest:
+    - /backend/build
+    - /app
+  - CmdLine:
+    - dotnet
+    - PlexSSO.dll
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "4200"
+  - Health:
+      Interval: 30000000000
+      Retries: 3
+      StartPeriod: 5000000000
+      Test:
+      - CMD
+      - curl
+      - --fail
+      - http://localhost:4200/api/v2/healthcheck
+      Timeout: 30000000000
+    Name: healthcheck
+  From:
+    Image: mcr.microsoft.com/dotnet/core/aspnet:3.0
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/aspnet:3.0 AS runtime

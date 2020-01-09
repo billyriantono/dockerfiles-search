@@ -1,0 +1,110 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: buildpack-deps:xenial
+  Commands:
+  - Env:
+    - Key: RUSTUP_HOME
+      Value: /usr/local/rustup
+    - Key: CARGO_HOME
+      Value: /usr/local/cargo
+    - Key: PATH
+      Value: /usr/local/cargo/bin:$PATH
+    Name: env
+  - CmdLine:
+    - set -eux;         url="https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init";     wget
+      "$url";     chmod +x rustup-init;     ./rustup-init -y --no-modify-path --default-toolchain
+      nightly;     rm rustup-init;     chmod -R a+w $RUSTUP_HOME $CARGO_HOME;     mkdir
+      /usr/src/app;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get update && apt-get install -y \t\tcmake clang \t&& rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - cargo build --release;     rm -rf src/;
+    Name: run
+    PrependShell: true
+  From:
+    Image: buildpack-deps:xenial
+  Name: build
+  Platform: ""
+  SourceCode: FROM buildpack-deps:xenial as build
+- BaseName: quay.io/vgteam/vg:v1.6.0-213-gc0c19fe5-t126-run
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/MoMI-G/MoMI-G/"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0.0-rc1"'
+    Name: label
+  - CmdLine:
+    - "apt-get update && apt-get install -y \t\truby \t&& rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /vg
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - proto/graph-helper*
+    - /vg/proto/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/target/release/graph-genome-browser-backend
+    - /vg/
+  - CmdLine:
+    - mkdir /vg/tmp;     mkdir /vg/tmp/xg;     mkdir /vg/static;     wget -O - https://www.dropbox.com/s/56r7zadwcc1etmr/chm1.tar.gz?dl=0
+      | tar xzv -C /vg/static;     wget -O - ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_27/gencode.v27.basic.annotation.gff3.gz
+      | gunzip -c | grep -v "#" > static/gencode.v27.basic.annotation.gff3;     wget
+      -O - ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_27/GRCh37_mapping/gencode.v27lift37.basic.annotation.gff3.gz
+      | gunzip -c | grep -v "#" > static/gencode.v27lift37.basic.annotation.gff3;     chmod
+      755 /vg;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - sample/chm1/config.yaml
+    - /vg/static
+  - Name: expose
+    Ports:
+    - "8081"
+  - Env:
+    - Key: RUST_LOG
+      Value: info
+    Name: env
+  - CmdLine:
+    - ./graph-genome-browser-backend
+    - --config=static/config.yaml
+    - --interval=1500000
+    - --http=0.0.0.0:8081
+    - --api=/api/v2/
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: quay.io/vgteam/vg:v1.6.0-213-gc0c19fe5-t126-run
+  Name: ""
+  Platform: ""
+  SourceCode: FROM quay.io/vgteam/vg:v1.6.0-213-gc0c19fe5-t126-run

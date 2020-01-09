@@ -1,0 +1,151 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "ubuntu:xenial",
+      "SourceCode": "FROM ubuntu:xenial AS builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "ubuntu:xenial"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get install -y     git     wget     \u0026\u0026 rm -rf /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/dehydrated"
+        },
+        {
+          "CmdLine": [
+            "git clone --depth=1 https://github.com/lukas2511/dehydrated . \u0026\u0026 mkdir hooks \u0026\u0026 git clone --depth=1 https://github.com/kappataumu/letsencrypt-cloudflare-hook hooks/cloudflare"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "DOCKERIZE_VERSION",
+              "Value": "v0.5.0"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz     \u0026\u0026 tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz     \u0026\u0026 rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "GOSU_VERSION",
+              "Value": "1.10"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "set -ex; \tfetchDeps=' \t\tca-certificates \t\twget \t'; \tapt-get update; \tapt-get install -y --no-install-recommends $fetchDeps; \trm -rf /var/lib/apt/lists/*; \tdpkgArch=\"$(dpkg --print-architecture | awk -F- '{ print $NF }')\"; \twget -O /usr/local/bin/gosu \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch\"; \twget -O /usr/local/bin/gosu.asc \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch.asc\"; \texport GNUPGHOME=\"$(mktemp -d)\"; \tgpg --keyserver ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4; \tgpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu; \trm -r \"$GNUPGHOME\" /usr/local/bin/gosu.asc; \tchmod +x /usr/local/bin/gosu; \tgosu nobody true; \tapt-get purge -y --auto-remove $fetchDeps"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "python:alpine3.6",
+      "SourceCode": "FROM python:alpine3.6",
+      "Platform": "",
+      "From": {
+        "Image": "python:alpine3.6"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add --update curl libressl bash \u0026\u0026     rm -rf /var/cache/apk/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/dehydrated"
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/dehydrated",
+            "/dehydrated"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/bin",
+            "/usr/local/bin"
+          ]
+        },
+        {
+          "CmdLine": [
+            "pip3 install -r hooks/cloudflare/requirements.txt"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "config.tmpl",
+            "config.tmpl"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "entrypoint.sh",
+            "/entrypoint.sh"
+          ]
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/dehydrated/certs"
+          ]
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/dehydrated/accounts"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/entrypoint.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

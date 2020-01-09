@@ -1,0 +1,105 @@
+MetaArgs: null
+Stages:
+- As: server
+  BaseName: golang:alpine
+  Commands:
+  - Env:
+    - Key: PKG
+      Value: github.com/ivanturianytsia/raspi-temp
+    Name: env
+  - Env:
+    - Key: DIR
+      Value: $GOPATH/src/$PKG
+    Name: env
+  - CmdLine:
+    - "apk add --no-cache git &&     go get     \tgithub.com/gorilla/mux     \tgithub.com/joho/godotenv
+      \      &&     apk del git &&     mkdir -p $DIR &&     addgroup -S http && adduser
+      -S -G http http"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./server
+    - $DIR/server
+  - Name: workdir
+    Path: $DIR
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-w -s' -installsuffix cgo -v
+      -o /server $PKG/server
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: server
+  Platform: ""
+  SourceCode: FROM golang:alpine as server
+- As: frontend
+  BaseName: node:carbon
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - cd /app &&     npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:carbon
+  Name: frontend
+  Platform: ""
+  SourceCode: FROM node:carbon as frontend
+- BaseName: alpine:3.7
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"ivanturianytsia.work@gmail.com"'
+    Name: label
+  - CmdLine:
+    - apk --update upgrade &&     apk --update add ca-certificates &&     update-ca-certificates
+      &&     rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: server
+    Name: copy
+    SourcesAndDest:
+    - /etc/passwd
+    - /etc/group
+    - /etc/
+  - Chown: ""
+    From: server
+    Name: copy
+    SourcesAndDest:
+    - /server
+    - /
+  - Chown: ""
+    From: frontend
+    Name: copy
+    SourcesAndDest:
+    - /app/dist
+    - /dist
+  - Name: user
+    User: http:http
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - /server
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

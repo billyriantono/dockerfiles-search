@@ -1,0 +1,206 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "",
+      "BaseName": "php:7.2-apache",
+      "SourceCode": "FROM php:7.2-apache",
+      "Platform": "",
+      "From": {
+        "Image": "php:7.2-apache"
+      },
+      "Commands": [
+        {
+          "Maintainer": "Rob Wilkes \u003cmail@robbiew.net\u003e",
+          "Name": "maintainer"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PHPIPAM_SOURCE",
+              "Value": "\"https://github.com/phpipam/phpipam/archive\""
+            },
+            {
+              "Key": "PHPIPAM_VERSION",
+              "Value": "\"1.3.2\""
+            },
+            {
+              "Key": "PHPMAILER_SOURCE",
+              "Value": "\"https://github.com/PHPMailer/PHPMailer/archive\""
+            },
+            {
+              "Key": "PHPMAILER_VERSION",
+              "Value": "\"5.2.27\""
+            },
+            {
+              "Key": "APACHE_DOCUMENT_ROOT",
+              "Value": "\"/var/www/html\""
+            },
+            {
+              "Key": "MYSQL_HOST",
+              "Value": "\"mysql\""
+            },
+            {
+              "Key": "MYSQL_USER",
+              "Value": "\"phpipam\""
+            },
+            {
+              "Key": "MYSQL_PASSWORD",
+              "Value": "\"phpipamadmin\""
+            },
+            {
+              "Key": "MYSQL_DB",
+              "Value": "\"phpipam\""
+            },
+            {
+              "Key": "MYSQL_PORT",
+              "Value": "\"3306\""
+            },
+            {
+              "Key": "MYSQL_SSL",
+              "Value": "\"false\""
+            },
+            {
+              "Key": "MYSQL_SSL_KEY",
+              "Value": "\"/path/to/cert.key\""
+            },
+            {
+              "Key": "MYSQL_SSL_CERT",
+              "Value": "\"/path/to/cert.crt\""
+            },
+            {
+              "Key": "MYSQL_SSL_CA",
+              "Value": "\"/path/to/ca.crt\""
+            },
+            {
+              "Key": "MYSQL_SSL_CAPATH",
+              "Value": "\"/path/to/ca_certs\""
+            },
+            {
+              "Key": "MYSQL_SSL_CIPHER",
+              "Value": "\"DHE-RSA-AES256-SHA:AES128-SHA\""
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026     apt-get -y upgrade \u0026\u0026     apt-get install -y git libgmp-dev libfreetype6-dev libjpeg62-turbo-dev libldb-dev libldap2-dev inetutils-ping cron fping ssl-cert"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "rm -rf /var/lib/apt/lists/* \u0026\u0026     docker-php-ext-configure mysqli --with-mysqli=mysqlnd \u0026\u0026     docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/ \u0026\u0026     ln -s /usr/include/x86_64-linux-gnu/gmp.h /usr/include/gmp.h \u0026\u0026     docker-php-ext-configure gmp --with-gmp=/usr/include/x86_64-linux-gnu \u0026\u0026     docker-php-ext-configure ldap --with-libdir=lib/x86_64-linux-gnu \u0026\u0026     docker-php-ext-install -j$(nproc) pdo_mysql sockets gd gmp ldap gettext pcntl \u0026\u0026     echo \". /etc/environment\" \u003e\u003e /etc/apache2/envvars \u0026\u0026     a2enmod rewrite"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "php.ini",
+            "/usr/local/etc/php/"
+          ]
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "${PHPIPAM_SOURCE}/${PHPIPAM_VERSION}.tar.gz",
+            "/tmp/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "tar -xzf /tmp/${PHPIPAM_VERSION}.tar.gz -C ${APACHE_DOCUMENT_ROOT}/ --strip-components=1 \u0026\u0026     cp ${APACHE_DOCUMENT_ROOT}/config.dist.php ${APACHE_DOCUMENT_ROOT}/config.php \u0026\u0026     chown www-data ${APACHE_DOCUMENT_ROOT}/app/admin/import-export/upload \u0026\u0026     chown www-data ${APACHE_DOCUMENT_ROOT}/app/subnets/import-subnet/upload \u0026\u0026     chown www-data ${APACHE_DOCUMENT_ROOT}/css/images/logo"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "${PHPMAILER_SOURCE}/v${PHPMAILER_VERSION}.tar.gz",
+            "/tmp/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "tar -xzf /tmp/v${PHPMAILER_VERSION}.tar.gz -C ${APACHE_DOCUMENT_ROOT}/functions/PHPMailer/ --strip-components=1"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "Name": "add",
+          "SourcesAndDest": [
+            "crontab",
+            "/etc/cron.d/phpipam-cron"
+          ]
+        },
+        {
+          "CmdLine": [
+            "chmod 0644 /etc/cron.d/phpipam-cron \u0026\u0026     sed -i \"s|APACHE_DOC_ROOT|${APACHE_DOCUMENT_ROOT}|g\" /etc/cron.d/phpipam-cron \u0026\u0026     sed -i '/session    required     pam_loginuid.so/c\\#session    required   pam_loginuid.so' /etc/pam.d/cron \u0026\u0026     echo \"export MYSQL_HOST=${MYSQL_HOST}\\nexport MYSQL_USER=${MYSQL_USER}\\nexport MYSQL_PASSWORD=${MYSQL_PASSWORD}\\nexport MYSQL_DB=${MYSQL_DB}\\nexport MYSQL_PORT=${MYSQL_PORT}\" \u003e\u003e /etc/phpipam_environment \u0026\u0026     crontab /etc/cron.d/phpipam-cron"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "sed -i     -e \"s/\\['host'\\] = 'localhost'/\\['host'\\] = getenv(\\\"MYSQL_HOST\\\")/\"     -e \"s/\\['user'\\] = 'phpipam'/\\['user'\\] = getenv(\\\"MYSQL_USER\\\")/\"     -e \"s/\\['pass'\\] = 'phpipamadmin'/\\['pass'\\] = getenv(\\\"MYSQL_PASSWORD\\\")/\"     -e \"s/\\['name'\\] = 'phpipam'/\\['name'\\] = getenv(\\\"MYSQL_DB\\\")/\"     -e \"s/\\['port'\\] = 3306/\\['port'\\] = getenv(\\\"MYSQL_PORT\\\")/\"     -e \"s/\\['ssl'\\] *= false/\\['ssl'\\] = getenv(\\\"MYSQL_SSL\\\")/\"     -e \"s/\\['ssl_key'\\] *= '\\/path\\/to\\/cert.key'/['ssl_key'\\] = getenv(\\\"MYSQL_SSL_KEY\\\")/\"     -e \"s/\\['ssl_cert'\\] *= '\\/path\\/to\\/cert.crt'/['ssl_cert'\\] = getenv(\\\"MYSQL_SSL_CERT\\\")/\"     -e \"s/\\['ssl_ca'\\] *= '\\/path\\/to\\/ca.crt'/['ssl_ca'\\] = getenv(\\\"MYSQL_SSL_CA\\\")/\"     -e \"s/\\['ssl_capath'\\] *= '\\/path\\/to\\/ca_certs'/['ssl_capath'\\] = getenv(\\\"MYSQL_SSL_CAPATH\\\")/\"     -e \"s/\\['ssl_cipher'\\] *= 'DHE-RSA-AES256-SHA:AES128-SHA'/['ssl_cipher'\\] = getenv(\\\"MYSQL_SSL_CIPHER\\\")/\"     ${APACHE_DOCUMENT_ROOT}/config.php"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "a2enmod rewrite"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "a2ensite default-ssl"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "a2enmod ssl"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "443"
+          ]
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/etc/ssl"
+          ]
+        },
+        {
+          "CmdLine": [
+            "sh",
+            "-c",
+            "cron \u0026\u0026 apache2-foreground"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

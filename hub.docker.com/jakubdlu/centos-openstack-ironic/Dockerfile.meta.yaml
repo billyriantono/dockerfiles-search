@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- As: ipxe-builder
+  BaseName: centos:7
+  Commands:
+  - Env:
+    - Key: IPXE_MASTER_SNAPSHOT
+      Value: https://git.ipxe.org/ipxe.git/snapshot/master.tar.gz
+    Name: env
+  - CmdLine:
+    - yum -y install gcc xz-devel make perl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /tmp/ipxe
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -f ${IPXE_MASTER_SNAPSHOT} -o /tmp/ipxe/master.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar --strip-components=1 -xzf /tmp/ipxe/master.tar.gz -C /tmp/ipxe
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/ipxe/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ipxescript
+    - /tmp/ipxe/src/
+  - CmdLine:
+    - make configure
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make bin/undionly.kpxe bin-x86_64-efi/ipxe.efi EMBED=/tmp/ipxe/src/ipxescript
+    Name: run
+    PrependShell: true
+  From:
+    Image: centos:7
+  Name: ipxe-builder
+  Platform: ""
+  SourceCode: FROM centos:7 as ipxe-builder
+- BaseName: centos:7
+  Commands:
+  - Env:
+    - Key: OPENSTACK_RELEASE
+      Value: train
+    Name: env
+  - CmdLine:
+    - groupadd -g 997 ironic && useradd -u 998 -d /var/lib/ironic -s /sbin/nologin
+      -M -g ironic ironic
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum -y install centos-release-openstack-${OPENSTACK_RELEASE} &&     yum -y install
+      epel-release &&     yum -y upgrade &&     yum -y install git                    httpd                    ipxe-bootimgs                    mariadb                    mod_wsgi                    less                    openstack-keystone                    openstack-ironic-api                    openstack-ironic-conductor                    patch                    python-crypto                    python-ironicclient                    python2-openstackclient.noarch                    python2-PyMySQL                    python2-rsa                    rsyslog                    qemu-img                    syslinux                    tftp-server                    wget
+      &&    mv /etc/ironic/rootwrap.d /etc/rootwrap.d-ironic &&     mkdir /tmp/patches
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ipxe-builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/ipxe/src/bin-x86_64-efi/ipxe.efi
+    - /usr/share/syslinux/custom-ipxe.efi
+  - Chown: ""
+    From: ipxe-builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/ipxe/src/bin/undionly.kpxe
+    - /usr/share/syslinux/custom-undionly.kpxe
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rsyslog.conf
+    - /etc/
+  - Name: volume
+    Volumes:
+    - /etc/ironic
+  - Name: user
+    User: ironic:ironic
+  From:
+    Image: centos:7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:7

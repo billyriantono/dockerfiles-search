@@ -1,0 +1,132 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12-alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk add build-base git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.sum
+    - .
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - GOOS=linux GOARCH=amd64 go build -ldflags '-linkmode=external "-extldflags=-static"'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp git-userland /bin
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12-alpine as builder
+- BaseName: debian:stretch
+  Commands:
+  - Labels:
+    - Key: maintainers
+      Value: '"Martin Koppehel <mkoppehel@embedded.enterprises>"'
+    Name: label
+  - CmdLine:
+    - echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt update && apt install -y locales man-db
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - locale-gen
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd -g 1000 user
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -d /home/user -g 1000 -u 1000 -o -m -s /bin/zsh user
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt update && apt install -y zsh git tmux vim emacs-nox tig nano less patch
+      git-man gnupg2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt install curl -y && su user -c 'sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"'
+      && sed -i s/robbyrussell/gianu/g /home/user/.zshrc && apt remove curl -y &&
+      apt autoremove -y
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /bin/git-userland
+    - /bin/git-userland
+  - Name: user
+    User: user
+  - Name: workdir
+    Path: /home/user
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./setup-userland.sh
+    - .
+  - CmdLine:
+    - sh ./setup-userland.sh && rm ./setup-userland.sh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - Name: user
+    User: root
+  - CmdLine:
+    - mv /home/user /home/user-template
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./start-userland.sh
+    - /start-userland.sh
+  - Name: user
+    User: root
+  - Name: workdir
+    Path: /home/user
+  - CmdLine:
+    - /bin/sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /start-userland.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch

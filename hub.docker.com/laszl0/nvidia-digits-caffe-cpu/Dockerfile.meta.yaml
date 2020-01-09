@@ -1,0 +1,134 @@
+MetaArgs: null
+Stages:
+- As: protobuf
+  BaseName: ubuntu:14.04
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends         autoconf         automake         ca-certificates         curl         g++         git         libtool         make         python-dev         python-setuptools         unzip
+      &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /protobuf
+  - CmdLine:
+    - git clone -b '3.2.x' https://github.com/google/protobuf.git . &&     ./autogen.sh
+      &&     ./configure --prefix=/usr/local/protobuf &&     make "-j$(nproc)" install
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:14.04
+  Name: protobuf
+  Platform: ""
+  SourceCode: FROM ubuntu:14.04 as protobuf
+- As: caffe
+  BaseName: nvidia/cuda:8.0-cudnn5-devel-ubuntu14.04
+  Commands:
+  - Chown: ""
+    From: protobuf
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/protobuf
+    - /usr/local
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends         ca-certificates         cmake         curl         g++         git         libatlas-base-dev         libboost-filesystem1.55-dev         libboost-python1.55-dev         libboost-system1.55-dev         libboost-thread1.55-dev         libgflags-dev         libgoogle-glog-dev         libhdf5-serial-dev         libleveldb-dev         liblmdb-dev         libnccl-dev=1.2.3-1+cuda8.0         libopencv-dev         libsnappy-dev         python-all-dev         python-h5py         python-matplotlib         python-opencv         python-pil         python-pydot         python-scipy         python-skimage         python-sklearn
+      &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -O https://bootstrap.pypa.io/get-pip.py &&     python get-pip.py &&     pip
+      install --upgrade --no-cache-dir pip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/nvidia/caffe.git /caffe -b 'caffe-0.15' &&     cd
+      /caffe &&     pip install ipython==5.4.1 &&     pip install -r python/requirements.txt
+      &&     mkdir build &&     cd build &&     cmake -DCMAKE_INSTALL_PREFIX=/usr/local/caffe
+      -DCPU_ONLY=1 .. &&     make -j"$(nproc)" install &&     rm -rf /caffe
+    Name: run
+    PrependShell: true
+  From:
+    Image: nvidia/cuda:8.0-cudnn5-devel-ubuntu14.04
+  Name: caffe
+  Platform: ""
+  SourceCode: FROM nvidia/cuda:8.0-cudnn5-devel-ubuntu14.04 as caffe
+- BaseName: nvidia/cuda:8.0-cudnn5-runtime-ubuntu14.04
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"NVIDIA CORPORATION <cudatools@nvidia.com>"'
+    Name: label
+  - Env:
+    - Key: DIGITS_VERSION
+      Value: "6.0"
+    Name: env
+  - Labels:
+    - Key: com.nvidia.digits.version
+      Value: '"6.0"'
+    Name: label
+  - Chown: ""
+    From: caffe
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/caffe
+    - /usr/local
+  - Chown: ""
+    From: protobuf
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/protobuf
+    - /usr/local
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends         ca-certificates         curl         python
+      &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -O https://bootstrap.pypa.io/get-pip.py &&     python get-pip.py &&     pip
+      install --upgrade --no-cache-dir pip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends         build-essential         git         graphviz         gunicorn         libatlas3-base         libboost-filesystem1.55.0         libboost-python1.55.0         libboost-system1.55.0         libboost-thread1.55.0         libfreetype6-dev         libgoogle-glog0         libhdf5-serial-dev         libleveldb1         libnccl1=1.2.3-1+cuda8.0         libopencv-core2.4         libopencv-highgui2.4         libopencv-imgproc2.4         libpng12-dev         libzmq3         nginx         pkg-config         python-dev         python-flask         python-flaskext.socketio         python-flaskext.wtf         python-gevent         python-lmdb         python-opencv         python-pil         python-pydot         python-requests         python-six         python-skimage         python-tk         python-wtforms         rsync         software-properties-common         torch7-nv=0.9.99-1+cuda8.0
+      &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install https://github.com/NVIDIA/DIGITS/archive/v6.0.1.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install --no-cache-dir         setuptools\>=18.5         tensorflow-gpu==1.2.1         protobuf==3.2.0
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /jobs
+  - Env:
+    - Key: DIGITS_JOBS_DIR
+      Value: /jobs
+    Name: env
+  - Env:
+    - Key: DIGITS_LOGFILE_FILENAME
+      Value: /jobs/digits.log
+    Name: env
+  - Env:
+    - Key: PYTHONPATH
+      Value: /usr/local/python
+    Name: env
+  - Name: expose
+    Ports:
+    - "5000"
+  - Name: expose
+    Ports:
+    - "6006"
+  - CmdLine:
+    - python
+    - -m
+    - digits
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: nvidia/cuda:8.0-cudnn5-runtime-ubuntu14.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nvidia/cuda:8.0-cudnn5-runtime-ubuntu14.04

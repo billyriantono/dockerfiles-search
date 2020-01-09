@@ -1,0 +1,179 @@
+MetaArgs: null
+Stages:
+- As: unbound-build
+  BaseName: alpine:3.9
+  Commands:
+  - Env:
+    - Key: REVISION
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: UNBOUND_BUILD_DEPS
+      Value: expat-dev file gcc libevent-dev openssl-dev make musl-dev
+    Name: env
+  - CmdLine:
+    - apk --no-cache add $UNBOUND_BUILD_DEPS
+    Name: run
+    PrependShell: true
+  - Key: UNBOUND_VERSION
+    Name: arg
+    Value: 1.9.3
+  - Key: UNBOUND_SHA256
+    Name: arg
+    Value: 1b55dd9170e4bfb327fb644de7bbf7f0541701149dff3adf1b63ffa785f16dfa
+  - Key: UNBOUND_DOWNLOAD_URL
+    Name: arg
+    Value: https://nlnetlabs.nl/downloads/unbound/unbound-${UNBOUND_VERSION}.tar.gz
+  - CmdLine:
+    - set -x &&     mkdir -p /tmp/src &&     cd /tmp/src &&     wget -O unbound.tar.gz
+      $UNBOUND_DOWNLOAD_URL &&     echo "${UNBOUND_SHA256} *unbound.tar.gz" | sha256sum
+      -c - &&     tar xzf unbound.tar.gz &&     rm -f unbound.tar.gz &&     cd unbound-${UNBOUND_VERSION}
+      &&     ./configure --with-conf-file=/etc/unbound/unbound.conf --with-run-dir=/etc/unbound     --with-pthreads
+      --with-username=_unbound --with-libevent     CFLAGS="-O2 -flto -fPIE -U_FORTIFY_SOURCE
+      -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wformat -Werror=format-security"     LDFLAGS="-Wl,-z,now
+      -Wl,-z,relro" &&     make install &&     ls /usr/local/lib/
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: unbound-build
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as unbound-build
+- BaseName: alpine:3.9
+  Commands:
+  - Env:
+    - Key: UNBOUND_RUN_DEPS
+      Value: expat libevent openssl runit shadow drill wget bc
+    Name: env
+  - Key: LIBUNBOUND_CURRENT
+    Name: arg
+    Value: "8"
+  - Key: LIBUNBOUND_VERSION
+    Name: arg
+    Value: ${LIBUNBOUND_CURRENT}.1.3
+  - CmdLine:
+    - apk add --no-cache $UNBOUND_RUN_DEPS
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/sbin/unbound
+    - /usr/local/sbin/unbound
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/sbin/unbound-checkconf
+    - /usr/local/sbin/unbound-checkconf
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/sbin/unbound-control
+    - /usr/local/sbin/unbound-control
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/sbin/unbound-host
+    - /usr/local/sbin/unbound-host
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/sbin/unbound-anchor
+    - /usr/local/sbin/unbound-anchor
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/sbin/unbound-control-setup
+    - /usr/local/sbin/unbound-control-setup
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/libunbound.so.${LIBUNBOUND_VERSION}
+    - /usr/local/lib/libunbound.so.${LIBUNBOUND_VERSION}
+  - CmdLine:
+    - set -x &&     cd /usr/local/lib/ &&     ln -sf libunbound.so.${LIBUNBOUND_VERSION}
+      libunbound.so.${LIBUNBOUND_CURRENT} &&     ln -sf libunbound.so.${LIBUNBOUND_VERSION}
+      libunbound.so &&     cd &&     groupadd _unbound &&     useradd -g _unbound
+      -s /dev/null -d /dev/null _unbound &&     mkdir -p /etc/service/unbound /etc/unbound/run
+      &&     unbound-anchor -a /etc/unbound/run/root.key || true &&     chown _unbound:_unbound
+      /etc/unbound/run &&     chown _unbound:_unbound /etc/unbound/run/root.key &&     wget
+      -O /etc/unbound/root.hints https://www.internic.net/domain/named.root     update-ca-certificates
+      2> /dev/null || true
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - unbound.conf
+    - /etc/unbound/unbound.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - unbound.sh
+    - /etc/service/unbound/run
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /
+  - Name: expose
+    Ports:
+    - 53/tcp
+    - 53/udp
+  - Name: expose
+    Ports:
+    - 4949/tcp
+  - Name: expose
+    Ports:
+    - 853/tcp
+  - CmdLine:
+    - unbound -h || true
+    Name: run
+    PrependShell: true
+  - Health:
+      Interval: 120000000000
+      StartPeriod: 60000000000
+      Test:
+      - CMD
+      - drill
+      - -D
+      - -Q
+      - .
+      - '@127.0.0.1'
+      - SOA
+    Name: healthcheck
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Labels:
+    - Key: org.opencontainers.image.title
+      Value: '"unbound"'
+    - Key: org.opencontainers.image.description
+      Value: '"Unbound is a validating, recursive, caching DNS resolver."'
+    - Key: org.opencontainers.image.url
+      Value: '"https://nlnetlabs.nl/projects/unbound/about/"'
+    - Key: org.opencontainers.image.documentation
+      Value: '"https://nlnetlabs.nl/documentation/unbound/"'
+    - Key: org.opencontainers.image.source
+      Value: '"https://nlnetlabs.nl/svn/unbound/"'
+    - Key: org.opencontainers.image.authors
+      Value: '"publicarray"'
+    - Key: org.opencontainers.image.version
+      Value: ${UNBOUND_VERSION}
+    Name: label
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

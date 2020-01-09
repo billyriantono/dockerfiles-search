@@ -1,0 +1,9 @@
+FROM pboreg/latex
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get -yq install --no-install-recommends \
+      pandoc && \
+    apt-get -y clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/*

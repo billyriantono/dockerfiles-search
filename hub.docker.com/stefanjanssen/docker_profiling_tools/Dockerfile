@@ -1,0 +1,63 @@
+FROM dkoslicki/commonkmers
+MAINTAINER Stefan Janssen, stefan.m.janssen@gmail.com
+ENV TOOLNAME commonkmers
+
+#needed if on Michaels cluster
+#~ ENV http_proxy http://172.16.20.249:3128
+#~ ENV https_proxy http://172.16.20.249:3128
+
+#update underlying linux system
+#RUN apt-get update -y
+
+#list of all dependencies that can be satisfied via the package management system of Ubuntu
+ENV PACKAGES curl
+#install dependencies
+RUN apt-get install -y --no-install-recommends ${PACKAGES}
+
+#install dependencies
+
+
+#directory where additional software shall be installed
+ENV PREFIX /biobox/
+#create prefix directory and src subdirectory
+RUN mkdir -p ${PREFIX}/src/ ${PREFIX}/bin/ ${PREFIX}/lib/ ${PREFIX}/share/ 
+ENV PATH=${PREFIX}/bin:${PATH}
+
+# Locations for biobox file validator
+ENV VALIDATOR /bbx/validator/
+ENV BASE_URL https://s3-us-west-1.amazonaws.com/bioboxes-tools/validate-biobox-file
+ENV VERSION  0.x.y
+RUN mkdir -p ${VALIDATOR}
+# download the validate-biobox-file binary and extract it to the directory $VALIDATOR
+RUN wget \
+      --quiet \
+      --output-document -\
+      ${BASE_URL}/${VERSION}/validate-biobox-file.tar.xz \
+    | tar xJf - \
+      --directory ${VALIDATOR} \
+      --strip-components=1
+ENV PATH ${PATH}:${VALIDATOR}
+#download yaml schema
+RUN wget -q -O ${PREFIX}/share/schema.yaml https://raw.githubusercontent.com/pbelmann/rfc/feature/new-profiling-inteface/container/profiling/schema.yaml
+
+
+
+ADD Classify.jl.patch ${PREFIX}/src/${TOOLNAME}/Classify.jl.patch
+RUN patch /usr/local/sbin/Classify.jl < ${PREFIX}/src/${TOOLNAME}/Classify.jl.patch
+
+#from now on, the database should be provided by the host as a volume mount!
+#~ RUN mkdir -p /exchange/db/
+#~ RUN curl http://www.math.oregonstate.edu/~koslickd/CommonKmersData.tar.gz > /exchange/db/CommonKmersData.tar.gz
+#~ RUN tar xzvf /exchange/db/CommonKmersData.tar.gz -C /exchange/db/
+#~ RUN rm -f /exchange/db/CommonKmersData.tar.gz
+#~ RUN echo -e "\n \n NOTE: Be sure to download the training data at http://www.math.oregonstate.edu/~koslickd/CommonKmersData.tar.gz and uncompress it. The resulting directory should be passed to docker at the proper location via: -v /path/to/uncompressed/Data:/exchange/db/:ro"
+
+ENV GITHUB https://raw.githubusercontent.com/sjanssen2/docker_profiling_tools/master/
+#add my Perl scripts
+RUN wget -q -O ${PREFIX}/lib/Utils.pm ${GITHUB}/Utils.pm
+RUN wget -q -O ${PREFIX}/lib/YAML.pm ${GITHUB}/YAML.pm
+ADD task_${TOOLNAME}.pl ${PREFIX}/bin/task.pl
+RUN chmod a+x ${PREFIX}/bin/task.pl
+
+ENV YAML "/bbx/mnt/input/biobox.yaml"
+ENTRYPOINT ["task.pl"]

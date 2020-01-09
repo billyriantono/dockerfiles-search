@@ -1,0 +1,128 @@
+MetaArgs:
+- DefaultValue: "3.10"
+  Key: ALPINE_VERSION
+  ProvidedValue: null
+  Value: "3.10"
+- DefaultValue: '"v1.22.1.0"'
+  Key: OVERLAY_VERSION
+  ProvidedValue: null
+  Value: '"v1.22.1.0"'
+- DefaultValue: '"amd64"'
+  Key: OVERLAY_ARCH
+  ProvidedValue: null
+  Value: '"amd64"'
+- DefaultValue: https://github.com/aldostools/webMAN-MOD
+  Key: PS3NETSRV_REPO
+  ProvidedValue: null
+  Value: https://github.com/aldostools/webMAN-MOD
+- DefaultValue: _Projects_/ps3netsrv
+  Key: PS3NETSRV_DIR
+  ProvidedValue: null
+  Value: _Projects_/ps3netsrv
+- DefaultValue: master
+  Key: PS3NETSRV_BRANCH
+  ProvidedValue: null
+  Value: master
+Stages:
+- As: builder
+  BaseName: alpine:${ALPINE_VERSION}
+  Commands:
+  - Key: PS3NETSRV_REPO
+    Name: arg
+    Value: null
+  - Key: PS3NETSRV_DIR
+    Name: arg
+    Value: null
+  - Key: PS3NETSRV_BRANCH
+    Name: arg
+    Value: null
+  - Env:
+    - Key: PS3NETSRV_REPO
+      Value: ${PS3NETSRV_REPO}
+    - Key: PS3NETSRV_DIR
+      Value: ${PS3NETSRV_DIR}
+    - Key: PS3NETSRV_BRANCH
+      Value: ${PS3NETSRV_BRANCH}
+    Name: env
+  - Name: workdir
+    Path: /tmp/repo
+  - CmdLine:
+    - echo "**** install build packages ****" &&   apk add --update --no-cache     git     build-base     meson     mbedtls-dev     tar
+      &&   echo "**** build ps3netsrv ****" &&   wget "${PS3NETSRV_REPO}/archive/${PS3NETSRV_BRANCH}.tar.gz"
+      -O repo.tar.gz &&   tar -xvf repo.tar.gz --strip 1 &&   cd /tmp/repo/${PS3NETSRV_DIR}
+      &&   meson build --buildtype=release &&   ninja -C build/
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:${ALPINE_VERSION}
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:${ALPINE_VERSION} as builder
+- BaseName: alpine:${ALPINE_VERSION}
+  Commands:
+  - Key: OVERLAY_VERSION
+    Name: arg
+    Value: null
+  - Key: OVERLAY_ARCH
+    Name: arg
+    Value: null
+  - Key: PS3NETSRV_DIR
+    Name: arg
+    Value: null
+  - Env:
+    - Key: OVERLAY_VERSION
+      Value: ${OVERLAY_VERSION}
+    - Key: OVERLAY_ARCH
+      Value: ${OVERLAY_ARCH}
+    - Key: PS3NETSRV_DIR
+      Value: ${PS3NETSRV_DIR}
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/repo/${PS3NETSRV_DIR}/build/ps3netsrv
+    - /usr/local/bin/ps3netsrv
+  - CmdLine:
+    - echo "**** install runtime packages ****" &&   apk add --no-cache     bash     curl     ca-certificates     coreutils     shadow     tzdata     libstdc++     mbedtls
+      &&   echo "**** add s6 overlay ****" &&   curl -o /tmp/s6-overlay.tar.gz -L     "https://github.com/just-containers/s6-overlay/releases/download/${OVERLAY_VERSION}/s6-overlay-${OVERLAY_ARCH}.tar.gz"
+      &&   tar xvzf /tmp/s6-overlay.tar.gz -C / &&   echo "**** create abc user and
+      make our folders ****" &&   groupmod -g 1000 users &&   useradd -u 911 -U -d
+      /config -s /bin/false abc &&   usermod -G users abc &&   mkdir -p /var/log/ps3netsrv
+      &&   chown -R 65534:65534 /var/log/ps3netsrv &&   echo "**** cleanup ****" &&   rm
+      -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs/
+    - /
+  - Name: volume
+    Volumes:
+    - /games
+  - Name: expose
+    Ports:
+    - "38008"
+  - Labels:
+    - Key: org.label-schema.name
+      Value: '"ps3netsrv"'
+    - Key: org.label-schema.description
+      Value: '"Docker container for ps3netsrv"'
+    - Key: org.label-schema.version
+      Value: '"unknown"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/shawly/docker-ps3netsrv"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:${ALPINE_VERSION}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:${ALPINE_VERSION}

@@ -1,0 +1,172 @@
+MetaArgs: null
+Stages:
+- As: api-build
+  BaseName: golang:1.10.2-alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./api
+    - /go/src/commento-ce/api
+  - Name: workdir
+    Path: /go/src/commento-ce/api
+  - CmdLine:
+    - apk update && apk add bash make git curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make prod -j$(($(nproc) + 1))
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10.2-alpine
+  Name: api-build
+  Platform: ""
+  SourceCode: FROM golang:1.10.2-alpine AS api-build
+- As: frontend-build
+  BaseName: node:10.3.0-alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./frontend
+    - /commento-ce/frontend/
+  - Name: workdir
+    Path: /commento-ce/frontend/
+  - CmdLine:
+    - apk update && apk add bash make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install -g html-minifier@3.5.7 uglify-js@3.4.1 sass@1.5.1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make prod -j$(($(nproc) + 1))
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10.3.0-alpine
+  Name: frontend-build
+  Platform: ""
+  SourceCode: FROM node:10.3.0-alpine AS frontend-build
+- As: templates-build
+  BaseName: alpine:3.7
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./templates
+    - /commento-ce/templates
+  - Name: workdir
+    Path: /commento-ce/templates
+  - CmdLine:
+    - apk update && apk add bash make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make prod -j$(($(nproc) + 1))
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: templates-build
+  Platform: ""
+  SourceCode: FROM alpine:3.7 AS templates-build
+- As: db-build
+  BaseName: alpine:3.7
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./db
+    - /commento-ce/db
+  - Name: workdir
+    Path: /commento-ce/db
+  - CmdLine:
+    - apk update && apk add bash make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make prod -j$(($(nproc) + 1))
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: db-build
+  Platform: ""
+  SourceCode: FROM alpine:3.7 AS db-build
+- BaseName: alpine:3.7
+  Commands:
+  - Chown: ""
+    From: api-build
+    Name: copy
+    SourcesAndDest:
+    - /go/src/commento-ce/api/build/prod/commento-ce
+    - /commento-ce/commento-ce
+  - Chown: ""
+    From: frontend-build
+    Name: copy
+    SourcesAndDest:
+    - /commento-ce/frontend/build/prod/*.html
+    - /commento-ce/
+  - Chown: ""
+    From: frontend-build
+    Name: copy
+    SourcesAndDest:
+    - /commento-ce/frontend/build/prod/css/*.css
+    - /commento-ce/css/
+  - Chown: ""
+    From: frontend-build
+    Name: copy
+    SourcesAndDest:
+    - /commento-ce/frontend/build/prod/js/*.js
+    - /commento-ce/js/
+  - Chown: ""
+    From: frontend-build
+    Name: copy
+    SourcesAndDest:
+    - /commento-ce/frontend/build/prod/images/*
+    - /commento-ce/images/
+  - Chown: ""
+    From: templates-build
+    Name: copy
+    SourcesAndDest:
+    - /commento-ce/templates/build/prod/templates/
+    - /commento-ce/templates/
+  - Chown: ""
+    From: db-build
+    Name: copy
+    SourcesAndDest:
+    - /commento-ce/db/build/prod/db/
+    - /commento-ce/db/
+  - CmdLine:
+    - apk update && apk add ca-certificates --no-cache
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: workdir
+    Path: /commento-ce/
+  - Env:
+    - Key: COMMENTO_BIND_ADDRESS
+      Value: '"0.0.0.0"'
+    Name: env
+  - CmdLine:
+    - /commento-ce/commento-ce
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

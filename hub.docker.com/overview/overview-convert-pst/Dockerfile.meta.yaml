@@ -1,0 +1,198 @@
+MetaArgs: null
+Stages:
+- As: framework
+  BaseName: overview/overview-convert-framework:0.0.17
+  Commands: null
+  From:
+    Image: overview/overview-convert-framework:0.0.17
+  Name: framework
+  Platform: ""
+  SourceCode: FROM overview/overview-convert-framework:0.0.17 as framework
+- As: os
+  BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache ca-certificates jq
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: os
+  Platform: ""
+  SourceCode: FROM alpine:3.7 AS os
+- As: test-base
+  BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache bats jq
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  From:
+    Image: alpine:3.7
+  Name: test-base
+  Platform: ""
+  SourceCode: FROM alpine:3.7 AS test-base
+- As: build
+  BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache     ca-certificates     curl     musl-dev     gcc     g++     make     tar     intltool     gzip     glib-dev     glib-static     xz
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LIBXML2_VERSION
+      Value: 2.9.8
+    Name: env
+  - CmdLine:
+    - mkdir -p /build   && cd /build   && curl -o - ftp://xmlsoft.org/libxml2/libxml2-${LIBXML2_VERSION}.tar.gz
+      | tar zxf -   && cd libxml2-${LIBXML2_VERSION}   && ./configure --without-python   &&
+      make -j4 && make install
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LIBGSF_VERSION
+      Value: 1.14.43
+    Name: env
+  - CmdLine:
+    - mkdir -p /build   && cd /build   && curl -o - --location http://ftp.gnome.org/pub/gnome/sources/libgsf/1.14/libgsf-${LIBGSF_VERSION}.tar.xz
+      | tar Jxf -   && cd libgsf-${LIBGSF_VERSION}   && ./configure   && make -j4
+      && make install
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LIBPST_VERSION
+      Value: 0.6.72
+    Name: env
+  - CmdLine:
+    - mkdir -p /build   && cd /build   && curl -o - --location http://www.five-ten-sg.com/libpst/packages/libpst-${LIBPST_VERSION}.tar.gz
+      | tar zxf -   && cd libpst-${LIBPST_VERSION}   && ./configure --disable-python
+      --enable-libpst-shared   && make -j4 && make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build/convert-emailarchive
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Makefile
+    - Makefile
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/
+    - src/
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: build
+  Platform: ""
+  SourceCode: FROM alpine:3.7 AS build
+- As: base
+  BaseName: os
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: framework
+    Name: copy
+    SourcesAndDest:
+    - /app/run
+    - /app/
+  - Chown: ""
+    From: framework
+    Name: copy
+    SourcesAndDest:
+    - /app/convert-stream-to-mime-multipart
+    - /app/convert
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/convert-emailarchive/extract-pst
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - do-convert-stream-to-mime-multipart
+    - /app/
+  - CmdLine:
+    - /app/run
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: os
+  Name: base
+  Platform: ""
+  SourceCode: FROM os AS base
+- As: dev
+  BaseName: base
+  Commands: null
+  From:
+    Stage:
+      Index: 4
+      Named: base
+  Name: dev
+  Platform: ""
+  SourceCode: FROM base AS dev
+- As: test
+  BaseName: test-base
+  Commands:
+  - Chown: ""
+    From: framework
+    Name: copy
+    SourcesAndDest:
+    - /app/convert-stream-to-mime-multipart
+    - /app/convert
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/convert-emailarchive/extract-pst
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - do-convert-stream-to-mime-multipart
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /test/
+    - /app/test/
+  - CmdLine:
+    - ./test/suite.bats
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "true"
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 2
+      Named: test-base
+  Name: test
+  Platform: ""
+  SourceCode: FROM test-base AS test
+- As: production
+  BaseName: base
+  Commands: null
+  From:
+    Stage:
+      Index: 4
+      Named: base
+  Name: production
+  Platform: ""
+  SourceCode: FROM base AS production

@@ -1,0 +1,93 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: golang:1.12.1-alpine3.9
+  Commands:
+  - Name: workdir
+    Path: /src/gocron
+  - Env:
+    - Key: GOPATH
+      Value: /
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /src/gocron
+  - CmdLine:
+    - apk add git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - env CGO_ENABLED=0 go test ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - env CGO_ENABLED=0 go build -o gocron
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.1-alpine3.9
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM golang:1.12.1-alpine3.9 AS build-env
+- As: test-env
+  BaseName: ubuntu:bionic
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y iproute2 postgresql curl sudo jq
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /src/gocron/gocron
+    - /usr/local/bin/gocron
+  - CmdLine:
+    - chmod +x /usr/local/bin/gocron
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/build_tests.sh
+    - /build_test.sh
+  - CmdLine:
+    - chmod +x /build_test.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bash /build_test.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:bionic
+  Name: test-env
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic AS test-env
+- BaseName: alpine:latest
+  Commands:
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /src/gocron/gocron
+    - /usr/local/bin/gocron
+  - CmdLine:
+    - adduser -S gocron &&     chmod +x /usr/local/bin/gocron &&     chown gocron
+      /usr/local/bin/gocron &&     apk add ca-certificates
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: gocron
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

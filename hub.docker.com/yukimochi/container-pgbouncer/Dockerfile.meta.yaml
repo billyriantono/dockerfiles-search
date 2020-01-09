@@ -1,0 +1,69 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:latest
+  Commands:
+  - Key: PGBOUNCER_VERSION
+    Name: arg
+    Value: 1.8.1
+  - CmdLine:
+    - apk add -U --no-cache build-base libevent-dev c-ares-dev libressl-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget http://pgbouncer.github.io/downloads/files/$PGBOUNCER_VERSION/pgbouncer-$PGBOUNCER_VERSION.tar.gz
+      &&     wget http://pgbouncer.github.io/downloads/files/$PGBOUNCER_VERSION/pgbouncer-$PGBOUNCER_VERSION.tar.gz.sha256
+      -O - | sha256sum -c - &&     tar -xf pgbouncer-$PGBOUNCER_VERSION.tar.gz &&     rm
+      pgbouncer-$PGBOUNCER_VERSION.tar.gz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: pgbouncer-$PGBOUNCER_VERSION
+  - CmdLine:
+    - ./configure --prefix=/usr/local --with-libevent=libevent-prefix &&     make
+      && make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/rootfs
+  - CmdLine:
+    - mkdir -p usr/bin usr/lib lib &&     cp /usr/local/bin/pgbouncer usr/bin &&     for
+      lib in $(ldd usr/bin/pgbouncer | awk '{ print $(NF-1) }'); do     cp $lib .$lib;     done
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:latest AS builder
+- BaseName: busybox
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/rootfs
+    - /
+  - CmdLine:
+    - adduser -D -S pgbouncer &&     mkdir -p /etc/pgbouncer /var/log/pgbouncer /var/run/pgbouncer
+      &&     chown pgbouncer /etc/pgbouncer /var/log/pgbouncer /var/run/pgbouncer
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: pgbouncer
+  - Name: volume
+    Volumes:
+    - /etc/pgbouncer
+  - Name: expose
+    Ports:
+    - "6432"
+  - CmdLine:
+    - /usr/bin/pgbouncer
+    - /etc/pgbouncer/pgbouncer.ini
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: busybox
+  Name: ""
+  Platform: ""
+  SourceCode: FROM busybox

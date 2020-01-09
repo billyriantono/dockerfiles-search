@@ -1,0 +1,153 @@
+MetaArgs: null
+Stages:
+- As: build-tools
+  BaseName: alpine
+  Commands:
+  - Key: http_proxy
+    Name: arg
+    Value: null
+  - Env:
+    - Key: http_proxy
+      Value: ${http_proxy:-""}
+    Name: env
+  - Env:
+    - Key: https_proxy
+      Value: $http_proxy
+    Name: env
+  - Env:
+    - Key: HTTP_PROXY
+      Value: $http_proxy
+    Name: env
+  - Env:
+    - Key: HTTPS_PROXY
+      Value: $http_proxy
+    Name: env
+  - Env:
+    - Key: ftp_proxy
+      Value: $http_proxy
+    Name: env
+  - Env:
+    - Key: rsync_proxy
+      Value: $http_proxy
+    Name: env
+  - Env:
+    - Key: socks_proxy
+      Value: $http_proxy
+    Name: env
+  - Env:
+    - Key: all_proxy
+      Value: $http_proxy
+    Name: env
+  - Env:
+    - Key: no_proxy
+      Value: '"localhost,127.0.0.1,0.0.0.0,.intranet,.ing.nl,ing.net,192.168.99.100"'
+    Name: env
+  - Env:
+    - Key: NO_PROXY
+      Value: '"localhost,127.0.0.1,0.0.0.0,.intranet,.ing.nl,ing.net,192.168.99.100"'
+    Name: env
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps                                 build-base                                                           gnupg                                                                pcre-dev                                                             wget                                                                 zlib-dev
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: build-tools
+  Platform: ""
+  SourceCode: FROM alpine AS build-tools
+- As: retrieve
+  BaseName: build-tools
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: VERSION
+      Value: ${VERSION:-1.17.3}
+    Name: env
+  - CmdLine:
+    - wget -q http://nginx.org/download/nginx-${VERSION}.tar.gz   --no-check-certificate  &&     wget
+      -q http://nginx.org/download/nginx-${VERSION}.tar.gz.asc --no-check-certificate
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xf nginx-${VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build-tools
+  Name: retrieve
+  Platform: ""
+  SourceCode: FROM build-tools AS retrieve
+- As: build
+  BaseName: retrieve
+  Commands:
+  - Name: workdir
+    Path: nginx-${VERSION}
+  - CmdLine:
+    - ./configure                                                              --with-ld-opt="-static"                                              --with-http_sub_module                                    &&     make
+      install                                                  &&     strip /usr/local/nginx/sbin/nginx
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: retrieve
+  Name: build
+  Platform: ""
+  SourceCode: FROM retrieve As build
+- BaseName: alpine
+  Commands:
+  - Name: workdir
+    Path: /usr/local/nginx/html
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/nginx
+    - /usr/local/nginx
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/dev/hello-world/assets
+    - /usr/local/nginx/html/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/dev/hello-world/nginx.conf
+    - /usr/local/nginx/conf/
+  - CmdLine:
+    - ln -sf /dev/stdout /usr/local/nginx/logs/access.log            &&     ln -sf
+      /dev/stderr /usr/local/nginx/logs/error.log
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/dev/hello-world/docker-entrypoint.sh
+    - /
+  - Name: stopsignal
+    Signal: SIGQUIT
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/local/nginx/sbin/nginx
+    - -g
+    - daemon off;
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

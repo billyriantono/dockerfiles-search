@@ -1,0 +1,92 @@
+MetaArgs: null
+Stages:
+- BaseName: saschaegerer/ubuntu:18.04
+  Commands:
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - CmdLine:
+    - apt-get update &&     apt-get install --no-install-recommends -y apache2 &&     apt-get
+      clean &&     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* &&     a2enmod rewrite
+      expires headers mime
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: APACHE_CONFDIR
+      Value: /etc/apache2
+    Name: env
+  - Env:
+    - Key: APACHE_ENVVARS
+      Value: $APACHE_CONFDIR/envvars
+    Name: env
+  - Env:
+    - Key: APACHE_CONF_WEBMASTER
+      Value: webmaster@localhost
+    Name: env
+  - CmdLine:
+    - 'set -ex &&     touch "$APACHE_ENVVARS" &&     sed -ri ''s/^export ([^=]+)=(.*)$/:
+      ${\1:=\2}\nexport \1/'' "$APACHE_ENVVARS" &&         . "$APACHE_ENVVARS" &&     for
+      dir in         "$APACHE_LOCK_DIR"         "$APACHE_RUN_DIR"         "$APACHE_LOG_DIR"         /var/www/html     ;
+      do         rm -rvf "$dir" &&         mkdir -p "$dir" &&         chown -R "$APACHE_RUN_USER:$APACHE_RUN_GROUP"
+      "$dir";     done'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2dismod mpm_event && a2enmod mpm_prefork proxy_fcgi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex &&     . "$APACHE_ENVVARS" &&     ln -sfT /dev/stderr "$APACHE_LOG_DIR/error.log"
+      &&     ln -sfT /dev/stdout "$APACHE_LOG_DIR/access.log" &&     ln -sfT /dev/stdout
+      "$APACHE_LOG_DIR/other_vhosts_access.log"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '{         echo ''<FilesMatch \.php$>'';         echo ''\tSetHandler application/x-httpd-php'';         echo
+      ''</FilesMatch>'';         echo;         echo ''DirectoryIndex disabled'';         echo
+      ''DirectoryIndex index.php index.html'';         echo;         echo ''<Directory
+      /var/www/>'';         echo ''\tOptions -Indexes'';         echo ''\tAllowOverride
+      All'';         echo ''</Directory>'';     } | tee "$APACHE_CONFDIR/conf-available/custom-php.conf"
+      &&     a2enconf custom-php &&     mkdir /var/www/public &&     chown -R www-data:www-data
+      /var/www'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - apache2-foreground
+    - apache2-entrypoint
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - apache2-default.conf
+    - $APACHE_CONFDIR/sites-available/000-default.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf-vhost
+    - $APACHE_CONFDIR/conf-vhost
+  - Name: workdir
+    Path: /var/www/
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - tini
+    - apache2-entrypoint
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - apache2-foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: saschaegerer/ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM saschaegerer/ubuntu:18.04

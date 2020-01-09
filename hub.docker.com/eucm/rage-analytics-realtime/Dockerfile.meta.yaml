@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: maven:3-jdk-8-slim
+  Commands:
+  - Key: BUILD_DIR
+    Name: arg
+    Value: '"/scratch"'
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - '"${BUILD_DIR}"'
+  - CmdLine:
+    - cd $BUILD_DIR     && mvn package -DskipTests=true -Dmaven.javadoc.skip=true
+      -B -V     && mkdir -p "${BUILD_DIR}/volume/output"     && find "${BUILD_DIR}"
+      -name '*.zip' -exec bash -c 'path={}; filename=$(basename "$path"); name="${filename%.*}";
+      unzip "$path" -d "${BUILD_DIR}/volume/output/$name"' \;     && find "${BUILD_DIR}/volume"
+      -type d -exec chmod 777 {} \;     && find "${BUILD_DIR}/volume" -type f -exec
+      chmod 666 {} \;
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3-jdk-8-slim
+  Name: build
+  Platform: ""
+  SourceCode: FROM maven:3-jdk-8-slim AS build
+- As: build2
+  BaseName: gcc:8
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends nasm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /scratch
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - noop-binary
+    - /scratch
+  - Name: workdir
+    Path: /scratch
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  From:
+    Image: gcc:8
+  Name: build2
+  Platform: ""
+  SourceCode: FROM gcc:8 as build2
+- BaseName: scratch
+  Commands:
+  - Key: OUTPUT_VOL
+    Name: arg
+    Value: '"/analysis"'
+  - Name: volume
+    Volumes:
+    - ${OUTPUT_VOL}
+  - Chown: ""
+    From: build2
+    Name: copy
+    SourcesAndDest:
+    - /scratch/noop
+    - /
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /scratch/volume
+    - ${OUTPUT_VOL}
+  - CmdLine:
+    - /noop
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

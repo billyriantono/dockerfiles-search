@@ -1,0 +1,102 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.10-alpine
+  Commands:
+  - Env:
+    - Key: VERSION
+      Value: ${VERSION:-"0.11.0"}
+    Name: env
+  - CmdLine:
+    - apk add --no-cache git gcc musl-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/mholt/caddy -b "v$VERSION" /go/src/github.com/mholt/caddy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -u github.com/caddyserver/builds
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/caddyserver/dnsproviders/googlecloud/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed '/This is where other plugins get plugged in/a_ \"github.com/caddyserver/dnsproviders/googlecloud\"'
+      -i /go/src/github.com/mholt/caddy/caddy/caddymain/run.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cat /go/src/github.com/mholt/caddy/caddy/caddymain/run.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /go/src/github.com/mholt/caddy/caddy     && go run build.go -goos=linux -goarch=amd64     &&
+      mv caddy /
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /caddy -version && /caddy -plugins
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.10-alpine as builder
+- BaseName: alpine:3.8
+  Commands:
+  - Env:
+    - Key: ACME_AGREE
+      Value: '"true"'
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /caddy
+    - /usr/bin/caddy
+  - CmdLine:
+    - apk add --no-cache ca-certificates
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - Name: volume
+    Volumes:
+    - /root/.caddy
+    - /srv
+  - Name: workdir
+    Path: /srv
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Caddyfile
+    - Caddyfile.template
+    - /etc/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - caddy_start.sh
+    - caddy_generate_single.sh
+    - /
+  - CmdLine:
+    - /bin/sh
+    - -c
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /caddy_start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

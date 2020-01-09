@@ -1,0 +1,141 @@
+MetaArgs: null
+Stages:
+- As: python-base
+  BaseName: python:2.7-slim
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - requirements.txt
+    - .
+  - CmdLine:
+    - apt-get update -y     && apt-get install -y libssl-dev libxml2-dev libxslt1-dev
+      libxmlsec1-openssl gcc pkg-config     && apt-get install -y --no-install-recommends
+      --no-install-suggests libxmlsec1-dev      && pip install -r requirements.txt     &&
+      pip install uwsgi
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:2.7-slim
+  Name: python-base
+  Platform: ""
+  SourceCode: FROM python:2.7-slim as python-base
+- As: node-deps
+  BaseName: node:8.9.3
+  Commands:
+  - Name: workdir
+    Path: /home/node/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - package-lock.json
+    - bower.json
+    - gulpfile.js
+    - /home/node/app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - compair/static/
+    - /home/node/app/compair/static/
+  - CmdLine:
+    - mkdir -p compair/templates/static/     && npm install --production --no-optional     &&
+      node_modules/gulp/bin/gulp.js     && node_modules/gulp/bin/gulp.js prod
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8.9.3
+  Name: node-deps
+  Platform: ""
+  SourceCode: FROM node:8.9.3 as node-deps
+- As: python-app
+  BaseName: python:2.7-slim
+  Commands:
+  - Maintainer: Pan Luo <pan.luo@ubc.ca>
+    Name: maintainer
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: PYTHONPATH
+      Value: /code
+    Name: env
+  - Env:
+    - Key: DEV
+      Value: "0"
+    Name: env
+  - Name: workdir
+    Path: /code
+  - Chown: ""
+    From: python-base
+    Name: copy
+    SourcesAndDest:
+    - /root/.cache
+    - /root/.cache
+  - Chown: ""
+    From: python-base
+    Name: copy
+    SourcesAndDest:
+    - /requirements.txt
+    - /code/requirements.txt
+  - CmdLine:
+    - apt-get update -y     && apt-get install -y libssl-dev libxml2-dev libxslt1-dev
+      libxmlsec1-openssl     && apt-get install -y --no-install-recommends --no-install-suggests
+      libxmlsec1-dev      && pip install -r /code/requirements.txt     && pip install
+      uwsgi     && STATIC_DEPS=true pip install lxml==4.1.1 --force-reinstall     &&
+      rm -rf /root/.cache     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - deploy/docker/uwsgi.ini
+    - /etc/uwsgi/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - deploy/docker/docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /code/
+  - Chown: ""
+    From: node-deps
+    Name: copy
+    SourcesAndDest:
+    - /home/node/app/compair/static/
+    - /code/compair/static/
+  - Chown: ""
+    From: node-deps
+    Name: copy
+    SourcesAndDest:
+    - /home/node/app/compair/templates/static/
+    - /code/compair/templates/static/
+  - Name: volume
+    Volumes:
+    - /code/persistent
+  - Name: expose
+    Ports:
+    - "3031"
+  - CmdLine:
+    - uwsgi
+    - --ini
+    - /etc/uwsgi/uwsgi.ini
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:2.7-slim
+  Name: python-app
+  Platform: ""
+  SourceCode: FROM python:2.7-slim as python-app

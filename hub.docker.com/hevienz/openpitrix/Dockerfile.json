@@ -1,0 +1,256 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "openpitrix/openpitrix-builder",
+      "SourceCode": "FROM openpitrix/openpitrix-builder as builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "openpitrix/openpitrix-builder"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/go/src/openpitrix.io/openpitrix/"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache util-linux"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /metadata_bin"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "go generate openpitrix.io/openpitrix/pkg/version \u0026\u0026 \tCGO_ENABLED=0 GOOS=linux GOBIN=/metadata_bin go install -ldflags '-w -s' -tags netgo openpitrix.io/openpitrix/metadata/cmd/..."
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "find /metadata_bin -type f -exec upx {} \\;"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "metad-builder",
+      "BaseName": "golang:1.10.1-alpine3.7",
+      "SourceCode": "FROM golang:1.10.1-alpine3.7 as metad-builder",
+      "Platform": "",
+      "As": "metad-builder",
+      "From": {
+        "Image": "golang:1.10.1-alpine3.7"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add --no-cache upx git"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/go/src/openpitrix.io/"
+        },
+        {
+          "CmdLine": [
+            "git clone https://github.com/openpitrix/metad.git \u0026\u0026 cd metad"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /metad_bin"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "go generate openpitrix.io/metad/pkg/version \u0026\u0026 CGO_ENABLED=0 GOOS=linux GOBIN=/metad_bin go install -ldflags '-w -s' -tags netgo openpitrix.io/metad"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "find /metad_bin -type f -exec upx {} \\;"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "alpine:3.7",
+      "SourceCode": "FROM alpine:3.7",
+      "Platform": "",
+      "From": {
+        "Image": "alpine:3.7"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add --update ca-certificates \u0026\u0026 update-ca-certificates"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/bin/nsenter",
+            "/usr/bin/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/metadata_bin/drone",
+            "/usr/local/bin/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/metadata_bin/frontgate",
+            "/usr/local/bin/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "metad-builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/metad_bin/*",
+            "/usr/local/bin/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache supervisor"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "metadata/supervisord/supervisord.conf",
+            "/etc/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "metadata/supervisord/start-supervisord.sh",
+            "/usr/local/bin/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "metadata/supervisord/frontgate/start-frontgate.sh",
+            "/usr/local/bin/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "metadata/supervisord/drone/start-drone.sh",
+            "/usr/local/bin/"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "metadata/supervisord/metad/start-metad.sh",
+            "/usr/local/bin/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /etc/supervisor.d"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "metadata/supervisord/frontgate/frontgate.ini",
+            "/etc/supervisor.d"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "metadata/supervisord/drone/drone.ini",
+            "/etc/supervisor.d"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "metadata/supervisord/metad/metad.ini",
+            "/etc/supervisor.d"
+          ]
+        },
+        {
+          "CmdLine": [
+            "start-supervisord.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

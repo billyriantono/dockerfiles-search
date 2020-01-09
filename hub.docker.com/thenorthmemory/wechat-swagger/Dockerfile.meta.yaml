@@ -1,0 +1,58 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: node:alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app/
+  - CmdLine:
+    - set -ex   && npm install js-yaml -g   && apk add --no-cache jq   && sh ./bin/gen.sh   &&
+      js-yaml ./docs/swagger.yaml | jq -Mc | tee ./docs/swagger.json   && js-yaml
+      ./docs/wxpay.yaml | jq -Mc | tee ./docs/wxpay.json   && sed -i 's@wxpay.yaml@wxpay.json@g'
+      ./docs/swagger.json ./docs/wxpay.json   && sed -i 's@swagger.yaml@swagger.json@g'
+      ./docs/index.html   && sed -i 's@\(root\s\+\)/app;@\1html;@' src/nginx.conf
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:alpine as builder
+- BaseName: openresty/openresty:alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"James Zhang <thenorthmemory@dingtalk.com>"'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/docs/index.html
+    - /app/docs/swagger.json
+    - /app/docs/wxpay.json
+    - /usr/local/openresty/nginx/html/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/src/nginx.conf
+    - /usr/local/openresty/nginx/conf/
+  - Name: expose
+    Ports:
+    - "7788"
+  - CmdLine:
+    - openresty
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openresty/openresty:alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openresty/openresty:alpine

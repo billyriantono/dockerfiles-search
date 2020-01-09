@@ -1,0 +1,209 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "base",
+      "BaseName": "node:alpine",
+      "SourceCode": "FROM node:alpine AS base",
+      "Platform": "",
+      "As": "base",
+      "From": {
+        "Image": "node:alpine"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apk add --no-cache nodejs-current tini"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "HOME",
+              "Value": "/home/app"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "addgroup -S app \u0026\u0026     adduser -S -h $HOME -s /bin/false -G app app"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "user",
+          "User": "app"
+        },
+        {
+          "Name": "workdir",
+          "Path": "$HOME"
+        },
+        {
+          "CmdLine": [
+            "/sbin/tini",
+            "--"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    },
+    {
+      "Name": "production-dependencies",
+      "BaseName": "base",
+      "SourceCode": "FROM base AS production-dependencies",
+      "Platform": "",
+      "As": "production-dependencies",
+      "From": {
+        "Stage": {
+          "Named": "base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "src/package.json",
+            "src/setup-node-env.sh",
+            "./"
+          ]
+        },
+        {
+          "CmdLine": [
+            "touch config.js \u0026\u0026     mkdir server lib \u0026\u0026     npm set progress=false \u0026\u0026     npm config set depth 0 \u0026\u0026     npm install --only=production"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "test-base",
+      "BaseName": "production-dependencies",
+      "SourceCode": "FROM production-dependencies AS test-base",
+      "Platform": "",
+      "As": "test-base",
+      "From": {
+        "Stage": {
+          "Named": "production-dependencies",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Name": "user",
+          "User": "root"
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache python make g++"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "user",
+          "User": "app"
+        }
+      ]
+    },
+    {
+      "Name": "test-dependencies",
+      "BaseName": "test-base",
+      "SourceCode": "FROM test-base AS test-dependencies",
+      "Platform": "",
+      "As": "test-dependencies",
+      "From": {
+        "Stage": {
+          "Named": "test-base",
+          "Index": 2
+        }
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "npm set progress=false \u0026\u0026     npm config set depth 0 \u0026\u0026     npm install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "test",
+      "BaseName": "test-dependencies",
+      "SourceCode": "FROM test-dependencies AS test",
+      "Platform": "",
+      "As": "test",
+      "From": {
+        "Stage": {
+          "Named": "test-dependencies",
+          "Index": 3
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "src/",
+            "./"
+          ]
+        },
+        {
+          "CmdLine": [
+            "npm test"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "production",
+      "BaseName": "production-dependencies",
+      "SourceCode": "FROM production-dependencies AS production",
+      "Platform": "",
+      "As": "production",
+      "From": {
+        "Stage": {
+          "Named": "production-dependencies",
+          "Index": 1
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "src/",
+            "./"
+          ]
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "3000"
+          ]
+        },
+        {
+          "CmdLine": [
+            "npm",
+            "start"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

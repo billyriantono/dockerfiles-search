@@ -1,0 +1,76 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:18.04
+  Commands:
+  - Env:
+    - Key: GOLANG_VERSION
+      Value: "1.11"
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"/usr/local/go/bin:/usr/local/work/bin:${PATH}"'
+    Name: env
+  - Env:
+    - Key: GOPATH
+      Value: /usr/local/work
+    Name: env
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - CmdLine:
+    - "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends
+      -y wget git libc6-dev make pkg-config g++ gcc mosquitto-clients mosquitto python3
+      python3-dev python3-pip python3-setuptools python3-wheel supervisor libfreetype6-dev
+      libpng-dev && \tmkdir /usr/local/work && \trm -rf /var/lib/apt/lists/* && \tset
+      -eux; \t\tdpkgArch=\"$(dpkg --print-architecture)\"; \tcase \"${dpkgArch##*-}\"
+      in \t\tamd64) goRelArch='linux-amd64'; goRelSha256='b3fcf280ff86558e0559e185b601c9eade0fd24c900b4c63cd14d1d38613e499'
+      ;; \t\tarmhf) goRelArch='linux-armv6l'; goRelSha256='8ffeb3577d8ca5477064f1cb8739835973c866487f2bf81df1227eaa96826acd'
+      ;; \t\tarm64) goRelArch='linux-arm64'; goRelSha256='e4853168f41d0bea65e4d38f992a2d44b58552605f623640c5ead89d515c56c9'
+      ;; \t\ti386) goRelArch='linux-386'; goRelSha256='1a91932b65b4af2f84ef2dce10d790e6a0d3d22c9ea1bdf3d8c4d9279dfa680e'
+      ;; \t\tppc64el) goRelArch='linux-ppc64le'; goRelSha256='e874d617f0e322f8c2dda8c23ea3a2ea21d5dfe7177abb1f8b6a0ac7cd653272'
+      ;; \t\ts390x) goRelArch='linux-s390x'; goRelSha256='c113495fbb175d6beb1b881750de1dd034c7ae8657c30b3de8808032c9af0a15'
+      ;; \t\t*) goRelArch='src'; goRelSha256='afc1e12f5fe49a471e3aae7d906c73e9d5b1fdd36d52d72652dde8f6250152fb';
+      \t\t\techo >&2; echo >&2 \"warning: current architecture ($dpkgArch) does not
+      have a corresponding Go binary release; will be building from source\"; echo
+      >&2 ;; \tesac; \t\turl=\"https://golang.org/dl/go${GOLANG_VERSION}.${goRelArch}.tar.gz\";
+      \twget -O go.tgz \"$url\"; \techo \"${goRelSha256} *go.tgz\" | sha256sum -c
+      -; \ttar -C /usr/local -xzf go.tgz; \trm go.tgz; \t\tif [ \"$goRelArch\" = 'src'
+      ]; then \t\techo >&2; \t\techo >&2 'error: UNIMPLEMENTED'; \t\techo >&2 'TODO
+      install golang-any from jessie-backports for GOROOT_BOOTSTRAP (and uninstall
+      after build)'; \t\techo >&2; \t\texit 1; \tfi; \t\texport PATH=\"/usr/local/go/bin:$PATH\";
+      \tgo version && \tmkdir /build && cd /build && \tgit clone https://github.com/jarlebh/find3
+      && \tmkdir /data && \tmkdir /app && \techo '#!/bin/bash\\npkill -9 mosquitto\\ncp
+      -R -u -p /app/mosquitto_config /data\\nmosquitto -d -c /data/mosquitto_config/mosquitto.conf\\nmkdir
+      -p /data/logs\\n/usr/bin/supervisord\\n'> /app/startup.sh && \tchmod +x /app/startup.sh
+      && echo '[supervisord]\\nnodaemon=true\\n[program:main]\\ndirectory=/app/main\\ncommand=/app/main/main
+      -debug -data /data/data -mqtt-dir /data/mosquitto_config\\npriority=1\\nstdout_logfile=/data/logs/main.stdout\\nstdout_logfile_maxbytes=0\\nstderr_logfile=/data/logs/main.stderr\\nstderr_logfile_maxbytes=0\\n[program:ai]\\ndirectory=/app/ai\\ncommand=make
+      production\\npriority=2\\nstdout_logfile=/data/logs/ai.stdout\\nstdout_logfile_maxbytes=0\\nstderr_logfile=/data/logs/ai.stderr\\nstderr_logfile_maxbytes=0\\n'>
+      /etc/supervisor/conf.d/supervisord.conf && \tmkdir /app/mosquitto_config &&
+      \ttouch /app/mosquitto_config/acl  && \ttouch /app/mosquitto_config/passwd  &&
+      echo 'allow_anonymous false\\nacl_file /data/mosquitto_config/acl\\npassword_file
+      /data/mosquitto_config/passwd\\npid_file /data/mosquitto_config/pid\\n'> /app/mosquitto_config/mosquitto.conf
+      && \techo \"moving to find3\" && cd /build/find3/server/main  && go build -v
+      && \techo \"moving main\" && mv /build/find3/server/main /app/main && \techo
+      \"moving to ai\" && cd /build/find3/server/ai  && python3 -m pip install -r
+      requirements.txt && \techo \"moving ai\" && mv /build/find3/server/ai /app/ai
+      && \techo \"removing go srces\" && rm -rf /usr/local/work/src && \techo \"purging
+      packages\" && apt-get remove -y --auto-remove git libc6-dev pkg-config g++ gcc
+      && \techo \"autoclean\" && apt-get autoclean && \techo \"clean\" && apt-get
+      clean && \techo \"autoremove\" && apt-get autoremove && \techo \"rm trash\"
+      && rm -rf ~/.local/share/Trash/* && \techo \"rm go\" && rm -rf /usr/local/go*
+      && \techo \"rm perl\" && rm -rf /usr/share/perl* && \techo \"rm build\" && rm
+      -rf /build* && \techo \"rm doc\" && rm -rf /usr/share/doc*"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - /app/startup.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

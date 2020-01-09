@@ -1,0 +1,111 @@
+MetaArgs: null
+Stages:
+- As: composer
+  BaseName: crunchgeek/composer:7.2
+  Commands:
+  - Key: TOKEN
+    Name: arg
+    Value: ""
+  - Env:
+    - Key: TOKEN
+      Value: $TOKEN
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - /src/
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - '[ -z "$var" ] || echo "{\"github-oauth\": {\"github.com\": \"$TOKEN\"}}" >
+      /tmp/auth.json'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - composer install
+    Name: run
+    PrependShell: true
+  From:
+    Image: crunchgeek/composer:7.2
+  Name: composer
+  Platform: ""
+  SourceCode: FROM crunchgeek/composer:7.2 as composer
+- As: node
+  BaseName: node:latest
+  Commands:
+  - Key: MIX_PUSHER_APP_KEY
+    Name: arg
+    Value: ""
+  - Key: MIX_PUSHER_APP_CLUSTER
+    Name: arg
+    Value: ""
+  - Env:
+    - Key: MIX_PUSHER_APP_KEY
+      Value: $MIX_PUSHER_APP_KEY
+    Name: env
+  - Env:
+    - Key: MIX_PUSHER_APP_CLUSTER
+      Value: $MIX_PUSHER_APP_CLUSTER
+    Name: env
+  - Name: workdir
+    Path: /node
+  - Chown: ""
+    From: composer
+    Name: copy
+    SourcesAndDest:
+    - /src
+    - /node
+  - CmdLine:
+    - "npm i cross-env -S && \tnpm i && \tnpm audit fix && \tnpm run production"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /node/node_modules
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:latest
+  Name: node
+  Platform: ""
+  SourceCode: FROM node:latest as node
+- BaseName: alpine:3.5
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: node
+    Name: copy
+    SourcesAndDest:
+    - /node
+    - /app
+  - CmdLine:
+    - "mkdir -p /app/storage/app/public && \tmkdir -p /app/storage/framework/cache
+      && \tmkdir -p /app/storage/framework/session && \tmkdir -p /app/storage/framework/testing
+      && \tmkdir -p /app/storage/framework/views && \tmkdir -p /app/storage/logs"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "chown -R 9000:9000 storage && \tchown -R 9000:9000 bootstrap/cache && \tchmod
+      -R ug+rwx    bootstrap/cache && \tchgrp -R 9000      bootstrap/cache && \tchmod
+      +x artisan"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "echo '#!/bin/sh'                      > /init.sh && \techo 'echo \"app init
+      started!\"'      >> /init.sh && \techo 'mv /app/* /src/'               >> /init.sh
+      && \techo 'mv /src/k8s/* /config/'        >> /init.sh && \techo 'cp -rp /src/public/*
+      /public/' >> /init.sh && \techo 'echo \"app init completed!\"'    >> /init.sh
+      && \tchmod +x /init.sh"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '[ ''/init.sh'' ]'
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:3.5
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.5

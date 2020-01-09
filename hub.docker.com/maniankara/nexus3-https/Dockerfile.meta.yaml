@@ -1,0 +1,68 @@
+MetaArgs: null
+Stages:
+- BaseName: java:8
+  Commands:
+  - Maintainer: Anoop Vijayan Maniankara<maniankara@gmail.com>
+    Name: maintainer
+  - Env:
+    - Key: NEXUS_HOME
+      Value: /opt/sonatype/nexus
+    - Key: NEXUS_VERSION
+      Value: 3.0.0-03
+    - Key: NEXUS_DOMAIN
+      Value: example.com
+    - Key: NEXUS_IP_ADDRESS
+      Value: 173.168.1.1
+    - Key: SONATYPE_WORK
+      Value: /sonatype-work
+    Name: env
+  - CmdLine:
+    - useradd -r -u 200 -m -c "nexus role account" -d ${SONATYPE_WORK}  nexus
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - http://download.sonatype.com/nexus/3/nexus-$NEXUS_VERSION-unix.tar.gz
+    - /opt/nexus.tar.gz
+  - CmdLine:
+    - mkdir -p /opt/sonatype &&   tar zxf /opt/nexus.tar.gz -C /tmp/ &&   mv /tmp/nexus-$NEXUS_VERSION
+      $NEXUS_HOME &&   chown -R nexus:nexus $NEXUS_HOME
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ${JAVA_HOME}/bin/keytool -genkeypair -keystore /tmp/server-keystore.jks -storepass
+      changeit -keypass changeit -alias jetty -keyalg RSA -keysize 2048 -validity
+      5000 -dname "CN=*.${NEXUS_DOMAIN}, OU=Example, O=Sonatype, L=Unspecified, ST=Unspecified,
+      C=US" -ext "SAN=DNS:${NEXUS_DOMAIN},IP:${NEXUS_IP_ADDRESS}" -ext "BC=ca:true"
+      &&   mkdir -p $NEXUS_HOME/etc/ssl/ &&   cp /tmp/server-keystore.jks $NEXUS_HOME/etc/ssl/keystore.jks
+      &&   echo "application-port-ssl=8443" >> $NEXUS_HOME/etc/org.sonatype.nexus.cfg
+      &&   sed -i 's%^.*KeyStorePassword.*$%\<Set name="KeyStorePassword"\>changeit\<\/Set\>%'
+      $NEXUS_HOME/etc/jetty-https.xml &&   sed -i 's%^.*KeyManagerPassword.*$%\<Set
+      name="KeyManagerPassword"\>changeit\<\/Set\>%' $NEXUS_HOME/etc/jetty-https.xml
+      &&   sed -i 's%^.*TrustStorePassword.*$%\<Set name="TrustStorePassword"\>changeit\<\/Set\>%'
+      $NEXUS_HOME/etc/jetty-https.xml &&   sed -i 's%^nexus-args.*$%nexus-args=\${karaf.etc}/jetty.xml,\${karaf.etc}\/jetty-http.xml,\${karaf.etc}\/jetty-requestlog.xml,\${karaf.etc}\/jetty-https.xml,\${karaf.etc}\/jetty-http-redirect-to-https.xml%'
+      $NEXUS_HOME/etc/org.sonatype.nexus.cfg
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: nexus
+  - Name: workdir
+    Path: $NEXUS_HOME
+  - Name: volume
+    Volumes:
+    - $NEXUS_HOME/data
+  - Name: expose
+    Ports:
+    - "8081"
+    - "8443"
+  - CmdLine:
+    - /opt/sonatype/nexus/bin/nexus
+    - run-redirect
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: java:8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM java:8

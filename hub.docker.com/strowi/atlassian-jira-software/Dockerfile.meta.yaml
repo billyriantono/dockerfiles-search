@@ -1,0 +1,79 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8u121-alpine
+  Commands:
+  - Maintainer: Roman v. Gemmeren <strowi@hasnoname.de>
+    Name: maintainer
+  - Key: JIRA_VERSION
+    Name: arg
+    Value: 7.5.0
+  - Key: JIRA_DOWNLOAD_URI
+    Name: arg
+    Value: https://www.atlassian.com/software/jira/downloads/binary/atlassian-jira-core-${JIRA_VERSION}.tar.gz
+  - Key: POSTGRES_DRIVER_VERSION
+    Name: arg
+    Value: 42.1.1
+  - Key: MYSQL_DRIVER_VERSION
+    Name: arg
+    Value: 5.1.38
+  - Env:
+    - Key: RUN_USER
+      Value: daemon
+    Name: env
+  - Env:
+    - Key: RUN_GROUP
+      Value: daemon
+    Name: env
+  - Env:
+    - Key: JIRA_HOME
+      Value: /var/atlassian/jira
+    Name: env
+  - Env:
+    - Key: JIRA_INSTALL
+      Value: /opt/atlassian/jira
+    Name: env
+  - CmdLine:
+    - apk --update --no-cache add     curl     tar     bash     fontconfig     ttf-dejavu     xmlstarlet     &&
+      mkdir -p "${JIRA_HOME}"       "${JIRA_INSTALL}/conf"     && curl -Ls "${JIRA_DOWNLOAD_URI}"       |
+      tar -xz --directory "${JIRA_INSTALL}"       --strip-components=1 --no-same-owner     &&
+      cd "${JIRA_INSTALL}/lib"     && rm -f "./postgresql-9.*"     && curl -Os "https://jdbc.postgresql.org/download/postgresql-${POSTGRES_DRIVER_VERSION}.jar"     &&
+      curl -Ls "https://dev.mysql.com/get/Downloads/Connector-J/mysql-connector-java-${MYSQL_DRIVER_VERSION}.tar.gz"       |
+      tar -xz --directory "${JIRA_INSTALL}/lib"       --strip-components=1 --no-same-owner       "mysql-connector-java-${MYSQL_DRIVER_VERSION}/mysql-connector-java-${MYSQL_DRIVER_VERSION}-bin.jar"     &&
+      chmod -R 700 "${JIRA_HOME}"       "${JIRA_INSTALL}/conf"       "${JIRA_INSTALL}/temp"       "${JIRA_INSTALL}/logs"       "${JIRA_INSTALL}/work"     &&
+      chown -R ${RUN_USER}:${RUN_GROUP} "${JIRA_HOME}"       "${JIRA_INSTALL}/conf"       "${JIRA_INSTALL}/temp"       "${JIRA_INSTALL}/logs"       "${JIRA_INSTALL}/work"     &&
+      sed --in-place "s/java version/openjdk version/g" "${JIRA_INSTALL}/bin/check-java.sh"     &&
+      echo -e "\jira.home=${JIRA_HOME}"       >> "${JIRA_INSTALL}/atlassian-jira/WEB-INF/classes/jira-application.properties"     &&
+      touch -d "@0" "${JIRA_INSTALL}/conf/server.xml"     && apk del tar curl     &&
+      rm -rf /var/lib/{apt,dpkg,cache,log}/ /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: '"${RUN_USER}":"${RUN_GROUP}"'
+  - Name: expose
+    Ports:
+    - "8090"
+  - Name: volume
+    Volumes:
+    - ${JIRA_INSTALL}/logs
+    - ${JIRA_HOME}
+  - Name: workdir
+    Path: '"${JIRA_INSTALL}"'
+  - CmdLine:
+    - ./bin/catalina.sh
+    - run
+    Name: cmd
+    PrependShell: false
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/
+    - /
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:8u121-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8u121-alpine

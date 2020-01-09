@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:3.11.2
+  Commands:
+  - CmdLine:
+    - apk add --no-cache     bash     build-base     findutils     curl     git     ninja     python     bsd-compat-headers     linux-headers     libexecinfo-dev
+    Name: run
+    PrependShell: true
+  - Key: SHAKA_PACKAGER_VERSION
+    Name: arg
+    Value: 2.4.0
+  - Key: DEPOT_TOOLS_VERSION
+    Name: arg
+    Value: 2d0e03cb5ddc5faef4d7bbd54d0177885d3975bc
+  - CmdLine:
+    - git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git &&     cd
+      /depot_tools &&     git checkout $DEPOT_TOOLS_VERSION
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: $PATH:/depot_tools
+    Name: env
+  - CmdLine:
+    - sed -i     '/malloc_usable_size/a \\nstruct mallinfo {\n  int arena;\n  int
+      hblkhd;\n  int uordblks;\n};'     /usr/include/malloc.h
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CFLAGS
+      Value: '"-O3 -static-libgcc -fno-strict-overflow -fstack-protector-all -fPIE"'
+    Name: env
+  - Env:
+    - Key: CXXFLAGS
+      Value: '"-O3 -static-libgcc -fno-strict-overflow -fstack-protector-all -fPIE"'
+    Name: env
+  - Env:
+    - Key: LDFLAGS
+      Value: '"-static -Wl,-z,relro -Wl,-z,now"'
+    Name: env
+  - Env:
+    - Key: GYP_DEFINES
+      Value: '"clang=0 use_experimental_allocator_shim=0 use_allocator=none musl=1"'
+    Name: env
+  - Name: workdir
+    Path: /shaka_packager
+  - CmdLine:
+    - gclient config https://www.github.com/google/shaka-packager.git --name=src
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gclient sync -r v$SHAKA_PACKAGER_VERSION --no-history
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ninja -C src/out/Release
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.11.2
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.11.2 as builder
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /shaka_packager/src/out/Release/packager
+    - /
+  - CmdLine:
+    - /packager
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - /packager
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

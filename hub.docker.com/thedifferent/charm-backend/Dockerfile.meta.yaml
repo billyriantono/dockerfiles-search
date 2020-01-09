@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- BaseName: python:3.7.1-alpine3.8
+  Commands:
+  - Labels:
+    - Key: description
+      Value: '"Charm Django-Wagtail backend"'
+    Name: label
+  - Maintainer: Simon Prast <simon.prast.sp@gmail.com>
+    Name: maintainer
+  - Env:
+    - Key: DJANGO_DEBUG
+      Value: "on"
+    - Key: DJANGO_SETTINGS_MODULE
+      Value: charm.settings.production
+    Name: env
+  - Env:
+    - Key: UWSGI_VIRTUALENV
+      Value: /venv
+    - Key: UWSGI_UID
+      Value: "1000"
+    - Key: UWSGI_GID
+      Value: "2000"
+    - Key: UWSGI_WSGI_FILE
+      Value: charm/wsgi_production.py
+    - Key: UWSGI_HTTP
+      Value: :8000
+    - Key: UWSGI_MASTER
+      Value: "1"
+    - Key: UWSGI_WORKERS
+      Value: "2"
+    - Key: UWSGI_THREADS
+      Value: "1"
+    Name: env
+  - Name: workdir
+    Path: /code/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - requirements/
+    - /requirements/
+  - CmdLine:
+    - "echo \"## Installing base ##\" && \techo \"@main http://dl-cdn.alpinelinux.org/alpine/edge/main/\"
+      >> /etc/apk/repositories && \techo \"@testing http://dl-cdn.alpinelinux.org/alpine/edge/testing/\"
+      >> /etc/apk/repositories && \techo \"@community http://dl-cdn.alpinelinux.org/alpine/edge/community/\"
+      >> /etc/apk/repositories && \tapk upgrade --update-cache --available && \t    apk
+      add --no-cache --virtual .build-deps         gcc \t\tg++ \t\tmake \t\tlibc-dev
+      \t\tmusl-dev \t\tlinux-headers \t\tpcre-dev \t\tmysql-dev \t\tpostgresql-dev
+      \t\tlibjpeg-turbo-dev \t\tzlib-dev \t\tlibxml2-dev \t\tlibxslt-dev \t; \tapk
+      add --force \t    git@main \t\tbash@main \t\tmysql-client@main         tini@community
+      \  \t\t&& python -m venv /venv \t&& /venv/bin/pip install -U pip \t&& LIBRARY_PATH=/lib:/usr/lib
+      /bin/sh -c \"/venv/bin/pip install -r /requirements/production.txt\" \t&& runDeps=\"$(
+      \t\tscanelf --needed --nobanner --recursive /venv \t\t\t| awk '{ gsub(/,/, \"\\nso:\",
+      $2); print \"so:\" $2 }' \t\t\t| sort -u \t\t\t| xargs -r apk info --installed
+      \t\t\t| sort -u \t)\" \t&& apk add --virtual .python-rundeps $runDeps \t&& apk
+      del .build-deps \t&& rm -rf /tmp/* /var/tmp/* /var/cache/apk/* /var/cache/distfiles/*"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8000"
+  - Name: volume
+    Volumes:
+    - /code/media
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /code/
+  - CmdLine:
+    - DATABASE_URL=mysql://none REDIS_URL=none /venv/bin/python manage.py collectstatic
+      --noinput
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /code/docker-entrypoint.sh / ;    chmod +x /docker-entrypoint.sh ;    find
+      /venv/ -type f -iname "*.py" -exec chmod -v +x {} \;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /venv/bin/uwsgi
+    - --http-auto-chunked
+    - --http-keepalive
+    - --static-map
+    - /media/=/code/media/
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3.7.1-alpine3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.7.1-alpine3.8

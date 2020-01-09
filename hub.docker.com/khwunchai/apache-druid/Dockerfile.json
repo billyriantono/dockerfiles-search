@@ -1,0 +1,164 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "maven:3-jdk-8",
+      "SourceCode": "FROM maven:3-jdk-8 as builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "maven:3-jdk-8"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "/src"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/src"
+        },
+        {
+          "CmdLine": [
+            "mvn dependency:go-offline install -ff -q -B -DskipTests -Dforbiddenapis.skip=true -Pdist -Pbundle-contrib-exts"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "VER=$(mvn -B org.apache.maven.plugins:maven-help-plugin:3.1.1:evaluate -Dexpression=project.version -q -DforceStdout=true -f pom.xml 2\u003e/dev/null)   \u0026\u0026 tar -zxf ./distribution/target/apache-druid-${VER}-bin.tar.gz -C /opt   \u0026\u0026 ln -s /opt/apache-druid-${VER} /opt/druid"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "addgroup --gid 1000 druid   \u0026\u0026 adduser --home /opt/druid --shell /bin/sh --no-create-home --uid 1000 --gecos '' --gid 1000 --disabled-password druid   \u0026\u0026 mkdir -p /opt/druid/var   \u0026\u0026 chown -R druid:druid /opt/druid   \u0026\u0026 chmod 775 /opt/druid/var"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "busybox",
+      "BaseName": "amd64/busybox:1.30.0-glibc",
+      "SourceCode": "FROM amd64/busybox:1.30.0-glibc as busybox",
+      "Platform": "",
+      "As": "busybox",
+      "From": {
+        "Image": "amd64/busybox:1.30.0-glibc"
+      },
+      "Commands": null
+    },
+    {
+      "Name": "",
+      "BaseName": "gcr.io/distroless/java:8",
+      "SourceCode": "FROM gcr.io/distroless/java:8",
+      "Platform": "",
+      "From": {
+        "Image": "gcr.io/distroless/java:8"
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"Apache Druid Developers \u003cdev@druid.apache.org\u003e\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Chown": "",
+          "From": "busybox",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/bin/busybox",
+            "/busybox/busybox"
+          ]
+        },
+        {
+          "CmdLine": [
+            "/busybox/busybox",
+            "--install",
+            "/bin"
+          ],
+          "Name": "run",
+          "PrependShell": false
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/etc/passwd",
+            "/etc/passwd"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/etc/group",
+            "/etc/group"
+          ]
+        },
+        {
+          "Chown": "druid",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/opt",
+            "/opt"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "distribution/docker/druid.sh",
+            "/druid.sh"
+          ]
+        },
+        {
+          "CmdLine": [
+            "chown -R druid:druid /opt/druid"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "user",
+          "User": "druid"
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/opt/druid/var"
+          ]
+        },
+        {
+          "Name": "workdir",
+          "Path": "/opt/druid"
+        },
+        {
+          "CmdLine": [
+            "/druid.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

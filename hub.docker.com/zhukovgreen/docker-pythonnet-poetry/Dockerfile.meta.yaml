@@ -1,0 +1,112 @@
+MetaArgs: null
+Stages:
+- As: mono
+  BaseName: python:3.7-stretch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Artem Zhukov <zhukovgreen@icloud.com>"'
+    Name: label
+  - Labels:
+    - Key: description
+      Value: '"pythonnet support on Mono. Add poetry"'
+    Name: label
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Env:
+    - Key: PYTHONNET_VERSION
+      Value: 2.4.0
+    Name: env
+  - Env:
+    - Key: POETRY_VERSION
+      Value: 0.12.17
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"/root/.poetry/bin:${PATH}"'
+    Name: env
+  - Env:
+    - Key: PIP_VERSION
+      Value: 19.2.3
+    Name: env
+  - Env:
+    - Key: SETUPTOOLS_VERSION
+      Value: 41.2.0
+    Name: env
+  - Env:
+    - Key: MONO_VERSION
+      Value: 5.4.1.6
+    Name: env
+  - CmdLine:
+    - apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF   &&
+      echo "deb http://download.mono-project.com/repo/debian stretch/snapshots/$MONO_VERSION/.
+      main" > /etc/apt/sources.list.d/mono-official.list   && apt-get update   &&
+      apt-get upgrade -y   && apt install -y curl git locales locales-all make nano
+      openssh-client   && apt-get install -y clang   && apt-get install -y mono-complete="$MONO_VERSION"\*   &&
+      rm -rf /var/lib/apt/lists/* /tmp/*   && apt autoremove -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install --upgrade pip=="$PIP_VERSION" setuptools=="$SETUPTOOLS_VERSION"
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.7-stretch
+  Name: mono
+  Platform: ""
+  SourceCode: FROM python:3.7-stretch as mono
+- As: pythonnet
+  BaseName: mono
+  Commands:
+  - CmdLine:
+    - pip install pycparser   && pip install pythonnet=="$PYTHONNET_VERSION"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: mono
+  Name: pythonnet
+  Platform: ""
+  SourceCode: FROM mono as pythonnet
+- As: poetry
+  BaseName: pythonnet
+  Commands:
+  - CmdLine:
+    - curl -sSL https://raw.githubusercontent.com/sdispater/poetry/master/get-poetry.py
+      | python
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - poetry config settings.virtualenvs.create false
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: pythonnet
+  Name: poetry
+  Platform: ""
+  SourceCode: FROM pythonnet as poetry
+- As: base
+  BaseName: poetry
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - python
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 2
+      Named: poetry
+  Name: base
+  Platform: ""
+  SourceCode: FROM poetry AS base

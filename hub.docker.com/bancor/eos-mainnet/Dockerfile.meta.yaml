@@ -1,0 +1,92 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: eosio/builder
+  Commands:
+  - Key: branch
+    Name: arg
+    Value: master
+  - Key: symbol
+    Name: arg
+    Value: EOS
+  - CmdLine:
+    - git clone -b $branch https://github.com/tmuskal/eos.git --recursive     && cd
+      eos && echo "$branch:$(git rev-parse HEAD)" > /etc/eosio-version     && cmake
+      -H. -B"/tmp/build" -GNinja -DCMAKE_BUILD_TYPE=Release -DWASM_ROOT=/opt/wasm
+      -DCMAKE_CXX_COMPILER=clang++        -DCMAKE_C_COMPILER=clang -DCMAKE_INSTALL_PREFIX=/tmp/build  -DSecp256k1_ROOT_DIR=/usr/local
+      -DBUILD_MONGO_DB_PLUGIN=true -DCORE_SYMBOL_NAME=$symbol     && cmake --build
+      /tmp/build --target install && rm /tmp/build/bin/eosiocpp
+    Name: run
+    PrependShell: true
+  From:
+    Image: eosio/builder
+  Name: builder
+  Platform: ""
+  SourceCode: FROM eosio/builder as builder
+- BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y install openssl
+      ca-certificates && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/*
+    - /usr/local/lib/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/build/bin
+    - /opt/eosio/bin
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/build/contracts
+    - /contracts
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /eos/Docker/config.ini
+    - /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/eosio-version
+    - /etc
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /eos/Docker/nodeosd.sh
+    - /opt/eosio/bin/nodeosd.sh
+  - Env:
+    - Key: EOSIO_ROOT
+      Value: /opt/eosio
+    Name: env
+  - CmdLine:
+    - chmod +x /opt/eosio/bin/nodeosd.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: /usr/local/lib
+    Name: env
+  - Name: volume
+    Volumes:
+    - /opt/eosio/bin/data-dir
+  - Env:
+    - Key: PATH
+      Value: /opt/eosio/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    Name: env
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

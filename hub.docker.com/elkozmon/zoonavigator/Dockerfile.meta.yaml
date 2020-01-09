@@ -1,0 +1,199 @@
+MetaArgs:
+- DefaultValue: null
+  Key: APP_VERSION
+  ProvidedValue: null
+  Value: null
+- DefaultValue: 1.2.8
+  Key: SBT_VERSION
+  ProvidedValue: null
+  Value: 1.2.8
+- DefaultValue: 99E82A75642AC823
+  Key: SBT_GPG_KEY
+  ProvidedValue: null
+  Value: 99E82A75642AC823
+- DefaultValue: 0.6.1
+  Key: DOCKERIZE_VERSION
+  ProvidedValue: null
+  Value: 0.6.1
+- DefaultValue: '"/"'
+  Key: BASE_HREF
+  ProvidedValue: null
+  Value: '"/"'
+Stages:
+- As: npm
+  BaseName: node:11.15.0-alpine
+  Commands:
+  - Maintainer: Lubos Kozmon <contact@elkozmon.com>
+    Name: maintainer
+  - Key: DOCKERIZE_VERSION
+    Name: arg
+    Value: null
+  - Key: APP_VERSION
+    Name: arg
+    Value: null
+  - Key: BASE_HREF
+    Name: arg
+    Value: null
+  - CmdLine:
+    - echo ${BASE_HREF} | grep -Eq '^\/(.*\/)?$' || (>&2 echo "BASE_HREF must start
+      and end with a forward slash" && exit 1)
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /zoonavigator-web
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /build/docker/files/zoonavigator-web
+    - .
+  - CmdLine:
+    - apk --no-cache add tar curl python-dev make g++
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl     -Lo dockerize-alpine-linux-amd64-v${DOCKERIZE_VERSION}.tar.gz     https://github.com/jwilder/dockerize/releases/download/v${DOCKERIZE_VERSION}/dockerize-alpine-linux-amd64-v${DOCKERIZE_VERSION}.tar.gz   &&
+      tar xzvf dockerize-alpine-linux-amd64-v${DOCKERIZE_VERSION}.tar.gz -C /usr/local/bin   &&
+      rm dockerize-alpine-linux-amd64-v${DOCKERIZE_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dockerize     -template ./environment.ts.template:./src/environments/environment.prod.ts
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install -g @angular/cli   && npm install   && ng build --prod --base-href
+      ${BASE_HREF}   && mv dist /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:11.15.0-alpine
+  Name: npm
+  Platform: ""
+  SourceCode: FROM node:11.15.0-alpine as npm
+- As: sbt
+  BaseName: openjdk:8u151-jdk-alpine3.7
+  Commands:
+  - Key: SBT_VERSION
+    Name: arg
+    Value: null
+  - Key: SBT_GPG_KEY
+    Name: arg
+    Value: null
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /zoonavigator-api
+    - .
+  - Chown: ""
+    From: npm
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - ./play/public
+  - CmdLine:
+    - apk --no-cache add aria2 gnupg ca-certificates bash   && aria2c -x4 "https://github.com/sbt/sbt/releases/download/v${SBT_VERSION}/sbt-${SBT_VERSION}.tgz"   &&
+      aria2c -x4 "https://github.com/sbt/sbt/releases/download/v${SBT_VERSION}/sbt-${SBT_VERSION}.tgz.asc"   &&
+      gpg --keyserver keyserver.ubuntu.com --recv-keys ${SBT_GPG_KEY}   && gpg --verify
+      sbt-${SBT_VERSION}.tgz.asc sbt-${SBT_VERSION}.tgz   && tar xvfz sbt-${SBT_VERSION}.tgz
+      -C /usr/local   && ln -s /usr/local/sbt/bin/sbt /usr/bin/sbt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sbt play/dist   && VERSION=$(ls play/target/universal/zoonavigator-play-*.zip
+      | sed -E 's/.*zoonavigator-play-(.*).zip$/\1/')   && unzip play/target/universal/zoonavigator-play-$VERSION.zip   &&
+      mv zoonavigator-play-$VERSION /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8u151-jdk-alpine3.7
+  Name: sbt
+  Platform: ""
+  SourceCode: FROM openjdk:8u151-jdk-alpine3.7 as sbt
+- BaseName: openjdk:14-jdk-slim
+  Commands:
+  - Key: BASE_HREF
+    Name: arg
+    Value: null
+  - Env:
+    - Key: HTTP_PORT
+      Value: "9000"
+    - Key: SESSION_TIMEOUT_MILLIS
+      Value: "3600000"
+    - Key: REQUEST_TIMEOUT_MILLIS
+      Value: "10000"
+    - Key: ZK_CLIENT_TIMEOUT_MILLIS
+      Value: "5000"
+    - Key: ZK_CONNECT_TIMEOUT_MILLIS
+      Value: "5000"
+    Name: env
+  - CmdLine:
+    - apt-get update   && apt-get install -y curl krb5-user   && apt-get clean
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - groupadd -g 1000 zoonavigator   && useradd -r -u 1000 -g zoonavigator zoonavigator  &&
+      chown -R zoonavigator:zoonavigator .
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: zoonavigator:zoonavigator
+  - Chown: zoonavigator:zoonavigator
+    From: sbt
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - Chown: zoonavigator:zoonavigator
+    From: npm
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/dockerize
+    - /usr/local/bin/dockerize
+  - Chown: zoonavigator:zoonavigator
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /build/docker/files/zoonavigator-api
+    - .
+  - Chown: zoonavigator:zoonavigator
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /build/docker/files/zoonavigator-web
+    - .
+  - CmdLine:
+    - dockerize     -template ./run.sh.template:./run.sh     -template ./healthcheck.sh.template:./healthcheck.sh   &&
+      chmod +x     ./run.sh     ./healthcheck.sh
+    Name: run
+    PrependShell: true
+  - Health:
+      Interval: 30000000000
+      Test:
+      - CMD-SHELL
+      - ./healthcheck.sh
+      Timeout: 3000000000
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - ./run.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:14-jdk-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:14-jdk-slim

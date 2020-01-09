@@ -1,0 +1,114 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git gcc g++ libc-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - go.sum
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - main.go
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - script/*
+    - ./script/
+  - CmdLine:
+    - go build
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12-alpine as builder
+- As: ci
+  BaseName: golang:1.12
+  Commands:
+  - Env:
+    - Key: GOFLAGS
+      Value: -tags=ci
+    Name: env
+  - CmdLine:
+    - curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh
+      | sh -s v1.15.0
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .golangci.yml
+    - .
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - golangci-lint run -v
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12
+  Name: ci
+  Platform: ""
+  SourceCode: FROM golang:1.12 as ci
+- BaseName: alpine:3.9
+  Commands:
+  - Env:
+    - Key: BUILD_DIR
+      Value: /build
+    Name: env
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apk add --no-cache ca-certificates bash
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $BUILD_DIR/ovh-ip-updater-go
+    - ${BUILD_DIR}/script/run.sh
+    - ./
+  - CmdLine:
+    - chmod +x run.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

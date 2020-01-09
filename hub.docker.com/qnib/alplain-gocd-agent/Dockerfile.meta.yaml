@@ -1,0 +1,144 @@
+MetaArgs:
+- DefaultValue: docker.io
+  Key: FROM_IMG_REGISTRY
+  ProvidedValue: null
+  Value: docker.io
+- DefaultValue: '":2019-02-13.1"'
+  Key: FROM_IMG_TAG
+  ProvidedValue: null
+  Value: '":2019-02-13.1"'
+- DefaultValue: '"@sha256:c85eb71442920b6ac34f65ba66a651a56b87fa060c5263df3c68fa6cd23b7a84"'
+  Key: FROM_IMG_HASH
+  ProvidedValue: null
+  Value: '"@sha256:c85eb71442920b6ac34f65ba66a651a56b87fa060c5263df3c68fa6cd23b7a84"'
+Stages:
+- As: build
+  BaseName: golang:alpine
+  Commands:
+  - Name: workdir
+    Path: /go/src/github.com/estesp
+  - CmdLine:
+    - apk --update add git gcc musl-dev  && git clone https://github.com/estesp/manifest-tool.git
+      manifest-tool
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/estesp/manifest-tool
+  - CmdLine:
+    - go build
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:alpine AS build
+- BaseName: ${FROM_IMG_REGISTRY}/qnib/alplain-openjre8${FROM_IMG_TAG}${FROM_IMG_HASH}
+  Commands:
+  - Key: GOCD_URL
+    Name: arg
+    Value: https://download.gocd.io/binaries
+  - Key: GOCD_VER
+    Name: arg
+    Value: 19.5.0
+  - Key: GOCD_SUBVER
+    Name: arg
+    Value: "9272"
+  - Env:
+    - Key: GO_SERVER_URL
+      Value: https://tasks.server:8154/go
+    - Key: GOCD_LOCAL_DOCKERENGINE
+      Value: "false"
+    - Key: GOCD_CLEAN_IMAGES
+      Value: "false"
+    - Key: DOCKER_TAG_REV
+      Value: "true"
+    - Key: GOCD_AGENT_AUTOENABLE_KEY
+      Value: qnibFTW
+    - Key: GOCD_AGENT_AUTOENABLE_ENV
+      Value: latest,upstream,docker,deploy
+    - Key: GOCD_AGENT_AUTOENABLE_RESOURCES
+      Value: alpine
+    - Key: DOCKER_REPO_DEFAULT
+      Value: qnib
+    - Key: GOPATH
+      Value: /usr/local/
+    - Key: DOCKER_CONSUL_DNS
+      Value: "false"
+    - Key: ENTRYPOINTS_DIR
+      Value: /opt/qnib/entry/
+    - Key: ENTRY_USER
+      Value: gocd
+    - Key: LANG
+      Value: en_US.utf8
+    - Key: HOME_DIR
+      Value: /home
+    Name: env
+  - Name: volume
+    Volumes:
+    - /godata
+  - CmdLine:
+    - apk add --no-cache    bc    curl    docker    file    gcc    git    go    jq    libffi-dev    linux-vanilla-dev    make    musl-dev    openssl    openssl-dev    perl    py-pip    python-dev    rsync    sed    wget  &&
+      pip install docker-compose  && rm -rf /var/cache/apk/* /tmp/* /opt/go-agent/config/autoregister.properties  &&
+      adduser -s /sbin/nologin -u 5000 -D -H -h /opt/go-agent/ gocd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Download '${GOCD_URL}/${GOCD_VER}-${GOCD_SUBVER}/generic/go-agent-${GOCD_VER}-${GOCD_SUBVER}.zip'"  &&
+      wget -qO /tmp/go-agent.zip ${GOCD_URL}/${GOCD_VER}-${GOCD_SUBVER}/generic/go-agent-${GOCD_VER}-${GOCD_SUBVER}.zip  &&
+      mkdir -p /opt/ && cd /opt/  && unzip -q /tmp/go-agent.zip && rm -f /tmp/go-agent.zip  &&
+      mv /opt/go-agent-${GOCD_VER} /opt/go-agent  && chmod +x /opt/go-agent/agent.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Download '$(/usr/local/bin/go-github rLatestUrl --ghrepo go-dckrimg --regex
+      \".*inux\")'"  && wget -qO /usr/local/bin/go-dckrimg $(/usr/local/bin/go-github
+      rLatestUrl --ghrepo go-dckrimg --regex ".*inux")  && chmod +x /usr/local/bin/go-dckrimg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Download '$(/usr/local/bin/go-github rLatestUrl --ghorg qnib --ghrepo
+      service-scripts --regex ".*.tar" --limit 1)'"  && wget -qO - $(/usr/local/bin/go-github
+      rLatestUrl --ghorg qnib --ghrepo service-scripts --regex ".*.tar" --limit 1)
+      |tar xf - -C /opt/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - opt/qnib/gocd/agent/bin/check.sh
+    - /opt/qnib/gocd/agent/bin/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - opt/qnib/gocd/agent/bin/start.sh
+    - /opt/qnib/gocd/agent/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - opt/qnib/entry/20-gocd-render-autoregister-conf.sh
+    - opt/qnib/entry/30-chown-gocd-files.sh
+    - opt/qnib/entry/40-unpack-bundles.sh
+    - /opt/qnib/entry/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - opt/qnib/gocd/etc/autoregister.properties
+    - /opt/qnib/gocd/etc/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/estesp/manifest-tool/manifest-tool
+    - /usr/local/bin/manifest-tool
+  - CmdLine:
+    - /opt/qnib/gocd/agent/bin/start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ${FROM_IMG_REGISTRY}/qnib/alplain-openjre8${FROM_IMG_TAG}${FROM_IMG_HASH}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${FROM_IMG_REGISTRY}/qnib/alplain-openjre8${FROM_IMG_TAG}${FROM_IMG_HASH}

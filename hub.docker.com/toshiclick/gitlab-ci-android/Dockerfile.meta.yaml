@@ -1,0 +1,132 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8-jdk
+  Commands:
+  - Env:
+    - Key: ANDROID_SDK_TOOLS
+      Value: '"3859397"'
+    - Key: ANDROID_BUILD_TOOLS
+      Value: '"28.0.3"'
+    - Key: ANDROID_COMPILE_SDK
+      Value: '"28"'
+    - Key: SDK_ROOT
+      Value: '"/sdk"'
+    - Key: ANDROID_HOME
+      Value: '"${SDK_ROOT}"'
+    - Key: ANDROID_NDK_HOME
+      Value: '"${SDK_ROOT}/ndk-bundle/"'
+    - Key: PATH
+      Value: '"$PATH:${SDK_ROOT}/platform-tools/"'
+    Name: env
+  - CmdLine:
+    - apt-get --quiet update --yes &&     apt-get --quiet install --no-install-recommends  --yes
+      git wget tar unzip lib32stdc++6 lib32z1 &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget --quiet --output-document=android-sdk.zip https://dl.google.com/android/repository/sdk-tools-linux-${ANDROID_SDK_TOOLS}.zip
+      &&     unzip -qq android-sdk.zip -d ${SDK_ROOT} &&     mkdir -p /root/.android
+      &&     touch /root/.android/repositories.cfg &&     mkdir -p ${SDK_ROOT}/licenses
+      &&     echo -e "\n8933bad161af4178b1185d1a37fbf41ea5269c55" > ${SDK_ROOT}/licenses/android-sdk-license
+      &&     echo -e "\n84831b9409646a918e30573bab4c9c91346d8abd" > ${SDK_ROOT}/licenses/android-sdk-preview-license
+      &&     echo y | ${SDK_ROOT}/tools/bin/sdkmanager "tools" >/dev/null 2>&1 &&     echo
+      y | ${SDK_ROOT}/tools/bin/sdkmanager "platforms;android-${ANDROID_COMPILE_SDK}"
+      >/dev/null 2>&1 &&     echo y | ${SDK_ROOT}/tools/bin/sdkmanager "build-tools;${ANDROID_BUILD_TOOLS}"
+      >/dev/null 2>&1 &&     echo y | ${SDK_ROOT}/tools/bin/sdkmanager "extras;android;m2repository"
+      >/dev/null 2>&1 &&     echo y | ${SDK_ROOT}/tools/bin/sdkmanager "extras;google;google_play_services"
+      >/dev/null 2>&1 &&     echo y | ${SDK_ROOT}/tools/bin/sdkmanager "extras;google;m2repository"
+      >/dev/null 2>&1 &&     touch local.properties &&     echo "sdk.dir=${ANDROID_HOME}"
+      >> local.properties &&     echo "ndk.dir=${ANDROID_NDK_HOME}" >> local.properties
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: RUBY_MAJOR
+      Value: "2.5"
+    - Key: RUBY_VERSION
+      Value: 2.5.3
+    - Key: RUBYGEMS_VERSION
+      Value: 2.7.8
+    - Key: BUNDLER_VERSION
+      Value: 1.17.1
+    - Key: GEM_HOME
+      Value: '''/usr/local/bundle'''
+    - Key: BUNDLE_PATH
+      Value: '"$GEM_HOME"'
+    - Key: BUNDLE_SILENCE_ROOT_WARNING
+      Value: "1"
+    - Key: BUNDLE_APP_CONFIG
+      Value: '"$GEM_HOME"'
+    - Key: BUILD_DEPS
+      Value: '''bison dpkg-dev libgdbm-dev ruby'''
+    - Key: PATH
+      Value: '"$GEM_HOME/bin:$BUNDLE_PATH/gems/bin:$PATH"'
+    Name: env
+  - CmdLine:
+    - mkdir -p /usr/local/etc &&     apt-get update &&     apt-get --quiet install
+      -y --no-install-recommends  ca-certificates curl netbase gnupg dirmngr wget         autoconf
+      automake bzip2 dpkg-dev file g++ gcc imagemagick         libbz2-dev libc6-dev
+      libcurl4-openssl-dev libdb-dev libevent-dev libffi-dev libgdbm-dev libgeoip-dev         libglib2.0-dev
+      libjpeg-dev libkrb5-dev liblzma-dev libmagickcore-dev libmagickwand-dev libncurses5-dev         libncursesw5-dev
+      libpng-dev libpq-dev libreadline-dev libsqlite3-dev libssl-dev libtool libwebp-dev         libxml2-dev
+      libxslt-dev libyaml-dev make patch xz-utils zlib1g-dev vim         $BUILD_DEPS
+      &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - gemrc
+    - /usr/local/etc/gemrc
+  - CmdLine:
+    - wget -nv -q -O ruby.tar.xz "https://cache.ruby-lang.org/pub/ruby/${RUBY_MAJOR%-rc}/ruby-$RUBY_VERSION.tar.xz"
+      &&     mkdir -p /usr/src/ruby &&     tar -xJf ruby.tar.xz -C /usr/src/ruby --strip-components=1
+      &&     rm ruby.tar.xz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/ruby
+  - CmdLine:
+    - apt-get update &&         apt-get --quiet install -y --no-install-recommends
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '{         echo ''#define ENABLE_PATH_CHECK 0'';         echo;         cat file.c;     }
+      > file.c.new &&     mv file.c.new file.c &&     autoconf &&     gnuArch="$(dpkg-architecture
+      --query DEB_BUILD_GNU_TYPE)" &&     ./configure          --silent          --build="$gnuArch"          --disable-install-doc          --enable-shared
+      &&     make --silent -j "$(nproc)" &&     make --silent install &&     apt-get
+      --quiet purge -y --auto-remove $BUILD_DEPS &&     rm -r /usr/src/ruby'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gem update --system "$RUBYGEMS_VERSION" &&     gem install bundler --version
+      "$BUNDLER_VERSION" --force &&     rm -r /root/.gem/ &&     mkdir -p "$GEM_HOME"
+      && chmod 777 "$GEM_HOME"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NODE_VERSION
+      Value: 8.11.3
+    Name: env
+  - CmdLine:
+    - cd &&   wget -q http://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz
+      &&   tar -xzf node-v${NODE_VERSION}-linux-x64.tar.gz &&   mv node-v${NODE_VERSION}-linux-x64
+      /opt/node &&   rm node-v${NODE_VERSION}-linux-x64.tar.gz
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: ${PATH}:/opt/node/bin
+    Name: env
+  - CmdLine:
+    - npm install react-native-cli rnpm yarn -g
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - irb
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jdk
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk

@@ -1,0 +1,112 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.12
+  Commands:
+  - Env:
+    - Key: GOPATH
+      Value: '""'
+    Name: env
+  - Key: LDFLAGS
+    Name: arg
+    Value: null
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.sum
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - .
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o helm-convert -ldflags "$LDFLAGS"
+      main.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.12 AS build
+- As: helm
+  BaseName: alpine
+  Commands:
+  - Env:
+    - Key: HELM_VERSION
+      Value: v2.13.0
+    Name: env
+  - Env:
+    - Key: HELM_TMP_FILE
+      Value: helm-${HELM_VERSION}-linux-amd64.tar.gz
+    Name: env
+  - CmdLine:
+    - wget https://storage.googleapis.com/kubernetes-helm/${HELM_TMP_FILE} &&   wget
+      https://storage.googleapis.com/kubernetes-helm/${HELM_TMP_FILE}.sha256
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk --no-cache add openssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ "$(openssl sha1 -sha256 ${HELM_TMP_FILE} | awk '{print $2}')" != "$(cat
+      helm-${HELM_VERSION}-linux-amd64.tar.gz.sha256)" ];   then     echo "SHA sum
+      of ${HELM_TMP_FILE} does not match. Aborting.";     exit 1;   fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar -xvf helm-${HELM_VERSION}-linux-amd64.tar.gz
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: helm
+  Platform: ""
+  SourceCode: FROM alpine AS helm
+- BaseName: alpine:3.8
+  Commands:
+  - Chown: ""
+    From: helm
+    Name: copy
+    SourcesAndDest:
+    - /linux-amd64/helm
+    - /usr/local/bin/helm
+  - CmdLine:
+    - helm init --skip-refresh --client-only &&   mkdir -p /root/.helm/plugins/helm-convert
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - plugin.yaml
+    - /root/.helm/plugins/helm-convert/plugin.yaml
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/helm-convert
+    - /root/.helm/plugins/helm-convert/helm-convert
+  - CmdLine:
+    - helm
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

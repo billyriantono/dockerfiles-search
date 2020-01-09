@@ -1,0 +1,104 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: BRANCH
+    Name: arg
+    Value: master
+  - Env:
+    - Key: BRANCH
+      Value: ${BRANCH}
+    Name: env
+  - CmdLine:
+    - apk update && apk add git && apk add ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -D -g '' appuser
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --branch $BRANCH https://github.com/bitly/oauth2_proxy.git $GOPATH/src/mypackage/myapp/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH/src/mypackage/myapp/
+  - CmdLine:
+    - wget https://github.com/bitly/oauth2_proxy/pull/651/commits/3899576c07a51cf94307d679c76aafd72dcba4f2.patch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - patch -p1 < 3899576c07a51cf94307d679c76aafd72dcba4f2.patch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -d -v
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w
+      -s" -o /go/bin/oauth_proxy
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- BaseName: scratch
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/funkypenguin/oauth2_proxy.git"'
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.schema-version
+      Value: '"2.2-r1"'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/passwd
+    - /etc/passwd
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/oauth_proxy
+    - /go/bin/oauth_proxy
+  - Name: expose
+    Ports:
+    - "4080"
+  - Name: user
+    User: appuser
+  - CmdLine:
+    - /go/bin/oauth_proxy
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

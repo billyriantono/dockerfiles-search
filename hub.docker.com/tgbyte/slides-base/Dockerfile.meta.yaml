@@ -1,0 +1,111 @@
+MetaArgs: null
+Stages:
+- BaseName: ruby:2.4.2-slim
+  Commands:
+  - Maintainer: Thilo-Alexander Ginkel <tg@tgbyte.de>
+    Name: maintainer
+  - Name: expose
+    Ports:
+    - "10000"
+    - "35729"
+  - Env:
+    - Key: RACK_ENV
+      Value: production
+    - Key: RUN_AS
+      Value: ${UID:-www}
+    - Key: DUMBINIT_VERSION
+      Value: 1.1.3
+    - Key: DUMBINIT_SHA256SUM
+      Value: 1af305fc011c72aa899c88fe6576e82f2c7657d8d5212a13583fd2de012e478f
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: FOPUB_DIR
+      Value: /opt/asciidoctor-fopub
+    - Key: PATH
+      Value: /usr/local/bundle/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/asciidoctor-fopub/bin
+    - Key: GRADLE_USER_HOME
+      Value: /opt/gradle
+    - Key: BASENAME
+      Value: slides
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - sources.list
+    - /etc/apt/
+  - CmdLine:
+    - set -x     && mkdir -p /home/slides/handouts     && echo 'deb http://deb.debian.org/debian
+      jessie-backports main' > /etc/apt/sources.list.d/jessie-backports.list     &&
+      apt-get update -qq     && apt-get -t jessie-backports install -y --no-install-recommends        git        openjdk-8-jdk        ca-certificates-java     &&
+      (echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select
+      true | debconf-set-selections)     && apt-get install -y -o Apt::Install-Recommends=0        ca-certificates        fonts-liberation        ttf-mscorefonts-installer        inotify-tools        wget        xsltproc     &&
+      wget -q -O /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v${DUMBINIT_VERSION}/dumb-init_${DUMBINIT_VERSION}_amd64     &&
+      echo "${DUMBINIT_SHA256SUM}  /usr/local/bin/dumb-init" > /tmp/SHA256SUM     &&
+      sha256sum -c /tmp/SHA256SUM     && rm /tmp/SHA256SUM     && chmod +x /usr/local/bin/dumb-init     &&
+      (cd /opt && git clone https://github.com/asciidoctor/asciidoctor-fopub && sed
+      -i 's,dependencies {,dependencies {\nruntime "org.apache.pdfbox:fontbox:1.8.13",'
+      "${FOPUB_DIR}/build.gradle" && "${FOPUB_DIR}/gradlew" -p "$FOPUB_DIR" -q -u
+      installApp)     && apt-get remove -y --purge        wget     && adduser --uid
+      500 --disabled-password --gecos "www" --quiet www
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gemfile
+    - /home/slides/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gemfile.lock
+    - /home/slides/
+  - Name: workdir
+    Path: /home/slides
+  - CmdLine:
+    - set -x     && apt-get install -y -o Apt::Install-Recommends=0        build-essential        libssl-dev        python-pygments     &&
+      bundle -j4 --without development test     && apt-get remove -y --purge        build-essential        libssl-dev     &&
+      apt-get autoremove -y --purge
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /home/slides
+  - CmdLine:
+    - set -x     && xsltproc --output /home/slides/docbook-xsl-custom/handout-titlepage.xsl
+      "${FOPUB_DIR}/build/fopub/docbook/template/titlepage.xsl" /home/slides/docbook-xsl-custom/handout-titlepage.xml     &&
+      mv /home/slides/generate /usr/local/bin     && mv /home/slides/serve /usr/local/bin     &&
+      mv /home/slides/handouts /usr/local/bin     && mkdir -p /home/slides/slides     &&
+      chown -R www.www /home/slides/slides
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: www
+  - CmdLine:
+    - /usr/local/bin/dumb-init
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - serve
+    Name: cmd
+    PrependShell: false
+  - Expression: ARG UID
+    Name: onbuild
+  - Expression: ENV RUN_AS=${UID:-www}
+    Name: onbuild
+  - Expression: USER root
+    Name: onbuild
+  - Expression: ADD . /home/slides
+    Name: onbuild
+  - Expression: RUN generate &&             chown -R $RUN_AS /home/slides
+    Name: onbuild
+  - Expression: USER $RUN_AS
+    Name: onbuild
+  From:
+    Image: ruby:2.4.2-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ruby:2.4.2-slim

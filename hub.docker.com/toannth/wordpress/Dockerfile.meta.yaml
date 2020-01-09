@@ -1,0 +1,131 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - Env:
+    - Key: WORDPRESS_VERSION
+      Value: 4.7.4
+    Name: env
+  - Env:
+    - Key: WORDPRESS_SHA1
+      Value: 153592ccbb838cafa1220de9174ec965df2e9e1a
+    Name: env
+  - Env:
+    - Key: PHP_INI_DIR
+      Value: /usr/local/etc/php
+    Name: env
+  - Env:
+    - Key: PHP_EXTRA_CONFIGURE_ARGS
+      Value: --enable-fpm --with-fpm-user=www-data --with-fpm-group=www-data
+    Name: env
+  - Env:
+    - Key: PHP_CFLAGS
+      Value: '"-fstack-protector-strong -fpic -fpie -O2"'
+    Name: env
+  - Env:
+    - Key: PHP_CPPFLAGS
+      Value: '"$PHP_CFLAGS"'
+    Name: env
+  - Env:
+    - Key: PHP_LDFLAGS
+      Value: '"-Wl,-O1 -Wl,--hash-style=both -pie"'
+    Name: env
+  - Env:
+    - Key: PHP_VERSION
+      Value: 7.1.2
+    Name: env
+  - Env:
+    - Key: PHP_URL
+      Value: '"https://secure.php.net/get/php-7.1.2.tar.xz/from/this/mirror"'
+    Name: env
+  - Env:
+    - Key: PHP_SHA256
+      Value: '"d815a0c39fd57bab1434a77ff0610fb507c22f790c66cd6f26e27030c4b3e971"'
+    Name: env
+  - Env:
+    - Key: PHP_REDIS_VERSION
+      Value: 3.1.1
+    Name: env
+  - Env:
+    - Key: PHPIZE_DEPS
+      Value: "autoconf \t\tfile \t\tg++ \t\tgcc \t\tlibc-dev \t\tmake \t\tpkg-config
+        \t\tre2c"
+    Name: env
+  - Name: volume
+    Volumes:
+    - /var/www/html
+  - CmdLine:
+    - "set -xe     && buildDeps=\"       libcurl4-openssl-dev       libedit-dev       libsqlite3-dev
+      \      libssl-dev       libxml2-dev       libjpeg-dev   \t\tlibpng12-dev      \"
+      \  && fetchDeps=\"       wget      \"   && apt-get update   && apt-get install
+      --no-install-recommends --no-install-suggests -y     $PHPIZE_DEPS     ca-certificates
+      \    curl     libedit2     libsqlite3-0     libxml2     libjpeg62     libpng12-0
+      \    xz-utils     ${buildDeps}     ${fetchDeps}   && rm -r /var/lib/apt/lists/*
+      \  && mkdir -p $PHP_INI_DIR/conf.d   && mkdir -p /usr/src/php   && cd /usr/src
+      \    && wget -O php.tar.xz \"$PHP_URL\"   && echo \"$PHP_SHA256 *php.tar.xz\"
+      | sha256sum -c -   && tar -Jxf php.tar.xz -C /usr/src/php --strip-components=1
+      \    && export CFLAGS=\"$PHP_CFLAGS\"     CPPFLAGS=\"$PHP_CPPFLAGS\"     LDFLAGS=\"$PHP_LDFLAGS\"
+      \  && cd /usr/src/php   && ./configure     --with-config-file-path=\"$PHP_INI_DIR\"
+      \    --with-config-file-scan-dir=\"$PHP_INI_DIR/conf.d\"       --without-pear
+      \      --disable-cgi       --enable-ftp     --enable-mbstring     --enable-mysqlnd
+      \      --with-curl     --with-libedit     --with-openssl     --with-zlib     --with-mysqli
+      \    --enable-opcache     --with-gd --with-png-dir=/usr --with-jpeg-dir=/usr
+      \      $PHP_EXTRA_CONFIGURE_ARGS   && make -j \"$(nproc)\"   && make install
+      \  && { find /usr/local/bin /usr/local/sbin -type f -executable -exec strip
+      --strip-all '{}' + || true; }     && mkdir -p /usr/src/php/ext/redis   && wget
+      -O phpredis.tar.gz https://github.com/phpredis/phpredis/archive/$PHP_REDIS_VERSION.tar.gz
+      \  && tar -xzf phpredis.tar.gz -C /usr/src/php/ext/redis --strip-components=1
+      \  && cd /usr/src/php/ext/redis   && phpize   && ./configure   && make   &&
+      make install   && echo \"extension=redis.so\" >> \"/usr/local/etc/php/conf.d/redis.ini\"
+      \    && wget -O wordpress.tar.gz \"https://wordpress.org/wordpress-${WORDPRESS_VERSION}.tar.gz\"
+      \  &&  echo \"$WORDPRESS_SHA1 *wordpress.tar.gz\" | sha1sum -c -   && tar -xzf
+      wordpress.tar.gz -C /usr/src   && rm wordpress.tar.gz   && chown -R www-data:www-data
+      /usr/src/wordpress     && apt-get purge -y --auto-remove     $buildDeps     $fetchDeps
+      \    $PHPIZE_DEPS   && rm -rf /usr/src/php"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/www/html
+  - CmdLine:
+    - "set -ex   && cd /usr/local/etc \t&& if [ -d php-fpm.d ]; then \t\tsed 's!=NONE/!=!g'
+      php-fpm.conf.default | tee php-fpm.conf > /dev/null; \t\tcp php-fpm.d/www.conf.default
+      php-fpm.d/www.conf; \telse \t\tmkdir php-fpm.d; \t\tcp php-fpm.conf.default
+      php-fpm.d/www.conf; \t\t{ \t\t\techo '[global]'; \t\t\techo 'include=etc/php-fpm.d/*.conf';
+      \t\t} | tee php-fpm.conf; \tfi \t&& { \t\techo '[global]'; \t\techo 'error_log
+      = /proc/self/fd/2'; \t\techo; \t\techo '[www]'; \t\techo '; if we send this
+      to /proc/self/fd/1, it never appears'; \t\techo 'access.log = /proc/self/fd/2';
+      \t\techo; \t\techo 'clear_env = no'; \t\techo; \t\techo '; Ensure worker stdout
+      and stderr are sent to the main error log.'; \t\techo 'catch_workers_output
+      = yes'; \t} | tee php-fpm.d/docker.conf \t&& { \t\techo '[global]'; \t\techo
+      'daemonize = no'; \t\techo; \t\techo '[www]'; \t\techo 'listen = [::]:9000';
+      \t} | tee php-fpm.d/zz-docker.conf"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "{ \t\techo 'opcache.memory_consumption=128'; \t\techo 'opcache.interned_strings_buffer=8';
+      \t\techo 'opcache.max_accelerated_files=4000'; \t\techo 'opcache.revalidate_freq=2';
+      \t\techo 'opcache.fast_shutdown=1'; \t\techo 'opcache.enable_cli=1'; \t} > /usr/local/etc/php/conf.d/opcache-recommended.ini"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - php-fpm
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

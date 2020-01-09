@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:16.04
+  Commands:
+  - Maintainer: Dustin Hiatt <dustin.hiatt@workiva.com>
+    Name: maintainer
+  - CmdLine:
+    - apt-get update     && apt-get -y install software-properties-common     && add-apt-repository
+      -y ppa:webupd8team/java     && echo debconf shared/accepted-oracle-license-v1-1
+      select true | debconf-set-selections     && echo debconf shared/accepted-oracle-license-v1-1
+      seen true | debconf-set-selections     && apt-get update     && apt-get -y install
+      oracle-java8-installer
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PRESTO_VERSION
+      Value: "0.189"
+    - Key: PRESTO_HOME
+      Value: /presto
+    - Key: BASE_URL
+      Value: https://repo1.maven.org/maven2/com/facebook/presto
+    - Key: CONFIG_HOME
+      Value: /presto-server-0.189/etc
+    - Key: CATALOG_HOME
+      Value: /presto-server-0.189/etc/catalog
+    Name: env
+  - CmdLine:
+    - "apt-get update \t&& apt-get install -y python \t&& wget ${BASE_URL}/presto-server/${PRESTO_VERSION}/presto-server-${PRESTO_VERSION}.tar.gz
+      \t\t${BASE_URL}/presto-cli/${PRESTO_VERSION}/presto-cli-${PRESTO_VERSION}-executable.jar
+      \t\t${BASE_URL}/presto-jdbc/${PRESTO_VERSION}/presto-jdbc-${PRESTO_VERSION}.jar
+      \t\t${BASE_URL}/presto-verifier/${PRESTO_VERSION}/presto-verifier-${PRESTO_VERSION}-executable.jar
+      \t\t${BASE_URL}/presto-benchmark-driver/${PRESTO_VERSION}/presto-benchmark-driver-${PRESTO_VERSION}-executable.jar
+      \t&& rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "chmod +x presto-*executable.jar \t&& tar zxvf presto-server-${PRESTO_VERSION}.tar.gz
+      \t&& ln -s presto-server-${PRESTO_VERSION} presto \t&& mv *.jar presto/. \t&&
+      cd presto \t&& ln -s presto-cli-${PRESTO_VERSION}-executable.jar presto \t&&
+      ln -s presto-verifier-${PRESTO_VERSION}-executable.jar verifier \t&& ln -s presto-benchmark-driver-${PRESTO_VERSION}-executable.jar
+      benchmark-driver \t&& wget -P plugin/hive-hadoop2/ https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/hive-json-serde/hive-json-serde-0.2.jar
+      \t&& cd -"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $CONFIG_HOME     && echo "coordinator=true" > $CONFIG_HOME/config.properties     &&
+      echo "node-scheduler.include-coordinator=true"     && echo "query.max-memory=5GB"
+      >> $CONFIG_HOME/config.properties     && echo "query.max-memory-per-node=1GB"
+      >> $CONFIG_HOME/config.properties     && echo "http-server.http.port=8080" >>
+      $CONFIG_HOME/config.properties     && echo "discover-server.enabled=true"     &&
+      echo "discovery.uri=http://localhost:8080" >> $CONFIG_HOME/config.properties
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "-server" > $CONFIG_HOME/jvm.config     && echo "-Xmx2G" >> $CONFIG_HOME/jvm.config     &&
+      echo "-XX:+UseG1GC" >> $CONFIG_HOME/jvm.config     && echo "-XX:G1HeapRegionSize=32M"
+      >> $CONFIG_HOME/jvm.config     && echo "-XX:+UseGCOverheadLimit" >> $CONFIG_HOME/jvm.config     &&
+      echo "-XX:+ExplicitGCInvokesConcurrent" >> $CONFIG_HOME/jvm.config     && echo
+      "-XX:+HeapDumpOnOutOfMemoryError" >> $CONFIG_HOME/jvm.config     && echo "-XX:OnOutOfMemoryError=kill
+      -9 0" >> $CONFIG_HOME/jvm.config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "node.environment=production" > $CONFIG_HOME/node.properties     && echo
+      "node.id=7fb47073-3398-42f2-b51a-ddce39550739" >> $CONFIG_HOME/node.properties     &&
+      echo "node.data-dir=/presto/data" >> $CONFIG_HOME/node.properties
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "com.facebook.presto=INFO" > $CONFIG_HOME/log.properties
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $CATALOG_HOME     && echo "connector.name=jmx" > $CATALOG_HOME/jmx.properties     &&
+      echo "connector.name=memory" > $CATALOG_HOME/memory.properties     && echo "memory.max-data-per-node=128MB"
+      >> $CATALOG_HOME/memory.properties
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $PRESTO_HOME
+  - Name: volume
+    Volumes:
+    - $PRESTO_HOME/etc
+    - $PRESTO_HOME/data
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - ./bin/launcher
+    - run
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:16.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04

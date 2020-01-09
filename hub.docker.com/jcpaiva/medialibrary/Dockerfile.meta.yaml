@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- As: frontend-builder
+  BaseName: node:latest
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - rm -rf frontend/node_modules &&     ./wizard.sh -a
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:latest
+  Name: frontend-builder
+  Platform: ""
+  SourceCode: FROM node:latest AS frontend-builder
+- As: binary-builder
+  BaseName: golang:alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - go.sum
+    - ./
+  - Chown: ""
+    From: frontend-builder
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - CmdLine:
+    - apk add --no-cache gcc musl-dev &&     go mod download &&     ./wizard.sh -c
+      --nosha
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: binary-builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as binary-builder
+- As: certifier
+  BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk --update add ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: certifier
+  Platform: ""
+  SourceCode: FROM alpine:latest AS certifier
+- BaseName: jrottenberg/ffmpeg:4.1-alpine
+  Commands:
+  - Chown: ""
+    From: certifier
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/ca-certificates.crt
+  - Chown: ""
+    From: binary-builder
+    Name: copy
+    SourcesAndDest:
+    - /app/medialibrary
+    - /medialibrary
+  - Name: volume
+    Volumes:
+    - /srv
+  - Name: expose
+    Ports:
+    - "80"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .docker.json
+    - /.medialibrary.json
+  - CmdLine:
+    - /medialibrary
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: jrottenberg/ffmpeg:4.1-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM jrottenberg/ffmpeg:4.1-alpine

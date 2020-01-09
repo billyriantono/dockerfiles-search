@@ -1,0 +1,70 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: alpine:3.9
+  Commands:
+  - Key: MSSQL_EXPORTER_VERSION
+    Name: arg
+    Value: '"0.3.0"'
+  - Env:
+    - Key: DOWNLOAD_URI
+      Value: https://github.com/DanielOliver/mssql_exporter/releases/download/${MSSQL_EXPORTER_VERSION}/mssql_exporter_linux_x64.tar
+    Name: env
+  - CmdLine:
+    - apk add curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Downloading from ${DOWNLOAD_URI}" && mkdir target && curl -O -J -L ${DOWNLOAD_URI}
+      -o /mssql_exporter_linux_x64.tar && tar xvf /mssql_exporter_linux_x64.tar -C
+      target/
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM alpine:3.9 AS build-env
+- BaseName: gcr.io/distroless/dotnet
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"zapodot@gmail.com"'
+    Name: label
+  - Name: volume
+    Volumes:
+    - /data
+  - Env:
+    - Key: PROMETHEUS_MSSQL_ConfigFile
+      Value: '"/data/data.json"'
+    Name: env
+  - Env:
+    - Key: PROMETHEUS_MSSQL_ServerPath
+      Value: '"/metrics"'
+    Name: env
+  - Env:
+    - Key: PROMETHEUS_MSSQL_ServerPort
+      Value: "8080"
+    Name: env
+  - Env:
+    - Key: PROMETHEUS_MSSQL_AddExporterMetrics
+      Value: '"false"'
+    Name: env
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /target
+    - /app/
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - ./mssql_exporter
+    - serve
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: gcr.io/distroless/dotnet
+  Name: ""
+  Platform: ""
+  SourceCode: FROM gcr.io/distroless/dotnet

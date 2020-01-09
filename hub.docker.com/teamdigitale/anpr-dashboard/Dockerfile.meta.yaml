@@ -1,0 +1,115 @@
+MetaArgs:
+- DefaultValue: "1.11"
+  Key: GO_VERSION
+  ProvidedValue: null
+  Value: "1.11"
+Stages:
+- As: builder
+  BaseName: golang:${GO_VERSION}-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache ca-certificates git openssh gcc libc-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - ./
+  - CmdLine:
+    - mkdir -p ~/.ssh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ssh-keyscan github.com >> ~/.ssh/known_hosts
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/teamdigitale/anpr-dashboard-server/server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/teamdigitale/anpr-dashboard-server/converter
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build     -o server/dashboard ./server
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build     -o converter/converter ./converter
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:${GO_VERSION}-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:${GO_VERSION}-alpine AS builder
+- As: final
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache ca-certificates sqlite
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /srv/anpr/db
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /srv/anpr/vault
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /srv/anpr/cache
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/site/
+    - /srv/anpr/site/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/server/
+    - /srv/anpr/server/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/converter/
+    - /srv/anpr/converter/
+  - CmdLine:
+    - chown -R nobody:nobody /srv/anpr
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /srv/anpr/db/
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: user
+    User: nobody:nobody
+  - CmdLine:
+    - /srv/anpr/server/dashboard
+    - --http-listen-on=[::]:8080
+    - --config-file=/srv/anpr/vault/config
+    - --cookie-creds=/srv/anpr/vault/cookie-creds
+    - --email-creds=/srv/anpr/vault/email-creds
+    - --oauth-creds=/srv/anpr/vault/oauth-creds
+    - --web-templates=/srv/anpr/server/templates/
+    - --email-templates=/srv/anpr/server/emails/
+    - --static-content=/srv/anpr/server/static/
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: final
+  Platform: ""
+  SourceCode: FROM alpine AS final

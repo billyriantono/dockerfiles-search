@@ -1,0 +1,72 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: rust:latest
+  Commands:
+  - Env:
+    - Key: CROSS_MUSL_COMMIT
+      Value: '"850fbd1024800a88d679a2891a03662dcec276f5"'
+    Name: env
+  - CmdLine:
+    - curl -fsSLO "https://github.com/japaric/cross/raw/$CROSS_MUSL_COMMIT/docker/musl.sh"     &&
+      curl -fsSLO "https://github.com/japaric/cross/raw/$CROSS_MUSL_COMMIT/docker/openssl.sh"     &&
+      curl -fsSL -o /usr/local/bin/musl-gcc "https://github.com/japaric/cross/raw/$CROSS_MUSL_COMMIT/docker/musl-gcc.x86_64-unknown-linux-musl"     &&
+      curl -fsSL -o /usr/local/lib/musl-gcc.specs "https://github.com/japaric/cross/raw/$CROSS_MUSL_COMMIT/docker/musl-gcc.specs.x86_64-unknown-linux-musl"     &&
+      bash musl.sh 1.1.15     && bash openssl.sh linux-x86_64 musl- -static     &&
+      rustup target add x86_64-unknown-linux-musl
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CC_x86_64_unknown_linux_musl
+      Value: musl-gcc
+    - Key: OPENSSL_DIR
+      Value: /openssl
+    - Key: OPENSSL_INCLUDE_DIR
+      Value: /openssl/include
+    - Key: OPENSSL_LIB_DIR
+      Value: /openssl/lib
+    Name: env
+  - CmdLine:
+    - mkdir /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app
+  - CmdLine:
+    - set -ex;     cargo build --target x86_64-unknown-linux-musl --release;     cargo
+      test --target x86_64-unknown-linux-musl --release -- --nocapture;     strip
+      target/x86_64-unknown-linux-musl/release/dfw;
+    Name: run
+    PrependShell: true
+  From:
+    Image: rust:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM rust:latest as builder
+- BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache nftables
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/target/x86_64-unknown-linux-musl/release/dfw
+    - /dfw
+  - CmdLine:
+    - /dfw
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

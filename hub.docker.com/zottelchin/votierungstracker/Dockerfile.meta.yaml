@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- As: backend-build-env
+  BaseName: golang:latest
+  Commands:
+  - CmdLine:
+    - go get -u github.com/golang/dep/cmd/dep
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /go/src/github.com/zottelchin/Votierungstracker
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/zottelchin/Votierungstracker
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.go'
+    - /go/src/github.com/zottelchin/Votierungstracker/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gopkg.*
+    - /go/src/github.com/zottelchin/Votierungstracker/
+  - CmdLine:
+    - dep ensure
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=1 GOOS=linux go build -a -ldflags '-extldflags "-static" -s' -installsuffix
+      cgo -o Votierungstracker -v .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: backend-build-env
+  Platform: ""
+  SourceCode: FROM golang:latest AS backend-build-env
+- As: frontend-build-env
+  BaseName: node
+  Commands:
+  - CmdLine:
+    - mkdir -p /frontend
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /frontend
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - frontend/
+    - /frontend/
+  - CmdLine:
+    - npm install && npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node
+  Name: frontend-build-env
+  Platform: ""
+  SourceCode: FROM node AS frontend-build-env
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: backend-build-env
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/zottelchin/Votierungstracker/Votierungstracker
+    - /
+  - Chown: ""
+    From: frontend-build-env
+    Name: copy
+    SourcesAndDest:
+    - /frontend/dist/
+    - /frontend/dist/
+  - Env:
+    - Key: GIN_MODE
+      Value: release
+    Name: env
+  - Name: workdir
+    Path: /
+  - Name: volume
+    Volumes:
+    - /db
+  - Name: expose
+    Ports:
+    - "8900"
+  - CmdLine:
+    - /Votierungstracker
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

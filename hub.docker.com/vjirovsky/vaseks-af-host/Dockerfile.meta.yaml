@@ -1,0 +1,95 @@
+MetaArgs:
+- DefaultValue: dev
+  Key: HOST_COMMIT
+  ProvidedValue: null
+  Value: dev
+- DefaultValue: "00001"
+  Key: BUILD_NUMBER
+  ProvidedValue: null
+  Value: "00001"
+Stages:
+- As: installer-env
+  BaseName: microsoft/dotnet:2.2-sdk
+  Commands:
+  - Key: HOST_COMMIT
+    Name: arg
+    Value: null
+  - Key: BUILD_NUMBER
+    Name: arg
+    Value: null
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -c
+  - Env:
+    - Key: PublishWithAspNetCoreTargetManifest
+      Value: "false"
+    Name: env
+  - CmdLine:
+    - export ARG_BUILD_NUMBER=${BUILD_NUMBER} &&     if [[ $ARG_BUILD_NUMBER == dev*
+      ]];     then export SCRIPT_BUILD_NUMBER=00001;     else export SCRIPT_BUILD_NUMBER=$(echo
+      $ARG_BUILD_NUMBER | cut -d'.' -f 3 | cut -d'-' -f 1);     fi &&     echo "Build
+      Number == $SCRIPT_BUILD_NUMBER" &&    wget https://github.com/Azure/azure-functions-host/archive/${HOST_COMMIT}.tar.gz
+      &&     tar xzf ${HOST_COMMIT}.tar.gz &&     cd azure-functions-host-* &&     dotnet
+      publish -v q /p:BuildNumber="$SCRIPT_BUILD_NUMBER" /p:CommitHash=${HOST_COMMIT}
+      src/WebJobs.Script.WebHost/WebJobs.Script.WebHost.csproj --output /azure-functions-host
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.2-sdk
+  Name: installer-env
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2-sdk AS installer-env
+- BaseName: microsoft/dotnet:2.2-aspnetcore-runtime
+  Commands:
+  - Chown: ""
+    From: installer-env
+    Name: copy
+    SourcesAndDest:
+    - /azure-functions-host
+    - /azure-functions-host
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./run-vaseks-afhost.sh
+    - /azure-functions-host/run-vaseks-afhost.sh
+  - CmdLine:
+    - sed -i 's/\r$//' /azure-functions-host/run-vaseks-afhost.sh  &&         chmod
+      +x /azure-functions-host/run-vaseks-afhost.sh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/site/wwwroot
+  - Env:
+    - Key: AzureWebJobsScriptRoot
+      Value: /home/site/wwwroot
+    Name: env
+  - Env:
+    - Key: AzureFunctionsJobHost__Logging__Console__IsEnabled
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: AzureWebJobsDashboard
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: HOME
+      Value: /home
+    Name: env
+  - Env:
+    - Key: ASPNETCORE_URLS
+      Value: http://+:80
+    Name: env
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /azure-functions-host/run-vaseks-afhost.sh
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.2-aspnetcore-runtime
+  Name: ""
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.2-aspnetcore-runtime

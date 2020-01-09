@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:3.7
+  Commands:
+  - Env:
+    - Key: TWEMPROXY_URL
+      Value: https://github.com/twitter/twemproxy/archive/v0.4.1.tar.gz
+    Name: env
+  - CmdLine:
+    - apk --no-cache add alpine-sdk autoconf automake curl libtool
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L "$TWEMPROXY_URL" | tar xzf - &&     TWEMPROXY_DIR=$(find / -maxdepth
+      1 -iname "twemproxy*" | sort | tail -1) &&     cd $TWEMPROXY_DIR &&     autoreconf
+      -fvi && CFLAGS="-ggdb3 -O0" ./configure --enable-debug=full && make && make
+      install
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.7 as builder
+- BaseName: alpine:3.7
+  Commands:
+  - Env:
+    - Key: LISTEN_PORT
+      Value: '"6380"'
+    - Key: REDIS_SERVERS
+      Value: '"127.0.0.1:6378:1,127.0.0.1:6379:1"'
+    - Key: AUTO_EJECT_HOSTS
+      Value: '"true"'
+    - Key: TIMEOUT
+      Value: '"2000"'
+    - Key: SERVER_RETRY_TIMEOUT
+      Value: '"5000"'
+    - Key: SERVER_FAILURE_LIMIT
+      Value: '"1"'
+    - Key: SERVER_CONNECTIONS
+      Value: '"40"'
+    - Key: PRECONNECT
+      Value: '"true"'
+    Name: env
+  - CmdLine:
+    - apk --no-cache add dumb-init
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/sbin/nutcracker
+    - /usr/local/sbin/nutcracker
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/local/sbin/
+  - CmdLine:
+    - dumb-init
+    - --rewrite
+    - "15:2"
+    - --
+    - entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - $LISTEN_PORT
+  - CmdLine:
+    - nutcracker
+    - -c
+    - /etc/nutcracker.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

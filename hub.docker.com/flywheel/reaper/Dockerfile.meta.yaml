@@ -1,0 +1,133 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: python:2.7-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache build-base
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DCMTK_VERSION
+      Value: 3.6.2
+    Name: env
+  - Name: workdir
+    Path: /src/dcmtk-$DCMTK_VERSION
+  - CmdLine:
+    - wget -O - http://dicom.offis.de/download/dcmtk/dcmtk${DCMTK_VERSION//./}/dcmtk-$DCMTK_VERSION.tar.gz
+      | tar xz -C /src
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dcmtk.patch
+    - .
+  - CmdLine:
+    - patch -p1 <dcmtk.patch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./configure
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make config-all ofstd-all oflog-all dcmdata-all dcmimgle-all dcmimage-all dcmjpeg-all
+      dcmjpls-all dcmtls-all dcmnet-all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make dcmdata-install dcmnet-install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /src/reaper
+  - CmdLine:
+    - python -m compileall /src/reaper/reaper && find /src/reaper/reaper -name '*.py'
+      -delete
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:2.7-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM python:2.7-alpine as build
+- As: dist
+  BaseName: python:2.7-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache libstdc++ tzdata
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin
+    - /usr/local/bin
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/etc/dcmtk
+    - /usr/local/etc/dcmtk
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/share/dcmtk
+    - /usr/local/share/dcmtk
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/share/doc/dcmtk
+    - /usr/local/share/doc/dcmtk
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - /src/reaper/requirements.txt
+  - CmdLine:
+    - pip install -r /src/reaper/requirements.txt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /src/reaper
+    - /src/reaper
+  - CmdLine:
+    - pip install -e /src/reaper
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:2.7-alpine
+  Name: dist
+  Platform: ""
+  SourceCode: FROM python:2.7-alpine as dist
+- As: testing
+  BaseName: dist
+  Commands:
+  - CmdLine:
+    - pip install -r /src/reaper/tests/requirements.txt
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: dist
+  Name: testing
+  Platform: ""
+  SourceCode: FROM dist as testing

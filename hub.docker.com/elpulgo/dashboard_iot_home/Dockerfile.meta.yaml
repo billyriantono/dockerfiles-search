@@ -1,0 +1,122 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: mcr.microsoft.com/dotnet/core/aspnet:3.0-buster-slim
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Name: expose
+    Ports:
+    - "80"
+  From:
+    Image: mcr.microsoft.com/dotnet/core/aspnet:3.0-buster-slim
+  Name: base
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/aspnet:3.0-buster-slim AS base
+- As: dotnetbuilder
+  BaseName: mcr.microsoft.com/dotnet/core/sdk:3.0-buster
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - DashboardIotHome.csproj
+    - DashboardIotHome/DashboardIotHome.csproj
+  - CmdLine:
+    - dotnet restore DashboardIotHome/DashboardIotHome.csproj
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./DashboardIotHome
+  - Name: workdir
+    Path: /src/DashboardIotHome
+  - CmdLine:
+    - dotnet build DashboardIotHome.csproj -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: mcr.microsoft.com/dotnet/core/sdk:3.0-buster
+  Name: dotnetbuilder
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/sdk:3.0-buster AS dotnetbuilder
+- As: publish
+  BaseName: dotnetbuilder
+  Commands:
+  - CmdLine:
+    - dotnet publish "DashboardIotHome.csproj" -c Release -o /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  From:
+    Stage:
+      Index: 1
+      Named: dotnetbuilder
+  Name: publish
+  Platform: ""
+  SourceCode: FROM dotnetbuilder AS publish
+- As: nodebuilder
+  BaseName: node:12.13
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./iot-dashboard/package.json
+    - ./package.json
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./iot-dashboard/
+    - /app
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12.13
+  Name: nodebuilder
+  Platform: ""
+  SourceCode: FROM node:12.13 as nodebuilder
+- As: final
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - Chown: ""
+    From: nodebuilder
+    Name: copy
+    SourcesAndDest:
+    - /app/build
+    - ./wwwroot
+  - CmdLine:
+    - dotnet
+    - DashboardIotHome.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: final
+  Platform: ""
+  SourceCode: FROM base AS final

@@ -1,0 +1,172 @@
+MetaArgs: null
+Stages:
+- BaseName: postgres:9.6-alpine
+  Commands:
+  - Env:
+    - Key: SYS_GROUP
+      Value: postgres
+    Name: env
+  - Env:
+    - Key: SYS_USER
+      Value: postgres
+    Name: env
+  - Env:
+    - Key: PG_MAX_WAL_SENDERS
+      Value: "8"
+    Name: env
+  - Env:
+    - Key: PG_WAL_KEEP_SEGMENTS
+      Value: "8"
+    Name: env
+  - Env:
+    - Key: REPMGR_PID_FILE
+      Value: /tmp/repmgrd.pid
+    Name: env
+  - Key: REPMGR_VERSION
+    Name: arg
+    Value: 4.4.0
+  - Key: REPMGR_SHA1
+    Name: arg
+    Value: e41a42dc5267e1b5f19d13f43a243eb7bc34d1a3
+  - CmdLine:
+    - "set -eux; \tgetent group ${SYS_GROUP} || addgroup -S ${SYS_GROUP}; \tgetent
+      passwd ${SYS_USER} || adduser -S ${SYS_USER}  -G ${SYS_GROUP} -s \"/bin/sh\";"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -ex; \tpostgresHome=\"$(getent passwd ${SYS_USER})\"; \tpostgresHome=\"$(echo
+      \"$postgresHome\" | cut -d: -f6)\"; \t[ \"$postgresHome\" = '/var/lib/postgresql'
+      ]; \tmkdir -p \"$postgresHome\"; \tchown -R ${SYS_USER}:${SYS_GROUP} \"$postgresHome\""
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: C
+    Name: env
+  - CmdLine:
+    - "set -ex \t\t&& apk add --no-cache  ca-certificates su-exec bash python3 py3-psycopg2"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -eux;  pip3 install barman
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -ex \t\t&& apk add --no-cache --virtual .dd2 \t      postgresql-dev \t
+      \     dos2unix \t      curl \t      git \t      bison         coreutils         dpkg-dev
+      dpkg         flex         gcc         libc-dev         libedit-dev         libxml2-dev
+      \        libxslt-dev         linux-headers         make         openssl-dev
+      \        perl-utils         perl-ipc-run         util-linux-dev         zlib-dev
+      \  && curl -sSL https://github.com/2ndQuadrant/repmgr/archive/v${REPMGR_VERSION}.tar.gz
+      \ -o ${REPMGR_VERSION}.tar.gz   && echo \"${REPMGR_SHA1}  ${REPMGR_VERSION}.tar.gz\"
+      | sha1sum -c -   && tar zxf ${REPMGR_VERSION}.tar.gz   && cd repmgr-${REPMGR_VERSION}
+      \  && ./configure   && make USE_PGXS=1 install   && cd ..   && rm -Rf repmgr-${REPMGR_VERSION}
+      ${REPMGR_VERSION}.tar.gz   && update-ca-certificates"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R ${SYS_USER}:${SYS_GROUP} "$PGDATA"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PRIMARY_NODE
+      Value: localhost
+    Name: env
+  - Env:
+    - Key: PG_REP_USER
+      Value: repmgr
+    Name: env
+  - Env:
+    - Key: PG_REP_DB
+      Value: repmgr
+    Name: env
+  - Env:
+    - Key: PG_CONFIG_DIR
+      Value: /var/lib/postgresql/conf
+    Name: env
+  - Env:
+    - Key: PGPASSFILE
+      Value: '"$PG_CONFIG_DIR/.pgpass"'
+    Name: env
+  - Env:
+    - Key: POSTGRES_PORT
+      Value: "5432"
+    Name: env
+  - Env:
+    - Key: PGSSLMODE
+      Value: prefer
+    Name: env
+  - CmdLine:
+    - mkdir -p "$PG_CONFIG_DIR" &&  chown -R ${SYS_USER}:${SYS_GROUP} "$PG_CONFIG_DIR"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/mreithub/pg_recall.git /root/pg_recall/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /root/pg_recall/; make install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - postgresql.conf
+    - /usr/local/share/postgresql/postgresql.conf.repmgr
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - script/*.sh
+    - /docker-entrypoint-initdb.d/
+  - CmdLine:
+    - dos2unix /usr/local/bin/docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dos2unix /docker-entrypoint-initdb.d/*.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk del .dd2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --update iputils
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - chmod +x  /usr/local/bin/docker-entrypoint.sh  /docker-entrypoint-initdb.d/*.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: volume
+    Volumes:
+    - /var/lib/postgresql
+  - Name: volume
+    Volumes:
+    - /var/lib/postgresql/data
+  - Name: expose
+    Ports:
+    - "5432"
+  - CmdLine:
+    - postgres
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: postgres:9.6-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM postgres:9.6-alpine

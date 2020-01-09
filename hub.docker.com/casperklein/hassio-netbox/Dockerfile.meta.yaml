@@ -1,0 +1,70 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: debian:10-slim
+  Commands:
+  - Env:
+    - Key: PACKAGES
+      Value: '"jq sudo postgresql libpq-dev python3-pip python3-dev build-essential
+        libxml2-dev libxslt1-dev libffi-dev graphviz libpq-dev libssl-dev redis-server
+        zlib1g-dev"'
+    Name: env
+  - CmdLine:
+    - "apt-get update &&\tapt-get -y install $PACKAGES"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs
+    - /
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/netbox-community/netbox/archive/v2.6.3.tar.gz
+    - /
+  - CmdLine:
+    - "/etc/init.d/redis-server start &&\tpg_ctlcluster 11 main start &&\tsudo -u
+      postgres psql < db.sql &&\ttar -xzf v2.6.3.tar.gz -C /opt &&\tcd /opt/ &&\tln
+      -s netbox-2.6.3/ netbox &&\tcd /opt/netbox/ &&\tpip3 install -r requirements.txt
+      &&\tmv /configuration.py /opt/netbox/netbox/netbox/ &&\tcd /opt/netbox/netbox
+      &&\tpython3 manage.py migrate &&\tpython3 manage.py collectstatic --no-input
+      &&\tpython3 manage.py loaddata initial_data &&\tpg_ctlcluster 11 main stop &&\t/etc/init.d/redis-server
+      stop"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get -y install dumb-init &&\trm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:10-slim
+  Name: build
+  Platform: ""
+  SourceCode: FROM    debian:10-slim as build
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /
+  - CmdLine:
+    - /usr/bin/dumb-init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: "FROM\tscratch"

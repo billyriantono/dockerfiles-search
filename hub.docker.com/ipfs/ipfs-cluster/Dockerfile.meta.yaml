@@ -1,0 +1,163 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.13-stretch
+  Commands:
+  - Maintainer: Hector Sanjuan <hector@protocol.ai>
+    Name: maintainer
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Env:
+    - Key: SRC_PATH
+      Value: $GOPATH/src/github.com/ipfs/ipfs-cluster
+    Name: env
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Env:
+    - Key: GOPROXY
+      Value: https://proxy.golang.org
+    Name: env
+  - Env:
+    - Key: SUEXEC_VERSION
+      Value: v0.2
+    Name: env
+  - Env:
+    - Key: TINI_VERSION
+      Value: v0.16.1
+    Name: env
+  - CmdLine:
+    - set -x   && cd /tmp   && git clone https://github.com/ncopa/su-exec.git   &&
+      cd su-exec   && git checkout -q $SUEXEC_VERSION   && make   && cd /tmp   &&
+      wget -q -O tini https://github.com/krallin/tini/releases/download/$TINI_VERSION/tini   &&
+      chmod +x tini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.*
+    - $SRC_PATH/
+  - Name: workdir
+    Path: $SRC_PATH
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $SRC_PATH
+  - CmdLine:
+    - make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-stretch
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.13-stretch AS builder
+- BaseName: busybox:1-glibc
+  Commands:
+  - Maintainer: Hector Sanjuan <hector@protocol.ai>
+    Name: maintainer
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Env:
+    - Key: SRC_PATH
+      Value: /go/src/github.com/ipfs/ipfs-cluster
+    Name: env
+  - Env:
+    - Key: IPFS_CLUSTER_PATH
+      Value: /data/ipfs-cluster
+    Name: env
+  - Env:
+    - Key: IPFS_CLUSTER_CONSENSUS
+      Value: crdt
+    Name: env
+  - Name: expose
+    Ports:
+    - "9094"
+  - Name: expose
+    Ports:
+    - "9095"
+  - Name: expose
+    Ports:
+    - "9096"
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $GOPATH/bin/ipfs-cluster-service
+    - /usr/local/bin/ipfs-cluster-service
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $GOPATH/bin/ipfs-cluster-ctl
+    - /usr/local/bin/ipfs-cluster-ctl
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $GOPATH/bin/ipfs-cluster-follow
+    - /usr/local/bin/ipfs-cluster-follow
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $SRC_PATH/docker/entrypoint.sh
+    - /usr/local/bin/entrypoint.sh
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/su-exec/su-exec
+    - /sbin/su-exec
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/tini
+    - /sbin/tini
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs
+    - /etc/ssl/certs
+  - CmdLine:
+    - mkdir -p $IPFS_CLUSTER_PATH &&     adduser -D -h $IPFS_CLUSTER_PATH -u 1000
+      -G users ipfs &&     chown ipfs:users $IPFS_CLUSTER_PATH
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - $IPFS_CLUSTER_PATH
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /usr/local/bin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - daemon
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: busybox:1-glibc
+  Name: ""
+  Platform: ""
+  SourceCode: FROM busybox:1-glibc

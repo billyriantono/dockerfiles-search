@@ -1,0 +1,75 @@
+MetaArgs: null
+Stages:
+- As: build-stage
+  BaseName: gradle:4.2.1-jdk8
+  Commands:
+  - Chown: gradle:gradle
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /home/gradle/src
+  - Name: workdir
+    Path: /home/gradle/src
+  - CmdLine:
+    - gradle clean build
+    Name: run
+    PrependShell: true
+  From:
+    Image: gradle:4.2.1-jdk8
+  Name: build-stage
+  Platform: ""
+  SourceCode: FROM gradle:4.2.1-jdk8 as build-stage
+- As: production-stage
+  BaseName: openjdk:8-jre-alpine
+  Commands:
+  - Env:
+    - Key: APPLICATION_USER
+      Value: ktor
+    Name: env
+  - CmdLine:
+    - adduser -D -g '' $APPLICATION_USER
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /app
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R $APPLICATION_USER /app
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-stage
+    Name: copy
+    SourcesAndDest:
+    - /home/gradle/src/build/libs/hiking-api.jar
+    - /app/hiking-api.jar
+  - CmdLine:
+    - chmod +x /app/hiking-api.jar
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $APPLICATION_USER
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - java
+    - -server
+    - -XX:+UnlockExperimentalVMOptions
+    - -XX:+UseCGroupMemoryLimitForHeap
+    - -XX:InitialRAMFraction=2
+    - -XX:MinRAMFraction=2
+    - -XX:MaxRAMFraction=2
+    - -XX:+UseG1GC
+    - -XX:MaxGCPauseMillis=100
+    - -XX:+UseStringDeduplication
+    - -jar
+    - hiking-api.jar
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jre-alpine
+  Name: production-stage
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre-alpine as production-stage

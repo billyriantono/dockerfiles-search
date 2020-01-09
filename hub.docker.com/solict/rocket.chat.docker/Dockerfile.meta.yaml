@@ -1,0 +1,119 @@
+MetaArgs: null
+Stages:
+- BaseName: solict/nodejs.stack.docker:debian8_nodejs
+  Commands:
+  - Key: app_main_version
+    Name: arg
+    Value: '"latest"'
+  - Key: app_main_user
+    Name: arg
+    Value: '"rocketchat"'
+  - Key: app_main_group
+    Name: arg
+    Value: '"rocketchat"'
+  - Key: app_main_home
+    Name: arg
+    Value: '"/srv/rocketchat"'
+  - Key: app_main_src
+    Name: arg
+    Value: '"${app_main_home}/src"'
+  - Key: app_main_data
+    Name: arg
+    Value: '"${app_main_home}/data"'
+  - Key: app_main_proto
+    Name: arg
+    Value: '"http"'
+  - Key: app_main_host
+    Name: arg
+    Value: '"rocketchat-main"'
+  - Key: app_main_port
+    Name: arg
+    Value: '"3000"'
+  - Key: app_mongodb_proto
+    Name: arg
+    Value: '"mongodb"'
+  - Key: app_mongodb_host
+    Name: arg
+    Value: '"rocketchat-mongodb"'
+  - Key: app_mongodb_port
+    Name: arg
+    Value: '"27017"'
+  - Key: app_mongodb_database
+    Name: arg
+    Value: '"rocketchat"'
+  - Env:
+    - Key: RC_VERSION
+      Value: '"${app_main_version}"'
+    - Key: PORT
+      Value: '"${app_main_port}"'
+    - Key: ROOT_URL
+      Value: '"${app_main_proto}://${app_main_host}:${app_main_port}"'
+    - Key: MONGO_URL
+      Value: '"${app_mongodb_proto}://${app_mongodb_host}:${app_mongodb_port}/${app_mongodb_database}"'
+    - Key: Accounts_AvatarStorePath
+      Value: '"${app_main_data}/uploads"'
+    Name: env
+  - CmdLine:
+    - printf "Installing packages...\n" &&         printf "Install the required packages...\n"
+      &&     apt-get update && apt-get install -qy       imagemagick &&     printf
+      "Cleanup the Package Manager...\n" &&     apt-get clean && rm -rf /var/lib/apt/lists/*
+      &&         printf "Finished installing packages...\n";
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - printf "Adding users and groups...\n" &&         printf "Add rocketchat user
+      and group...\n" &&     id -g "${app_main_user}" ||     groupadd       --system
+      "${app_main_group}" &&     id -u "${app_main_user}" &&     usermod       --gid
+      "${app_main_group}"       --home "${app_main_home}"       --shell "/sbin/nologin"       "${app_main_user}"     ||     useradd       --system
+      --gid "${app_main_group}"       --no-create-home --home-dir "${app_main_home}"       --shell
+      "/sbin/nologin"       "${app_main_user}" &&         printf "Copying skeleton
+      files...\n" &&     rsync -rah "/etc/skel/." "${app_main_home}" &&         printf
+      "Setting ownership and permissions...\n" &&     mkdir -p "${app_main_data}"
+      &&     chown -R "${app_main_user}":"${app_main_group}" "${app_main_home}" &&         printf
+      "Finished adding users and groups...\n";
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'printf "Installing application...\n" &&         printf "Add the GPG keys...\n"
+      &&     printf "\- gpg key 4FD08014: public key Rocket.Chat Buildmaster <buildmaster@rocket.chat>...\n"
+      &&     gpg --keyserver ha.pool.sks-keyservers.net --recv-keys 0E163286C20D07B9787EBE9FD7F9D0414FD08104
+      &&         printf "Install the binaries...\n" &&     mkdir -p "${app_main_src}"
+      &&     wget "https://rocket.chat/releases/${RC_VERSION}/download" -O "/tmp/rocket.chat-${RC_VERSION}.tar.gz"
+      &&     wget "https://rocket.chat/releases/${RC_VERSION}/asc" -O "/tmp/rocket.chat-${RC_VERSION}.tar.gz.asc"
+      &&     gpg --verify "/tmp/rocket.chat-${RC_VERSION}.tar.gz.asc" &&     tar -xzf
+      "/tmp/rocket.chat-${RC_VERSION}.tar.gz" -C "${app_main_src}" &&     rm -f "/tmp/{rocket.chat-${RC_VERSION}.tar.gz.asc,rocket.chat-${RC_VERSION}.tar.gz}"
+      &&         printf "Run the module installation...\n" &&     (cd "${app_main_src}/bundle/programs/server"
+      && $(which npm) install) &&         printf "Cleanup the nodejs Package Manager...\n"
+      &&     $(which npm) cache clear &&         printf "Finished installing application...\n";'
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - $app_main_port
+  - Name: volume
+    Volumes:
+    - '"${app_main_data}"'
+  - Name: user
+    User: '"${app_main_user}"'
+  - Name: workdir
+    Path: '"${app_main_src}/bundle"'
+  - CmdLine:
+    - $(which pm2-docker)
+    - main.js
+    - -i
+    - max
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 300000000000
+      Retries: 3
+      Test:
+      - CMD-SHELL
+      - '"$(which pm2) ping main || exit 1"'
+      Timeout: 3000000000
+    Name: healthcheck
+  From:
+    Image: solict/nodejs.stack.docker:debian8_nodejs
+  Name: ""
+  Platform: ""
+  SourceCode: FROM solict/nodejs.stack.docker:debian8_nodejs

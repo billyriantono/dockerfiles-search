@@ -1,0 +1,115 @@
+MetaArgs:
+- DefaultValue: production
+  Key: environment
+  ProvidedValue: null
+  Value: production
+Stages:
+- As: production
+  BaseName: mozilla/sbt
+  Commands:
+  - Name: user
+    User: root
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /fluence
+  - Name: workdir
+    Path: /fluence
+  - CmdLine:
+    - sbt node/assembly
+    Name: run
+    PrependShell: true
+  From:
+    Image: mozilla/sbt
+  Name: production
+  Platform: ""
+  SourceCode: FROM mozilla/sbt as production
+- As: docker
+  BaseName: alpine
+  Commands:
+  - Key: DOCKER_BINARY
+    Name: arg
+    Value: https://download.docker.com/linux/static/stable/x86_64/docker-19.03.2.tgz
+  - CmdLine:
+    - wget $DOCKER_BINARY -O- | tar -C / --strip-components=1 -zx docker/docker
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: docker
+  Platform: ""
+  SourceCode: FROM alpine as docker
+- As: test
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /fluence
+  From:
+    Scratch: true
+  Name: test
+  Platform: ""
+  SourceCode: FROM scratch as test
+- As: build
+  BaseName: $environment
+  Commands: null
+  From:
+    Image: $environment
+  Name: build
+  Platform: ""
+  SourceCode: FROM $environment as build
+- BaseName: openjdk:10-jre-slim
+  Commands:
+  - Name: volume
+    Volumes:
+    - /master
+  - Env:
+    - Key: MIN_PORT
+      Value: "10000"
+    Name: env
+  - Env:
+    - Key: MAX_PORT
+      Value: "11000"
+    Name: env
+  - Name: expose
+    Ports:
+    - "5678"
+  - Chown: ""
+    From: docker
+    Name: copy
+    SourcesAndDest:
+    - /docker
+    - /usr/bin/docker
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /fluence/node/src/main/resources/docker
+    - /
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /fluence/node/target/scala-2.12/master-node.jar
+    - /master-node.jar
+  - CmdLine:
+    - java
+    - -jar
+    - -Dconfig.file=/master/application.conf
+    - /master-node.jar
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:10-jre-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:10-jre-slim

@@ -1,0 +1,144 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "GO_VERSION",
+      "DefaultValue": "1.12",
+      "ProvidedValue": null,
+      "Value": "1.12"
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "build_base",
+      "BaseName": "golang:${GO_VERSION}-stretch",
+      "SourceCode": "FROM golang:${GO_VERSION}-stretch as build_base",
+      "Platform": "",
+      "As": "build_base",
+      "From": {
+        "Image": "golang:${GO_VERSION}-stretch"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026     DEBIAN_FRONTEND=noninteractive apt-get -y upgrade \u0026\u0026     apt-get install -y --no-install-recommends git ca-certificates"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/src"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "./go.mod",
+            "./go.sum",
+            "./"
+          ]
+        },
+        {
+          "CmdLine": [
+            "go mod download"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "build_binaries",
+      "BaseName": "build_base",
+      "SourceCode": "FROM build_base AS build_binaries",
+      "Platform": "",
+      "As": "build_binaries",
+      "From": {
+        "Stage": {
+          "Named": "build_base",
+          "Index": 0
+        }
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            ".",
+            "."
+          ]
+        },
+        {
+          "CmdLine": [
+            "CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go install ./cmd/dms-exporter"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "release",
+      "BaseName": "debian:stretch-slim",
+      "SourceCode": "FROM debian:stretch-slim AS release",
+      "Platform": "",
+      "As": "release",
+      "From": {
+        "Image": "debian:stretch-slim"
+      },
+      "Commands": [
+        {
+          "Env": [
+            {
+              "Key": "DEBIAN_VERSION",
+              "Value": "stretch"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026     DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \u0026\u0026     DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y -qq     ca-certificates \u0026\u0026     apt-get clean \u0026\u0026     rm -rf /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "useradd -ms /bin/bash aws"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "build_binaries",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/go/bin/dms-exporter",
+            "/bin/dms-exporter"
+          ]
+        },
+        {
+          "Name": "user",
+          "User": "aws"
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "8080"
+          ]
+        },
+        {
+          "CmdLine": [
+            "dms-exporter"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

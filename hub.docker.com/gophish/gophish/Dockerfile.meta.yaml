@@ -1,0 +1,119 @@
+MetaArgs: null
+Stages:
+- As: build-js
+  BaseName: node:latest
+  Commands:
+  - CmdLine:
+    - npm install gulp gulp-cli -g
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - npm install --only=dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gulp
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:latest
+  Name: build-js
+  Platform: ""
+  SourceCode: FROM node:latest AS build-js
+- As: build-golang
+  BaseName: golang:1.11
+  Commands:
+  - Name: workdir
+    Path: /go/src/github.com/gophish/gophish
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - go get -v && go build -v
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11
+  Name: build-golang
+  Platform: ""
+  SourceCode: FROM golang:1.11 AS build-golang
+- BaseName: debian:stable-slim
+  Commands:
+  - CmdLine:
+    - useradd -m -d /opt/gophish -s /bin/bash app
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get update && \tapt-get install --no-install-recommends -y jq libcap2-bin
+      && \tapt-get clean && \trm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/gophish
+  - Chown: ""
+    From: build-golang
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/gophish/gophish/
+    - ./
+  - Chown: ""
+    From: build-js
+    Name: copy
+    SourcesAndDest:
+    - /build/static/js/dist/
+    - ./static/js/dist/
+  - Chown: ""
+    From: build-js
+    Name: copy
+    SourcesAndDest:
+    - /build/static/css/dist/
+    - ./static/css/dist/
+  - Chown: ""
+    From: build-golang
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/gophish/gophish/config.json
+    - ./
+  - CmdLine:
+    - chown app. config.json
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - setcap 'cap_net_bind_service=+ep' /opt/gophish/gophish
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  - CmdLine:
+    - sed -i 's/127.0.0.1/0.0.0.0/g' config.json
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch config.json.tmp
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3333"
+    - "8080"
+    - "8443"
+  - CmdLine:
+    - ./docker/run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stable-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stable-slim

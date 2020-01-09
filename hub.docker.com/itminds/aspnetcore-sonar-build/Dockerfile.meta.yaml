@@ -1,0 +1,158 @@
+MetaArgs: null
+Stages:
+- As: pipeline-tools
+  BaseName: itminds/pipeline-tools
+  Commands: null
+  From:
+    Image: itminds/pipeline-tools
+  Name: pipeline-tools
+  Platform: ""
+  SourceCode: FROM itminds/pipeline-tools AS pipeline-tools
+- BaseName: microsoft/dotnet:2.1-sdk-alpine
+  Commands:
+  - Env:
+    - Key: DOTNET_TOOLS_HOME
+      Value: /root/.dotnet/tools
+    Name: env
+  - Env:
+    - Key: SONAR_SCANNER_MSBUILD_VERSION
+      Value: 4.3.1
+    Name: env
+  - Env:
+    - Key: EMBEDDED_SONAR_SCANNER_VERSION
+      Value: 3.2.0.1227
+    Name: env
+  - Env:
+    - Key: SONAR_SCANNER_HOME
+      Value: ${DOTNET_TOOLS_HOME}/.store/dotnet-sonarscanner/${SONAR_SCANNER_MSBUILD_VERSION}/dotnet-sonarscanner/${SONAR_SCANNER_MSBUILD_VERSION}/tools/netcoreapp2.1/any
+    Name: env
+  - Env:
+    - Key: MINICOVER_HOME
+      Value: /opt/minicover
+    Name: env
+  - Env:
+    - Key: TOOLS_HOME
+      Value: /opt/tools
+    Name: env
+  - Env:
+    - Key: JAVA_HOME
+      Value: /opt/jdk
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: ${PATH}:${JAVA_HOME}/bin
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: ${PATH}:${DOTNET_TOOLS_HOME}
+    Name: env
+  - CmdLine:
+    - "apk add --no-cache curl ca-certificates tar nodejs nodejs-npm \t&& curl -Ls
+      https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.21-r2/glibc-2.21-r2.apk
+      > /tmp/glibc-2.21-r2.apk \t&& apk add --allow-untrusted /tmp/glibc-2.21-r2.apk"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root
+  - CmdLine:
+    - apk add --no-cache wget unzip jq gnupg bash git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "curl https://registry.npmjs.org/npm/-/npm-6.1.0.tgz -o \"npm.tgz\" && \ttar
+      xzf npm.tgz && \tcd package && \tnode bin/npm-cli.js install -gf --prefix=/usr/local
+      ../npm.tgz && \tcd .. && rm npm.tgz && rm package -r"
+    Name: run
+    PrependShell: true
+  - Key: JAVA_VERSION_MAJOR
+    Name: arg
+    Value: "8"
+  - Key: JAVA_VERSION_MINOR
+    Name: arg
+    Value: "172"
+  - Key: JAVA_VERSION_BUILD
+    Name: arg
+    Value: "11"
+  - Key: JAVA_PACKAGE
+    Name: arg
+    Value: jdk
+  - Key: JAVA_URL_ELEMENT
+    Name: arg
+    Value: a58eab1ec242421181065cdc37240b08
+  - CmdLine:
+    - "mkdir -p /opt &&\tcurl -jkLH \"Cookie: oraclelicense=accept-securebackup-cookie\"
+      -o java.tar.gz     http://download.oracle.com/otn-pub/java/jdk/${JAVA_VERSION_MAJOR}u${JAVA_VERSION_MINOR}-b${JAVA_VERSION_BUILD}/${JAVA_URL_ELEMENT}/${JAVA_PACKAGE}-${JAVA_VERSION_MAJOR}u${JAVA_VERSION_MINOR}-linux-x64.tar.gz
+      && \tgunzip -c java.tar.gz | tar -xf - -C /opt && rm -f java.tar.gz && \tln
+      -s /opt/jdk1.${JAVA_VERSION_MAJOR}.0_${JAVA_VERSION_MINOR} /opt/jdk && \trm
+      -rf /opt/jdk/*src.zip           /opt/jdk/lib/missioncontrol           /opt/jdk/lib/visualvm
+      \          /opt/jdk/lib/*javafx*           /opt/jdk/jre/lib/plugin.jar           /opt/jdk/jre/lib/ext/jfxrt.jar
+      \          /opt/jdk/jre/bin/javaws           /opt/jdk/jre/lib/javaws.jar           /opt/jdk/jre/lib/desktop
+      \          /opt/jdk/jre/plugin           /opt/jdk/jre/lib/deploy*           /opt/jdk/jre/lib/*javafx*
+      \          /opt/jdk/jre/lib/*jfx*           /opt/jdk/jre/lib/amd64/libdecora_sse.so
+      \          /opt/jdk/jre/lib/amd64/libprism_*.so           /opt/jdk/jre/lib/amd64/libfxplugins.so
+      \          /opt/jdk/jre/lib/amd64/libglass.so           /opt/jdk/jre/lib/amd64/libgstreamer-lite.so
+      \          /opt/jdk/jre/lib/amd64/libjavafx*.so           /opt/jdk/jre/lib/amd64/libjfx*.so
+      &&   apk del curl &&   rm -rf /var/cache/apk/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dotnet tool install --global dotnet-sonarscanner --version ${SONAR_SCANNER_MSBUILD_VERSION}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - SonarQube.Analysis.xml
+    - ${SONAR_SCANNER_HOME}/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sonar-scanner.properties
+    - ${SONAR_SCANNER_HOME}/sonar-scanner-${EMBEDDED_SONAR_SCANNER_VERSION}/conf/
+  - CmdLine:
+    - dotnet sonarscanner; exit 0
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: pipeline-tools
+    Name: copy
+    SourcesAndDest:
+    - ${TOOLS_HOME}/*
+    - ${TOOLS_HOME}/
+  - CmdLine:
+    - ln -s ${TOOLS_HOME}/* /usr/local/bin/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./tools/tools.csproj
+    - ${MINICOVER_HOME}/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./tools/dotnet-coverage
+    - ${MINICOVER_HOME}/
+  - CmdLine:
+    - chmod +x ${MINICOVER_HOME}/dotnet-coverage
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s ${MINICOVER_HOME}/dotnet-coverage /usr/local/bin/dotnet-coverage
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${MINICOVER_HOME}
+  - CmdLine:
+    - dotnet restore --no-cache
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.1-sdk-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1-sdk-alpine

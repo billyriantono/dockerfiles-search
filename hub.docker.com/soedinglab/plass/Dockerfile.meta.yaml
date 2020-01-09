@@ -1,0 +1,88 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:stable-slim
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y       build-essential cmake xxd git zlib1g-dev
+      libbz2-dev       && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/source
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - .
+  - Name: workdir
+    Path: /opt/source/build_sse
+  - CmdLine:
+    - cmake -DHAVE_MPI=0 -DHAVE_TESTS=0 -DHAVE_SSE4_1=1 -DCMAKE_BUILD_TYPE=Release
+      ..
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -j $(nproc --all)
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/source/build_avx
+  - CmdLine:
+    - cmake -DHAVE_MPI=0 -DHAVE_TESTS=0 -DHAVE_AVX2=1 -DCMAKE_BUILD_TYPE=Release ..
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -j $(nproc --all)
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stable-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:stable-slim as builder
+- BaseName: debian:stable-slim
+  Commands:
+  - Maintainer: Milot Mirdita <milot@mirdita.de>
+    Name: maintainer
+  - CmdLine:
+    - apt-get update && apt-get install -y       gawk bash grep libstdc++6 libgomp1
+      zlib1g libbz2-1.0       && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/source/build_sse/src/plass
+    - /usr/local/bin/plass_sse42
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/source/build_avx/src/plass
+    - /usr/local/bin/plass_avx2
+  - CmdLine:
+    - echo '#!/bin/bash\nif $(grep -q -E "^flags.+avx2" /proc/cpuinfo); then\n    exec
+      /usr/local/bin/plass_avx2 "$@"\nelse\n    exec /usr/local/bin/plass_sse42 "$@"\nfi'>>
+      /usr/local/bin/plass
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /usr/local/bin/plass
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /app
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - plass
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:stable-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stable-slim

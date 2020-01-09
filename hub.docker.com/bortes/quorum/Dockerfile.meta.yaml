@@ -1,0 +1,158 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: ubuntu:16.04
+  Commands:
+  - Env:
+    - Key: GO_VERSION
+      Value: '"go1.9.3.linux-amd64"'
+    Name: env
+  - Env:
+    - Key: QUORUM_VERSION
+      Value: '"2.0.2"'
+    Name: env
+  - Env:
+    - Key: CONSTELLATION_VERSION
+      Value: '"0.3.2"'
+    Name: env
+  - Env:
+    - Key: CONSTELLATION_RELEASE
+      Value: '"constellation-$CONSTELLATION_VERSION-ubuntu1604"'
+    Name: env
+  - Env:
+    - Key: GOROOT
+      Value: /opt/google/go
+    Name: env
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install --yes wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/google
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q https://dl.google.com/go/$GO_VERSION.tar.gz -P /opt/google
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xfz /opt/google/$GO_VERSION.tar.gz -C /opt/google/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /opt/google/go/bin/ -type f -executable -exec cp  {} /usr/local/bin/ \;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install --yes git make gcc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git -C /opt clone https://github.com/jpmorganchase/quorum.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git -C /opt/quorum checkout tags/v$QUORUM_VERSION
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -C /opt/quorum all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /opt/quorum/build/bin/ -type f -executable -exec cp  {} /build \;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install --yes wget xz-utils
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q https://github.com/jpmorganchase/constellation/releases/download/v$CONSTELLATION_VERSION/$CONSTELLATION_RELEASE.tar.xz
+      -P /opt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xfJ /opt/$CONSTELLATION_RELEASE.tar.xz -C /opt/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /opt/$CONSTELLATION_RELEASE /opt/constellation
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /opt/constellation/ -type f -executable -exec cp  {} /build \;
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.04
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04 AS builder
+- As: deployer
+  BaseName: ubuntu:16.04
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./controller.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - addgroup quorum     && adduser --ingroup quorum --disabled-login --gecos "Quorum
+      container user" quorum     && mkdir -p         /var/run/supervisor         /var/opt/nodes         /etc/opt/quorum         /var/opt/quorum         /etc/opt/constellation         /var/opt/constellation     &&
+      chown -R quorum:quorum         /usr/local/bin/controller.sh         /var/run/supervisor         /var/opt/nodes         /etc/opt/quorum         /var/opt/quorum         /etc/opt/constellation         /var/opt/constellation     &&
+      apt-get update     && apt-get install --no-install-recommends --yes         netbase         libsodium-dev
+      libleveldb-dev libgmp10         dnsutils curl supervisor vim iputils-ping iproute2
+      netcat     &&  apt-get autoremove --yes     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker-entrypoint.sh
+    - /usr/local/bin/
+  - Name: user
+    User: quorum
+  - Name: workdir
+    Path: /home/quorum
+  - CmdLine:
+    - /usr/local/bin/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:16.04
+  Name: deployer
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04 AS deployer

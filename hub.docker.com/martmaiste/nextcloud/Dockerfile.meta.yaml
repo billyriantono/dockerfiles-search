@@ -1,0 +1,156 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.9
+  Commands:
+  - Key: NEXTCLOUD_VERSION
+    Name: arg
+    Value: 17.0.2
+  - Key: GPG_nextcloud
+    Name: arg
+    Value: '"2880 6A87 8AE4 23A2 8372  792E D758 99B9 A724 937A"'
+  - Env:
+    - Key: UID
+      Value: "1000"
+    - Key: GID
+      Value: "1000"
+    - Key: UPLOAD_MAX_SIZE
+      Value: 10G
+    - Key: APC_SHM_SIZE
+      Value: 128M
+    - Key: OPCACHE_MEM_SIZE
+      Value: "128"
+    - Key: MEMORY_LIMIT
+      Value: 512M
+    - Key: CRON_PERIOD
+      Value: 15m
+    - Key: CRON_MEMORY_LIMIT
+      Value: 1g
+    - Key: TZ
+      Value: Etc/UTC
+    - Key: DB_TYPE
+      Value: sqlite3
+    - Key: DOMAIN
+      Value: localhost
+    - Key: EMAIL
+      Value: hostmaster@localhost
+    Name: env
+  - CmdLine:
+    - 'BUILD_DEPS="     gnupg     tar     build-base     autoconf     automake     pcre-dev     libtool     libffi-dev     openssl-dev     python-dev     samba-dev"  &&
+      apk -U upgrade && apk add     ${BUILD_DEPS}     bash     nginx     python     py-pip     openssl     s6     libressl     ca-certificates     certbot     libsmbclient     samba-client     su-exec     tzdata     php7     php7-fpm     php7-intl     php7-mbstring     php7-curl     php7-gd     php7-fileinfo     php7-mcrypt     php7-opcache     php7-json     php7-session     php7-pdo     php7-dom     php7-ctype     php7-pdo_mysql     php7-pdo_pgsql     php7-pgsql     php7-pdo_sqlite     php7-sqlite3     php7-zlib     php7-zip     php7-xmlreader     php7-xml     php7-xmlwriter     php7-simplexml     php7-posix     php7-openssl     php7-ldap     php7-ftp     php7-pcntl     php7-exif     php7-redis     php7-iconv     php7-pear     php7-dev     php7-pecl-apcu     php7-pecl-imagick  &&
+      pecl install smbclient  && echo "extension=smbclient.so" > /etc/php7/conf.d/00_smbclient.ini  &&
+      sed -i ''s|;session.save_path = "/tmp"|session.save_path = "/data/session"|g''
+      /etc/php7/php.ini  && mkdir -p /etc/letsencrypt/webrootauth /etc/letsencrypt/live/localhost
+      /etc/letsencrypt/archive  && mkdir /nextcloud  && NEXTCLOUD_TARBALL="nextcloud-${NEXTCLOUD_VERSION}.tar.bz2"  &&
+      wget -q https://download.nextcloud.com/server/releases/${NEXTCLOUD_TARBALL}  &&
+      wget -q https://download.nextcloud.com/server/releases/${NEXTCLOUD_TARBALL}.sha512  &&
+      wget -q https://download.nextcloud.com/server/releases/${NEXTCLOUD_TARBALL}.asc  &&
+      wget -q https://nextcloud.com/nextcloud.asc  && echo "Verifying both integrity
+      and authenticity of ${NEXTCLOUD_TARBALL}..."  && CHECKSUM_STATE=$(echo -n $(sha512sum
+      -c ${NEXTCLOUD_TARBALL}.sha512) | tail -c 2)  && if [ "${CHECKSUM_STATE}" !=
+      "OK" ]; then echo "Warning! Checksum does not match!" && exit 1; fi  && gpg
+      --import nextcloud.asc  && FINGERPRINT="$(LANG=C gpg --verify ${NEXTCLOUD_TARBALL}.asc
+      ${NEXTCLOUD_TARBALL} 2>&1   | sed -n "s#Primary key fingerprint: \(.*\)#\1#p")"  &&
+      if [ -z "${FINGERPRINT}" ]; then echo "Warning! Invalid GPG signature!" && exit
+      1; fi  && if [ "${FINGERPRINT}" != "${GPG_nextcloud}" ]; then echo "Warning!
+      Wrong GPG fingerprint!" && exit 1; fi  && echo "All seems good, now unpacking
+      ${NEXTCLOUD_TARBALL}..."  && tar xjf ${NEXTCLOUD_TARBALL} --strip 1 -C /nextcloud  &&
+      apk del ${BUILD_DEPS} php7-pear php7-dev  && rm -rf /var/cache/apk/* /tmp/*
+      /root/.gnupg'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx.conf
+    - /etc/nginx/nginx.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php-fpm.conf
+    - /etc/php7/php-fpm.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - opcache.ini
+    - /etc/php7/conf.d/00_opcache.ini
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - apcu.ini
+    - /etc/php7/conf.d/apcu.ini
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - /usr/local/bin/run.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - setup.sh
+    - /usr/local/bin/setup.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - occ
+    - /usr/local/bin/occ
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - s6.d
+    - /etc/s6.d
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - generate-certs
+    - /usr/local/bin/generate-certs
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - letsencrypt-setup
+    - /usr/local/bin/letsencrypt-setup
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - letsencrypt-renew
+    - /usr/local/bin/letsencrypt-renew
+  - CmdLine:
+    - chmod +x /usr/local/bin/* /etc/s6.d/*/* /etc/s6.d/.s6-svscan/*
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+    - /config
+    - /apps2
+  - Name: expose
+    Ports:
+    - "8080"
+    - "8443"
+  - Labels:
+    - Key: description
+      Value: '"A server software for creating file hosting services"'
+    - Key: nextcloud
+      Value: '"Nextcloud v${NEXTCLOUD_VERSION}"'
+    - Key: maintainer
+      Value: '"ull <mart.maiste@gmail.com>"'
+    Name: label
+  - CmdLine:
+    - run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

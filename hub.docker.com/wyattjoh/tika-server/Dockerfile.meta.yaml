@@ -1,0 +1,75 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:18.04
+  Commands:
+  - Env:
+    - Key: PRODUCT_GROUP
+      Value: '"tika"'
+    Name: env
+  - Env:
+    - Key: PRODUCT_NAME
+      Value: '"tika-server"'
+    Name: env
+  - Env:
+    - Key: PRODUCT_VERSION
+      Value: '"1.22"'
+    Name: env
+  - Env:
+    - Key: PRODUCT_ROOT
+      Value: '"https://www.apache.org/dist"'
+    Name: env
+  - Env:
+    - Key: PRODUCT_KEY_URL
+      Value: '"${PRODUCT_ROOT}/${PRODUCT_GROUP}/KEYS"'
+    Name: env
+  - Env:
+    - Key: PRODUCT_ASC_URL
+      Value: '"${PRODUCT_ROOT}/${PRODUCT_GROUP}/${PRODUCT_NAME}-${PRODUCT_VERSION}.jar.asc"'
+    Name: env
+  - CmdLine:
+    - apt-get -y --fix-missing update     && apt-get install -y gpg curl jq     &&
+      echo "PRODUCT_GROUP = ${PRODUCT_GROUP}"     && echo "PRODUCT_NAME = ${PRODUCT_NAME}"     &&
+      echo "PRODUCT_VERSION = ${PRODUCT_VERSION}"     && echo "PRODUCT_ROOT = ${PRODUCT_ROOT}"     &&
+      echo "PRODUCT_KEY_URL = ${PRODUCT_KEY_URL}"     && echo "PRODUCT_ASC_URL = ${PRODUCT_ASC_URL}"     &&
+      curl -sSL "$PRODUCT_KEY_URL" -o /tmp/KEYS     && gpg --import /tmp/KEYS     &&
+      curl -sSL "$PRODUCT_ASC_URL" -o "/tmp/${PRODUCT_NAME}.jar.asc"     && NEAREST_JAR_URL=$(curl
+      -sSL http://www.apache.org/dyn/closer.cgi/${PRODUCT_JAR_URL#https://www.apache.org/dist/}\?asjson\=1
+      | jq -r .preferred | sed 's/\/*$//g')     && echo "NEAREST_JAR_URL = ${NEAREST_JAR_URL}"     &&
+      curl -sSL "${NEAREST_JAR_URL}/${PRODUCT_GROUP}/${PRODUCT_NAME}-${PRODUCT_VERSION}.jar"
+      -o "/${PRODUCT_NAME}.jar"     && gpg --verify "/tmp/${PRODUCT_NAME}.jar.asc"
+      "/${PRODUCT_NAME}.jar"
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04
+- BaseName: openjdk:8
+  Commands:
+  - Name: expose
+    Ports:
+    - "9998"
+  - CmdLine:
+    - apt-get -y --fix-missing update     && apt-get install -y gdal-bin tesseract-ocr
+      tesseract-ocr-eng     && tesseract -v     && apt-get -y clean autoclean     &&
+      apt-get -y autoremove     && rm -rf /var/lib/{apt,dpkg,cache,log}/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src/app
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /tika-server.jar
+    - /usr/src/app
+  - CmdLine:
+    - java -jar "tika-server.jar" --h 0.0.0.0 --port 9998
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: openjdk:8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8

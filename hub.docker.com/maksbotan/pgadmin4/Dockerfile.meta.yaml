@@ -1,0 +1,138 @@
+MetaArgs: null
+Stages:
+- As: node-builder
+  BaseName: node:6
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./pgadmin4/web/
+    - /pgadmin4/web/
+  - Name: workdir
+    Path: /pgadmin4/web
+  - CmdLine:
+    - yarn install --cache-folder ./ycache --verbose &&     yarn run bundle &&     rm
+      -rf ./ycache ./pgadmin/static/js/generated/.cache
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:6
+  Name: node-builder
+  Platform: ""
+  SourceCode: FROM node:6 AS node-builder
+- As: docs-builder
+  BaseName: python:3.6-alpine3.7
+  Commands:
+  - CmdLine:
+    - apk add --no-cache make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install --no-cache-dir     sphinx flask_babel flask_security flask_paranoid
+      python-dateutil flask_sqlalchemy     flask_gravatar simplejson
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./pgadmin4/
+    - /pgadmin4
+  - CmdLine:
+    - LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 make -C /pgadmin4/docs/en_US -f Makefile.sphinx
+      html
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.6-alpine3.7
+  Name: docs-builder
+  Platform: ""
+  SourceCode: FROM python:3.6-alpine3.7 as docs-builder
+- BaseName: python:3.6-alpine3.7
+  Commands:
+  - CmdLine:
+    - pip --no-cache-dir install gunicorn
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache postgresql-client postgresql-libs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex &&     apk add --no-cache --virtual build-deps build-base postgresql-dev
+      &&     pip install --no-cache-dir psycopg2 pycrypto &&     apk del --no-cache
+      build-deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: node-builder
+    Name: copy
+    SourcesAndDest:
+    - /pgadmin4/web/pgadmin/static/js/generated/
+    - /pgadmin4/pgadmin/static/js/generated/
+  - Chown: ""
+    From: docs-builder
+    Name: copy
+    SourcesAndDest:
+    - /pgadmin4/docs/en_US/_build/html/
+    - /pgadmin4/docs/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./pgadmin4/web
+    - /pgadmin4
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./pgadmin4/requirements.txt
+    - /pgadmin4
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./run_pgadmin.py
+    - /pgadmin4
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config_distro.py
+    - /pgadmin4
+  - Name: workdir
+    Path: /pgadmin4
+  - Env:
+    - Key: PYTHONPATH
+      Value: /pgadmin4
+    Name: env
+  - CmdLine:
+    - pip install --no-cache-dir -r requirements.txt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python -O -m compileall /pgadmin4
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./entrypoint.sh
+    - /entrypoint.sh
+  - Name: volume
+    Volumes:
+    - /var/lib/pgadmin
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: python:3.6-alpine3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.6-alpine3.7

@@ -1,0 +1,169 @@
+MetaArgs: null
+Stages:
+- As: unms
+  BaseName: ubnt/unms:0.13.1-connection.2
+  Commands: null
+  From:
+    Image: ubnt/unms:0.13.1-connection.2
+  Name: unms
+  Platform: ""
+  SourceCode: FROM ubnt/unms:0.13.1-connection.2 as unms
+- As: unms-netflow
+  BaseName: ubnt/unms-netflow:0.13.1-connection.2
+  Commands: null
+  From:
+    Image: ubnt/unms-netflow:0.13.1-connection.2
+  Name: unms-netflow
+  Platform: ""
+  SourceCode: FROM ubnt/unms-netflow:0.13.1-connection.2 as unms-netflow
+- BaseName: oznu/s6-node:8.12.0-amd64
+  Commands:
+  - CmdLine:
+    - echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories   &&
+      apk add --no-cache vips redis rabbitmq-server   && apk del ${devDeps}   && deluser
+      rabbitmq   && addgroup -S rabbitmq && adduser -S -h /var/lib/rabbitmq -G rabbitmq
+      rabbitmq   && mkdir -p /var/lib/rabbitmq /etc/rabbitmq   && chown -R rabbitmq:rabbitmq
+      /var/lib/rabbitmq /etc/rabbitmq   && chmod -R 777 /var/lib/rabbitmq /etc/rabbitmq   &&
+      ln -sf /var/lib/rabbitmq/.erlang.cookie /root/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/v3.6/main
+      postgresql==9.6.10-r0 postgresql-client=9.6.10-r0 postgresql-contrib=9.6.10-r0
+      libpq=9.6.10-r0
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /home/app/unms
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/app/unms
+  - Chown: ""
+    From: unms
+    Name: copy
+    SourcesAndDest:
+    - /home/app/unms
+    - /home/app/unms
+  - CmdLine:
+    - devDeps="vips-dev fftw-dev make python g++"     && apk add --no-cache --repository
+      https://dl-3.alpinelinux.org/alpine/edge/testing/ --repository https://dl-3.alpinelinux.org/alpine/edge/main
+      ${devDeps}  su-exec gzip bash vim dumb-init openssl vips libcap     && rm -rf
+      node_modules     && JOBS=$(nproc) npm install     && apk del ${devDeps}     &&
+      mkdir -p -m 777 "$HOME/unms/public/site-images"     && mkdir -p -m 777 "$HOME/unms/data/config-backups"     &&
+      mkdir -p -m 777 "$HOME/unms/data/unms-backups"     && mkdir -p -m 777 "$HOME/unms/data/import"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - setcap cap_net_raw=pe $(which node)
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: unms
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/docker-entrypoint.sh
+    - /usr/local/bin/docker-entrypoint.sh
+  - CmdLine:
+    - chmod +x /usr/local/bin/docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /home/app/netflow
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: unms-netflow
+    Name: copy
+    SourcesAndDest:
+    - /home/app
+    - /home/app/netflow
+  - CmdLine:
+    - devDeps="vips-dev fftw-dev make python g++"   && apk add --no-cache --repository
+      https://dl-3.alpinelinux.org/alpine/edge/testing/ --repository https://dl-3.alpinelinux.org/alpine/edge/main
+      ${devDeps}   && cd /home/app/netflow   && JOBS=$(nproc) npm install   && apk
+      del ${devDeps}
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NGINX_UID
+      Value: "1000"
+    - Key: NGINX_VERSION
+      Value: nginx-1.12.2
+    - Key: LUAJIT_VERSION
+      Value: 2.1.0-beta3
+    Name: env
+  - CmdLine:
+    - 'set -x && devDeps="wget pcre-dev zlib-dev build-base libffi-dev python-dev
+      build-base"     && apk add --no-cache --update ${devDeps} sudo dumb-init pcre
+      libgcc gettext py-pip     && pip install certbot==0.21.0     && mkdir -p /tmp/src
+      && cd /tmp/src     && wget -q http://nginx.org/download/${NGINX_VERSION}.tar.gz
+      -O nginx.tar.gz     && wget -q https://github.com/openresty/lua-nginx-module/archive/v0.10.11.tar.gz
+      -O lua-nginx-module.tar.gz     && wget -q https://github.com/simpl/ngx_devel_kit/archive/v0.3.0.tar.gz
+      -O ndk.tar.gz     && wget -q http://luajit.org/download/LuaJIT-${LUAJIT_VERSION}.tar.gz
+      -O luajit.tar.gz     && tar -zxvf lua-nginx-module.tar.gz     && tar -zxvf ndk.tar.gz     &&
+      tar -zxvf luajit.tar.gz     && tar -zxvf nginx.tar.gz     && cd /tmp/src/LuaJIT-${LUAJIT_VERSION}
+      && make amalg PREFIX=''/usr'' && make install PREFIX=''/usr''     && export
+      LUAJIT_LIB=/usr/lib/libluajit-5.1.so && export LUAJIT_INC=/usr/include/luajit-2.1     &&
+      cd /tmp/src/${NGINX_VERSION} && ./configure         --with-cc-opt=''-g -O2 -fPIE
+      -fstack-protector-strong -Wformat -Werror=format-security -fPIC -Wdate-time
+      -D_FORTIFY_SOURCE=2''         --with-ld-opt=''-Wl,-Bsymbolic-functions -fPIE
+      -pie -Wl,-z,relro -Wl,-z,now -fPIC''         --with-pcre-jit         --with-threads         --add-module=/tmp/src/lua-nginx-module-0.10.11         --add-module=/tmp/src/ngx_devel_kit-0.3.0         --with-http_ssl_module         --with-http_realip_module         --with-http_gzip_static_module         --with-http_secure_link_module         --without-mail_pop3_module         --without-mail_imap_module         --without-http_upstream_ip_hash_module         --without-http_memcached_module         --without-http_auth_basic_module         --without-http_userid_module         --without-http_fastcgi_module         --without-http_uwsgi_module         --without-http_scgi_module         --prefix=/var/lib/nginx         --sbin-path=/usr/sbin/nginx         --conf-path=/etc/nginx/nginx.conf         --http-log-path=/dev/stdout         --error-log-path=/dev/stderr         --lock-path=/tmp/nginx.lock         --pid-path=/tmp/nginx.pid         --http-client-body-temp-path=/tmp/body         --http-proxy-temp-path=/tmp/proxy     &&
+      make -j $(nproc)     && make install     && apk del ${devDeps}     && rm /usr/bin/luajit-${LUAJIT_VERSION}     &&
+      rm -rf /tmp/src     && rm -rf /var/cache/apk/*     && echo "unms ALL=(ALL) NOPASSWD:
+      /usr/sbin/nginx -s *" >> /etc/sudoers     && echo "unms ALL=(ALL) NOPASSWD:SETENV:
+      /copy-user-certs.sh reload" >> /etc/sudoers'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/Ubiquiti-App/UNMS/archive/v0.13.1-connection.2.tar.gz
+    - /tmp/unms.tar.gz
+  - CmdLine:
+    - cd /tmp     && tar -xzf unms.tar.gz     && cd UNMS-*/src/nginx     && cp entrypoint.sh
+      refresh-certificate.sh fill-template.sh openssl.cnf *.conf.template /     &&
+      mkdir -p /www/public     && cp -R public /www/     && chmod +x /entrypoint.sh
+      /fill-template.sh /refresh-certificate.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /home/app/unms/node_modules/.bin:$PATH
+    - Key: PGDATA
+      Value: /config/postgres
+    - Key: POSTGRES_DB
+      Value: unms
+    - Key: QUIET_MODE
+      Value: "0"
+    - Key: WS_PORT
+      Value: "443"
+    - Key: PUBLIC_HTTPS_PORT
+      Value: "443"
+    - Key: PUBLIC_WS_PORT
+      Value: "443"
+    - Key: UNMS_NETFLOW_PORT
+      Value: "2055"
+    - Key: SECURE_LINK_SECRET
+      Value: enigma
+    - Key: SSL_CERT
+      Value: '""'
+    Name: env
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - Name: volume
+    Volumes:
+    - /config
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - root
+    - /
+  From:
+    Image: oznu/s6-node:8.12.0-amd64
+  Name: ""
+  Platform: ""
+  SourceCode: FROM oznu/s6-node:8.12.0-amd64

@@ -1,0 +1,107 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "",
+      "BaseName": "fedora:22",
+      "SourceCode": "FROM fedora:22",
+      "Platform": "",
+      "From": {
+        "Image": "fedora:22"
+      },
+      "Commands": [
+        {
+          "Key": "version",
+          "Name": "arg",
+          "Value": "7.2"
+        },
+        {
+          "Env": [
+            {
+              "Key": "CONFIG_EXCLUDE",
+              "Value": "^apm\\.|^extension_dir|^sendmail_path|auto_prepend_file|^ic24|^phpd"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PECL_PACKAGES",
+              "Value": "apcu|apm|imagick|oauth|pdo_sqlsrv|redis|sqlsrv"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "BUILDDEPS",
+              "Value": "aspell-devel         ImageMagick-devel         bzip2-devel         curl-devel         db4-devel         freetds-devel         freetype-devel         gmp-devel         icu         krb5-devel         libXpm-devel         libc-client-devel         libcurl-devel         libicu-devel         libjpeg-devel         libmcrypt-devel         libpng-devel         libtidy-devel         libxml2-devel         libxslt-devel         mhash-devel         mysql-devel         ncurses-devel         net-snmp-devel         openldap-devel         openssl-devel         pcre-devel         postgresql-devel         readline-devel         recode-devel         sqlite-devel         systemd-devel         t1lib-devel         unixODBC-devel         zlib-devel"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Name": "shell",
+          "Shell": [
+            "/bin/bash",
+            "-o",
+            "pipefail",
+            "-c"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "PATH",
+              "Value": "$PATH:/opt/php/bin"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "\"${version}\"-config",
+            "/usr/src/config"
+          ]
+        },
+        {
+          "CmdLine": [
+            "sh -c \"curl https://raw.githubusercontent.com/kadwanev/retry/master/retry -o /usr/local/bin/retry \u0026\u0026         chmod +x /usr/local/bin/retry\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            ". /usr/src/config \u0026\u0026         touch /var/lib/rpm/*         \u0026\u0026 retry -- dnf -y upgrade --setopt=deltarpm=false         \u0026\u0026 retry -- dnf -y group install \"C Development Tools and Libraries\"         \u0026\u0026 retry -- dnf -y install         ${BUILDDEPS}         file         mariadb         wget         xz \u0026\u0026         retry -- curl --silent --location --output /etc/yum.repos.d/mssql-release.repo https://packages.microsoft.com/config/rhel/7/prod.repo \u0026\u0026         ACCEPT_EULA=Y retry -- dnf install -y msodbcsql \u0026\u0026                 cd /usr/src \u0026\u0026         retry -- curl --silent --location --output php.tar.xz \"http://us1.php.net/get/php-${EXACT_VERSION}.tar.xz/from/this/mirror\" \u0026\u0026         tar xf php.tar.xz \u0026\u0026         cd /usr/src/php-* \u0026\u0026         ./configure ${CLI_CONFIGURE_OPTIONS} \u0026\u0026         make -j \"$(nproc)\" \u0026\u0026         make install \u0026\u0026                 echo \"${CLI_INI}\" \u003e \"/opt/php/etc/php.ini\" \u0026\u0026         ln -s /usr/lib64/mysql/libmysqlclient* /usr/lib/ \u0026\u0026         pear config-set php_ini /opt/php/etc/php.ini \u0026\u0026         yes '' | pecl install --force $(echo \"${EXTENSIONS_VERSIONS}\" | grep -Eio \"(${PECL_PACKAGES})-[0-9]\\\\.[0-9]\\\\.[0-9]\");         mv /opt/php/lib/[0-9]*/* /opt/php/lib \u0026\u0026         if [[ ${EXTENSIONS} == *\"ionCube Loader\"* ]]; then         mkdir -p /opt/pantheon/ioncube/10.0.3/ \u0026\u0026         retry -- curl --silent --location http://downloads3.ioncube.com/loader_downloads/ioncube_loaders_lin_x86-64.tar.gz | tar xvz --directory /opt/pantheon/ioncube/10.0.3/ --strip-components=1;         fi \u0026\u0026         EXT=$(grep '^extension=' /opt/php/etc/php.ini | tr -d '\"' | sort -u);         sed -i'' /opt/php/etc/php.ini -e 's/^extension=.*//g' \u0026\u0026         echo \"${EXT}\" \u003e\u003e /opt/php/etc/php.ini \u0026\u0026                 rm -rf /usr/src/* \u0026\u0026         retry -- dnf -y group remove \"C Development Tools and Libraries\" \u0026\u0026         retry -- dnf clean all \u0026\u0026                 if ! diff -uw /etc/redhat-release \u003c(echo \"${DISTRO}\"); then echo \"Distro does not match expected\"; exit 1; fi \u0026\u0026         if ! diff -uw \u003c(php -r '$e = get_loaded_extensions(); sort($e); print(implode(PHP_EOL, $e));') \u003c(echo \"${EXTENSIONS}\"); then echo \"PHP extensions do not match expected\"; exit 2; fi \u0026\u0026         if ! diff -uw         \u003c(php -r 'foreach (ini_get_all() as $k =\u003e $v) { print \"$k: $v['global_value']\\n\"; }' | grep -Ev \"($CONFIG_EXCLUDE)\")         \u003c(echo \"${CONFIG}\" | grep -Ev \"($CONFIG_EXCLUDE)\");         then echo \"PHP config does not match expected\"; exit 3; fi"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "workdir",
+          "Path": "/opt/php/etc"
+        },
+        {
+          "CmdLine": [
+            "if [ -d php-fpm.d ]; then         sed 's!=NONE/!=!g' php-fpm.conf.default | tee php-fpm.conf \u003e /dev/null;         cp php-fpm.d/www.conf.default php-fpm.d/www.conf;         else         mkdir php-fpm.d;         cp php-fpm.conf.default php-fpm.d/www.conf;         {         echo '[global]';         echo 'include=etc/php-fpm.d/*.conf';         } | tee php-fpm.conf;         fi         \u0026\u0026 {         echo '[global]';         echo 'error_log = /proc/self/fd/2';         echo;         echo '[www]';         echo '; if we send this to /proc/self/fd/1, it never appears';         echo 'access.log = /proc/self/fd/2';         echo;         echo 'clear_env = no';         echo;         echo '; Ensure worker stdout and stderr are sent to the main error log.';         echo 'catch_workers_output = yes';         } | tee php-fpm.d/docker.conf         \u0026\u0026 {         echo '[global]';         echo 'daemonize = no';         echo;         echo '[www]';         echo 'listen = 9000';         } | tee php-fpm.d/zz-docker.conf"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "/opt/php/sbin/php-fpm"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

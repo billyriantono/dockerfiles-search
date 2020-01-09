@@ -1,0 +1,174 @@
+MetaArgs:
+- DefaultValue: '"13"'
+  Key: JAVA_MAJOR_VERSION
+  ProvidedValue: null
+  Value: '"13"'
+- DefaultValue: '"0.1"'
+  Key: JAVA_MINOR_REVISION
+  ProvidedValue: null
+  Value: '"0.1"'
+- DefaultValue: '"9"'
+  Key: JAVA_BUILD_NUMBER
+  ProvidedValue: null
+  Value: '"9"'
+- DefaultValue: '"cec27d702aa74d5a8630c65ae61e4305"'
+  Key: JAVA_BUILD_PATH
+  ProvidedValue: null
+  Value: '"cec27d702aa74d5a8630c65ae61e4305"'
+- DefaultValue: ${JAVA_MAJOR_VERSION}.${JAVA_MINOR_REVISION}
+  Key: JAVA_VERSION
+  ProvidedValue: null
+  Value: ${JAVA_MAJOR_VERSION}.${JAVA_MINOR_REVISION}
+- DefaultValue: java-${JAVA_VERSION}_${JAVA_BUILD_NUMBER}-openjdk-amd64
+  Key: JAVA_HOME_DIR
+  ProvidedValue: null
+  Value: java-${JAVA_VERSION}_${JAVA_BUILD_NUMBER}-openjdk-amd64
+- DefaultValue: /usr/lib/jvm/${JAVA_HOME_DIR}
+  Key: JAVA_HOME
+  ProvidedValue: null
+  Value: /usr/lib/jvm/${JAVA_HOME_DIR}
+- DefaultValue: '"2e01716546395694d3fad54c9b36d1cd46c5894c06f72d156772efbcf4b41335"'
+  Key: JAVA_SHA256
+  ProvidedValue: null
+  Value: '"2e01716546395694d3fad54c9b36d1cd46c5894c06f72d156772efbcf4b41335"'
+Stages:
+- As: downloader
+  BaseName: buildpack-deps:curl
+  Commands:
+  - Key: JAVA_MAJOR_VERSION
+    Name: arg
+    Value: null
+  - Key: JAVA_MINOR_REVISION
+    Name: arg
+    Value: null
+  - Key: JAVA_BUILD_NUMBER
+    Name: arg
+    Value: null
+  - Key: JAVA_BUILD_PATH
+    Name: arg
+    Value: null
+  - Key: JAVA_VERSION
+    Name: arg
+    Value: null
+  - Key: JAVA_HOME_DIR
+    Name: arg
+    Value: null
+  - Key: JAVA_HOME
+    Name: arg
+    Value: null
+  - Key: JAVA_SHA256
+    Name: arg
+    Value: null
+  - CmdLine:
+    - "apt-get update && apt-get install -y --no-install-recommends \t\tbzip2 \t\tunzip
+      \t\txz-utils \t\tca-certificates \t&& apt-get autoremove --purge -y \t&& apt-get
+      clean \t&& rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_HOME
+      Value: ${JAVA_HOME}
+    Name: env
+  - Key: JAVA_URL
+    Name: arg
+    Value: '"https://download.java.net/java/GA/jdk${JAVA_VERSION}/${JAVA_BUILD_PATH}/${JAVA_BUILD_NUMBER}/GPL/openjdk-${JAVA_VERSION}_linux-x64_bin.tar.gz"'
+  - Key: basedir
+    Name: arg
+    Value: ${JAVA_HOME}
+  - Key: mandir
+    Name: arg
+    Value: $basedir/man
+  - CmdLine:
+    - mkdir -p /usr/lib/jvm/  && TMP_DIR=$(mktemp -d)  && cd ${TMP_DIR}  && wget ${JAVA_URL}  &&
+      echo "${JAVA_SHA256} openjdk-${JAVA_VERSION}_linux-x64_bin.tar.gz" | sha256sum
+      -c -  && tar xf openjdk-${JAVA_VERSION}_linux-x64_bin.tar.gz -C /usr/lib/jvm/  &&
+      cd /usr/lib/jvm/  && mv jdk-${JAVA_VERSION} ${JAVA_HOME_DIR}
+    Name: run
+    PrependShell: true
+  From:
+    Image: buildpack-deps:curl
+  Name: downloader
+  Platform: ""
+  SourceCode: FROM buildpack-deps:curl AS downloader
+- BaseName: python:slim
+  Commands:
+  - Labels:
+    - Key: maintenar
+      Value: '"Kenji Saito <ken-yo@mbr.nifty.com>"'
+    Name: label
+  - CmdLine:
+    - "apt-get update  && apt-get full-upgrade -qqy  && apt-get install -y --no-install-recommends
+      \t\txz-utils \t\tca-certificates  && apt-get autoremove --purge -y  && apt-get
+      clean  && rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Key: JAVA_MAJOR_VERSION
+    Name: arg
+    Value: null
+  - Key: JAVA_BUILD_NUMBER
+    Name: arg
+    Value: null
+  - Key: JAVA_VERSION
+    Name: arg
+    Value: null
+  - Key: JAVA_HOME_DIR
+    Name: arg
+    Value: null
+  - Key: JAVA_HOME
+    Name: arg
+    Value: null
+  - Env:
+    - Key: JAVA_HOME
+      Value: ${JAVA_HOME}
+    Name: env
+  - Key: basedir
+    Name: arg
+    Value: ${JAVA_HOME}
+  - Key: mandir
+    Name: arg
+    Value: ${basedir}/man
+  - Chown: ""
+    From: downloader
+    Name: copy
+    SourcesAndDest:
+    - ${JAVA_HOME}
+    - ${JAVA_HOME}
+  - CmdLine:
+    - "set -ex; \t\tif [ ! -d /usr/share/man/man1 ]; then \t\tmkdir -p /usr/share/man/man1;
+      \tfi; \t    mkdir -p /usr/lib/jvm/;     ln -s ${JAVA_HOME_DIR} java-${JAVA_MAJOR_VERSION}-openjdk-amd64
+      \    ;     for i in $(ls ${basedir}/bin); do         update-alternatives --install
+      /usr/bin/${i} ${i} $basedir/bin/${i} 1100;     done  &&     update-alternatives
+      --get-selections | awk -v home=\"$(readlink -f \"$JAVA_HOME\")\" 'index($3,
+      home) == 1 { $2 = \"manual\"; print | \"update-alternatives --set-selections\"
+      }'; \tupdate-alternatives --query java | grep -q 'Status: manual'"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: ${JAVA_HOME}/bin:${PATH}
+    Name: env
+  - Health:
+      Test:
+      - CMD
+      - java
+      - -version
+    Name: healthcheck
+  - CmdLine:
+    - groupadd -g 1000 java  && useradd -g 1000 -l -m -s /bin/false -u 1000 java
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: java
+  - CmdLine:
+    - jshell
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:slim

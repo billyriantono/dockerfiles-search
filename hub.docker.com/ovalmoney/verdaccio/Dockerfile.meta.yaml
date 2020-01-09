@@ -1,0 +1,71 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: node:10-alpine
+  Commands:
+  - Name: workdir
+    Path: /opt/verdaccio-gitlab-build
+  - Key: PLUGIN_GITLAB
+    Name: arg
+    Value: 933cba3b7acb0c1ce6fd3df8944c4996664a23e6
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    - Key: VERDACCIO_BUILD_REGISTRY
+      Value: https://registry.npmjs.org/
+    Name: env
+  - CmdLine:
+    - apk add --no-cache     curl     zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -S -L -O     https://github.com/bufferoverflow/verdaccio-gitlab/archive/${PLUGIN_GITLAB}.tar.gz
+      &&     tar -xvf ${PLUGIN_GITLAB}.tar.gz --strip 1 &&     rm -R ${PLUGIN_GITLAB}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn config set registry $VERDACCIO_BUILD_REGISTRY &&     yarn install --production=false
+      &&     yarn code:docker-build &&     yarn cache clean &&     yarn install --production=true
+      --pure-lockfile
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:10-alpine as builder
+- BaseName: verdaccio/verdaccio:4.3
+  Commands:
+  - Name: user
+    User: root
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/verdaccio-gitlab-build/build
+    - /opt/verdaccio-gitlab/build
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/verdaccio-gitlab-build/package.json
+    - /opt/verdaccio-gitlab/package.json
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/verdaccio-gitlab-build/node_modules
+    - /opt/verdaccio-gitlab/node_modules
+  - Name: workdir
+    Path: $VERDACCIO_APPDIR
+  - CmdLine:
+    - ln -s /opt/verdaccio-gitlab/build /verdaccio/plugins/verdaccio-gitlab
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $VERDACCIO_USER_UID
+  From:
+    Image: verdaccio/verdaccio:4.3
+  Name: ""
+  Platform: ""
+  SourceCode: FROM verdaccio/verdaccio:4.3

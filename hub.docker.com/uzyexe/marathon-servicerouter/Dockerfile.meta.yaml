@@ -1,0 +1,65 @@
+MetaArgs: null
+Stages:
+- BaseName: python:2.7.10-slim
+  Commands:
+  - Env:
+    - Key: MARATHON_VERSION
+      Value: 0.11.1
+    Name: env
+  - Env:
+    - Key: HAPROXY_VERSION
+      Value: 1.5.8-3+deb8u2
+    Name: env
+  - CmdLine:
+    - apt-get update -qq &&     apt-get install -qfy haproxy=${HAPROXY_VERSION} mercurial
+      rsyslog --no-install-recommends &&     apt-get clean all &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install -e hg+https://bitbucket.org/dbenamy/devcron#egg=devcron requests
+      &&     apt-get remove --purge -y mercurial
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/mesosphere/marathon/archive/v${MARATHON_VERSION}.tar.gz
+    - marathon.tar.gz
+  - CmdLine:
+    - mkdir marathon &&     tar xvzf marathon.tar.gz -C marathon --strip-components
+      1 &&     rm marathon.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /cron &&     echo "* * * * * /cron/servicerouter.sh" > /cron/crontab &&     echo
+      "/marathon/bin/servicerouter.py --marathon http://127.0.0.1:8080" > /cron/servicerouter.sh
+      &&     chmod a+x /cron/servicerouter.sh &&     mkdir /var/log/haproxy
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - rsyslog-haproxy.conf
+    - /etc/rsyslog.d/49-haproxy.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - logrotate-haproxy.conf
+    - /etc/logrotate.d/haproxy
+  - Name: volume
+    Volumes:
+    - /cron
+  - CmdLine:
+    - service rsyslog start;     /usr/local/bin/devcron.py /cron/crontab
+    Name: cmd
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+    - "9090"
+  From:
+    Image: python:2.7.10-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:2.7.10-slim

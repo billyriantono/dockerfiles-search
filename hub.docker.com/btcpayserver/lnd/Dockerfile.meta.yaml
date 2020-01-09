@@ -1,0 +1,128 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Env:
+    - Key: GODEBUG
+      Value: netdns=cgo
+    Name: env
+  - CmdLine:
+    - apk add --no-cache     git     make
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/lightningnetwork/lnd
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - make &&  make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- As: dotnetbuilder
+  BaseName: microsoft/dotnet:2.1.403-sdk-alpine3.7
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /source
+  - CmdLine:
+    - git clone https://github.com/dgarage/NBXplorer && cd NBXplorer && git checkout
+      88a8db8be3911f59b4b6109845b547368c5f02fb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd NBXplorer/NBXplorer.NodeWaiter && dotnet restore && cd ..
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd NBXplorer/NBXplorer.NodeWaiter &&     dotnet publish --output /app/ --configuration
+      Release
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.1.403-sdk-alpine3.7
+  Name: dotnetbuilder
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1.403-sdk-alpine3.7 AS dotnetbuilder
+- As: final
+  BaseName: microsoft/dotnet:2.1.5-runtime-alpine3.7
+  Commands:
+  - CmdLine:
+    - apk --no-cache add     bash     ca-certificates
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LND_DATA
+      Value: /data
+    Name: env
+  - Env:
+    - Key: LND_BITCOIND
+      Value: /deps/.bitcoin
+    Name: env
+  - Env:
+    - Key: LND_LITECOIND
+      Value: /deps/.litecoin
+    Name: env
+  - Env:
+    - Key: LND_BTCD
+      Value: /deps/.btcd
+    Name: env
+  - CmdLine:
+    - mkdir "$LND_DATA" &&     mkdir "/deps" &&     mkdir "$LND_BITCOIND" &&     mkdir
+      "$LND_LITECOIND" &&     mkdir "$LND_BTCD" &&     ln -sfn "$LND_DATA" /root/.lnd
+      &&     ln -sfn "$LND_BITCOIND" /root/.bitcoin &&     ln -sfn "$LND_LITECOIND"
+      /root/.litecoin &&     ln -sfn "$LND_BTCD" /root/.btcd
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/lncli
+    - /bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/lnd
+    - /bin/
+  - Chown: ""
+    From: dotnetbuilder
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - /opt/NBXplorer.NodeWaiter
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /docker-entrypoint.sh
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - lnd
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: microsoft/dotnet:2.1.5-runtime-alpine3.7
+  Name: final
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1.5-runtime-alpine3.7 as final

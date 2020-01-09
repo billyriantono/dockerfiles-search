@@ -1,0 +1,80 @@
+MetaArgs: null
+Stages:
+- As: build_base
+  BaseName: golang:1.11-alpine
+  Commands:
+  - CmdLine:
+    - apk add bash ca-certificates git gcc g++ libc-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/unprofession-al/webstalker
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.sum
+    - .
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-alpine
+  Name: build_base
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine AS build_base
+- As: app_builder
+  BaseName: build_base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go install -a -tags netgo -ldflags '-w
+      -extldflags "-static"' ./...
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build_base
+  Name: app_builder
+  Platform: ""
+  SourceCode: FROM build_base AS app_builder
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: app_builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: app_builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/webstalker
+    - /webstalker
+  - CmdLine:
+    - ./webstalker
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

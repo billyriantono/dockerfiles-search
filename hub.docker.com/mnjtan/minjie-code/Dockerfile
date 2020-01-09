@@ -1,0 +1,14 @@
+FROM microsoft/dotnet AS build
+WORKDIR /docker
+RUN dotnet new mvc --name HelloMVC
+WORKDIR /docker/HelloMVC
+RUN dotnet build
+RUN dotnet publish
+ENTRYPOINT [ "dotnet" ]
+
+FROM microsoft/aspnetcore
+WORKDIR /publish
+COPY --from=build /docker/HelloMVC/bin/Debug/netcoreapp2.0/publish .
+ENV ASPNET_URLS="http://*:4200"
+EXPOSE 4200 80
+CMD [ "dotnet", "HelloMVC.dll" ]

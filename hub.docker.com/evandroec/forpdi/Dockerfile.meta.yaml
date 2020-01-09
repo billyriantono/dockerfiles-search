@@ -1,0 +1,146 @@
+MetaArgs: null
+Stages:
+- As: clone_code
+  BaseName: alpine:latest
+  Commands:
+  - Key: FORPDI_REPO_URL
+    Name: arg
+    Value: https://github.com/evandroec/forpdi
+  - Key: FORPDI_REPO_BRANCH
+    Name: arg
+    Value: master
+  - CmdLine:
+    - apk add --update-cache --no-cache git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth 1 $FORPDI_REPO_URL /forpdi -b $FORPDI_REPO_BRANCH
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: clone_code
+  Platform: ""
+  SourceCode: FROM alpine:latest AS CLONE_CODE
+- As: build_frontend
+  BaseName: node:6-alpine
+  Commands:
+  - Chown: ""
+    From: CLONE_CODE
+    Name: copy
+    SourcesAndDest:
+    - /forpdi
+    - /forpdi
+  - Name: workdir
+    Path: /forpdi/backend-java/src/main/frontend/
+  - CmdLine:
+    - npm -g install webpack
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:6-alpine
+  Name: build_frontend
+  Platform: ""
+  SourceCode: FROM node:6-alpine AS BUILD_FRONTEND
+- As: build_backend
+  BaseName: maven:3-jdk-8-alpine
+  Commands:
+  - Chown: ""
+    From: BUILD_FRONTEND
+    Name: copy
+    SourcesAndDest:
+    - /forpdi
+    - /forpdi
+  - Name: workdir
+    Path: /forpdi/backend-java/
+  - CmdLine:
+    - cp dev.properties prd.properties
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/.*connection\.url.*/<!--&-->/' src/main/resources/hibernate.cfg.xml  &&
+      sed -i 's/.*connection\.username.*/<!--&-->/' src/main/resources/hibernate.cfg.xml  &&
+      sed -i 's/.*connection\.password.*/<!--&-->/' src/main/resources/hibernate.cfg.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn install -P prd -B -q
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /deploy/entrypoint.sh
+  - CmdLine:
+    - cp /forpdi/backend-java/target/forpdi.war /deploy  && chmod +x /deploy/entrypoint.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3-jdk-8-alpine
+  Name: build_backend
+  Platform: ""
+  SourceCode: FROM maven:3-jdk-8-alpine AS BUILD_BACKEND
+- BaseName: jboss/wildfly:9.0.2.Final
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.name
+      Value: '"ForPDI Docker"'
+    - Key: org.label-schema.description
+      Value: '"Solução Aberta para elaboração e gestão do PDI"'
+    - Key: org.label-schema.url
+      Value: '"http://www.forpdi.org/"'
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/forpdi/forpdi"'
+    - Key: org.label-schema.vendor
+      Value: '"Evandro Evangelista"'
+    - Key: org.label-schema.version
+      Value: $VERSION
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - Chown: ""
+    From: BUILD_BACKEND
+    Name: copy
+    SourcesAndDest:
+    - /deploy
+    - /opt/jboss/wildfly/standalone/deployments/
+  - CmdLine:
+    - /opt/jboss/wildfly/standalone/deployments/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /opt/jboss/wildfly/bin/standalone.sh
+    - -b
+    - 0.0.0.0
+    - -P
+    - forpdi.properties
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: jboss/wildfly:9.0.2.Final
+  Name: ""
+  Platform: ""
+  SourceCode: FROM jboss/wildfly:9.0.2.Final

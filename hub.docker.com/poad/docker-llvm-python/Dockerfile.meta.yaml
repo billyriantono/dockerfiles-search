@@ -1,0 +1,202 @@
+MetaArgs:
+- DefaultValue: '"E3FF2839C048B25C084DEBE9B26995E310250568"'
+  Key: PYTHON_XZ_GPG_KEY
+  ProvidedValue: null
+  Value: '"E3FF2839C048B25C084DEBE9B26995E310250568"'
+- DefaultValue: '"3.8.1"'
+  Key: PYTHON_VERSION
+  ProvidedValue: null
+  Value: '"3.8.1"'
+- DefaultValue: '"19.3.1"'
+  Key: PYTHON_PIP_VERSION
+  ProvidedValue: null
+  Value: '"19.3.1"'
+- DefaultValue: '"ffe826207a010164265d9cc807978e3604d18ca0"'
+  Key: PIP_DOWNLOAD_HASH
+  ProvidedValue: null
+  Value: '"ffe826207a010164265d9cc807978e3604d18ca0"'
+- DefaultValue: https://github.com/pypa/get-pip/raw/${PIP_DOWNLOAD_HASH}/get-pip.py
+  Key: PYTHON_GET_PIP_URL
+  ProvidedValue: null
+  Value: https://github.com/pypa/get-pip/raw/${PIP_DOWNLOAD_HASH}/get-pip.py
+- DefaultValue: '"b86f36cc4345ae87bfd4f10ef6b2dbfa7a872fbff70608a1e43944d283fd0eee"'
+  Key: PYTHON_GET_PIP_SHA256
+  ProvidedValue: null
+  Value: '"b86f36cc4345ae87bfd4f10ef6b2dbfa7a872fbff70608a1e43944d283fd0eee"'
+Stages:
+- As: downloader
+  BaseName: alpine:latest
+  Commands:
+  - Key: PYTHON_XZ_GPG_KEY
+    Name: arg
+    Value: null
+  - Key: PYTHON_VERSION
+    Name: arg
+    Value: null
+  - Key: PYTHON_PIP_VERSION
+    Name: arg
+    Value: null
+  - Key: PYTHON_GET_PIP_URL
+    Name: arg
+    Value: null
+  - Key: PYTHON_GET_PIP_SHA256
+    Name: arg
+    Value: null
+  - Env:
+    - Key: PATH
+      Value: /usr/local/python/bin:$PATH
+    - Key: JAVA_HOME
+      Value: ${JAVA_HOME}
+    Name: env
+  - CmdLine:
+    - "apk add --no-cache --virtual .build-deps     curl     gnupg     xz \twget"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - wget -O get-pip.py "${PYTHON_GET_PIP_URL}"  && echo "${PYTHON_GET_PIP_SHA256}
+      *get-pip.py" | sha256sum -c -  && set -ex   && wget -O python.tar.xz "https://www.python.org/ftp/python/${PYTHON_VERSION%%[a-z]*}/Python-${PYTHON_VERSION}.tar.xz"  &&
+      wget -O python.tar.xz.asc "https://www.python.org/ftp/python/${PYTHON_VERSION%%[a-z]*}/Python-${PYTHON_VERSION}.tar.xz.asc"  &&
+      export GNUPGHOME="$(mktemp -d)"  && for key in     "${PYTHON_XZ_GPG_KEY}"  ;
+      do    gpg --batch --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys
+      "${key}" ||    gpg --batch --keyserver hkp://ipv4.pool.sks-keyservers.net --recv-keys
+      "${key}" ||    gpg --batch --keyserver hkp://pgp.mit.edu:80 --recv-keys "${key}"
+      ;  done  && gpg --batch --verify python.tar.xz.asc python.tar.xz  && { command
+      -v gpgconf > /dev/null && gpgconf --kill all || :; }  && rm -rf "${GNUPGHOME}"
+      python.tar.xz.asc  && mkdir -p /usr/src/python  && tar -xJC /usr/src/python
+      --strip-components=1 -f python.tar.xz  && rm python.tar.xz  && mkdir -p /usr/local/python
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: downloader
+  Platform: ""
+  SourceCode: FROM alpine:latest AS downloader
+- As: python
+  BaseName: buildpack-deps:bionic-curl
+  Commands:
+  - Env:
+    - Key: PATH
+      Value: /usr/local/bin:$PATH
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: CPPFLAGS
+      Value: '"-I/usr/local/opt/zlib/include -I/usr/local/opt/sqlite3/include -I/usr/local/opt/openssl/include"'
+    - Key: LDFLAGS
+      Value: '"-L/usr/local/lib -L/usr/local/opt/openssl/lib"'
+    - Key: CC
+      Value: '"/usr/bin/clang-9 -O5 -fsanitize=undefined"'
+    - Key: CXX
+      Value: '"clang++-9 -O5 -fsanitize=undefined -fno-sanitize=vptr"'
+    - Key: PATH
+      Value: /usr/local/python/bin:/usr/local/bin:$PATH
+    Name: env
+  - Key: DEPENDENCIES
+    Name: arg
+    Value: "\"        autoconf \t\tautomake \t\tbzip2 \t\tdpkg-dev \t\tfile \t\tgit
+      \t\tclang-9 \t\tlld-9 \t\timagemagick \t\tlibbz2-dev \t\tlibc6-dev \t\tlibcurl4-openssl-dev
+      \t\tlibdb-dev \t\tlibevent-dev \t\tlibffi-dev \t\tlibgdbm-dev \t\tlibglib2.0-dev
+      \t\tlibgmp-dev \t\tlibjpeg-dev \t\tlibkrb5-dev \t\tliblzma-dev \t\tlibmagickcore-dev
+      \t\tlibmagickwand-dev \t\tlibmaxminddb-dev \t\tlibncurses5-dev \t\tlibncursesw5-dev
+      \t\tlibpng-dev \t\tlibpq-dev \t\tlibreadline-dev \t\tlibsqlite3-dev \t\tlibssl-dev
+      \t\tlibtool \t\tlibwebp-dev \t\tlibxml2-dev \t\tlibxslt-dev \t\tlibyaml-dev
+      \t\tmake \t\tpatch \t\tunzip \t\txz-utils \t\tzlib1g-dev \t\ttk-dev \t\tuuid-dev\""
+  - CmdLine:
+    - apt-get update -qq  && apt-get autoremove --purge -qqy gcc  && apt-get install
+      --no-install-recommends -qqy ca-certificates gnupg2 binutils apt-utils  && curl
+      -sL https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -  && echo "deb
+      http://apt.llvm.org/bionic/ llvm-toolchain-bionic main" >> /etc/apt/sources.list.d/llvm-toolchain.list  &&
+      echo "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-9 main" >> /etc/apt/sources.list.d/llvm-toolchain.list  &&
+      apt-get update -qq  && apt-get install -qqy --no-install-recommends ${DEPENDENCIES}  &&
+      apt-get clean  && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: downloader
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/python
+    - /usr/src/python
+  - Name: workdir
+    Path: /usr/src/python
+  - CmdLine:
+    - "gnuArch=\"$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)\"  && ./configure
+      \      --build=\"$gnuArch\"       --enable-loadable-sqlite-extensions       --with-system-expat
+      \      --with-system-ffi       --without-ensurepip       --prefix=/usr/local/python
+      \ && make -j \"$(nproc)\"  && make install   && find /usr/local -depth \t\t\\(
+      \t\t\t\\( -type d -a \\( -name test -o -name tests -o -name idle_test \\) \\)
+      \t\t\t-o \t\t\t\\( -type f -a \\( -name '*.pyc' -o -name '*.pyo' \\) \\) \t\t\\)
+      -exec rm -rf '{}' +  && rm -rf /usr/src/python   && python3 --version"
+    Name: run
+    PrependShell: true
+  From:
+    Image: buildpack-deps:bionic-curl
+  Name: python
+  Platform: ""
+  SourceCode: FROM buildpack-deps:bionic-curl AS python
+- BaseName: poad/docker-zsh:bionic
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Kenji Saito<ken-yo@mbr.nifty.com>"'
+    Name: label
+  - Key: PYTHON_PIP_VERSION
+    Name: arg
+    Value: null
+  - Name: user
+    User: root
+  - Env:
+    - Key: PATH
+      Value: /usr/local/bin:${PATH}
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Chown: ""
+    From: python
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/python
+    - /usr/local
+  - Chown: ""
+    From: downloader
+    Name: copy
+    SourcesAndDest:
+    - /tmp/get-pip.py
+    - /tmp/get-pip.py
+  - CmdLine:
+    - "cd /usr/local/bin \t&& ln -s idle3 idle \t&& ln -s pydoc3 pydoc \t&& ln -s
+      python3 python \t&& ln -s python3-config python-config"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get update -qq  && apt-get install -qqy --no-install-recommends \t\tlibexpat1
+      \        libssl1.1  && ldconfig  && python /tmp/get-pip.py \t\t--disable-pip-version-check
+      \t\t--no-cache-dir \t\t\"pip==${PYTHON_PIP_VERSION}\"  && apt-get clean  &&
+      rm -rf /var/lib/apt/lists/* /tmp/* /var/log/apt/* /var/log/alternatives.log
+      /var/log/dpkg.log /var/log/faillog /var/log/lastlog"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: zsh
+  - Env:
+    - Key: PATH
+      Value: /home/zsh/.local/bin:/usr/local/bin:${PATH}
+    Name: env
+  - Name: workdir
+    Path: /home/zsh
+  From:
+    Image: poad/docker-zsh:bionic
+  Name: ""
+  Platform: ""
+  SourceCode: FROM poad/docker-zsh:bionic

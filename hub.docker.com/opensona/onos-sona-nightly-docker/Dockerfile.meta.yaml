@@ -1,0 +1,165 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: opensona/java-oracle:jdk_8
+  Commands:
+  - Maintainer: Jian Li <gunine@sk.com>
+    Name: maintainer
+  - Env:
+    - Key: HOME
+      Value: /root
+    Name: env
+  - Env:
+    - Key: BUILD_NUMBER
+      Value: docker
+    Name: env
+  - Env:
+    - Key: JAVA_TOOL_OPTIONS
+      Value: -Dfile.encoding=UTF8
+    Name: env
+  - Env:
+    - Key: BAZEL_VERSION
+      Value: 1.0.0
+    Name: env
+  - Env:
+    - Key: ONOS_VERSION
+      Value: 98220659bd844f8f6a5f4beaa7004da046725eb9
+    Name: env
+  - Env:
+    - Key: ONOS_SNAPSHOT
+      Value: 1.15-snapshot
+    Name: env
+  - Env:
+    - Key: ONOS_LATEST_BRANCH
+      Value: onos-1.15
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --branch ${ONOS_LATEST_BRANCH} https://gerrit.onosproject.org/onos
+      onos &&         cd onos &&         git reset --hard ${ONOS_VERSION} &&         cd
+      ../ &&         mkdir -p /src/ &&         cp -R onos /src/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /src/onos/apps/openstack*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/sonaproject/onos-sona-bazel-defs.git bazel-defs
+      &&         cp bazel-defs/sona.bzl /src/onos/ &&         sed -i 's/modules.bzl/sona.bzl/g'
+      /src/onos/BUILD
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/sonaproject/onos-sona-patch.git patch &&     cp
+      patch/${ONOS_SNAPSHOT}/* /src/onos/ &&     cp patch/patch.sh /src/onos/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src/onos
+  - CmdLine:
+    - ./patch.sh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /onos
+  - CmdLine:
+    - git checkout ${ONOS_LATEST_BRANCH}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -R apps/openstack* ../src/onos/apps
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src/onos
+  - CmdLine:
+    - apt-get update && apt-get install -y zip python python3 git bzip2 build-essential
+      &&         curl -L -o bazel.sh https://github.com/bazelbuild/bazel/releases/download/${BAZEL_VERSION}/bazel-${BAZEL_VERSION}-installer-linux-x86_64.sh
+      &&         chmod +x bazel.sh &&         ./bazel.sh --user &&         export
+      ONOS_ROOT=/src/onos &&         ln -s /usr/lib/jvm/java-8-oracle/bin/jar /etc/alternatives/jar
+      &&         ln -s /etc/alternatives/jar /usr/bin/jar &&         ~/bin/bazel build
+      onos --verbose_failures &&         mkdir -p /src/tar &&         cd /src/tar
+      &&         tar -xf /src/onos/bazel-bin/onos.tar.gz --strip-components=1 &&         rm
+      -rf /src/onos/bazel-* .git
+    Name: run
+    PrependShell: true
+  From:
+    Image: opensona/java-oracle:jdk_8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM opensona/java-oracle:jdk_8 as builder
+- BaseName: anapsix/alpine-java:8_server-jre
+  Commands:
+  - CmdLine:
+    - apk update &&         apk add curl &&         mkdir -p /root/onos
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root/onos
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/tar/
+    - .
+  - CmdLine:
+    - sed -ibak '/log4j.rootLogger=/s/$/, stdout/' $(ls -d apache-karaf-*)/etc/org.ops4j.pax.logging.cfg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -ibak 's/org.osgi.service.http.secure.enabled=false/org.osgi.service.http.secure.enabled=true/g'
+      $(ls -d apache-karaf-*)/etc/org.ops4j.pax.web.cfg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -ibak 's/OBF:1xtn1w1u1uob1xtv1y7z1xtn1unn1w1o1xtv/onos-sona/g' $(ls -d apache-karaf-*)/etc/org.ops4j.pax.web.cfg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -ibak 's/etc\/keystore/..\/keystore\/keystore.jks/g' $(ls -d apache-karaf-*)/etc/org.ops4j.pax.web.cfg
+    Name: run
+    PrependShell: true
+  - Labels:
+    - Key: org.label-schema.name
+      Value: '"ONOS"'
+    - Key: org.label-schema.description
+      Value: '"SDN Controller"'
+    - Key: org.label-schema.usage
+      Value: '"http://wiki.onosproject.org"'
+    - Key: org.label-schema.url
+      Value: '"http://onosproject.org"'
+    - Key: org.label-scheme.vendor
+      Value: '"Open Networking Foundation"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - CmdLine:
+    - touch apps/org.onosproject.drivers/active &&       touch apps/org.onosproject.openflow-base/active
+      &&       touch apps/org.onosproject.openstacknetworking/active &&       touch
+      apps/org.onosproject.openstacktroubleshoot/active
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "6640"
+    - "6653"
+    - "8101"
+    - "8181"
+    - "9876"
+  - CmdLine:
+    - ./bin/onos-service
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - server
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: anapsix/alpine-java:8_server-jre
+  Name: ""
+  Platform: ""
+  SourceCode: FROM anapsix/alpine-java:8_server-jre

@@ -1,0 +1,77 @@
+MetaArgs:
+- DefaultValue: 4.5.0
+  Key: EXIST_VERSION
+  ProvidedValue: null
+  Value: 4.5.0
+Stages:
+- As: builder
+  BaseName: openjdk:8-jdk-slim
+  Commands:
+  - Name: user
+    User: root
+  - Env:
+    - Key: TEI_VERSION
+      Value: 2.7.0
+    Name: env
+  - Env:
+    - Key: ANT_VERSION
+      Value: 1.10.5
+    Name: env
+  - Env:
+    - Key: ANT_HOME
+      Value: /etc/ant-${ANT_VERSION}
+    Name: env
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - apt-get update && apt-get install -y  git  ant  wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget http://www-us.apache.org/dist/ant/binaries/apache-ant-${ANT_VERSION}-bin.tar.gz     &&
+      mkdir ant-${ANT_VERSION}     && tar -zxvf apache-ant-${ANT_VERSION}-bin.tar.gz     &&
+      mv apache-ant-${ANT_VERSION} ${ANT_HOME}     && rm apache-ant-${ANT_VERSION}-bin.tar.gz     &&
+      rm -rf ant-${ANT_VERSION}     && rm -rf ${ANT_HOME}/manual     && unset ANT_VERSION
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: ${PATH}:${ANT_HOME}/bin
+    Name: env
+  From:
+    Image: openjdk:8-jdk-slim
+  Name: builder
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-slim as builder
+- As: tei
+  BaseName: builder
+  Commands:
+  - CmdLine:
+    - mkdir -p ~/.ssh && ssh-keyscan -t rsa gitlab.existsolutions.com >> ~/.ssh/known_hosts
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://gitlab.existsolutions.com/tei-publisher/tei-publisher-lib.git  &&
+      cd tei-publisher-lib  && git checkout v${TEI_VERSION}  && ant
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: builder
+  Name: tei
+  Platform: ""
+  SourceCode: FROM builder as tei
+- BaseName: existdb/existdb:${EXIST_VERSION}
+  Commands:
+  - Chown: ""
+    From: tei
+    Name: copy
+    SourcesAndDest:
+    - /tmp/tei-publisher-lib/build/*.xar
+    - /exist/autodeploy
+  From:
+    Image: existdb/existdb:${EXIST_VERSION}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM existdb/existdb:${EXIST_VERSION}

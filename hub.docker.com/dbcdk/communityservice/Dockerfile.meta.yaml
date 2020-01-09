@@ -1,0 +1,129 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: node:alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache nodejs-current tini
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HOME
+      Value: /home/app
+    Name: env
+  - CmdLine:
+    - addgroup -S app &&     adduser -S -h $HOME -s /bin/false -G app app
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  - Name: workdir
+    Path: $HOME
+  - CmdLine:
+    - /sbin/tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: node:alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:alpine AS base
+- As: production-dependencies
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - setup-node-env.sh
+    - ./
+  - CmdLine:
+    - touch current.env &&     mkdir server lib acceptance fixtures migrations &&     npm
+      set progress=false &&     npm config set depth 0 &&     npm install --only=production
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: production-dependencies
+  Platform: ""
+  SourceCode: FROM base AS production-dependencies
+- As: test-base
+  BaseName: production-dependencies
+  Commands:
+  - Name: user
+    User: root
+  - CmdLine:
+    - apk add --no-cache python make g++
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  From:
+    Stage:
+      Index: 1
+      Named: production-dependencies
+  Name: test-base
+  Platform: ""
+  SourceCode: FROM production-dependencies AS test-base
+- As: test-dependencies
+  BaseName: test-base
+  Commands:
+  - CmdLine:
+    - npm set progress=false &&     npm config set depth 0 &&     npm install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 2
+      Named: test-base
+  Name: test-dependencies
+  Platform: ""
+  SourceCode: FROM test-base AS test-dependencies
+- As: test
+  BaseName: test-dependencies
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - CmdLine:
+    - npm test
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 3
+      Named: test-dependencies
+  Name: test
+  Platform: ""
+  SourceCode: FROM test-dependencies AS test
+- As: production
+  BaseName: production-dependencies
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - npm
+    - start
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: production-dependencies
+  Name: production
+  Platform: ""
+  SourceCode: FROM production-dependencies AS production

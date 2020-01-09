@@ -1,0 +1,64 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: redis:latest
+  Commands:
+  - Env:
+    - Key: DEPS
+      Value: '"automake peg libtool autoconf python python-setuptools python-pip wget
+        build-essential cmake m4 libgomp1"'
+    Name: env
+  - CmdLine:
+    - set -ex;    deps="$DEPS";    apt-get update;    apt-get install -y --no-install-recommends
+      $deps;    pip install rmtest;    pip install redisgraph;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./
+    - /redisgraph
+  - Name: workdir
+    Path: /redisgraph
+  - CmdLine:
+    - set -ex;    make clean;     make;
+    Name: run
+    PrependShell: true
+  From:
+    Image: redis:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM redis:latest as builder
+- BaseName: redis:latest
+  Commands:
+  - Env:
+    - Key: LIBDIR
+      Value: /usr/lib/redis/modules
+    Name: env
+  - Name: workdir
+    Path: /data
+  - CmdLine:
+    - set -ex;    mkdir -p "$LIBDIR";    apt-get update;    apt-get install -y --no-install-recommends
+      libgomp1;
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /redisgraph/src/redisgraph.so
+    - '"$LIBDIR"'
+  - Name: expose
+    Ports:
+    - "6379"
+  - CmdLine:
+    - redis-server
+    - --loadmodule
+    - /usr/lib/redis/modules/redisgraph.so
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: redis:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM redis:latest

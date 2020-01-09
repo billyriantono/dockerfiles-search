@@ -1,0 +1,108 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.11.1-alpine3.8
+  Commands:
+  - Env:
+    - Key: WORK_DIR
+      Value: $GOPATH/src/github.com/prometheus
+    Name: env
+  - Name: workdir
+    Path: $WORK_DIR
+  - CmdLine:
+    - set -ex; apk update; apk add --no-cache curl make git;     git clone https://github.com/prometheus/prometheus.git;     cd
+      prometheus; make build;     mkdir -p /prometheus/bin /prometheus/config;     cp
+      -a prometheus /prometheus/bin/prometheus;     cp -a promtool /prometheus/bin/promtool;     cp
+      -a documentation/examples/prometheus.yml /prometheus/config/prometheus.yml;     cp
+      -a console_libraries/ /prometheus/;     cp -a consoles/ /prometheus/
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11.1-alpine3.8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.11.1-alpine3.8 as builder
+- BaseName: alpine:3.8
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Platform/IIBU <zhangzhitao@fmsh.com.cn>"'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /prometheus/bin
+    - /bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /prometheus/config/prometheus.yml
+    - /etc/prometheus/prometheus.yml
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /prometheus/console_libraries/
+    - /usr/share/prometheus/console_libraries/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /prometheus/consoles/
+    - /usr/share/prometheus/consoles/
+  - Env:
+    - Key: TZ
+      Value: Asia/Shanghai
+    Name: env
+  - CmdLine:
+    - set -ex; apk upgrade; apk add curl bash tzdata jq;     ln -sf /usr/share/zoneinfo/${TZ}
+      /etc/localtime;     echo ${TZ} > /etc/timezone;     rm -rf /var/cache/apk/*;     ln
+      -s /usr/share/prometheus/console_libraries /usr/share/prometheus/consoles/ /etc/prometheus/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config
+    - /etc/prometheus/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint
+    - /
+  - CmdLine:
+    - chmod 770 /*.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: WEAVE_TOKEN
+      Value: none
+    Name: env
+  - Name: workdir
+    Path: /prometheus
+  - Name: volume
+    Volumes:
+    - /prometheus
+  - Name: expose
+    Ports:
+    - "9090"
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --config.file=/etc/prometheus/prometheus.yml
+    - --storage.tsdb.path=/prometheus
+    - --web.console.libraries=/usr/share/prometheus/console_libraries
+    - --web.console.templates=/usr/share/prometheus/consoles
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

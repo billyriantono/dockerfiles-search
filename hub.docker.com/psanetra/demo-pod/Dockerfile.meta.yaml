@@ -1,0 +1,94 @@
+MetaArgs: null
+Stages:
+- As: build-npm
+  BaseName: node:12-alpine
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./ui/package.json
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./ui/package-lock.json
+    - ./
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./ui/
+    - ./
+  - CmdLine:
+    - npm run build:prod
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12-alpine
+  Name: build-npm
+  Platform: ""
+  SourceCode: FROM node:12-alpine as build-npm
+- As: build-go
+  BaseName: golang:1.13-alpine
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /src
+  - CmdLine:
+    - go test -v -vet=off ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - GOOS=linux GARCH=amd64 go build -o demo-pod -ldflags="-s -w" main.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-alpine
+  Name: build-go
+  Platform: ""
+  SourceCode: FROM golang:1.13-alpine as build-go
+- BaseName: alpine:3.10
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: build-go
+    Name: copy
+    SourcesAndDest:
+    - /src/demo-pod
+    - ./
+  - Chown: ""
+    From: build-npm
+    Name: copy
+    SourcesAndDest:
+    - /src/dist/demo-pod-ui
+    - ./static
+  - CmdLine:
+    - /app/demo-pod
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --notes-state-file-path=/mnt/notes/notes.txt
+    - --watch=demo-secret=/mnt/secrets/demo-secret/secret.txt
+    - --watch=demo-config-map=/mnt/config-maps/demo-config/config.txt
+    - --watch=notes=/mnt/notes/notes.txt
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10

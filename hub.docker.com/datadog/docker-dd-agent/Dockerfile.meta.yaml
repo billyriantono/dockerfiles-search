@@ -1,0 +1,116 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.6
+  Commands:
+  - Maintainer: Datadog <package@datadoghq.com>
+    Name: maintainer
+  - Key: AGENT_VERSION_ARG
+    Name: arg
+    Value: 5.31.0
+  - Env:
+    - Key: DD_HOME
+      Value: /opt/datadog-agent
+    - Key: DD_START_AGENT
+      Value: "0"
+    - Key: DOCKER_DD_AGENT
+      Value: "yes"
+    - Key: PYCURL_SSL_LIBRARY
+      Value: openssl
+    - Key: AGENT_VERSION
+      Value: $AGENT_VERSION_ARG
+    - Key: INTEGRATIONS_VERSION
+      Value: $AGENT_VERSION_ARG
+    - Key: DD_ETC_ROOT
+      Value: '"/opt/datadog-agent/agent"'
+    - Key: PATH
+      Value: '"/opt/datadog-agent/venv/bin:/opt/datadog-agent/agent/bin:$PATH"'
+    - Key: PYTHONPATH
+      Value: '"/opt/datadog-agent/agent"'
+    - Key: DD_CONF_LOG_TO_SYSLOG
+      Value: "no"
+    - Key: NON_LOCAL_TRAFFIC
+      Value: "yes"
+    - Key: DD_SUPERVISOR_DELETE_USER
+      Value: "yes"
+    - Key: DD_CONF_PROCFS_PATH
+      Value: '"/host/proc"'
+    Name: env
+  - CmdLine:
+    - apk add -qU --no-cache coreutils curl curl-dev python-dev tar sysstat tini
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://raw.githubusercontent.com/DataDog/dd-agent/master/packaging/datadog-agent/source/setup_agent.sh
+    - /tmp/setup_agent.sh
+  - CmdLine:
+    - apk add -qU --no-cache -t .build-deps gcc musl-dev postgresql-dev linux-headers
+      libffi-dev     && sh /tmp/setup_agent.sh     && apk del -q .build-deps     &&
+      rm /tmp/setup_agent.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - probe-alpine.sh
+    - $DD_HOME/probe.sh
+  - CmdLine:
+    - cp ${DD_ETC_ROOT}/datadog.conf.example ${DD_ETC_ROOT}/datadog.conf   && chmod
+      +x $DD_HOME/probe.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf.d/docker_daemon.yaml
+    - '"${DD_ETC_ROOT}/conf.d/docker_daemon.yaml"'
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config_builder.py
+    - /config_builder.py
+  - Name: volume
+    Volumes:
+    - /conf.d
+    - /checks.d
+  - Name: expose
+    Ports:
+    - 8125/udp
+  - Health:
+      Interval: 300000000000
+      Retries: 1
+      Test:
+      - CMD-SHELL
+      - ./probe.sh
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - /sbin/tini
+    - -g
+    - --
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: workdir
+    Path: $DD_HOME
+  - CmdLine:
+    - supervisord
+    - -c
+    - agent/supervisor.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.6
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.6

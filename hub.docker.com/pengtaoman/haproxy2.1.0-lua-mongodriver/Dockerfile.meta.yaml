@@ -1,0 +1,143 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - groupadd -r haproxy && useradd -r -g haproxy haproxy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -eux;         apt-get update &&         apt-get install libreadline6-dev
+      -y --no-install-recommends &&         apt-get install gcc automake autoconf
+      libtool make -y &&         apt-get install libpcre3-dev -y &&         apt-get
+      install libz-dev -y &&         apt-get install curl -y &&         apt-get install
+      wget -y &&         apt-get install unzip -y &&         apt-get install cmake
+      -y &&         apt-get install libssl-dev -y &&         apt-get install rsyslog
+      -y
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOSU_VERSION
+      Value: "1.11"
+    Name: env
+  - CmdLine:
+    - "set -ex; \t\tsavedAptMark=\"$(apt-mark showmanual)\"; \tapt-get update; \tapt-get
+      install -y --no-install-recommends \t\twget \t; \tif ! command -v gpg > /dev/null;
+      then \t\tapt-get install -y --no-install-recommends gnupg dirmngr; \t\tsavedAptMark=\"$savedAptMark
+      gnupg dirmngr\"; \telif gpg --version | grep -q '^gpg (GnuPG) 1\\.'; then \t\tapt-get
+      install -y --no-install-recommends gnupg-curl; \tfi; \trm -rf /var/lib/apt/lists/*;
+      \t\tdpkgArch=\"$(dpkg --print-architecture | awk -F- '{ print $NF }')\"; \twget
+      -O /usr/local/bin/gosu \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch\";
+      \twget -O /usr/local/bin/gosu.asc \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch.asc\";
+      \texport GNUPGHOME=\"$(mktemp -d)\"; \tgpg --batch --keyserver hkps://keys.openpgp.org
+      --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4; \tgpg --batch --verify
+      /usr/local/bin/gosu.asc /usr/local/bin/gosu; \tcommand -v gpgconf && gpgconf
+      --kill all || :; \trm -r \"$GNUPGHOME\" /usr/local/bin/gosu.asc; \tchmod +x
+      /usr/local/bin/gosu; \tgosu --version; \tgosu nobody true; \t\tapt-mark auto
+      '.*' > /dev/null; \tapt-mark manual $savedAptMark > /dev/null; \tapt-get purge
+      -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - lua-5.3.5.tar.gz
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - luarocks-3.2.1.tar.gz
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mongo-c-driver-1.15.2.tar.gz
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - haproxy-2.1.0.tar.gz
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - haproxylog.conf
+    - /etc/rsyslog.d/haproxylog.conf
+  - Env:
+    - Key: LUA_SRC
+      Value: /usr/src/lua
+    Name: env
+  - Env:
+    - Key: LUAROCK_SRC
+      Value: /usr/src/luarocks
+    Name: env
+  - Env:
+    - Key: MONGODRIVER_SRC
+      Value: /usr/src/mongo
+    Name: env
+  - Env:
+    - Key: HAPROXY_SRC
+      Value: /usr/src/haproxy
+    Name: env
+  - CmdLine:
+    - set -ex;     eval "mkdir -p /usr/src/lua" &&     eval "mkdir -p /usr/src/luarocks"
+      &&     eval "mkdir -p /usr/src/mongo" &&     eval "mkdir -p /usr/src/haproxy"
+      &&     eval "tar -zxvf lua-5.3.5.tar.gz -C ${LUA_SRC}  --strip-components 1"
+      &&     eval "tar zxpf luarocks-3.2.1.tar.gz  -C ${LUAROCK_SRC}  --strip-components
+      1" &&     eval "tar xzf mongo-c-driver-1.15.2.tar.gz  -C ${MONGODRIVER_SRC}  --strip-components
+      1"  &&     eval "tar xvzf haproxy-2.1.0.tar.gz  -C ${HAPROXY_SRC}  --strip-components
+      1" &&     eval "make -C /usr/src/lua linux test" &&     eval "make -C /usr/src/lua
+      linux" &&     eval "make -C /usr/src/lua install" &&     eval "mkdir -p ${MONGODRIVER_SRC}/cmake-build"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $LUAROCK_SRC
+  - CmdLine:
+    - set -ex;     eval "./configure" &&     eval "make" &&     eval "make install"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${MONGODRIVER_SRC}/cmake-build
+  - CmdLine:
+    - set -ex;     eval "cmake -DENABLE_AUTOMATIC_INIT_AND_CLEANUP=OFF .." &&     eval
+      "make" &&     eval "make install" &&     luarocks install lua-mongo
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $HAPROXY_SRC
+  - CmdLine:
+    - set -ex;     eval "make TARGET=linux-glibc USE_PCRE=1 USE_PCRE_JIT=1 USE_OPENSSL=1
+      USE_ZLIB=1 USE_LINUX_TPROXY=1 USE_REGPARM=1 USE_LUA=1 USE_THREAD=1 USE_TFO=1"
+      &&     eval "make install"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - Name: stopsignal
+    Signal: SIGUSR1
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - haproxy
+    - -f
+    - /etc/haproxy/conf/haproxy.cfg
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

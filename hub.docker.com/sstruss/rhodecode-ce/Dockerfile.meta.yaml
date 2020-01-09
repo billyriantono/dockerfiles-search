@@ -1,0 +1,164 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - "apt update && apt install -y \tcurl vim bzip2 sudo libapr1-dev libaprutil1-dev
+      libsvn-dev \tpostgresql postgresql-contrib libpq-dev libcurl4-openssl-dev mercurial"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd nixbld && useradd -g nixbld nixbld && usermod -G nixbld nixbld
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /etc/nix && echo 'sandbox = false' > /etc/nix/nix.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://nixos.org/nix/install | USER=root sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /nix/var/nix/profiles/default/etc/profile.d/nix.sh /etc/profile.d/
+    Name: run
+    PrependShell: true
+  - Expression: ENV     ENV=/etc/profile     USER=root     PATH=/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/bin:/sbin:/usr/bin:/usr/sbin     GIT_SSL_CAINFO=/nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt     NIX_SSL_CERT_FILE=/nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt
+    Name: onbuild
+  - Env:
+    - Key: ENV
+      Value: /etc/profile
+    - Key: USER
+      Value: root
+    - Key: PATH
+      Value: /nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/bin:/sbin:/usr/bin:/usr/sbin
+    - Key: GIT_SSL_CAINFO
+      Value: /nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt
+    - Key: NIX_SSL_CERT_FILE
+      Value: /nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt
+    - Key: NIX_PATH
+      Value: /nix/var/nix/profiles/per-user/root/channels
+    Name: env
+  - CmdLine:
+    - "USER=root . /root/.nix-profile/etc/profile.d/nix.sh && \tnix-channel --update
+      && \tnix-channel --add https://nixos.org/channels/nixos-18.03 nixpkgs && \tnix-channel
+      --update"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "USER=root . /root/.nix-profile/etc/profile.d/nix.sh && \tnix-env -i nix-prefetch-hg
+      && \tnix-env -i nix-prefetch-git"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir rhodecode-develop && \tcd rhodecode-develop && \thg clone https://code.rhodecode.com/rhodecode-enterprise-ce
+      -u v4.16.0 && \thg clone https://code.rhodecode.com/rhodecode-vcsserver -u v4.16.0
+      && \thg clone https://code.rhodecode.com/rhodecode-tools-ce -u v1.1.0"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd rhodecode-develop/rhodecode-vcsserver && sed -ie 's/www.apache.org/archive.apache.org/'
+      default.nix
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - USER=root . /root/.nix-profile/etc/profile.d/nix.sh &&         cd rhodecode-develop/rhodecode-tools-ce
+      &&         nix-shell
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "USER=root . /root/.nix-profile/etc/profile.d/nix.sh && \tcd rhodecode-develop/rhodecode-vcsserver
+      && \tnix-shell"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "USER=root . /root/.nix-profile/etc/profile.d/nix.sh && \tcd rhodecode-develop/rhodecode-enterprise-ce
+      && \tnix-shell"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ~/.nixpkgs && touch ~/.nixpkgs/config.nix
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/host = .*/host = 0.0.0.0/' /rhodecode-develop/rhodecode-enterprise-ce/configs/production.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /root/my_dev_repos
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.nix
+    - /root/.nixpkgs/config.nix
+  - CmdLine:
+    - sed -i -e 's/postgres:qweqwe/postgres:postgres/' /rhodecode-develop/rhodecode-enterprise-ce/configs/production.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/workers = 2/workers = 1/' /rhodecode-develop/rhodecode-enterprise-ce/configs/production.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /etc/timezone
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .rhoderc
+    - /root/.rhoderc
+  - CmdLine:
+    - "service postgresql start && \tsudo -u postgres -H psql -c \"ALTER USER postgres
+      PASSWORD 'postgres';\" && \tsudo -u postgres -H psql -c \"CREATE DATABASE rhodecode\"
+      && \tUSER=root . /root/.nix-profile/etc/profile.d/nix.sh && \tcd rhodecode-develop/rhodecode-enterprise-ce
+      &&         nix-shell --run \"rc-setup-app configs/production.ini --user=admin
+      --password=secret --email=admin@example.com --repos=/root/my_dev_repos --force-yes
+      --api-key DOCKER_API_KEY && apt install -y grunt && grunt && apt remove -y grunt
+      && apt autoremove -y\" &&         export RHODECODE_API_KEY=`sudo -u postgres
+      -H psql rhodecode -c \"select api_key FROM user_api_keys where user_id=2 and
+      role='token_role_all';\" -A -t` &&         sed -ie \"s/api_key = .*/api_key
+      = $RHODECODE_API_KEY/\" /root/.rhoderc"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - USER=root . /root/.nix-profile/etc/profile.d/nix.sh && nix-env -i glibc-locales
+      && export LOCALE_ARCHIVE=`nix-env --installed --no-name --out-path --query glibc-locales`/lib/locale/locale-archive
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rhodecode
+    - /bin/rhodecode
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - /start.sh
+  - CmdLine:
+    - chmod +x start.sh /bin/rhodecode
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /rhodecode-develop/rhodecode-enterprise-ce/configs
+    - /var/lib/postgresql
+    - /root/my_dev_repos
+  - Name: expose
+    Ports:
+    - "5000"
+  - CmdLine:
+    - /start.sh
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

@@ -1,0 +1,194 @@
+MetaArgs: null
+Stages:
+- As: masscan
+  BaseName: ubuntu:19.10
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y     gcc     git    libpcap-dev    make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/robertdavidgraham/masscan /masscan     && cd /masscan     &&
+      make
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:19.10
+  Name: masscan
+  Platform: ""
+  SourceCode: from ubuntu:19.10 as masscan
+- As: amass-and-subfinder
+  BaseName: ubuntu:19.10
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y     gcc     git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://dl.google.com/go/go1.13.linux-amd64.tar.gz
+    - /tmp/go.tar.gz
+  - CmdLine:
+    - tar -C /usr/local -xzf /tmp/go.tar.gz
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $GOPATH/bin:/usr/local/go/bin:$PATH
+    Name: env
+  - CmdLine:
+    - mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 777 "$GOPATH"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/OWASP/Amass; exit 0
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Name: workdir
+    Path: /go/src/github.com/OWASP/Amass
+  - CmdLine:
+    - go install ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get github.com/subfinder/subfinder; exit 0
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Name: workdir
+    Path: /go/src/github.com/subfinder/subfinder
+  - CmdLine:
+    - go install ./...
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:19.10
+  Name: amass-and-subfinder
+  Platform: ""
+  SourceCode: FROM ubuntu:19.10 as amass-and-subfinder
+- As: massdns
+  BaseName: ubuntu:19.10
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y     build-essential     git     libldns-dev     python
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/blechschmidt/massdns.git /massdns     && cd /massdns     &&
+      make
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:19.10
+  Name: massdns
+  Platform: ""
+  SourceCode: FROM ubuntu:19.10 as massdns
+- BaseName: ubuntu:19.10
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y     git     curl     jq     nmap     python3     python3-pip     vim     &&
+      pip3 install --upgrade pip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /lists/jhaddix &&     curl https://gist.githubusercontent.com/jhaddix/86a06c5dc309d08580a018c66354a056/raw/96f4e51d96b2203f19f6381c8c545b278eaa0837/all.txt
+      -o /lists/jhaddix/subdomains.txt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /tools/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/FortyNorthSecurity/EyeWitness.git /tools/EyeWitness
+      &&   /tools/EyeWitness/setup/setup.sh
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /tools/EyeWitness:$PATH
+    Name: env
+  - CmdLine:
+    - git clone https://github.com/maurosoria/dirsearch.git /tools/dirsearch
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /tools/dirsearch:$PATH
+    Name: env
+  - CmdLine:
+    - git clone https://github.com/christophetd/censys-subdomain-finder.git /tools/censys-subdomain-finder
+      &&     pip3 install -r /tools/censys-subdomain-finder/requirements.txt &&     chmod
+      u+x /tools/censys-subdomain-finder/censys_subdomain_finder.py
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /tools/censys-subdomain-finder:$PATH
+    Name: env
+  - CmdLine:
+    - git clone https://github.com/lanmaster53/recon-ng.git /tools/recon-ng &&     pip3
+      install -r /tools/recon-ng/REQUIREMENTS
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /tools/recon-ng:$PATH
+    Name: env
+  - CmdLine:
+    - curl -sL https://github.com/tomnomnom/gron/releases/download/v0.6.0/gron-linux-amd64-0.6.0.tgz
+      | tar -zxC /usr/bin/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL https://github.com/tomnomnom/httprobe/releases/download/v0.1.2/httprobe-linux-amd64-0.1.2.tgz
+      | tar -zxC /usr/bin/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: amass-and-subfinder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/amass
+    - /usr/bin/amass
+  - Chown: ""
+    From: masscan
+    Name: copy
+    SourcesAndDest:
+    - /masscan/bin/masscan
+    - /usr/bin/masscan
+  - Chown: ""
+    From: massdns
+    Name: copy
+    SourcesAndDest:
+    - /massdns/bin/massdns/
+    - /usr/bin/massdns
+  - Chown: ""
+    From: massdns
+    Name: copy
+    SourcesAndDest:
+    - /massdns/lists/resolvers.txt/
+    - /lists/massdns/resolvers.txt
+  - Chown: ""
+    From: amass-and-subfinder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/subfinder
+    - /usr/bin/subfinder
+  From:
+    Image: ubuntu:19.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:19.10

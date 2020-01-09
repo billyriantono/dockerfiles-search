@@ -1,0 +1,180 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: centos
+  Commands:
+  - Key: GITHUB_TOKEN
+    Name: arg
+    Value: null
+  - Key: THEIA_VERSION
+    Name: arg
+    Value: plugin-id
+  - Env:
+    - Key: THEIA_VERSION
+      Value: ${THEIA_VERSION}
+    - Key: HOME
+      Value: /home/theia
+    Name: env
+  - Name: workdir
+    Path: ${HOME}
+  - CmdLine:
+    - yum install -y epel-release && yum -y install curl jq expect
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/builder/check-github-limit.sh
+    - /tmp/builder/scripts/check-github-limit.sh
+  - CmdLine:
+    - /tmp/builder/scripts/check-github-limit.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/builder/setup-nodejs.sh
+    - /tmp/builder/scripts/setup-nodejs.sh
+  - CmdLine:
+    - /tmp/builder/scripts/setup-nodejs.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum install -y gcc-c++ make python git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/config.yaml
+    - ${HOME}/.config/verdaccio/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/patches
+    - /home/theia-build/patches
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/builder/build-and-publish-theia.sh
+    - /tmp/builder/scripts/build-and-publish-theia.sh
+  - CmdLine:
+    - /tmp/builder/scripts/build-and-publish-theia.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/add-extensions.js
+    - /home/theia-build/add-extensions.js
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/versions.sh
+    - /home/theia-build/versions.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/resolutions-provider.js
+    - /home/theia-build/resolutions-provider.js
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/extensions.json
+    - ${HOME}/extensions.json
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/package.json
+    - ${HOME}/package.json
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/builder/add-extensions.sh
+    - /tmp/builder/scripts/add-extensions.sh
+  - CmdLine:
+    - /tmp/builder/scripts/add-extensions.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/builder/assemble-theia.sh
+    - /tmp/builder/scripts/assemble-theia.sh
+  - CmdLine:
+    - /tmp/builder/scripts/assemble-theia.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find ${HOME} -exec sh -c "chgrp 0 {}; chmod g+rwX {}" \;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn cache clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm config set registry https://registry.npmjs.org && yarn config set registry
+      https://registry.npmjs.org
+    Name: run
+    PrependShell: true
+  From:
+    Image: centos
+  Name: builder
+  Platform: ""
+  SourceCode: FROM centos as builder
+- BaseName: centos
+  Commands:
+  - Env:
+    - Key: USE_LOCAL_GIT
+      Value: "true"
+    - Key: HOME
+      Value: /home/theia
+    Name: env
+  - Name: expose
+    Ports:
+    - "3000"
+    - "3030"
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/builder/setup-nodejs.sh
+    - /tmp/builder/scripts/setup-nodejs.sh
+  - CmdLine:
+    - yum install -y sudo java-1.8.0-openjdk-devel git bzip2 &&     /tmp/builder/scripts/setup-nodejs.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'useradd -u 1000 -G users,wheel,root -d ${HOME} --shell /bin/bash theia     &&
+      usermod -p "*" theia     && echo "%wheel ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers     &&
+      for f in "${HOME}" "/etc/passwd" "/etc/group"; do           sudo chgrp -R 0
+      ${f} &&            sudo chmod -R g+rwX ${f};        done     && cat /etc/passwd
+      | sed s#root:x.*#root:x:\${USER_ID}:\${GROUP_ID}::\${HOME}:/bin/bash#g > ${HOME}/passwd.template     &&
+      cat /etc/group | sed s#root:x:0:#root:x:0:0,\${USER_ID}:#g > ${HOME}/group.template     &&
+      npm install -g yo @theia/generator-plugin     && mkdir -p ${HOME}/.config/insight-nodejs/     &&
+      chmod -R 777 ${HOME}/.config/     && npm install -g typescript@2.9.2     &&
+      find ${HOME} -exec sh -c "chgrp 0 {}; chmod g+rwX {}" \;'
+    Name: run
+    PrependShell: true
+  - Chown: theia:root
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/theia
+    - /home/theia
+  - Name: user
+    User: theia
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: centos
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos

@@ -1,0 +1,3 @@
+FROM openjdk:8-jre-stretch
+RUN apt update && apt install -y wget && wget https://downloads.wkhtmltopdf.org/0.12/0.12.5/wkhtmltox_0.12.5-1.stretch_amd64.deb && dpkg -i wkhtmltox_0.12.5-1.stretch_amd64.deb || apt-get -f -y install && rm -f wkhtmltox_0.12.5-1.stretch_amd64.deb && mkdir -p /usr/share/fonts/chinese/TrueType && rm -rf /var/lib/apt/lists/*
+COPY Lantinghei.ttc /usr/share/fonts/chinese/TrueType/Lantinghei.ttc

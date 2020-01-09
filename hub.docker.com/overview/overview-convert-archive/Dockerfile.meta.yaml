@@ -1,0 +1,175 @@
+MetaArgs: null
+Stages:
+- As: framework
+  BaseName: overview/overview-convert-framework:0.0.15
+  Commands: null
+  From:
+    Image: overview/overview-convert-framework:0.0.15
+  Name: framework
+  Platform: ""
+  SourceCode: FROM overview/overview-convert-framework:0.0.15 as framework
+- As: os
+  BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache jq ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: os
+  Platform: ""
+  SourceCode: FROM alpine:3.7 AS os
+- As: test-base
+  BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache jq python3
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  From:
+    Image: alpine:3.7
+  Name: test-base
+  Platform: ""
+  SourceCode: FROM alpine:3.7 AS test-base
+- As: build
+  BaseName: alpine:3.7
+  Commands:
+  - Env:
+    - Key: LIBARCHIVE_VERSION
+      Value: 3.3.2
+    Name: env
+  - CmdLine:
+    - apk add --update --no-cache       build-base       curl       zlib-dev       bzip2-dev       xz-dev       lz4-dev       acl-dev       libressl-dev       expat-dev   &&
+      mkdir -p /build/   && cd /build   && curl -o - http://www.libarchive.org/downloads/libarchive-${LIBARCHIVE_VERSION}.tar.gz
+      | tar zxf -   && cd libarchive-${LIBARCHIVE_VERSION}   && ./configure --without-xml2   &&
+      make -j3
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build/overview-convert-archive
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Makefile
+    - Makefile
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/
+    - src/
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: build
+  Platform: ""
+  SourceCode: FROM alpine:3.7 AS build
+- As: base
+  BaseName: os
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: framework
+    Name: copy
+    SourcesAndDest:
+    - /app/run
+    - /app/
+  - Chown: ""
+    From: framework
+    Name: copy
+    SourcesAndDest:
+    - /app/convert-stream-to-mime-multipart
+    - /app/convert
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/overview-convert-archive/archive-to-multipart
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - do-convert-stream-to-mime-multipart
+    - /app/
+  - CmdLine:
+    - /app/run
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: os
+  Name: base
+  Platform: ""
+  SourceCode: FROM os AS base
+- As: dev
+  BaseName: base
+  Commands: null
+  From:
+    Stage:
+      Index: 4
+      Named: base
+  Name: dev
+  Platform: ""
+  SourceCode: FROM base AS dev
+- As: test
+  BaseName: test-base
+  Commands:
+  - Chown: ""
+    From: framework
+    Name: copy
+    SourcesAndDest:
+    - /app/convert-stream-to-mime-multipart
+    - /app/convert
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/overview-convert-archive/archive-to-multipart
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - do-convert-stream-to-mime-multipart
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /test/
+    - /app/test/
+  - CmdLine:
+    - ./test/all-tests.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "true"
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 2
+      Named: test-base
+  Name: test
+  Platform: ""
+  SourceCode: FROM test-base AS test
+- As: production
+  BaseName: base
+  Commands: null
+  From:
+    Stage:
+      Index: 4
+      Named: base
+  Name: production
+  Platform: ""
+  SourceCode: FROM base AS production

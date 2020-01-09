@@ -1,0 +1,138 @@
+MetaArgs:
+- DefaultValue: 1.3.7
+  Key: activator_version
+  ProvidedValue: null
+  Value: 1.3.7
+Stages:
+- As: dev
+  BaseName: openjdk:8-jdk
+  Commands:
+  - Key: activator_version
+    Name: arg
+    Value: null
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - wget -q http://downloads.typesafe.com/typesafe-activator/${activator_version}/typesafe-activator-${activator_version}-minimal.zip
+      -O /build/activator.zip &&     unzip -q ./activator.zip
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build/collins
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./build.sbt
+    - /build/collins/build.sbt
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./project/
+    - /build/collins/project/
+  - CmdLine:
+    - /build/activator-${activator_version}-minimal/activator update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /build/activator-${activator_version}-minimal/activator
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: openjdk:8-jdk
+  Name: dev
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk AS dev
+- As: build
+  BaseName: openjdk:8-jdk
+  Commands:
+  - Key: activator_version
+    Name: arg
+    Value: null
+  - Name: workdir
+    Path: /build/collins
+  - CmdLine:
+    - apt-get update && apt-get install --no-install-recommends zip
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: dev
+    Name: copy
+    SourcesAndDest:
+    - /build
+    - /build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /build/collins
+  - CmdLine:
+    - PLAY_CMD=/build/activator-${activator_version}-minimal/activator ./scripts/package.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8-jdk
+  Name: build
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk AS build
+- As: production
+  BaseName: openjdk:8-jre
+  Commands:
+  - Name: volume
+    Volumes:
+    - /opt/collins/conf/solr/cores/collins/data
+  - Name: workdir
+    Path: /opt/collins
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/collins/target/collins.zip
+    - /build/collins/target/collins.zip
+  - CmdLine:
+    - unzip -q /build/collins/target/collins.zip -d /opt/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/docker
+    - /opt/collins/conf/
+  - CmdLine:
+    - apt-get update &&     apt-get install --no-install-recommends -y ipmitool &&     apt-get
+      clean &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3333"
+    - "9000"
+  - CmdLine:
+    - java
+    - -server
+    - -Dconfig.file=/opt/collins/conf/production.conf
+    - -Dhttp.port=9000
+    - -Dlogger.file=/opt/collins/conf/logger.xml
+    - -Dnetworkaddress.cache.ttl=1
+    - -Dnetworkaddress.cache.negative.ttl=1
+    - -Dcom.sun.management.jmxremote
+    - -Dcom.sun.management.jmxremote.port=3333
+    - -Dcom.sun.management.jmxremote.authenticate=false
+    - -Dcom.sun.management.jmxremote.ssl=false
+    - -XX:MaxPermSize=384m
+    - -XX:+CMSClassUnloadingEnabled
+    - -XX:-UsePerfData
+    - -cp
+    - /opt/collins/lib/*
+    - play.core.server.NettyServer
+    - /opt/collins
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jre
+  Name: production
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre AS production

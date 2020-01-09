@@ -1,0 +1,140 @@
+MetaArgs: null
+Stages:
+- As: prebuild
+  BaseName: node:lts
+  Commands:
+  - Name: workdir
+    Path: /home/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - package-lock.json
+    - /home/app/
+  - CmdLine:
+    - npm ci --ignore-scripts
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:lts
+  Name: prebuild
+  Platform: ""
+  SourceCode: FROM node:lts AS prebuild
+- As: build
+  BaseName: node:lts
+  Commands:
+  - Name: workdir
+    Path: /home/app
+  - Env:
+    - Key: NODE_ENV
+      Value: '"production"'
+    Name: env
+  - Chown: ""
+    From: prebuild
+    Name: copy
+    SourcesAndDest:
+    - /home/app
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tsconfig.production.json
+    - /home/app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/
+    - /home/app/src/
+  - CmdLine:
+    - npm run build-production
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:lts
+  Name: build
+  Platform: ""
+  SourceCode: FROM node:lts AS build
+- As: deps
+  BaseName: node:lts
+  Commands:
+  - Name: workdir
+    Path: /home/app
+  - Env:
+    - Key: NODE_ENV
+      Value: '"production"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - package-lock.json
+    - /home/app/
+  - CmdLine:
+    - npm ci --ignore-scripts
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:lts
+  Name: deps
+  Platform: ""
+  SourceCode: FROM node:lts AS deps
+- BaseName: node:lts-alpine
+  Commands:
+  - Env:
+    - Key: APP_DIR
+      Value: /app
+    Name: env
+  - CmdLine:
+    - addgroup -S -g 1001 ndxbn &&     adduser -S -D -h $APP_DIR -s /sbin/nologin
+      -G ndxbn -u 1001 ndxbn
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ndxbn
+  - Name: workdir
+    Path: $APP_DIR
+  - CmdLine:
+    - mkdir -p config storage
+    Name: run
+    PrependShell: true
+  - Chown: ndxbn
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /home/app/lib/
+    - lib/
+  - Chown: ndxbn
+    From: deps
+    Name: copy
+    SourcesAndDest:
+    - /home/app/node_modules/
+    - node_modules/
+  - Chown: ndxbn
+    From: deps
+    Name: copy
+    SourcesAndDest:
+    - /home/app/package.json
+    - .
+  - Chown: ndxbn
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/default.yaml
+    - config/
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - npm
+    - start
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: node:lts-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:lts-alpine

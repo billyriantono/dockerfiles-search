@@ -1,0 +1,71 @@
+MetaArgs: null
+Stages:
+- BaseName: centos/postgresql-95-centos7
+  Commands:
+  - Name: user
+    User: root
+  - Env:
+    - Key: PATRONIVERSION
+      Value: 1.2.4
+    - Key: WALE_VERSION
+      Value: 1.0.3
+    - Key: PGHOME
+      Value: /var/lib/pgsql/
+    Name: env
+  - Env:
+    - Key: PGROOT
+      Value: ${PGHOME}/pgdata/pgroot
+    Name: env
+  - Env:
+    - Key: PGDATA
+      Value: ${PGROOT}/data/
+    Name: env
+  - Env:
+    - Key: PGLOG
+      Value: $PGROOT/pg_log/
+    - Key: WALE_ENV_DIR
+      Value: ${PGHOME}/etc/wal-e.d/env
+    - Key: USER_NAME
+      Value: ${PGUSER}
+    - Key: USER_UID
+      Value: "26"
+    Name: env
+  - CmdLine:
+    - yum install -y epel-release &&     yum install -y etcd gcc make ansible python-pip
+      iproute &&     pip install pip --upgrade &&     pip install --upgrade patroni==${PATRONIVERSION}
+      &&     curl -Lo /tmp/origin.tar.gz 'https://github.com/openshift/origin/releases/download/v1.5.0-rc.0/openshift-origin-client-tools-v1.5.0-rc.0-49a4a7a-linux-64bit.tar.gz'
+      &&     tar -C /usr/bin/ -xf /tmp/origin.tar.gz --wildcards --no-anchored 'oc'
+      --strip 1 &&     mv /opt/rh/rh-postgresql95/root/usr/bin/postgres{,-real} &&     echo
+      '#!/usr/bin/bash' > /opt/rh/rh-postgresql95/root/usr/bin/postgres &&     cat
+      /opt/rh/rh-postgresql95/enable >> /opt/rh/rh-postgresql95/root/usr/bin/postgres
+      &&     echo 'exec postgres-real "$@"' >> /opt/rh/rh-postgresql95/root/usr/bin/postgres
+      &&     chmod 755 /opt/rh/rh-postgresql95/root/usr/bin/postgres
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - root
+    - /
+  - CmdLine:
+    - chmod -R ug+x /usr/bin/user_setup /usr/bin/callback.py /usr/bin/init.py &&     /usr/bin/user_setup
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${USER_UID}
+  - CmdLine:
+    - sed "s@${USER_NAME}:x:${USER_UID}:@${USER_NAME}:x:\${USER_ID}:@g" /etc/passwd
+      > ${HOME}/passwd.template
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${PGHOME}
+  - Name: expose
+    Ports:
+    - "5432"
+    - "8008"
+  From:
+    Image: centos/postgresql-95-centos7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos/postgresql-95-centos7

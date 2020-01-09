@@ -1,0 +1,223 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: registry.fedoraproject.org/fedora-minimal:31
+  Commands:
+  - Key: RUBY_VERSION
+    Name: arg
+    Value: '"2.6"'
+  - Key: NODEJS_VERSION
+    Name: arg
+    Value: '"11"'
+  - Env:
+    - Key: FOREMAN_FQDN
+      Value: foreman.example.com
+    Name: env
+  - Env:
+    - Key: FOREMAN_DOMAIN
+      Value: example.com
+    Name: env
+  - CmdLine:
+    - echo -e "[nodejs]\nname=nodejs\nstream=${NODEJS_VERSION}\nprofiles=\nstate=enabled\n"
+      > /etc/dnf/modules.d/nodejs.module &&   echo -e "[ruby]\nname=ruby\nstream=${RUBY_VERSION}\nprofiles=\nstate=enabled\n"
+      > /etc/dnf/modules.d/ruby.module &&   microdnf install postgresql-libs ruby{,gems}
+      rubygem-{rake,bundler} npm nc hostname   python2-numpy &&   microdnf clean all
+    Name: run
+    PrependShell: true
+  - Key: HOME
+    Name: arg
+    Value: /home/foreman
+  - Name: workdir
+    Path: $HOME
+  - CmdLine:
+    - groupadd -r foreman -f -g 0 &&     useradd -u 1001 -r -g foreman -d $HOME -s
+      /sbin/nologin     -c "Foreman Application User" foreman &&     chown -R 1001:0
+      $HOME &&     chmod -R g=u ${HOME}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - extras/containers/entrypoint.sh
+    - /usr/bin/
+  - CmdLine:
+    - chmod +x /usr/bin/entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: registry.fedoraproject.org/fedora-minimal:31
+  Name: base
+  Platform: ""
+  SourceCode: FROM registry.fedoraproject.org/fedora-minimal:31 as base
+- As: builder
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: RAILS_ENV
+      Value: production
+    Name: env
+  - Env:
+    - Key: FOREMAN_APIPIE_LANGS
+      Value: en
+    Name: env
+  - Env:
+    - Key: BUNDLER_SKIPPED_GROUPS
+      Value: '"test development openid libvirt journald facter console"'
+    Name: env
+  - CmdLine:
+    - microdnf install redhat-rpm-config git     gcc-c++ make bzip2 gettext tar     libxml2-devel
+      libcurl-devel ruby-devel     postgresql-devel libsq3-devel &&   microdnf clean
+      all
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DATABASE_URL
+      Value: sqlite3:tmp/bootstrap-db.sql
+    Name: env
+  - Key: HOME
+    Name: arg
+    Value: /home/foreman
+  - Name: user
+    User: "1001"
+  - Name: workdir
+    Path: $HOME
+  - Chown: "1001:0"
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ${HOME}/
+  - CmdLine:
+    - echo gem '"rdoc"' > bundler.d/container.rb && echo gem '"tzinfo-data"' >> bundler.d/container.rb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bundle install --without "${BUNDLER_SKIPPED_GROUPS}"     --binstubs --clean
+      --path vendor --jobs=5 --retry=3 &&   rm -rf vendor/ruby/*/cache/*.gem &&   find
+      vendor/ruby/*/gems -name "*.c" -delete &&   find vendor/ruby/*/gems -name "*.o"
+      -delete
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install --no-optional
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -C locale all-mo &&   bundle exec rake assets:clean assets:precompile db:migrate
+      &&    bundle exec rake db:seed apipie:cache:index && rm tmp/bootstrap-db.sql
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./node_modules/webpack/bin/webpack.js --config config/webpack.config.js && npm
+      run analyze && rm -rf public/webpack/stats.json
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf vendor/ruby/*/cache vendor/ruby/*/gems/*/node_modules
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bundle install --without "${BUNDLER_SKIPPED_GROUPS}" assets
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: "0"
+  - CmdLine:
+    - chgrp -R 0 ${HOME} &&     chmod -R g=u ${HOME}
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: "1001"
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base as builder
+- BaseName: base
+  Commands:
+  - Key: HOME
+    Name: arg
+    Value: /home/foreman
+  - Key: RAILS_ENV
+    Name: arg
+    Value: production
+  - Env:
+    - Key: RAILS_SERVE_STATIC_FILES
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: RAILS_LOG_TO_STDOUT
+      Value: "true"
+    Name: env
+  - Name: user
+    User: "1001"
+  - Name: workdir
+    Path: ${HOME}
+  - Chown: "1001:0"
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ${HOME}/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/entrypoint.sh
+    - /usr/bin/entrypoint.sh
+  - Chown: "1001:0"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - ${HOME}/.bundle/config
+    - ${HOME}/.bundle/config
+  - Chown: "1001:0"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - ${HOME}/Gemfile.lock
+    - ${HOME}/Gemfile.lock
+  - Chown: "1001:0"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - ${HOME}/vendor/ruby
+    - ${HOME}/vendor/ruby
+  - Chown: "1001:0"
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - ${HOME}/public
+    - ${HOME}/public
+  - CmdLine:
+    - echo gem '"rdoc"' > bundler.d/container.rb && echo gem '"tzinfo-data"' >> bundler.d/container.rb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - date -u > BUILD_TIME
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '"bundle exec bin/rails server"'
+    Name: cmd
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - 3000/tcp
+  - Name: expose
+    Ports:
+    - 5910-5930/tcp
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

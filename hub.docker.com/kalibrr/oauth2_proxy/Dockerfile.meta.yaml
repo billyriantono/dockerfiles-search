@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.11-stretch
+  Commands:
+  - Env:
+    - Key: DOCKERIZE_VERSION
+      Value: v0.5.0
+    Name: env
+  - CmdLine:
+    - wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz     &&
+      tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz     &&
+      rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /usr/bin && wget -O dep https://github.com/golang/dep/releases/download/v0.5.0/dep-linux-amd64
+      && chmod a+x dep
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /go/src/github.com/bitly/oauth2_proxy
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/bitly/oauth2_proxy
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gopkg.toml
+    - Gopkg.lock
+    - ./
+  - CmdLine:
+    - dep ensure -vendor-only
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -ldflags "-s -w" -a -installsuffix cgo -o
+      oauth2_proxy
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-stretch
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.11-stretch AS builder
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk --no-cache add ca-certificates
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/dockerize
+    - /usr/local/bin/dockerize
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/bitly/oauth2_proxy/oauth2_proxy
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /templates
+    - /templates
+  - Name: expose
+    Ports:
+    - "4180"
+  - CmdLine:
+    - /usr/local/bin/dockerize
+    - -template
+    - /templates/config.tmpl:/app/config
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /app/oauth2_proxy
+    - -config=/app/config
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

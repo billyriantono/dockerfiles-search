@@ -1,0 +1,198 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "",
+      "BaseName": "debian:stretch-slim",
+      "SourceCode": "FROM debian:stretch-slim",
+      "Platform": "",
+      "From": {
+        "Image": "debian:stretch-slim"
+      },
+      "Commands": [
+        {
+          "CmdLine": [
+            "set -ex; \tif ! command -v gpg \u003e /dev/null; then \t\tapt-get update; \t\tapt-get install -y --no-install-recommends \t\t\tgnupg \t\t\tdirmngr \t\t; \t\trm -rf /var/lib/apt/lists/*; \tfi"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "set -eux; \tgroupadd -r postgres --gid=999; \tuseradd -r -g postgres --uid=999 --home-dir=/var/lib/postgresql --shell=/bin/bash postgres; \tmkdir -p /var/lib/postgresql; \tchown -R postgres:postgres /var/lib/postgresql"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "GOSU_VERSION",
+              "Value": "1.11"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "set -x \t\u0026\u0026 apt-get update \u0026\u0026 apt-get install -y --no-install-recommends ca-certificates wget \u0026\u0026 rm -rf /var/lib/apt/lists/* \t\u0026\u0026 wget -O /usr/local/bin/gosu \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)\" \t\u0026\u0026 wget -O /usr/local/bin/gosu.asc \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture).asc\" \t\u0026\u0026 export GNUPGHOME=\"$(mktemp -d)\" \t\u0026\u0026 gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \t\u0026\u0026 gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \t\u0026\u0026 { command -v gpgconf \u003e /dev/null \u0026\u0026 gpgconf --kill all || :; } \t\u0026\u0026 rm -rf \"$GNUPGHOME\" /usr/local/bin/gosu.asc \t\u0026\u0026 chmod +x /usr/local/bin/gosu \t\u0026\u0026 gosu nobody true         \u0026\u0026 wget http://repo.postgrespro.ru/keys/GPG-KEY-POSTGRESPRO         \u0026\u0026 apt-key add GPG-KEY-POSTGRESPRO         \u0026\u0026 apt-key list \t\u0026\u0026 apt-get purge -y --auto-remove ca-certificates wget"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "set -eux; \tif [ -f /etc/dpkg/dpkg.cfg.d/docker ]; then \t\tgrep -q '/usr/share/locale' /etc/dpkg/dpkg.cfg.d/docker; \t\tsed -ri '/\\/usr\\/share\\/locale/d' /etc/dpkg/dpkg.cfg.d/docker; \t\t! grep -q '/usr/share/locale' /etc/dpkg/dpkg.cfg.d/docker; \tfi; \tapt-get update; apt-get install -y locales; rm -rf /var/lib/apt/lists/*; \tlocaledef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "LANG",
+              "Value": "en_US.utf8"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "set -eux; \tapt-get update; \tapt-get install -y --no-install-recommends libnss-wrapper; \trm -rf /var/lib/apt/lists/*"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir /docker-entrypoint-initdb.d"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "PG_MAJOR",
+              "Value": "10"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PG_VERSION",
+              "Value": "10.7.1-1.stretch"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PG_REPO",
+              "Value": "10.7"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "set -ex;         echo \"deb http://repo.postgrespro.ru/1c-archive/pg1c-$PG_REPO/debian stretch main\" \u003e /etc/apt/sources.list.d/postgrespro.list; \tapt-get update;         apt-get install -y \t  postgrespro-1c-$PG_MAJOR-server=$PG_VERSION         ; \trm -rf /var/lib/apt/lists/*;         \tif [ -n \"$tempDir\" ]; then \t\tapt-get purge -y --auto-remove; \t\trm -rf \"$tempDir\" /etc/apt/sources.list.d/temp.list; \tfi"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "set -eux;         dpkg-divert --add --rename --divert \"/opt/pgpro/1c-$PG_MAJOR/share/postgresql.conf.sample.dpkg\" \"/opt/pgpro/1c-$PG_MAJOR/share/postgresql.conf.sample\";         cp -v /opt/pgpro/1c-$PG_MAJOR/share/postgresql.conf.sample.dpkg /opt/pgpro/1c-$PG_MAJOR/share/postgresql.conf.sample;         sed -ri \"s!^#?(listen_addresses)\\s*=\\s*\\S+.*!\\1 = '*'!\" /opt/pgpro/1c-$PG_MAJOR/share/postgresql.conf.sample;         grep -F \"listen_addresses = '*'\" /opt/pgpro/1c-$PG_MAJOR/share/postgresql.conf.sample"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /var/run/postgresql \u0026\u0026 chown -R postgres:postgres /var/run/postgresql \u0026\u0026 chmod 2777 /var/run/postgresql"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Env": [
+            {
+              "Key": "PATH",
+              "Value": "$PATH:/usr/lib/postgresql/$PG_MAJOR/bin"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PGDATA",
+              "Value": "/var/lib/postgresql/data"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "mkdir -p \"$PGDATA\" \u0026\u0026 chown -R postgres:postgres \"$PGDATA\" \u0026\u0026 chmod 777 \"$PGDATA\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/var/lib/postgresql/data"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "docker-entrypoint.sh",
+            "/usr/local/bin/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "ln -s usr/local/bin/docker-entrypoint.sh / # backwards compat"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "ln -s /opt/pgpro/1c-10/bin/* /usr/bin/"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "docker-entrypoint.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "5432"
+          ]
+        },
+        {
+          "CmdLine": [
+            "postgres"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

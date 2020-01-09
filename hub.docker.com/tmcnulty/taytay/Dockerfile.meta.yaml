@@ -1,0 +1,76 @@
+MetaArgs: null
+Stages:
+- BaseName: python:3.5-alpine
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - requirements.txt
+    - /
+  - CmdLine:
+    - "set -ex \t&& apk update \t&& apk add --no-cache --virtual .build-deps \t\tgcc
+      \t\tmake \t\tlibc-dev \t\tmusl-dev \t\tlinux-headers \t\tpostgresql-dev \t\tlibjpeg-turbo-dev
+      \t\tlibpng-dev \t\tfreetype-dev \t\tlibxslt-dev \t\tlibxml2-dev \t\tzlib-dev
+      \t&& pyvenv /venv \t&& LIBRARY_PATH=/lib:/usr/lib /bin/sh -c \"/venv/bin/pip
+      install -r /requirements.txt\" \t&& runDeps=\"$( \t\tscanelf --needed --nobanner
+      --recursive /venv \t\t\t| awk '{ gsub(/,/, \"\\nso:\", $2); print \"so:\" $2
+      }' \t\t\t| sort -u \t\t\t| xargs -r apk info --installed \t\t\t| sort -u \t)\"
+      \t&& apk add --virtual .python-rundeps $runDeps \t&& apk del .build-deps"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /code/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /code/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /code/
+  - Name: expose
+    Ports:
+    - "8000"
+  - Env:
+    - Key: DEBUG
+      Value: "off"
+    - Key: UWSGI_VIRTUALENV
+      Value: /venv
+    - Key: UWSGI_WSGI_FILE
+      Value: taytay/wsgi.py
+    - Key: UWSGI_HTTP
+      Value: :8000
+    - Key: UWSGI_MASTER
+      Value: "1"
+    - Key: UWSGI_WORKERS
+      Value: "8"
+    - Key: UWSGI_HTTP_AUTO_CHUNKED
+      Value: "1"
+    - Key: UWSGI_KEEPALIVE
+      Value: "1"
+    - Key: UWSGI_HARAKIRI
+      Value: "20"
+    Name: env
+  - CmdLine:
+    - SECRET_KEY=none /venv/bin/python manage.py collectstatic --noinput
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /venv/bin/pip install ec2-meta-env
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /venv/bin/ec2-meta-env
+    - -e
+    - local-ipv4
+    - -e
+    - local-hostname
+    - /venv/bin/uwsgi
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3.5-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.5-alpine

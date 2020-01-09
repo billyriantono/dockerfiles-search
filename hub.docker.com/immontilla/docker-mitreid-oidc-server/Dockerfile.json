@@ -1,0 +1,116 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "clone",
+      "BaseName": "alpine/git",
+      "SourceCode": "FROM alpine/git as clone",
+      "Platform": "",
+      "As": "clone",
+      "From": {
+        "Image": "alpine/git"
+      },
+      "Commands": [
+        {
+          "Labels": [
+            {
+              "Key": "maintainer",
+              "Value": "\"Iván Mauricio Montilla Figueroa\""
+            }
+          ],
+          "Name": "label"
+        },
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "CmdLine": [
+            "mkdir srv \u0026\u0026 cd srv \u0026\u0026 git clone --progress https://github.com/immontilla/OpenID-Connect-Java-Spring-Server.git \u0026\u0026 cd .. \u0026\u0026 mkdir web \u0026\u0026 cd web \u0026\u0026 git clone --progress https://github.com/immontilla/simple-web-app.git"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "build",
+      "BaseName": "maven:alpine",
+      "SourceCode": "FROM maven:alpine as build",
+      "Platform": "",
+      "As": "build",
+      "From": {
+        "Image": "maven:alpine"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Chown": "",
+          "From": "clone",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/srv/OpenID-Connect-Java-Spring-Server",
+            "/app/srv"
+          ]
+        },
+        {
+          "CmdLine": [
+            "cd srv \u0026\u0026 mvn -Dmaven.javadoc.skip=true -DskipTests clean install \u0026\u0026 mkdir ../WARs \u0026\u0026 mv openid-connect-server-webapp/target/openid-connect-server-webapp.war ../WARs"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "clone",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/web/simple-web-app",
+            "/app/web"
+          ]
+        },
+        {
+          "CmdLine": [
+            "cd web \u0026\u0026 mvn -DskipTests clean install \u0026\u0026 mv target/simple-web-app.war ../WARs"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "tomcat:alpine",
+      "SourceCode": "FROM tomcat:alpine",
+      "Platform": "",
+      "From": {
+        "Image": "tomcat:alpine"
+      },
+      "Commands": [
+        {
+          "Name": "workdir",
+          "Path": "/app"
+        },
+        {
+          "Chown": "",
+          "From": "build",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/app/WARs",
+            "/app"
+          ]
+        },
+        {
+          "CmdLine": [
+            "apk add --no-cache --update openssl \u0026\u0026 cp *.war /usr/local/tomcat/webapps/ \u0026\u0026 rm -rf /usr/local/tomcat/webapps/ROOT/WEB-INF/ \u0026\u0026 rm /usr/local/tomcat/webapps/ROOT/* \u0026\u0026 cd /usr/local/tomcat/webapps/ROOT/ \u0026\u0026 wget https://raw.githubusercontent.com/immontilla/docker-mitreid-oidc-server/master/index.html"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    }
+  ]
+}

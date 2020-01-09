@@ -1,0 +1,69 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.13-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache --virtual .build-deps   bash   gcc   ca-certificates   git   musl-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src
+    - .
+  - CmdLine:
+    - go get -d -v ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-extldflags
+      "-static"' -o webserver .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -S -D -H -h /go/src/app webserver
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: webserver
+  From:
+    Image: golang:1.13-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.13-alpine AS build
+- BaseName: scratch
+  Commands:
+  - Labels:
+    - Key: author
+      Value: '"Christian Ruigrok <christian@ruigrok.info>"'
+    Name: label
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/src/app/webserver
+    - /app/
+  - Name: workdir
+    Path: /app
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - ./webserver
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

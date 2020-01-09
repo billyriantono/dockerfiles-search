@@ -1,0 +1,121 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:3.8
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache     ca-certificates     autoconf     automake     build-base     libressl     libtool     gmp-dev     python     python-dev     python3     sqlite-dev     wget     git     file     gnupg     swig     zlib-dev
+    Name: run
+    PrependShell: true
+  - Key: CORE_VERSION
+    Name: arg
+    Value: '"0.17.0"'
+  - Env:
+    - Key: TARBALL
+      Value: bitcoin-${CORE_VERSION}-x86_64-linux-gnu.tar.gz
+    Name: env
+  - Env:
+    - Key: URL
+      Value: https://bitcoincore.org/bin/bitcoin-core-${CORE_VERSION}
+    Name: env
+  - CmdLine:
+    - wget ${URL}/SHA256SUMS.asc  && gpg --keyserver hkp://keyserver.ubuntu.com:80
+      --recv-keys "01EA5486DE18A882D4C2684590C8019E36C2E964"  && gpg --verify SHA256SUMS.asc  &&
+      wget ${URL}/${TARBALL}  && grep ${TARBALL} SHA256SUMS.asc | sha256sum -c -  &&
+      tar -xzC . -f ${TARBALL} bitcoin-${CORE_VERSION}/bin/bitcoin-cli --strip-components=2  &&
+      rm -rf ${TARBALL} SHA256SUMS.asc  && apk del gnupg
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LIGHTNINGD_VERSION
+      Value: master
+    Name: env
+  - Key: DEVELOPER
+    Name: arg
+    Value: "1"
+  - CmdLine:
+    - git clone -b v0.6.2 --single-branch https://github.com/ElementsProject/lightning.git  &&
+      cd lightning && ./configure && make -j3 DEVELOPER=${DEVELOPER}
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.8 as builder
+- BaseName: alpine:3.8
+  Commands:
+  - Env:
+    - Key: GLIBC_VERSION
+      Value: 2.27-r0
+    Name: env
+  - Env:
+    - Key: GLIBC_SHA256
+      Value: 938bceae3b83c53e7fa9cc4135ce45e04aae99256c5e74cf186c794b97473bc7
+    Name: env
+  - Env:
+    - Key: GLIBCBIN_SHA256
+      Value: 3a87874e57b9d92e223f3e90356aaea994af67fb76b71bb72abfb809e948d0d6
+    Name: env
+  - CmdLine:
+    - 'wget -O /etc/apk/keys/sgerrand.rsa.pub https://github.com/sgerrand/alpine-pkg-glibc/releases/download/$GLIBC_VERSION/sgerrand.rsa.pub  &&
+      wget -O glibc.apk "https://github.com/sgerrand/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-${GLIBC_VERSION}.apk"  &&
+      echo "$GLIBC_SHA256  glibc.apk" | sha256sum -c -  && wget -O glibc-bin.apk "https://github.com/sgerrand/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-bin-${GLIBC_VERSION}.apk"  &&
+      echo "$GLIBCBIN_SHA256  glibc-bin.apk" | sha256sum -c -  && apk add --update
+      --no-cache glibc-bin.apk glibc.apk  && /usr/glibc-compat/sbin/ldconfig /lib
+      /usr/glibc-compat/lib  && echo ''hosts: files mdns4_minimal [NOTFOUND=return]
+      dns mdns4'' >> /etc/nsswitch.conf  && rm -rf glibc.apk glibc-bin.apk'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --update --no-cache     gmp-dev     sqlite-dev     inotify-tools     socat     bash     zlib-dev     su-exec
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LIGHTNINGD_DATA
+      Value: /.lightning
+    Name: env
+  - Env:
+    - Key: LIGHTNINGD_RPC_PORT
+      Value: "9735"
+    Name: env
+  - Name: volume
+    Volumes:
+    - /.bitcoin
+    - /.lightning
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /lightning/cli/lightning-cli
+    - /usr/bin
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /lightning/lightningd/lightning*
+    - /usr/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /bitcoin-cli
+    - /usr/bin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bitcoin.conf
+    - /.bitcoin/bitcoin.conf
+  - Name: expose
+    Ports:
+    - "9735"
+  - CmdLine:
+    - su-exec
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

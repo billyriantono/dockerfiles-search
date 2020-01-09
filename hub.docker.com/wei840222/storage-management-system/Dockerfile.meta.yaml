@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- As: web
+  BaseName: node:12-stretch
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./web
+    - /app
+  - CmdLine:
+    - yarn install && yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12-stretch
+  Name: web
+  Platform: ""
+  SourceCode: FROM node:12-stretch AS web
+- As: api-doc
+  BaseName: redocly/redoc
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./openapi.yaml
+    - /usr/share/nginx/html/openapi.yaml
+  - CmdLine:
+    - sed -i -e "s|%SPEC_URL%|openapi.yaml|g" /usr/share/nginx/html/index.html &&     sed
+      -i -e "s|%PAGE_TITLE%|ReDoc|g" /usr/share/nginx/html/index.html &&     sed -i
+      -e "s|%PAGE_FAVICON%|favicon.png|g" /usr/share/nginx/html/index.html
+    Name: run
+    PrependShell: true
+  From:
+    Image: redocly/redoc
+  Name: api-doc
+  Platform: ""
+  SourceCode: FROM redocly/redoc AS api-doc
+- BaseName: golang:1.12.4-alpine
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache git bash curl nodejs ca-certificates &&     curl
+      -L https://storage.googleapis.com/kubernetes-helm/helm-v2.13.1-linux-amd64.tar.gz
+      |tar xvz &&     mv linux-amd64/helm /usr/bin/helm &&     chmod +x /usr/bin/helm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /root/.helm/plugins &&     helm plugin install https://github.com/Microsoft/helm-json-output
+      --version master
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./api
+    - /app
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./kube.config
+    - /root/.kube/config
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - helm init && go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: web
+    Name: copy
+    SourcesAndDest:
+    - /app/dist
+    - /app/dist
+  - Chown: ""
+    From: api-doc
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/nginx/html
+    - /app/dist/api-doc
+  - CmdLine:
+    - go run main.go
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: golang:1.12.4-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM golang:1.12.4-alpine

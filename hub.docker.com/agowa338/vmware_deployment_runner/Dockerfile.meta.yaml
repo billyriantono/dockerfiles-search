@@ -1,0 +1,145 @@
+MetaArgs: null
+Stages:
+- As: build_terraform
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk add --update git bash openssh zip
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TF_DEV
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: TF_RELEASE
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: XC_ARCH
+      Value: amd64
+    Name: env
+  - Env:
+    - Key: XC_OS
+      Value: linux
+    Name: env
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Name: workdir
+    Path: /go/src/github.com/hashicorp/terraform
+  - CmdLine:
+    - git clone https://github.com/hashicorp/terraform.git .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash scripts/build.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: build_terraform
+  Platform: ""
+  SourceCode: FROM golang:alpine AS build_terraform
+- As: build_powershell
+  BaseName: archlinux/base:latest
+  Commands:
+  - CmdLine:
+    - pacman -Syu --needed --noconfirm git binutils base-devel icu openssl cmake dotnet-sdk
+      make gcc fakeroot awk busybox
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /bin/busybox /bin/unzip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd build --home /mnt --system
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://aur.archlinux.org/powershell.git /mnt
+    Name: run
+    PrependShell: true
+  - Chown: build:build
+    Name: add
+    SourcesAndDest:
+    - powershell-packaging-fix.patch
+    - /mnt/
+  - CmdLine:
+    - chown build:build /mnt -R
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -ie 's_#warning "The <sys/sysctl.h> header is deprecated and will be removed."__'
+      /usr/include/sys/sysctl.h
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: build
+  - Name: workdir
+    Path: /mnt
+  - CmdLine:
+    - patch < powershell-packaging-fix.patch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - makepkg
+    Name: run
+    PrependShell: true
+  From:
+    Image: archlinux/base:latest
+  Name: build_powershell
+  Platform: ""
+  SourceCode: FROM archlinux/base:latest AS build_powershell
+- BaseName: agowa338/ansible:latest
+  Commands:
+  - Chown: ""
+    From: build_terraform
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/terraform
+    - /bin/
+  - Chown: root:root
+    From: build_powershell
+    Name: copy
+    SourcesAndDest:
+    - /mnt/powershell-*-x86_64.pkg.tar.xz
+    - /
+  - CmdLine:
+    - pacman -U --needed --noconfirm /powershell-*-x86_64.pkg.tar.xz &&     rm --force
+      /powershell-*-x86_64.pkg.tar.xz &&     cp /opt/dotnet/shared/Microsoft.NETCore.App/*/*.a
+      /usr/lib/powershell/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pwsh
+    - -Command
+    - Install-Module -Force VMware.VimAutomation.Core,PowerShellGet,PSScriptAnalyzer,PSReadLine,PackageManagement,Nuget
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - pwsh
+    - -Command
+    - Set-PowerCLIConfiguration -Scope AllUsers -ParticipateInCEIP $false -InvalidCertificateAction
+      Warn -Confirm:$false
+    Name: run
+    PrependShell: false
+  - Name: volume
+    Volumes:
+    - /playbook
+  - Env:
+    - Key: isDocker
+      Value: "True"
+    Name: env
+  - CmdLine:
+    - /bin/bash
+    - /playbook/plays/play.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: agowa338/ansible:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM agowa338/ansible:latest

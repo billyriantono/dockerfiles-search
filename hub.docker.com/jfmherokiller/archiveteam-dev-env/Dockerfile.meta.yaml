@@ -1,0 +1,154 @@
+MetaArgs: null
+Stages:
+- BaseName: phusion/baseimage:0.9.22
+  Commands:
+  - Name: expose
+    Ports:
+    - "8001"
+    - "9022"
+    - "9080"
+    - "9081"
+    - "9873"
+  - CmdLine:
+    - /sbin/my_init
+    Name: entrypoint
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://deb.nodesource.com/setup_6.x
+    - /tmp/nodeme
+  - CmdLine:
+    - "chmod +x /tmp/nodeme && /tmp/nodeme && apt-get -y install \topenssh-server
+      \tbuild-essential \twget \tcurl \trsync \tscreen \tpython \tpython-dev \tpython-pip
+      \tgit \tlua5.1 \tliblua5.1-0-dev \tlibssl-dev \tlibgnutls-dev \tzlib1g-dev \tlibyaml-0-2
+      \tlibcurl4-openssl-dev \tacpid     sudo     nodejs     libpcre3     libpcre3-dev
+      \    redis-server"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'rm -f /etc/service/sshd/down && sed -i ''s/Port 22/Port 9022/g'' /etc/ssh/sshd_config
+      && useradd -Ums /bin/bash dev && useradd -Ums /bin/bash tracker && useradd -Ums
+      /bin/bash rsync && echo "dev ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && echo
+      "tracker ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && echo "rsync ALL=(ALL) NOPASSWD:
+      ALL" >> /etc/sudoers && echo ''user=root'' >> /etc/dnsmasq.conf'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'cd /opt/ && pip install -e "git+https://github.com/ArchiveTeam/seesaw-kit.git#egg=seesaw"
+      && echo $''= ArchiveTeam Developer Environment (\n \l) = \nUsernames available:
+      dev, tracker, rsync \nTracker web interface: http://localhost:9080/global-admin/
+      \nPorts: SSH=9022, Rsync=9873'' > /etc/issue && sysctl vm.overcommit_memory=1
+      || echo vm.overcommit_memory=1 >> /etc/sysctl.conf'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s/\(pidfile *\).*/\1\/var\/run\/shm\/redis_6379.pid/" /etc/redis/redis.conf
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: tracker:tracker
+  - CmdLine:
+    - curl -L get.rvm.io -o /tmp/rvm_stable && bash -ex /tmp/rvm_stable --ignore-dotfiles
+      --autolibs=0 --ruby && echo "source /home/tracker/.rvm/scripts/rvm" | tee --append
+      /home/tracker/.bashrc /home/tracker/.profile && /bin/bash -l -c "rvm requirements"
+      && /bin/bash -l -c "rvm install 2.0.0" && /bin/bash -l -c "rvm rubygems current"
+      && /bin/bash -l -c "gem install bundler --no-ri --no-rdoc" && /bin/bash -l -c
+      "gem install rails" && /bin/bash -l -c "gem install passenger" && /bin/bash
+      -l -c "passenger-install-nginx-module --auto --auto-download --prefix /home/tracker/nginx/"
+      && sed -i "s/\( root *\).*/\1\/home\/tracker\/universal-tracker\/public;passenger_enabled
+      on;/" /home/tracker/nginx/conf/nginx.conf && sed -i "s/\( listen *\).*/\19080;/"
+      /home/tracker/nginx/conf/nginx.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/ArchiveTeam/universal-tracker.git /home/tracker/universal-tracker/
+      && /bin/bash -l -c "cd /home/tracker/universal-tracker && bundle update cucumber"
+      && /bin/bash -l -c "cd /home/tracker/universal-tracker && bundle outdated ||
+      :" && /bin/bash -l -c "bundle install --gemfile /home/tracker/universal-tracker/Gemfile"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - setup_tracker.sh
+    - /tmp
+  - CmdLine:
+    - /bin/bash -l -c "/tmp/setup_tracker.sh"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: rsync:rsync
+  - CmdLine:
+    - mkdir -p /home/rsync/uploads/ && git clone https://github.com/ArchiveTeam/archiveteam-megawarc-factory.git
+      /home/rsync/archiveteam-megawarc-factory/ && git clone https://github.com/alard/megawarc.git
+      /home/rsync/archiveteam-megawarc-factory/megawarc/
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root:root
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - redis_server.sh
+    - /tmp
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - logrotate_redis
+    - /tmp
+  - CmdLine:
+    - mkdir /etc/service/redis && mv /tmp/redis_server.sh /etc/service/redis/run &&
+      sed -i '/daemonize yes/c\daemonize no' /etc/redis/redis.conf && chown -R www-data:www-data
+      /var/log/redis/ && mv /tmp/logrotate_redis /etc/logrotate.d/redis && chmod 777
+      /etc/redis/redis.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - rsync_server.sh
+    - /tmp
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - rsyncd.conf
+    - /tmp
+  - CmdLine:
+    - mkdir /etc/service/rsync && mv /tmp/rsync_server.sh /etc/service/rsync/run &&
+      mv /tmp/rsyncd.conf /etc/rsyncd.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ngnix_server.sh
+    - /tmp
+  - CmdLine:
+    - mkdir /etc/service/nginx && mv /tmp/ngnix_server.sh /etc/service/nginx/run
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - rotate-ngnix-logs
+    - /tmp
+  - CmdLine:
+    - mv /tmp/rotate-ngnix-logs /etc/logrotate.d/nginx-tracker.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - nodejs_server.sh
+    - /tmp
+  - CmdLine:
+    - mkdir /etc/service/nodejs-tracker && mv /tmp/nodejs_server.sh /etc/service/nodejs-tracker/run
+      && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && echo "Done"
+    Name: run
+    PrependShell: true
+  From:
+    Image: phusion/baseimage:0.9.22
+  Name: ""
+  Platform: ""
+  SourceCode: FROM phusion/baseimage:0.9.22

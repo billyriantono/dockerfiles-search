@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: builds
+  BaseName: alpine:edge
+  Commands:
+  - CmdLine:
+    - "apk add --no-cache \tautoconf \tautomake \tbuild-base \tclang \tclang-static
+      \tcmake \tgettext-dev \tgettext-static \tgit \tlinux-headers \tncurses-dev \tncurses-static
+      \tgit \ttzdata \tlibmaxminddb-dev \txz"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CC
+      Value: clang
+    Name: env
+  - Env:
+    - Key: LIBRESSL_VER
+      Value: 2.9.1
+    Name: env
+  - Name: workdir
+    Path: /libressl
+  - CmdLine:
+    - wget http://mirror.leaseweb.com/openbsd/LibreSSL/libressl-${LIBRESSL_VER}.tar.gz
+      &&     tar zxf libressl-${LIBRESSL_VER}.tar.gz --strip 1 &&     cmake . -DCMAKE_BUILD_TYPE=Release
+      -DCMAKE_INSTALL_PREFIX=/usr &&     make && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/allinurl/goaccess.git /goaccess
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /goaccess
+  - CmdLine:
+    - pwd && ls -lh && autoreconf -fiv
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CFLAGS="-O3 -static" LIBS="$(pkg-config --libs openssl)" ./configure --prefix=""
+      --enable-utf8 --with-openssl --enable-geoip=mmdb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make && make DESTDIR=/dist install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar Jcf /dist/tzdata.tar.xz -C /usr/share/zoneinfo/right .
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: builds
+  Platform: ""
+  SourceCode: FROM alpine:edge AS builds
+- BaseName: busybox:musl
+  Commands:
+  - Chown: ""
+    From: builds
+    Name: copy
+    SourcesAndDest:
+    - /dist
+    - /
+  - Name: volume
+    Volumes:
+    - /var/www/goaccess
+  - Name: expose
+    Ports:
+    - "7890"
+  - CmdLine:
+    - /bin/goaccess
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: busybox:musl
+  Name: ""
+  Platform: ""
+  SourceCode: FROM busybox:musl

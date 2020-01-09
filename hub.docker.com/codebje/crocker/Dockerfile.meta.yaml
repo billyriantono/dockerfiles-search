@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: alpine:edge
+  Commands:
+  - CmdLine:
+    - echo http://dl-cdn.alpinelinux.org/alpine/edge/testing >> /etc/apk/repositories     &&
+      apk update     && apk add wget ghc ca-certificates musl-dev shadow linux-headers
+      zlib-dev     && update-ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -qO- https://get.haskellstack.org/ | sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -h /home/stack stack -D
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: stack
+  - CmdLine:
+    - 'stack config set system-ghc --global true     && mkdir -p /home/stack/.stack/global-project/     &&
+      echo ''resolver: lts-8.8'' > /home/stack/.stack/global-project/stack.yaml     &&
+      stack setup'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - mkdir /build
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - stack.yaml
+    - /build
+  - CmdLine:
+    - 'cd /build     && sed -i ''s/enable: true/enable: false/'' stack.yaml     &&
+      stack config set system-ghc --global true     && stack setup'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - crocker.cabal
+    - /build
+  - CmdLine:
+    - cd /build     && stack build --dependencies-only --test
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /build
+  - CmdLine:
+    - 'cd /build     && sed -i ''s/enable: true/enable: false/'' stack.yaml     &&
+      stack build --test     && stack install'
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: build
+  Platform: ""
+  SourceCode: FROM alpine:edge as build
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /root/.local/bin/crocker
+    - /
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

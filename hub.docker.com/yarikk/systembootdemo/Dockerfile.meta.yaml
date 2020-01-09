@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- BaseName: uroottest/test-image-amd64:v3.2.4
+  Commands:
+  - CmdLine:
+    - "sudo apt-get update &&                          \tsudo apt-get install -y --no-install-recommends
+      \t\t`# Linux dependencies` \t\tgit \t\tbc \t\tbison \t\tflex \t\tgcc \t\tmake
+      \t\t`# QEMU dependencies` \t\tlibglib2.0-dev \t\tlibfdt-dev \t\tlibpixman-1-dev
+      \t\tzlib1g-dev \t\t`# Linux kernel build deps` \t\tlibelf-dev \t\t`# Multiboot
+      kernel build deps` \t\tgcc-multilib \t\tgzip \t\t`# coreboot deps` \t\tpatch
+      \t\t`# coreboot optional deps (faster builds)` \t\tgcc \t\tclang \t\tiasl \t\t`#
+      vpd deps` \t\tuuid-dev \t\txxd \t\t`# to be put into u-root` \t\tstrace \t\t`#
+      tools for creating bootable disk images` \t\tgdisk \t\te2fsprogs \t\tqemu-utils
+      \t\t&& \tsudo rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --branch=release-R74-11895.B https://chromium.googlesource.com/chromiumos/platform/vpd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "(cd vpd && \t\tmake && \t\tmake test && \t\tsudo cp vpd /bin/vpd \t) && \trm
+      -rf vpd/ && \ttype vpd"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/linuxboot/demo.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -x; \tgo get  \t\tgithub.com/u-root/u-root \t\tgithub.com/systemboot/systemboot/uinit
+      \t\tgithub.com/systemboot/systemboot/localboot \t\tgithub.com/systemboot/systemboot/netboot
+      \t\t&& \tu-root \t\t-build=bb \t\t-files /usr/bin/strace \t\tcore \t\tgithub.com/systemboot/systemboot/uinit
+      \t\tgithub.com/systemboot/systemboot/localboot \t\tgithub.com/systemboot/systemboot/netboot
+      \t\t&& \txz --check=crc32 --lzma2=dict=512KiB /tmp/initramfs.linux_amd64.cpio"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -x; \tgit clone -q --depth 1 -b v4.19 https://github.com/torvalds/linux.git
+      && \tsed -e '/^# CONFIG_RELOCATABLE / s!.*!CONFIG_RELOCATABLE=y!' `# for kexec`
+      \t\tdemo/20190203-FOSDEM-barberio-hendricks/config/linux-config \t\t> linux/.config
+      && \t(cd linux/ && exec make -j$(nproc)) && \tcp linux/arch/x86/boot/bzImage
+      bzImage && \trm -r linux/"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -x; \tgit clone -q --depth 1 https://review.coreboot.org/coreboot.git &&
+      \tcp demo/20190203-FOSDEM-barberio-hendricks/config/qemu.fmd coreboot/qemu.fmd
+      && \tsed -e '/^CONFIG_FMDFILE=/ s!=.*!=\"qemu.fmd\"!' \t\t-e '/^CONFIG_PAYLOAD_FILE=/
+      s!=.*!=\"../bzImage\"!' \t\t-e '/CONFIG_ANY_TOOLCHAIN/ s!.*!CONFIG_ANY_TOOLCHAIN=y!'
+      `# speeds up things`         \t\tdemo/20190203-FOSDEM-barberio-hendricks/config/coreboot-config
+      \        \t\t> coreboot/.config && \t(cd coreboot && \t\tgit submodule update
+      --init --checkout && \t\t: `# cherry-pick VPD-on-Qemu patch, https://review.coreboot.org/c/coreboot/+/32087`
+      && \t\tgit config user.email \"you@example.com\" && \t\tgit config user.name
+      \"Your Name\" && \t\tgit fetch https://review.coreboot.org/coreboot refs/changes/87/32087/6
+      && \t\tgit cherry-pick FETCH_HEAD && \t\t: skip this... BUILD_LANGUAGES=c CPUS=$(nproc)
+      make -j$(nproc) crossgcc-i386 && \t\tmake -j$(nproc) \t) && \tcp coreboot/build/coreboot.rom
+      coreboot.rom && \trm -rf coreboot/"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -x; \tmkdir rootfs && \tcp bzImage rootfs/ && \tu-root -build=bb -o rootfs/ramfs.cpio
+      -initcmd shutdown  && \txz --check=crc32 --lzma2=dict=512KiB rootfs/ramfs.cpio
+      && \t{ \t\techo menuentry; \t\techo linux bzImage; \t\techo initrd ramfs.cpio.xz;
+      \t} > rootfs/grub2.cfg && \tdu -a rootfs/ && \tqemu-img create -f raw disk.img
+      20m && \tsgdisk --clear \t\t--new 1::-0 --typecode=1:8300 --change-name=1:'Linux
+      root filesystem' \t\tdisk.img && \tmkfs.ext2 -F -E 'offset=1048576' -d rootfs/
+      disk.img 18m && \tgdisk -l disk.img && \tqemu-img convert -f raw -O qcow2 disk.img
+      disk.qcow2 && \tmv disk.qcow2 disk.img && \trm -r rootfs/"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -x; \t: `# RW_VPD partition` && \tvpd -f coreboot.rom -i RW_VPD -O && \tvpd
+      -f coreboot.rom -i RW_VPD -s 'LinuxBoot=IsCool' && \t: `# RO_VPD partition`
+      && \tvpd -f coreboot.rom -i RO_VPD -O && \tvpd -f coreboot.rom -i RO_VPD -s
+      'Boot0000={\"type\":\"localboot\",\"method\":\"grub\"}' && \tvpd -f coreboot.rom
+      -i RO_VPD -g Boot0000"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "./qemu-system-x86_64 \t-M q35 \t-L pc-bios/ `# for vga option rom` \t-bios
+      coreboot.rom \t-m 1024 \t-nographic \t-object 'rng-random,filename=/dev/urandom,id=rng0'
+      \t-device 'virtio-rng-pci,rng=rng0' \t-hda disk.img"
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: uroottest/test-image-amd64:v3.2.4
+  Name: ""
+  Platform: ""
+  SourceCode: FROM uroottest/test-image-amd64:v3.2.4

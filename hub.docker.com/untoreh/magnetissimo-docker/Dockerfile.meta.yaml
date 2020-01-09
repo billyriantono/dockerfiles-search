@@ -1,0 +1,68 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine
+  Commands:
+  - Env:
+    - Key: PGDATA
+      Value: /pgsql/data
+    Name: env
+  - Env:
+    - Key: PGRUN
+      Value: /run/pgsql
+    Name: env
+  - Env:
+    - Key: PGDIR
+      Value: /pgsql
+    Name: env
+  - Env:
+    - Key: PGSTARTTIMEOUT
+      Value: "270"
+    Name: env
+  - Env:
+    - Key: MIX_ENV
+      Value: prod
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./*.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./init
+    - /init
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./tasks.ex
+    - /tmp/tasks.ex
+  - CmdLine:
+    - apk add -t buildenv $(apk --update search -q erlang) elixir postgresql git libressl
+      nodejs-npm  &&   mkdir -p $PGDIR /run/postgresql && chmod 777 $PGDIR /run/postgresql
+      &&   su postgres -c "pg_ctl initdb -D $PGDATA &&   pg_ctl start -D ${PGDATA}
+      -s -w -t ${PGSTARTTIMEOUT}" &&   git clone https://github.com/sergiotapia/magnetissimo.git
+      &&   cd magnetissimo &&   mv /tmp/tasks.ex lib/ &&   echo -e 'Y\nY\n' | mix
+      deps.get &&   su postgres -c createdb.sh &&   config.sh &&   echo -e 'Y\nY\n'
+      | mix ecto.create ;   mix compile ;   echo -e 'Y\nY\n' | mix ecto.migrate &&   npm
+      install &&   mix phoenix.digest &&   mix release --env=prod &&   su postgres
+      -c "pg_ctl stop -D ${PGDATA} -s -m fast" &&   rm -rf $PGDATA && mkdir $PGDATA
+      &&   apk del --purge buildenv &&   apk add postgresql libressl ca-certificates
+      &&   mv _build/prod/rel/magnetissimo/ /rel &&   rm -rf /var/cache/apk/* /magnetissimo
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "4000"
+  - CmdLine:
+    - /init
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

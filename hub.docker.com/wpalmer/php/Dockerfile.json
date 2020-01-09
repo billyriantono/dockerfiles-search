@@ -1,0 +1,261 @@
+{
+  "MetaArgs": [
+    {
+      "Key": "PHP_VERSION",
+      "DefaultValue": "5.6",
+      "ProvidedValue": null,
+      "Value": "5.6"
+    },
+    {
+      "Key": "PHP_VARIANT",
+      "DefaultValue": "apache",
+      "ProvidedValue": null,
+      "Value": "apache"
+    },
+    {
+      "Key": "PHP_TAG",
+      "DefaultValue": "${PHP_VERSION}-${PHP_VARIANT}",
+      "ProvidedValue": null,
+      "Value": "${PHP_VERSION}-${PHP_VARIANT}"
+    },
+    {
+      "Key": "PHP_IMAGE",
+      "DefaultValue": "php:${PHP_TAG}",
+      "ProvidedValue": null,
+      "Value": "php:${PHP_TAG}"
+    },
+    {
+      "Key": "PHP_EXT_INSTALL",
+      "DefaultValue": "\"    bcmath     curl     gd     intl     mbstring     mysqli     pdo     pdo_mysql     simplexml     soap     xml     xsl     zip \"",
+      "ProvidedValue": null,
+      "Value": "\"    bcmath     curl     gd     intl     mbstring     mysqli     pdo     pdo_mysql     simplexml     soap     xml     xsl     zip \""
+    },
+    {
+      "Key": "PHP_EXT_REQUIRE",
+      "DefaultValue": "\"    ${PHP_EXT_INSTALL} \"",
+      "ProvidedValue": null,
+      "Value": "\"    ${PHP_EXT_INSTALL} \""
+    },
+    {
+      "Key": "PHP_EXT_BUILD_DEPS",
+      "DefaultValue": "\"    libfreetype6-dev     libjpeg62-turbo-dev     libcurl4-openssl-dev     libpng-dev     libicu-dev     libmcrypt-dev     libxml2-dev     libxslt-dev     libzip-dev \"",
+      "ProvidedValue": null,
+      "Value": "\"    libfreetype6-dev     libjpeg62-turbo-dev     libcurl4-openssl-dev     libpng-dev     libicu-dev     libmcrypt-dev     libxml2-dev     libxslt-dev     libzip-dev \""
+    },
+    {
+      "Key": "RUN_DEPS",
+      "DefaultValue": "\"    libfreetype6     libjpeg62-turbo     libmcrypt4     libpng16-16     libxslt1.1     libzip4     msmtp \"",
+      "ProvidedValue": null,
+      "Value": "\"    libfreetype6     libjpeg62-turbo     libmcrypt4     libpng16-16     libxslt1.1     libzip4     msmtp \""
+    }
+  ],
+  "Stages": [
+    {
+      "Name": "php-extensions",
+      "BaseName": "${PHP_IMAGE}",
+      "SourceCode": "FROM ${PHP_IMAGE} as php-extensions",
+      "Platform": "",
+      "As": "php-extensions",
+      "From": {
+        "Image": "${PHP_IMAGE}"
+      },
+      "Commands": [
+        {
+          "Key": "PHP_EXT_INSTALL",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "PHP_EXT_BUILD_DEPS",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "CmdLine": [
+            "echo ${PHP_EXT_INSTALL} \u003e /php-ext-install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "if [ `printf '%s\\n%s\\n' \"${PHP_VERSION}\" \"7.0\" | sort -V | sed '1q'` != \"7.0\" ]; then echo mysql \u003e\u003e /php-ext-install; fi"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "if [ `printf '%s\\n%s\\n' \"${PHP_VERSION}\" \"7.2\" | sort -V | sed '1q'` != \"7.2\" ]; then echo mcrypt \u003e\u003e /php-ext-install; fi"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "apt-get update \u0026\u0026 apt-get install -y ${PHP_EXT_BUILD_DEPS} --no-install-recommends"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /usr/include/freetype2/freetype"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "printf '#!/bin/sh\\nexec pkg-config \"$@\" freetype2\\n' \u003e /usr/local/bin/freetype-config"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "chmod +x /usr/local/bin/freetype-config"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "docker-php-ext-install `cat /php-ext-install`"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "composer",
+      "BaseName": "${PHP_IMAGE}",
+      "SourceCode": "FROM ${PHP_IMAGE} as composer",
+      "Platform": "",
+      "As": "composer",
+      "From": {
+        "Image": "${PHP_IMAGE}"
+      },
+      "Commands": [
+        {
+          "Key": "COMPOSER_SHA384",
+          "Name": "arg",
+          "Value": "a5c698ffe4b8e849a443b120cd5ba38043260d5c4023dbf93e1558871f1f07f58274fc6f4c93bcfd858c6bd0775cd8d1"
+        },
+        {
+          "Name": "workdir",
+          "Path": "/tmp"
+        },
+        {
+          "CmdLine": [
+            "php -r \"copy('https://getcomposer.org/installer', 'composer-setup.php');\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "php -r \"if (hash_file('sha384', 'composer-setup.php') === '${COMPOSER_SHA384}') exit(0); exit(1);\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "php composer-setup.php"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "chmod a+x composer.phar"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "${PHP_IMAGE}",
+      "SourceCode": "FROM ${PHP_IMAGE}",
+      "Platform": "",
+      "From": {
+        "Image": "${PHP_IMAGE}"
+      },
+      "Commands": [
+        {
+          "Key": "PHP_EXT_REQUIRE",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Key": "RUN_DEPS",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "Chown": "",
+          "From": "php-extensions",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/lib/php",
+            "/usr/local/lib/php"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "php-extensions",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/include/php",
+            "/usr/local/include/php"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "php-extensions",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/local/etc/php",
+            "/usr/local/etc/php"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "php-extensions",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/php-ext-install",
+            "/php-ext-install"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "composer",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/tmp/composer.phar",
+            "/usr/bin/composer.phar"
+          ]
+        },
+        {
+          "CmdLine": [
+            "set -ex  \u0026\u0026 apt-get update \u0026\u0026 apt-get install -y ${RUN_DEPS} --no-install-recommends \u0026\u0026 rm -rf /var/lib/apt/lists/*  \u0026\u0026 php -r '    $extensions = $_SERVER[\"argv\"]; array_shift($extensions);    foreach ($extensions as $extension) {      if (!extension_loaded($extension)) {        file_put_contents(\"php://stderr\", \"Required extension \\\"$extension\\\" not loaded\\n\");        exit(1);       }    }    exit(0);  ' `cat /php-ext-install` ${PHP_EXT_REQUIRE}  \u0026\u0026 rm -f /php-ext-install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    }
+  ]
+}

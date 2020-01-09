@@ -1,0 +1,107 @@
+MetaArgs: null
+Stages:
+- As: build_env
+  BaseName: debian:buster
+  Commands:
+  - Key: SOURCE_BRANCH
+    Name: arg
+    Value: null
+  - Env:
+    - Key: GETDNS_VERSION
+      Value: ${SOURCE_BRANCH:-1.5.2}
+    Name: env
+  - Env:
+    - Key: STUBBY_URL
+      Value: https://getdnsapi.net/dist/getdns-${GETDNS_VERSION}.tar.gz
+    Name: env
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y build-essential curl libexpat-dev libtool-bin automake         libyaml-dev
+      libssl-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build
+  - CmdLine:
+    - curl -v -O ${STUBBY_URL}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xvf getdns-${GETDNS_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build/getdns-${GETDNS_VERSION}
+  - CmdLine:
+    - ./configure --enable-stub-only --without-libidn --without-libidn2         --with-stubby
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip -s /usr/local/bin/getdns_server_mon
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip -s /usr/local/bin/stubby
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip -s /usr/local/lib/libgetdns.so.10
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:buster
+  Name: build_env
+  Platform: ""
+  SourceCode: FROM debian:buster as build_env
+- BaseName: gcr.io/distroless/base-debian10:debug
+  Commands:
+  - Chown: ""
+    From: build_env
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/libgetdns.so.10
+    - /lib/x86_64-linux-gnu/
+  - Chown: ""
+    From: build_env
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/stubby
+    - /bin/
+  - Chown: ""
+    From: build_env
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/getdns_server_mon
+    - /bin/
+  - Chown: ""
+    From: build_env
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/x86_64-linux-gnu/libyaml-0.so.2
+    - /lib/x86_64-linux-gnu/
+  - Health:
+      Test:
+      - CMD
+      - /bin/getdns_server_mon
+      - -M
+      - -t
+      - '@127.0.0.1'
+      - lookup
+      - google.com
+    Name: healthcheck
+  - CmdLine:
+    - /bin/stubby
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: gcr.io/distroless/base-debian10:debug
+  Name: ""
+  Platform: ""
+  SourceCode: FROM gcr.io/distroless/base-debian10:debug

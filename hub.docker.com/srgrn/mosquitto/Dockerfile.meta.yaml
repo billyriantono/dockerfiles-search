@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:edge
+  Commands:
+  - Name: expose
+    Ports:
+    - "1883"
+  - Name: expose
+    Ports:
+    - "9883"
+  - Name: volume
+    Volumes:
+    - /var/lib/mosquitto
+    - /etc/mosquitto
+    - /etc/mosquitto.d
+  - CmdLine:
+    - addgroup -S mosquitto &&     adduser -S -H -h /var/empty -s /sbin/nologin -D
+      -G mosquitto mosquitto
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /usr/local/bin:/usr/local/sbin:$PATH
+    Name: env
+  - Env:
+    - Key: MOSQUITTO_VERSION
+      Value: v1.5
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - libressl.patch
+    - /
+  - CmdLine:
+    - buildDeps='cmake git build-base libressl-dev c-ares-dev util-linux-dev hiredis-dev
+      postgresql-dev curl-dev libxslt docbook-xsl';     chmod +x /run.sh &&     mkdir
+      -p /var/lib/mosquitto &&     touch /var/lib/mosquitto/.keep &&     mkdir -p
+      /etc/mosquitto.d &&     apk update &&     apk add $buildDeps hiredis postgresql-libs
+      libuuid c-ares libressl curl ca-certificates &&     git clone -b v2.4-stable
+      https://libwebsockets.org/repo/libwebsockets &&     cd libwebsockets &&     cmake
+      . &&     make install &&     cd .. &&     git clone https://github.com/eclipse/mosquitto.git
+      &&     cd mosquitto &&     git checkout ${MOSQUITTO_VERSION} -b ${MOSQUITTO_VERSION}
+      &&     sed -i -e "s|(INSTALL) -s|(INSTALL)|g" -e 's|--strip-program=${CROSS_COMPILE}${STRIP}||'
+      */Makefile */*/Makefile &&     sed -i "s@/usr/share/xml/docbook/stylesheet/docbook-xsl/manpages/docbook.xsl@/usr/share/xml/docbook/xsl-stylesheets-1.79.1/manpages/docbook.xsl@"
+      man/manpage.xsl &&     sed -i 's/ -lanl//' config.mk &&     patch -p1 < /libressl.patch
+      &&     make WITH_MEMORY_TRACKING=no WITH_SRV=yes WITH_WEBSOCKETS=yes WITH_TLS_PSK=no
+      &&     make install &&     git clone git://github.com/srgrn/mosquitto-auth-plug.git
+      &&     cd mosquitto-auth-plug &&     cp config.mk.in config.mk &&     sed -i
+      "s/BACKEND_REDIS ?= no/BACKEND_REDIS ?= yes/" config.mk &&     sed -i "s/BACKEND_HTTP
+      ?= no/BACKEND_HTTP ?= yes/" config.mk &&     sed -i "s/BACKEND_MYSQL ?= yes/BACKEND_MYSQL
+      ?= no/" config.mk &&     sed -i "s/MOSQUITTO_SRC =/MOSQUITTO_SRC = ..\//" config.mk
+      &&     sed -i "s/EVP_MD_CTX_new/EVP_MD_CTX_create/g" cache.c &&     sed -i "s/EVP_MD_CTX_free/EVP_MD_CTX_destroy/g"
+      cache.c &&     make &&     cp auth-plug.so /usr/local/lib/ &&     cp np /usr/local/bin/
+      && chmod +x /usr/local/bin/np &&     cd / && rm -rf mosquitto && rm /libressl.patch
+      &&     apk del $buildDeps && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - mosquitto.conf
+    - /etc/mosquitto/mosquitto.conf
+  - CmdLine:
+    - /run.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - mosquitto
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:edge
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:edge

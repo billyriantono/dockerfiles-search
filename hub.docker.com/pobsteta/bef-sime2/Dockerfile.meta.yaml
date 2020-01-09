@@ -1,0 +1,218 @@
+MetaArgs: null
+Stages:
+- As: builder-node
+  BaseName: node
+  Commands:
+  - Env:
+    - Key: SERIES
+      Value: "4.8"
+    Name: env
+  - CmdLine:
+    - npm install -g bower
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://downloads.tryton.org/${SERIES}/tryton-sao-last.tgz | tar zxf -
+      -C /
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /package && bower install --allow-root
+    Name: run
+    PrependShell: true
+  From:
+    Image: node
+  Name: builder-node
+  Platform: ""
+  SourceCode: FROM node as builder-node
+- BaseName: debian:stretch-slim
+  Commands:
+  - Maintainer: Pascal Obstetar <pascal.obstetar@bioecoforests.com>
+    Name: maintainer
+  - Env:
+    - Key: SERIES
+      Value: "4.8"
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - CmdLine:
+    - export DEBIAN_FRONTEND=noninteractive
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - dpkg-divert --local --rename --add /sbin/initctl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y update; apt-get -y install gnupg2 wget ca-certificates rpl pwgen
+      software-properties-common
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sh -c 'echo "deb http://qgis.org/debian stretch main" > /etc/apt/sources.list.d/qgis.list'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-key adv --keyserver keyserver.ubuntu.com --recv-key CAEB3DC3BDF7FB45
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sh -c 'echo "deb http://cran.irsn.fr/bin/linux/debian stretch-cran35/" > /etc/apt/sources.list.d/rcran.list'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-key adv --keyserver keys.gnupg.net --recv-key E19F5F87128899B192B1A2C2AD5F960A256A04AF
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd -r trytond     && useradd --no-log-init -r -d /var/lib/trytond -m -g
+      trytond trytond     && mkdir /var/lib/trytond/db && chown trytond:trytond /var/lib/trytond/db     &&
+      mkdir /var/lib/trytond/www
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends         curl         gnupg         software-properties-common         python3         python3-pip         python3-setuptools         uwsgi         uwsgi-plugin-python3         python3-lxml         python3-genshi         python3-polib         python3-werkzeug         python3-wrapt         python3-psycopg2         python3-bcrypt         python3-dateutil         python3-html2text         python3-magic         python3-ofxparse         python3-pypdf2         python3-requests         python3-simpleeval         python3-stdnum         python3-tz         python3-zeep     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip3 install --no-cache-dir trytond-gis
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip3 install --no-cache-dir     "trytond == ${SERIES}.*"     && for module in
+      `curl https://downloads.tryton.org/${SERIES}/modules.txt`; do         pip3 install
+      --no-cache-dir "trytond_${module} == ${SERIES}.*";         done     && pip3
+      install --no-cache-dir phonenumbers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install --yes --force-yes git python3-gdal python3-rpy2
+      libgeos-dev apache2 qgis qgis-server libapache2-mod-fcgid && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - addgroup www-data root
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - apache.conf
+    - /etc/apache2/sites-enabled/000-default.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - fcgid.conf
+    - /etc/apache2/mods-available/fcgid.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - fqdn.conf
+    - /etc/apache2/conf-available/fqdn.conf
+  - CmdLine:
+    - a2enconf fqdn
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'install.packages(c("sp", "rgeos"), repos="http://cran.us.r-project.org",
+      dependencies=TRUE)' > /tmp/packages.R     && Rscript /tmp/packages.R
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder-node
+    Name: copy
+    SourcesAndDest:
+    - /package
+    - /var/lib/trytond/www
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - trytond.conf
+    - /etc/trytond.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - qgis_server.conf
+    - /etc/qgis_server.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - uwsgi.conf
+    - /etc/uwsgi.conf
+  - Env:
+    - Key: APACHE_RUN_USER
+      Value: www-data
+    Name: env
+  - Env:
+    - Key: APACHE_RUN_GROUP
+      Value: www-data
+    Name: env
+  - Env:
+    - Key: APACHE_PID_FILE
+      Value: /var/run/apache2.pid
+    Name: env
+  - Env:
+    - Key: APACHE_RUN_DIR
+      Value: /var/run/apache2
+    Name: env
+  - Env:
+    - Key: APACHE_LOCK_DIR
+      Value: /var/lock/apache2
+    Name: env
+  - Env:
+    - Key: APACHE_LOG_DIR
+      Value: /var/log/apache2
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: C
+    Name: env
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: expose
+    Ports:
+    - "8000"
+  - Name: expose
+    Ports:
+    - "8001"
+  - Name: volume
+    Volumes:
+    - /var/lib/trytond/db
+  - Env:
+    - Key: TRYTOND_CONFIG
+      Value: /etc/trytond.conf
+    Name: env
+  - Name: user
+    User: trytond
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - uwsgi
+    - --ini
+    - /etc/uwsgi.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

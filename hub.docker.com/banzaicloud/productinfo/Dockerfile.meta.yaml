@@ -1,0 +1,115 @@
+MetaArgs: null
+Stages:
+- As: backend
+  BaseName: golang:1.11-alpine
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache bash ca-certificates curl git make tzdata
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /go/src/github.com/banzaicloud/productinfo
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - Gopkg.*
+    - Makefile
+    - main-targets.mk
+    - /go/src/github.com/banzaicloud/productinfo/
+  - Name: workdir
+    Path: /go/src/github.com/banzaicloud/productinfo
+  - CmdLine:
+    - make vendor
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/banzaicloud/productinfo
+  - CmdLine:
+    - make build
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-alpine
+  Name: backend
+  Platform: ""
+  SourceCode: FROM golang:1.11-alpine as backend
+- As: frontend
+  BaseName: node:9
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./web
+    - /web
+  - Name: workdir
+    Path: /web
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install -g @angular/cli
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ng build --configuration=production --base-href=/
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:9
+  Name: frontend
+  Platform: ""
+  SourceCode: FROM node:9 as frontend
+- BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache bash
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: backend
+    Name: copy
+    SourcesAndDest:
+    - /usr/share/zoneinfo/
+    - /usr/share/zoneinfo/
+  - Chown: ""
+    From: backend
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: backend
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/banzaicloud/productinfo/build/productinfo
+    - /bin
+  - Chown: ""
+    From: frontend
+    Name: copy
+    SourcesAndDest:
+    - /web/dist/ui
+    - /web/dist/ui
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./entrypoint.sh
+    - /entrypoint.sh
+  - Env:
+    - Key: PRODUCTINFO_BASEPATH
+      Value: '"/productinfo"'
+    Name: env
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

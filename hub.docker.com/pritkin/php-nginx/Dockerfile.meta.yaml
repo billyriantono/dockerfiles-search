@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- BaseName: pritkin/nginx:1.15.3
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker
+    - /
+  - Env:
+    - Key: PHP_VERSION
+      Value: 7.2.9
+    - Key: PHPIZE_DEPS
+      Value: "\" \t\tautoconf \t\tdpkg-dev dpkg \t\tfile \t\tg++ \t\tgcc \t\tlibc-dev
+        \t\tmake \t\tpkgconf \t\tre2c \t\t\""
+    Name: env
+  - CmdLine:
+    - "PHP_INI_DIR=/usr/local/etc/php     && mkdir -p ${PHP_INI_DIR}/conf.d     &&
+      PHP_URL=\"https://secure.php.net/get/php-${PHP_VERSION}.tar.xz/from/this/mirror\"
+      \    && PHP_ASC_URL=\"https://secure.php.net/get/php-${PHP_VERSION}.tar.xz.asc/from/this/mirror\"
+      \    && PHP_SHA256=\"3585c1222e00494efee4f5a65a8e03a1e6eca3dfb834814236ee7f02c5248ae0\"
+      \     && PHP_MD5=\"\"     && PHP_EXTRA_CONFIGURE_ARGS=\"--enable-fpm --with-fpm-user=www-data
+      --with-fpm-group=www-data --disable-cgi\"     && PHP_CFLAGS=\"-fstack-protector-strong
+      -fpic -fpie -O2\"     && PHP_CPPFLAGS=\"${PHP_CFLAGS}\"     && PHP_LDFLAGS=\"-Wl,-O1
+      -Wl,--hash-style=both -pie\"     && GPG_KEYS=\"1729F83938DA44E27BA0F4D3DBDB397470D12172
+      B1B44D8F021E4E2D6021E995DC9FF8D3EE5AF27F\"     && set -x \t&& addgroup -g 82
+      -S www-data \t&& adduser -u 82 -D -S -G www-data www-data     && set -xe; \t\tapk
+      add --no-cache --virtual .fetch-deps \t\tgnupg \t\twget \t; \t\tmkdir -p /usr/src;
+      \tcd /usr/src; \t\twget -O php.tar.xz \"${PHP_URL}\"; \t\tif [ -n \"${PHP_SHA256}\"
+      ]; then \t\techo \"${PHP_SHA256} *php.tar.xz\" | sha256sum -c -; \tfi; \tif
+      [ -n \"${PHP_MD5}\" ]; then \t\techo \"${PHP_MD5} *php.tar.xz\" | md5sum -c
+      -; \tfi; \t\tif [ -n \"${PHP_ASC_URL}\" ]; then \t\twget -O php.tar.xz.asc \"${PHP_ASC_URL}\";
+      \t\texport GNUPGHOME=\"$(mktemp -d)\"; \t\tfor key in ${GPG_KEYS}; do \t\t\tgpg
+      --keyserver ha.pool.sks-keyservers.net --recv-keys \"$key\"; \t\tdone; \t\tgpg
+      --batch --verify php.tar.xz.asc php.tar.xz; \t\tcommand -v gpgconf > /dev/null
+      && gpgconf --kill all; \t\trm -rf \"${GNUPGHOME}\"; \tfi; \t\tapk del .fetch-deps
+      \t&& apk add --no-cache --virtual .build-deps \t\t${PHPIZE_DEPS} \t\targon2-dev
+      \t\tcoreutils \t\tcurl-dev \t\tlibedit-dev \t\tlibressl-dev \t\tlibsodium-dev
+      \t\tlibxml2-dev \t\tsqlite-dev \t    && apk add --no-cache --virtual .persistent-deps
+      \        ca-certificates         curl         tar         xz         libressl
+      \        icu-dev \t&& export CFLAGS=\"${PHP_CFLAGS}\" \t\tCPPFLAGS=\"${PHP_CPPFLAGS}\"
+      \t\tLDFLAGS=\"${PHP_LDFLAGS}\" \t&& docker-php-source extract \t&& cd /usr/src/php
+      \t&& gnuArch=\"$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)\" \t&& ./configure
+      \t\t--build=\"$gnuArch\" \t\t--with-config-file-path=\"${PHP_INI_DIR}\" \t\t--with-config-file-scan-dir=\"${PHP_INI_DIR}/conf.d\"
+      \t\t\t\t--enable-option-checking=fatal \t\t\t\t--with-mhash \t\t\t\t--enable-ftp
+      \t\t--enable-mbstring \t\t--enable-mysqlnd \t\t--with-password-argon2 \t\t--with-sodium=shared
+      \t\t\t\t--with-curl \t\t--with-libedit \t\t--with-openssl \t\t--with-zlib \t\t\t\t$(test
+      \"$gnuArch\" = 's390x-linux-gnu' && echo '--without-pcre-jit') \t\t\t\t${PHP_EXTRA_CONFIGURE_ARGS}
+      \t&& make -j \"$(nproc)\" \t&& make install \t&& { find /usr/local/bin /usr/local/sbin
+      -type f -perm +0111 -exec strip --strip-all '{}' + || true; } \t&& make clean
+      \t\t&& cp -v php.ini-* \"${PHP_INI_DIR}/\" \t\t&& cd / \t&& docker-php-source
+      delete \t\t&& runDeps=\"$( \t\tscanelf --needed --nobanner --format '%n#p' --recursive
+      /usr/local \t\t\t| tr ',' '\\n' \t\t\t| sort -u \t\t\t| awk 'system(\"[ -e /usr/local/lib/\"
+      $1 \" ]\") == 0 { next } { print \"so:\" $1 }' \t)\" \t&& apk add --no-cache
+      --virtual .php-rundeps $runDeps \t\t&& apk del .build-deps \t\t&& pecl update-channels
+      \t&& rm -rf /tmp/pear ~/.pearrc     && docker-php-ext-enable sodium     && docker-php-ext-configure
+      intl         --enable-intl      && docker-php-ext-install         intl         opcache
+      \        pdo_mysql"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - Name: stopsignal
+    Signal: SIGTERM
+  - Health:
+      Interval: 5000000000
+      Retries: 2
+      Test:
+      - CMD-SHELL
+      - wget -q -O - localhost/ping || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - php-fpm
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: pritkin/nginx:1.15.3
+  Name: ""
+  Platform: ""
+  SourceCode: FROM pritkin/nginx:1.15.3

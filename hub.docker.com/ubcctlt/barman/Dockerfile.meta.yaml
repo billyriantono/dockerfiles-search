@@ -1,0 +1,137 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - Env:
+    - Key: GOSU_VERSION
+      Value: "1.11"
+    Name: env
+  - CmdLine:
+    - "apt-get update \t&& apt-get install -y --no-install-recommends ca-certificates
+      wget \t&& dpkgArch=\"$(dpkg --print-architecture | awk -F- '{ print $NF }')\"
+      \t&& wget -O /usr/local/bin/gosu \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch\"
+      \t&& wget -O /usr/local/bin/gosu.asc \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch.asc\"
+      \t&& export GNUPGHOME=\"$(mktemp -d)\" \t&& gpg --keyserver ha.pool.sks-keyservers.net
+      --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \t&& gpg --batch --verify
+      /usr/local/bin/gosu.asc /usr/local/bin/gosu \t&& rm -r \"$GNUPGHOME\" /usr/local/bin/gosu.asc
+      \t&& chmod +x /usr/local/bin/gosu \t&& gosu nobody true \t&& rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "bash -c 'echo \"deb http://apt.postgresql.org/pub/repos/apt/ jessie-pgdg main\"
+      >> /etc/apt/sources.list.d/pgdg.list' \t&& (wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc
+      | apt-key add -) \t&& apt-get update \t&& apt-get install -y --no-install-recommends
+      \t\tcron \t\tgcc \t\tlibpq-dev \t\tlibpython-dev \t\topenssh-client \t\tpostgresql-client-9.4
+      \t\tpostgresql-client-9.5 \t\tpostgresql-client-9.6 \t\tpython \t\trsync         gettext-base
+      \t&& rm -rf /var/lib/apt/lists/* \t&& rm -f /etc/crontab /etc/cron.*/* \t&&
+      sed -i 's/\\(.*pam_loginuid.so\\)/#\\1/' /etc/pam.d/cron     && mkdir -p /etc/barman/barman.d"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: BARMAN_VERSION
+      Value: "2.7"
+    - Key: BARMAN_CRON_SRC
+      Value: /private/cron.d
+    - Key: BARMAN_DATA_DIR
+      Value: /var/lib/barman
+    - Key: BARMAN_LOG_DIR
+      Value: /var/log/barman
+    - Key: BARMAN_SSH_KEY_DIR
+      Value: /private/ssh
+    - Key: BARMAN_PGPASSFILE
+      Value: /private/pgpass
+    - Key: BARMAN_CRON_SCHEDULE
+      Value: '"* * * * *"'
+    - Key: BARMAN_BACKUP_SCHEDULE
+      Value: '"0 4 * * *"'
+    - Key: BARMAN_LOG_LEVEL
+      Value: INFO
+    - Key: DB_HOST
+      Value: pg
+    - Key: DB_PORT
+      Value: "5432"
+    - Key: DB_SUPERUSER
+      Value: postgres
+    - Key: DB_SUPERUSER_PASSWORD
+      Value: postgres
+    - Key: DB_SUPERUSER_DATABASE
+      Value: postgres
+    - Key: DB_REPLICATION_USER
+      Value: standby
+    - Key: DB_REPLICATION_PASSWORD
+      Value: standby
+    - Key: DB_SLOT_NAME
+      Value: barman
+    - Key: DB_BACKUP_METHOD
+      Value: postgres
+    Name: env
+  - Name: volume
+    Volumes:
+    - ${BARMAN_DATA_DIR}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - install_barman.sh
+    - /tmp/
+  - CmdLine:
+    - /tmp/install_barman.sh && rm /tmp/install_barman.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - barman.conf.template
+    - /etc/barman.conf.template
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pg.conf.template
+    - /etc/barman/barman.d/pg.conf.template
+  - Env:
+    - Key: TINI_VERSION
+      Value: v0.18.0
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini
+    - /tini
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini.asc
+    - /tini.asc
+  - CmdLine:
+    - gpg --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 595E85A6B1B4779EA4DAAEC70B588DFF0527A9B7  &&
+      gpg --verify /tini.asc  && chmod +x /tini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cron
+    - -L
+    - "0"
+    - -f
+    Name: cmd
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /
+  - Name: workdir
+    Path: ${BARMAN_DATA_DIR}
+  - CmdLine:
+    - /tini
+    - --
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

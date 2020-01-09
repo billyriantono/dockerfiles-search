@@ -1,0 +1,111 @@
+MetaArgs: null
+Stages:
+- As: consul-builder
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add git gcc musl-dev upx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get --ldflags='-w -s' github.com/hashicorp/consul
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - upx bin/consul
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: consul-builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as consul-builder
+- As: dumb-init-builder
+  BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add git make bash gcc musl-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - git clone https://github.com/Yelp/dumb-init.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build/dumb-init
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: dumb-init-builder
+  Platform: ""
+  SourceCode: FROM alpine:latest as dumb-init-builder
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk --no-cache update && apk --no-cache add ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: consul-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/consul
+    - /usr/local/bin/
+  - Chown: ""
+    From: dumb-init-builder
+    Name: copy
+    SourcesAndDest:
+    - /build/dumb-init/dumb-init
+    - /usr/local/bin
+  - CmdLine:
+    - /usr/local/bin/dumb-init
+    - --
+    - /usr/local/bin/consul
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - 8300/tcp
+    - 8301/tcp
+    - 8301/udp
+    - 8302/tcp
+    - 8302/udp
+    - 8500/tcp
+    - 8600/tcp
+    - 8600/udp
+  - Name: volume
+    Volumes:
+    - /consul/config
+  - Name: volume
+    Volumes:
+    - /consul/data
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config
+    - /consul/config
+  - CmdLine:
+    - agent
+    - -ui
+    - -config-dir=/consul/config
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

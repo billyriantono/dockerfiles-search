@@ -1,0 +1,160 @@
+{
+  "MetaArgs": null,
+  "Stages": [
+    {
+      "Name": "builder",
+      "BaseName": "clearlinux:latest",
+      "SourceCode": "FROM clearlinux:latest AS builder",
+      "Platform": "",
+      "As": "builder",
+      "From": {
+        "Image": "clearlinux:latest"
+      },
+      "Commands": [
+        {
+          "Key": "swupd_args",
+          "Name": "arg",
+          "Value": null
+        },
+        {
+          "CmdLine": [
+            "swupd update --no-boot-update $swupd_args"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "clearlinux/os-core:latest",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/usr/lib/os-release",
+            "/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "source /os-release \u0026\u0026     mkdir /install_root     \u0026\u0026 swupd os-install -V ${VERSION_ID}     --path /install_root --statedir /swupd-state     --bundles=cassandra,os-core-plus,su-exec --no-boot-update     \u0026\u0026 rm /install_root/usr/lib/jvm/*/src.zip"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "mkdir /os_core_install"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Chown": "",
+          "From": "clearlinux/os-core:latest",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/",
+            "/os_core_install/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "cd / \u0026\u0026     find os_core_install | sed -e 's/os_core_install/install_root/' | xargs rm -d \u0026\u003e /dev/null || true"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        }
+      ]
+    },
+    {
+      "Name": "",
+      "BaseName": "clearlinux/os-core:latest",
+      "SourceCode": "FROM clearlinux/os-core:latest",
+      "Platform": "",
+      "From": {
+        "Image": "clearlinux/os-core:latest"
+      },
+      "Commands": [
+        {
+          "Chown": "",
+          "From": "builder",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "/install_root",
+            "/"
+          ]
+        },
+        {
+          "Env": [
+            {
+              "Key": "CASSANDRA_CONFIG",
+              "Value": "/usr/share/cassandra/conf"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "Env": [
+            {
+              "Key": "PATH",
+              "Value": "/usr/share/cassandra/bin:/usr/share/cassandra/tools/bin:$PATH"
+            }
+          ],
+          "Name": "env"
+        },
+        {
+          "CmdLine": [
+            "mkdir -p /var/lib/cassandra/{cdc_raw,commitlog,data,hints,saved_caches}          \u0026\u0026 chown -R cassandra:cassandra /var/lib/cassandra \"$CASSANDRA_CONFIG\"         \u0026\u0026 chmod -R 777 /var/lib/cassandra /usr/share/cassandra/tools/bin \"$CASSANDRA_CONFIG\""
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "Name": "volume",
+          "Volumes": [
+            "/var/lib/cassandra"
+          ]
+        },
+        {
+          "Chown": "",
+          "From": "",
+          "Name": "copy",
+          "SourcesAndDest": [
+            "docker-entrypoint.sh",
+            "/usr/local/bin/"
+          ]
+        },
+        {
+          "CmdLine": [
+            "chmod +x /usr/local/bin/docker-entrypoint.sh"
+          ],
+          "Name": "run",
+          "PrependShell": true
+        },
+        {
+          "CmdLine": [
+            "docker-entrypoint.sh"
+          ],
+          "Name": "entrypoint",
+          "PrependShell": false
+        },
+        {
+          "Name": "expose",
+          "Ports": [
+            "7000",
+            "7001",
+            "7199",
+            "9042",
+            "9160"
+          ]
+        },
+        {
+          "CmdLine": [
+            "cassandra",
+            "-f"
+          ],
+          "Name": "cmd",
+          "PrependShell": false
+        }
+      ]
+    }
+  ]
+}

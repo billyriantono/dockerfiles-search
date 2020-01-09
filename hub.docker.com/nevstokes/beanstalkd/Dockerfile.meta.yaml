@@ -1,0 +1,87 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: alpine:3.6
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - alpine.patch
+    - github-releases.xsl
+    - /
+  - Env:
+    - Key: GITHUB_REPO
+      Value: kr/beanstalkd
+    Name: env
+  - CmdLine:
+    - echo '@community http://dl-cdn.alpinelinux.org/alpine/edge/community' >> /etc/apk/repositories         &&
+      apk --update add         gcc         libressl         libxslt-dev         make         musl-dev         upx@community
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /usr/src/beanstalk         && export BEANSTALKD_VERSION=`wget -q https://github.com/$GITHUB_REPO/releases.atom
+      -O - | xsltproc /github-releases.xsl - | awk -F/ '{ print $NF; }'`     && wget
+      -qO- https://github.com/$GITHUB_REPO/archive/$BEANSTALKD_VERSION.tar.gz | tar
+      xz -C /usr/src/beanstalk --strip-components=1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /usr/src/beanstalk     && patch -p0 < /alpine.patch     && make CFLAGS=-Os         &&
+      strip --strip-all beanstalkd     && upx -9 beanstalkd
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.6
+  Name: build
+  Platform: ""
+  SourceCode: FROM alpine:3.6 AS build
+- BaseName: scratch
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: VCS_URL
+    Name: arg
+    Value: null
+  - Name: expose
+    Ports:
+    - "11300"
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/beanstalk/beanstalkd
+    - /bin/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /lib/ld-musl-x86_64.so.1
+    - /lib/
+  - CmdLine:
+    - beanstalkd
+    Name: entrypoint
+    PrependShell: false
+  - Labels:
+    - Key: maintainer
+      Value: '"Nev Stokes <mail@nevstokes.com>"'
+    - Key: description
+      Value: '"Beanstalkd general-purpose work queue"'
+    - Key: org.label-schema.build-date
+      Value: '"$BUILD_DATE"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.vcs-ref
+      Value: '"$VCS_REF"'
+    - Key: org.label-schema.vcs-url
+      Value: '"$VCS_URL"'
+    Name: label
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

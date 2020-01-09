@@ -1,0 +1,155 @@
+MetaArgs: null
+Stages:
+- As: base-image
+  BaseName: python:3.6-alpine
+  Commands:
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - CmdLine:
+    - ALPINE_GLIBC_BASE_URL="https://github.com/sgerrand/alpine-pkg-glibc/releases/download"
+      &&     ALPINE_GLIBC_PACKAGE_VERSION="2.29-r0" &&     ALPINE_GLIBC_BASE_PACKAGE_FILENAME="glibc-$ALPINE_GLIBC_PACKAGE_VERSION.apk"
+      &&     ALPINE_GLIBC_BIN_PACKAGE_FILENAME="glibc-bin-$ALPINE_GLIBC_PACKAGE_VERSION.apk"
+      &&     ALPINE_GLIBC_I18N_PACKAGE_FILENAME="glibc-i18n-$ALPINE_GLIBC_PACKAGE_VERSION.apk"
+      &&     apk add --no-cache wget ca-certificates &&     wget "https://alpine-pkgs.sgerrand.com/sgerrand.rsa.pub"
+      -O /etc/apk/keys/sgerrand.rsa.pub &&     wget "$ALPINE_GLIBC_BASE_URL/$ALPINE_GLIBC_PACKAGE_VERSION/$ALPINE_GLIBC_BASE_PACKAGE_FILENAME"  &&     wget
+      "$ALPINE_GLIBC_BASE_URL/$ALPINE_GLIBC_PACKAGE_VERSION/$ALPINE_GLIBC_BIN_PACKAGE_FILENAME"  &&     wget
+      "$ALPINE_GLIBC_BASE_URL/$ALPINE_GLIBC_PACKAGE_VERSION/$ALPINE_GLIBC_I18N_PACKAGE_FILENAME"  &&     apk
+      add --no-cache         "$ALPINE_GLIBC_BASE_PACKAGE_FILENAME"         "$ALPINE_GLIBC_BIN_PACKAGE_FILENAME"         "$ALPINE_GLIBC_I18N_PACKAGE_FILENAME"
+      &&     rm "/etc/apk/keys/sgerrand.rsa.pub" &&     /usr/glibc-compat/bin/localedef
+      --force --inputfile POSIX --charmap UTF-8 "$LANG" || true &&     echo "export
+      LANG=$LANG" > /etc/profile.d/locale.sh &&     apk del glibc-i18n &&     rm         "/root/.wget-hsts"         "$ALPINE_GLIBC_BASE_PACKAGE_FILENAME"         "$ALPINE_GLIBC_BIN_PACKAGE_FILENAME"         "$ALPINE_GLIBC_I18N_PACKAGE_FILENAME"
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.6-alpine
+  Name: base-image
+  Platform: ""
+  SourceCode: FROM python:3.6-alpine as base-image
+- As: build-rs
+  BaseName: base-image
+  Commands:
+  - Env:
+    - Key: RUSTUP_HOME
+      Value: /usr/local/rustup
+    - Key: CARGO_HOME
+      Value: /usr/local/cargo
+    - Key: PATH
+      Value: /usr/local/cargo/bin:$PATH
+    Name: env
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - apk add --no-cache alpine-sdk bash &&     wget "https://sh.rustup.rs" -O rustup-init
+      &&     chmod +x ./rustup-init &&     ./rustup-init -y --no-modify-path --default-toolchain
+      nightly-2019-06-20 --default-host x86_64-unknown-linux-gnu &&     rm -rf rustup-init
+      &&     pip install setuptools-rust wheel
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Cargo.toml
+    - Cargo.lock
+    - setup.py
+    - README.md
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/
+    - ./src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - celery_exporter/
+    - ./celery_exporter/
+  - CmdLine:
+    - pip wheel . -w /src/wheelhouse
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base-image
+  Name: build-rs
+  Platform: ""
+  SourceCode: FROM base-image as build-rs
+- As: app
+  BaseName: base-image
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Fabio Todaro <ft@ovalmoney.com>"'
+    Name: label
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: DOCKER_REPO
+    Name: arg
+    Value: null
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.name
+      Value: $DOCKER_REPO
+    - Key: org.label-schema.version
+      Value: $VERSION
+    - Key: org.label-schema.description
+      Value: '"Prometheus metrics exporter for Celery"'
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/OvalMoney/celery-exporter"'
+    Name: label
+  - Name: workdir
+    Path: /app/
+  - Chown: ""
+    From: build-rs
+    Name: copy
+    SourcesAndDest:
+    - /src/wheelhouse/
+    - /app/wheelhouse/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements/
+    - ./requirements
+  - CmdLine:
+    - pip install -r ./requirements/requirements.txt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install wheelhouse/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - celery-exporter
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine: []
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "9540"
+  From:
+    Stage:
+      Index: 0
+      Named: base-image
+  Name: app
+  Platform: ""
+  SourceCode: FROM base-image as app

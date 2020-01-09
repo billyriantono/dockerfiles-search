@@ -1,0 +1,153 @@
+MetaArgs: null
+Stages:
+- As: lsp-builder
+  BaseName: satishbabariya/sourcekit-lsp
+  Commands: null
+  From:
+    Image: satishbabariya/sourcekit-lsp
+  Name: lsp-builder
+  Platform: ""
+  SourceCode: FROM satishbabariya/sourcekit-lsp as lsp-builder
+- As: extension-builder
+  BaseName: node:10
+  Commands:
+  - CmdLine:
+    - npm install -g vsce
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth 1 https://github.com/apple/sourcekit-lsp
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /sourcekit-lsp/Editors/vscode
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run postinstall
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - vsce package -o ./sourcekit-lsp.vsix
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10
+  Name: extension-builder
+  Platform: ""
+  SourceCode: FROM node:10 as extension-builder
+- BaseName: satishbabariya/sourcekit-lsp
+  Commands:
+  - CmdLine:
+    - yes | unminimize     && apt-get install -yq         asciidoctor         bash-completion         build-essential         htop         jq         less         locales         man-db         nano         software-properties-common         sudo         vim         multitail         curl     &&
+      locale-gen en_US.UTF-8     && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - CmdLine:
+    - useradd -l -u 33333 -G sudo -md /home/gitpod -s /bin/bash -p gitpod gitpod     &&
+      sed -i.bkp -e 's/%sudo\s\+ALL=(ALL\(:ALL\)\?)\s\+ALL/%sudo ALL=NOPASSWD:ALL/g'
+      /etc/sudoers
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HOME
+      Value: /home/gitpod
+    Name: env
+  - Name: workdir
+    Path: $HOME
+  - CmdLine:
+    - '{ echo && echo "PS1=''\[\e]0;\u \w\a\]\[\033[01;32m\]\u\[\033[00m\] \[\033[01;34m\]\w\[\033[00m\]
+      \\\$ ''" ; } >> .bashrc'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -yq         apache2         nginx         nginx-extras     &&
+      apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*     && mkdir /var/run/apache2     &&
+      mkdir /var/lock/apache2     && mkdir /var/run/nginx     && ln -s /etc/apache2/mods-available/rewrite.load
+      /etc/apache2/mods-enabled/rewrite.load     && chown -R gitpod:gitpod /etc/apache2
+      /var/run/apache2 /var/lock/apache2 /var/log/apache2     && chown -R gitpod:gitpod
+      /etc/nginx /var/run/nginx /var/lib/nginx/ /var/log/nginx/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - apache2/
+    - /etc/apache2/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx
+    - /etc/nginx/
+  - Env:
+    - Key: APACHE_DOCROOT_IN_REPO
+      Value: '"public"'
+    Name: env
+  - Env:
+    - Key: NGINX_DOCROOT_IN_REPO
+      Value: '"public"'
+    Name: env
+  - Name: user
+    User: gitpod
+  - CmdLine:
+    - 'sudo echo "Running ''sudo'' for Gitpod: success"'
+    Name: run
+    PrependShell: true
+  - Key: NODE_VERSION
+    Name: arg
+    Value: 10.15.3
+  - CmdLine:
+    - curl -fsSL https://raw.githubusercontent.com/creationix/nvm/v0.34.0/install.sh
+      | bash     && bash -c ". .nvm/nvm.sh         && nvm install $NODE_VERSION         &&
+      npm config set python /usr/bin/python --global         && npm config set python
+      /usr/bin/python         && npm install -g typescript yarn"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /home/gitpod/.nvm/versions/node/v${NODE_VERSION}/bin:$PATH
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $HOME/.pyenv/bin:$HOME/.pyenv/shims:$PATH
+    Name: env
+  - CmdLine:
+    - curl -fsSL https://github.com/pyenv/pyenv-installer/raw/master/bin/pyenv-installer
+      | bash     && { echo;         echo 'eval "$(pyenv init -)"';         echo 'eval
+      "$(pyenv virtualenv-init -)"'; } >> .bashrc     && pyenv install 2.7.15     &&
+      pyenv install 3.7.2     && pyenv global 2.7.15 3.7.2     && pip2 install --upgrade
+      pip     && pip2 install virtualenv pipenv pylint rope flake8 autopep8 pep8 pylama
+      pydocstyle bandit python-language-server[all]==0.25.0     && pip3 install --upgrade
+      pip     && pip3 install virtualenv pipenv pylint rope flake8 autopep8 pep8 pylama
+      pydocstyle bandit python-language-server[all]==0.25.0     && rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: extension-builder
+    Name: copy
+    SourcesAndDest:
+    - /sourcekit-lsp/Editors/vscode/sourcekit-lsp.vsix
+    - /home/theia/plugins/
+  - Env:
+    - Key: THEIA_DEFAULT_PLUGINS
+      Value: local-dir:/home/theia/plugins
+    Name: env
+  - CmdLine:
+    - 'notOwnedFile=$(find . -not "(" -user gitpod -and -group gitpod ")" -print -quit)     &&
+      { [ -z "$notOwnedFile" ]         || { echo "Error: not all files/dirs in $HOME
+      are owned by ''gitpod'' user & group"; exit 1; } }'
+    Name: run
+    PrependShell: true
+  From:
+    Image: satishbabariya/sourcekit-lsp
+  Name: ""
+  Platform: ""
+  SourceCode: FROM satishbabariya/sourcekit-lsp

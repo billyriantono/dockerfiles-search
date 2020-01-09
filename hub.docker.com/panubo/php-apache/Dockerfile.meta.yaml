@@ -1,0 +1,139 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:8
+  Commands:
+  - Maintainer: Tim Robinson <tim@panubo.com>
+    Name: maintainer
+  - Env:
+    - Key: S6_RELEASE
+      Value: 1.20.0
+    - Key: S6_VERSION
+      Value: 2.5.1.0
+    - Key: S6_SHA1
+      Value: b798972cbf46e28f1c5d238f6703aba6edded57e
+    Name: env
+  - Env:
+    - Key: VOLTGRID_PIE
+      Value: 1.0.8
+    - Key: VOLTGRID_PIE_SHA1
+      Value: c25926d4ac22ed7963f23463334bfac8e2d5e85f
+    Name: env
+  - CmdLine:
+    - usermod -u 48 www-data &&   groupmod -g 48 www-data
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&   apt-get install --no-install-recommends --no-install-suggests
+      -y wget curl ca-certificates git openssh-client msmtp-mta python-jinja2 apache2
+      apache2-mpm-event libapache2-mod-xsendfile imagemagick ghostscript php5-fpm
+      php5-cli php5-curl php5-apcu php5-gd php5-imap php5-intl php5-ldap php5-mcrypt
+      php5-mysql php5-pgsql php5-sqlite php5-redis php5-igbinary php5-imagick php5-pspell
+      php5-recode php5-xmlrpc php5-memcached php-http-request2 &&   echo 'deb http://repo.suhosin.org/
+      debian-jessie main' >> /etc/apt/sources.list &&   wget -O- https://sektioneins.de/files/repository.asc
+      | apt-key add - &&   apt-get update &&   apt-get install --no-install-recommends
+      --no-install-suggests -y php5-suhosin-extension &&   apt-get clean && rm -rf
+      /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/www/html/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&   apt-get install --no-install-recommends --no-install-suggests
+      -y php5-dev re2c make pkg-config &&   pecl install mongo &&   echo "; priority=99\nextension
+      = mongo.so" > /etc/php5/mods-available/mongo.ini &&   apt-get --purge autoremove
+      -y php5-dev re2c make pkg-config && apt-get clean && rm -rf /var/lib/apt/lists/*
+      && rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DIR=$(mktemp -d) && cd ${DIR} &&     curl -s -L https://github.com/voltgrid/voltgrid-pie/archive/v${VOLTGRID_PIE}.tar.gz
+      -o voltgrid-pie.tar.gz &&     sha1sum voltgrid-pie.tar.gz &&     echo "${VOLTGRID_PIE_SHA1}
+      voltgrid-pie.tar.gz" | sha1sum -c - &&     tar -C /usr/local/bin --strip-components
+      1 -zxf voltgrid-pie.tar.gz voltgrid-pie-${VOLTGRID_PIE}/voltgrid.py &&     rm
+      -rf ${DIR} &&     echo '{"user":{"uid":0,"gid":0}}' > /usr/local/etc/voltgrid.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - DIR=$(mktemp -d) && cd ${DIR} &&     curl -s -L https://github.com/just-containers/skaware/releases/download/v${S6_RELEASE}/s6-${S6_VERSION}-linux-amd64-bin.tar.gz
+      -o s6.tar.gz &&     echo "${S6_SHA1} s6.tar.gz" | sha1sum -c - &&     tar -xzf
+      s6.tar.gz -C /usr/local/ &&     rm -rf ${DIR}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /root/.ssh &&   echo "Host *\n\tStrictHostKeyChecking no\n" >> /root/.ssh/config
+      &&   sed -i -e '/^session.save_/ s/^/;/' /etc/php5/*/php.ini &&   touch /var/log/msmtp.log
+      &&   chown www-data:www-data /var/log/msmtp.log &&   sed -i -r 's/^Listen.*/Listen
+      8000/g' /etc/apache2/ports.conf &&   sed -i 's/^error_log.*/error_log = \/dev\/stderr/'
+      /etc/php5/fpm/php-fpm.conf &&   sed -i -E 's/^;?systemd_interval.*/systemd_interval
+      = 0/' /etc/php5/fpm/php-fpm.conf &&   mv /etc/php5/fpm/pool.d/www.conf /etc/php5/fpm/pool.d/www.conf_orig
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - apache2.conf
+    - /etc/apache2/conf-available/php5-fpm.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php.d
+    - /etc/php5/mods-available
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - msmtprc
+    - /etc/msmtprc
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php-fpm.conf
+    - /etc/php5/fpm/pool.d/www.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - voltgrid.conf
+    - /usr/local/etc/voltgrid.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - s6
+    - /etc/s6/
+  - CmdLine:
+    - cd /tmp   && wget https://github.com/panubo/php-extras/archive/master.tar.gz   &&
+      tar --wildcards -C /usr/share/php/ -xvf master.tar.gz --strip 1 '*.php'    &&
+      rm -f /tmp/master.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - php5enmod suhosin session mongo &&   a2dissite 000-default &&   a2disconf security
+      other-vhosts-access-log &&   a2enconf php5-fpm &&   a2enmod proxy_fcgi remoteip
+      rewrite headers
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TMPDIR
+      Value: /var/tmp
+    - Key: TERM
+      Value: dumb
+    Name: env
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - /usr/local/bin/voltgrid.py
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /usr/local/bin/s6-svscan
+    - /etc/s6
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:8

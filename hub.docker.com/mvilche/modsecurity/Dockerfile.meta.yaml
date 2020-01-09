@@ -1,0 +1,103 @@
+MetaArgs: null
+Stages:
+- BaseName: centos
+  Commands:
+  - Labels:
+    - Key: PROYECTO
+      Value: '"APACHE + MODSECURITY"'
+    - Key: AUTOR
+      Value: '"MARTIN VILCHE"'
+    Name: label
+  - Env:
+    - Key: LANG
+      Value: es_ES.UTF-8
+    - Key: TZ
+      Value: America/Montevideo
+    Name: env
+  - CmdLine:
+    - localedef -i es_ES -f UTF-8 es_ES.UTF-8 && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime
+      && echo $TZ > /etc/timezone && yum install epel-release -y && yum update -y
+      &&  yum install httpd mod_ssl git openssl mod_security -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /etc/httpd/certificados && sed -i -e "s/^Listen 80/Listen 8080/" /etc/httpd/conf/httpd.conf
+      && openssl req -x509 -sha256 -newkey rsa:4060 -keyout /etc/httpd/certificados/sitio.key
+      -out /etc/httpd/certificados/sitio.crt -days 1024 -nodes -subj "/C=UY/ST=UY/L=UY/O=WAF/OU=WAF/CN=localhost"
+      && sed -ri -e 's!^(\s*CustomLog)\s+\S+!\1 /proc/self/fd/1!g' -e 's!^(\s*ErrorLog)\s+\S+!\1
+      /proc/self/fd/2!g' /etc/httpd/conf/httpd.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /etc/httpd/ && git clone --depth=1 https://github.com/SpiderLabs/owasp-modsecurity-crs.git
+      && mv owasp-modsecurity-crs modsecurity && mv modsecurity/crs-setup.conf.example
+      modsecurity/crs-setup.conf && mv modsecurity/rules/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf.example
+      modsecurity/rules/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf && mv modsecurity/rules/RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf.example
+      modsecurity/rules/RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf && rm -rf modsecurity.d
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum remove git -y && yum autoremove -y && rm -rf /var/cache/yum /etc/httpd/conf.d/welcome.conf
+      /etc/httpd/conf.d/ssl.conf /etc/httpd/conf.d/mod_security.conf
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/share/httpd
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - /usr/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - seguridad.conf
+    - /etc/httpd/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sitio.conf
+    - /etc/httpd/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ErrorPages
+    - /var/www/html/ErrorPages
+  - CmdLine:
+    - touch /var/log/httpd/modsec_audit.log && usermod -aG root apache && chmod +x
+      /usr/bin/run.sh && chown apache -R /etc/httpd /var/log/httpd /usr/share/httpd
+      /var/run/httpd /var/lib/mod_security /var/www/html /usr/bin/run.sh && ln -sf
+      /dev/stdout /var/log/httpd/modsec_audit.log && chgrp -R 0 /etc/httpd /var/log/httpd
+      /usr/share/httpd /var/run/httpd /var/lib/mod_security /var/www/html /usr/bin/run.sh
+      && chmod -R g=u /etc/httpd /var/log/httpd /usr/share/httpd /var/run/httpd /var/lib/mod_security
+      /var/www/html /usr/bin/run.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+    - "8443"
+  - Name: user
+    User: apache
+  - Name: volume
+    Volumes:
+    - /var/log/httpd
+  - CmdLine:
+    - /usr/bin/run.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - httpd
+    - -D
+    - FOREGROUND
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos

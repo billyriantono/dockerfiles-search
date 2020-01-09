@@ -1,0 +1,1 @@
+from quay.io/calico/cni:v1.11.4

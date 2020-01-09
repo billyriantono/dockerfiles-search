@@ -1,0 +1,87 @@
+MetaArgs: null
+Stages:
+- BaseName: java:8-jdk
+  Commands:
+  - Maintainer: Alan Schegrer <flyinprogrammer@gmail.com>
+    Name: maintainer
+  - Env:
+    - Key: ZK_VERSION
+      Value: 3.4.6
+    - Key: EXHIBITOR_BRANCH
+      Value: master
+    - Key: EXHIBITOR_VERSION
+      Value: 1.5.6
+    - Key: PATH
+      Value: ${PATH}:/opt/zk/bin:/opt/mvn/bin
+    Name: env
+  - CmdLine:
+    - mkdir -p /opt/zk /opt/zk/transactions /opt/zk/snapshots &&     curl -Lo /tmp/zk.tar.gz     http://www.apache.org/dist/zookeeper/zookeeper-${ZK_VERSION}/zookeeper-${ZK_VERSION}.tar.gz
+      &&     tar -xzf /tmp/zk.tar.gz -C /opt/zk --strip=1 &&     rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&     apt-get install -y git &&     mkdir -p /opt/src &&     cd
+      /opt/src &&     git clone --depth 1 https://github.com/flyinprogrammer/exhibitor.git
+      &&     cd exhibitor &&     git checkout ${EXHIBITOR_BRANCH} &&     ./gradlew
+      -Prelease.version=${EXHIBITOR_VERSION} install &&     cd exhibitor-standalone/src/main/resources/buildscripts/standalone/gradle/
+      &&     ../../../../../../../gradlew shadowJar &&     mkdir -p /opt/exhibitor
+      &&     mv build/libs/exhibitor-${EXHIBITOR_VERSION}-all.jar /opt/exhibitor/exhibitor.jar
+      &&     apt-get purge -y git &&     apt-get autoremove -y &&     apt-get clean
+      autoclean &&     rm -rf /var/lib/{apt,dpkg,cache,log}/            /opt/src            $HOME/.gradle            $HOME/.m2
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CP_VERSION
+      Value: 2.4.3
+    - Key: CP_SHA1
+      Value: 2c469a0e79a7ac801f1c032c2515dd0278134790
+    Name: env
+  - CmdLine:
+    - set -x &&     curl -fSL "https://github.com/joyent/containerpilot/releases/download/${CP_VERSION}/containerpilot-${CP_VERSION}.tar.gz"
+      -o cp.tar.gz &&     echo "${CP_SHA1}  ./cp.tar.gz" | sha1sum -c - &&     tar
+      -xzvf cp.tar.gz &&     mv ./containerpilot /bin/ &&     chmod +x /bin/containerpilot
+      &&     rm cp.tar.gz &&     containerpilot -version
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - wrapper.sh
+    - /opt/exhibitor/wrapper.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - zk.log4j.properties
+    - /opt/zk/conf/log4j.properties
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - app.json
+    - /opt/exhibitor/app.json
+  - Env:
+    - Key: CONTAINERPILOT
+      Value: file:///opt/exhibitor/app.json
+    Name: env
+  - Name: user
+    User: root
+  - Name: workdir
+    Path: /opt/exhibitor
+  - Name: expose
+    Ports:
+    - "2181"
+    - "2888"
+    - "3888"
+    - "8181"
+  - CmdLine:
+    - containerpilot
+    - /opt/exhibitor/wrapper.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: java:8-jdk
+  Name: ""
+  Platform: ""
+  SourceCode: FROM java:8-jdk

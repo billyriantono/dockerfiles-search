@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- As: build-ui
+  BaseName: node:8-slim
+  Commands:
+  - Name: workdir
+    Path: /go/src/github.com/dictionary-generator/ui
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./ui
+    - .
+  - CmdLine:
+    - npm config set registry https://registry.npm.taobao.org && npm install && npm
+      run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8-slim
+  Name: build-ui
+  Platform: ""
+  SourceCode: FROM node:8-slim as build-ui
+- As: builder-server
+  BaseName: golang:1.12.6
+  Commands:
+  - Env:
+    - Key: GO15VENDOREXPERIMENT
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Name: workdir
+    Path: /go/src/github.com/dictionary-generator
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./server
+    - .
+  - CmdLine:
+    - go build -mod=vendor -o server
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.6
+  Name: builder-server
+  Platform: ""
+  SourceCode: FROM golang:1.12.6 as builder-server
+- As: final
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk --update upgrade && apk add sqlite
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /lib64 && ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: builder-server
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/dictionary-generator/server
+    - /app/server
+  - Chown: ""
+    From: builder-server
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/dictionary-generator/templetes
+    - /app/templetes
+  - Chown: ""
+    From: build-ui
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/dictionary-generator/server/ui-dist
+    - /app/ui-dist
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - /app/server
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: final
+  Platform: ""
+  SourceCode: FROM alpine as final

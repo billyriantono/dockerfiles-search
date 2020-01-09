@@ -1,0 +1,145 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: node:10.16-alpine
+  Commands:
+  - CmdLine:
+    - mkdir -p /var/app && chown -R node /var/app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - yarn.lock
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - public
+    - .
+  From:
+    Image: node:10.16-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:10.16-alpine AS base
+- As: dependencies
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apk add --update python build-base
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn install --production --no-progress
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -R node_modules prod_node_modules
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn install --no-progress
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: dependencies
+  Platform: ""
+  SourceCode: FROM base AS dependencies
+- As: build
+  BaseName: dependencies
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Key: API_URI
+    Name: arg
+    Value: null
+  - Key: APP_URI
+    Name: arg
+    Value: null
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - CmdLine:
+    - yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: dependencies
+  Name: build
+  Platform: ""
+  SourceCode: FROM dependencies AS build
+- As: release
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: dependencies
+    Name: copy
+    SourcesAndDest:
+    - /var/app/node_modules
+    - ./node_modules
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /var/app/.next
+    - ./.next
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./server.js
+    - ./server.js
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./next.config.js
+    - ./next.config.js
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./public
+    - ./public
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - yarn prod
+    Name: cmd
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: release
+  Platform: ""
+  SourceCode: FROM base AS release

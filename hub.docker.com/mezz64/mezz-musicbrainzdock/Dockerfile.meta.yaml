@@ -1,0 +1,108 @@
+MetaArgs: null
+Stages:
+- BaseName: linuxserver/baseimage
+  Commands:
+  - Maintainer: Sparklyballs <sparklyballs@linuxserver.io>
+    Name: maintainer
+  - Env:
+    - Key: DATA_ROOT
+      Value: '"/data"'
+    - Key: PG_MAJOR
+      Value: '"9.5"'
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: '"en_US.UTF-8"'
+    - Key: LANGUAGE
+      Value: '"en_US:en"'
+    - Key: LC_ALL
+      Value: '"en_US.UTF-8"'
+    - Key: URL_ROOT
+      Value: '"ftp://ftp.musicbrainz.org/pub/musicbrainz/data/fullexport"'
+    - Key: PERL5LIB
+      Value: '"/app/perl"'
+    - Key: PGCONF
+      Value: '"/config"'
+    - Key: APTLIST
+      Value: '"build-essential cpanminus git-core libbz2-dev libdb-dev libexpat1-dev
+        libicu-dev libjson-xs-perl liblocal-lib-perl libpq-dev libxml2-dev memcached
+        postgresql-$PG_MAJOR postgresql-client-$PG_MAJOR postgresql-contrib-$PG_MAJOR
+        postgresql-plperl-$PG_MAJOR postgresql-server-dev-$PG_MAJOR python-software-properties
+        redis-server software-properties-common wget"'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /usr/lib/postgresql/$PG_MAJOR/bin:$PATH
+    Name: env
+  - Env:
+    - Key: MBDATA
+      Value: $DATA_ROOT/import
+    Name: env
+  - Env:
+    - Key: PGDATA
+      Value: $DATA_ROOT/dbase
+    Name: env
+  - CmdLine:
+    - locale-gen en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - defaults/
+    - /defaults/
+  - CmdLine:
+    - apt-key adv --keyserver keyserver.ubuntu.com --recv-keys B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
+      && echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" > /etc/apt/sources.list.d/pgdg.list
+      && curl -sL https://deb.nodesource.com/setup_0.12 | bash - && apt-get install
+      nodejs postgresql-common -qy && npm install -g npm@latest && sed -ri 's/#(create_main_cluster)
+      .*$/\1 = false/' /etc/postgresql-common/createcluster.conf && apt-get clean
+      && rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - add-apt-repository ppa:chris-lea/redis-server && apt-get update -q && apt-get
+      install $APTLIST -qy && apt-get clean && rm -rf /tmp/* /var/lib/apt/lists/*
+      /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b production --recursive git://github.com/metabrainz/musicbrainz-server.git
+      /app/musicbrainz && cp /defaults/DBDefs.pm /app/musicbrainz/lib/DBDefs.pm &&
+      mkdir -p $PERL5LIB && cd /app/musicbrainz && cpanm --installdeps --notest .
+      && npm install && ./script/compile_resources.sh && cd /app/musicbrainz/postgresql-musicbrainz-unaccent
+      && make && make install && cd /app/musicbrainz/postgresql-musicbrainz-collate
+      && make && make install && apt-get clean && rm -rf /tmp/* /var/lib/apt/lists/*
+      /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - init/
+    - /etc/my_init.d/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - services/
+    - /etc/service/
+  - CmdLine:
+    - chmod -v +x /etc/service/*/run /etc/my_init.d/*.sh /defaults/update-script.sh
+      && sed 's/^loglevel notice/loglevel warning/' -i /etc/redis/redis.conf && sed
+      's/^daemonize yes/daemonize no/' -i /etc/redis/redis.conf && sed 's/^bind 127.0.0.1/bind
+      0.0.0.0/' -i /etc/redis/redis.conf && sed 's/^logfile \/var\/log\/redis\/redis-server.log/logfile
+      \"\"/' -i /etc/redis/redis.conf && sed -i 's#/var/lib/redis#/data/redis#g' /etc/redis/redis.conf
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /config
+    - /data
+  - Name: expose
+    Ports:
+    - "5000"
+  From:
+    Image: linuxserver/baseimage
+  Name: ""
+  Platform: ""
+  SourceCode: FROM linuxserver/baseimage

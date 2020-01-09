@@ -1,0 +1,1 @@
+FROM goharbor/harbor-log:v1.7.4
