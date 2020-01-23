@@ -1,0 +1,179 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine
+  Commands:
+  - Maintainer: Even Rouault <even.rouault@spatialys.com>
+    Name: maintainer
+  - CmdLine:
+    - apk add --no-cache wget curl unzip make libtool autoconf automake pkgconfig
+      g++ sqlite sqlite-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache     linux-headers     curl-dev     zlib-dev zstd-dev     libjpeg-turbo-dev
+      libpng-dev openjpeg-dev libwebp-dev expat-dev     postgresql-dev     && mkdir
+      -p /build_thirdparty/usr/lib
+    Name: run
+    PrependShell: true
+  - Key: GEOS_VERSION
+    Name: arg
+    Value: 3.8.0
+  - CmdLine:
+    - if test "${GEOS_VERSION}" != ""; then (     wget -q http://download.osgeo.org/geos/geos-${GEOS_VERSION}.tar.bz2     &&
+      tar xjf geos-${GEOS_VERSION}.tar.bz2      && rm -f geos-${GEOS_VERSION}.tar.bz2     &&
+      cd geos-${GEOS_VERSION}     && ./configure --prefix=/usr --disable-static     &&
+      make -j$(nproc)     && make install     && cp -P /usr/lib/libgeos*.so* /build_thirdparty/usr/lib     &&
+      for i in /build_thirdparty/usr/lib/*; do strip -s $i 2>/dev/null || /bin/true;
+      done     && cd ..     && rm -rf geos-${GEOS_VERSION}     ); fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if test "${OPENJPEG_VERSION}" != ""; then (     apk add --no-cache cmake     &&
+      wget -q https://github.com/uclouvain/openjpeg/archive/v${OPENJPEG_VERSION}.tar.gz     &&
+      tar xzf v${OPENJPEG_VERSION}.tar.gz     && rm -f v${OPENJPEG_VERSION}.tar.gz     &&
+      cd openjpeg-${OPENJPEG_VERSION}     && cmake . -DBUILD_SHARED_LIBS=ON  -DBUILD_STATIC_LIBS=OFF
+      -DCMAKE_BUILD_TYPE=Release         -DCMAKE_INSTALL_PREFIX=/usr     && make -j$(nproc)     &&
+      make install     && rm -f /usr/lib/libopenjp2.so.2.3.0     && cp -P /usr/lib/libopenjp2*.so*
+      /build_thirdparty/usr/lib     && for i in /build_thirdparty/usr/lib/*; do strip
+      -s $i 2>/dev/null || /bin/true; done     && cd ..     && rm -rf openjpeg-${OPENJPEG_VERSION}     &&
+      apk del cmake     ); fi
+    Name: run
+    PrependShell: true
+  - Key: PROJ_DATUMGRID_LATEST_LAST_MODIFIED
+    Name: arg
+    Value: null
+  - CmdLine:
+    - mkdir -p /build_projgrids/usr/share/proj     && curl -LOs http://download.osgeo.org/proj/proj-datumgrid-latest.zip     &&
+      unzip -q -j -u -o proj-datumgrid-latest.zip  -d /build_projgrids/usr/share/proj     &&
+      rm -f *.zip
+    Name: run
+    PrependShell: true
+  - Key: PROJ_VERSION
+    Name: arg
+    Value: 6.2.1
+  - CmdLine:
+    - mkdir proj     && wget -q https://github.com/OSGeo/PROJ/archive/${PROJ_VERSION}.tar.gz
+      -O -         | tar xz -C proj --strip-components=1     && cd proj     && ./autogen.sh     &&
+      ./configure --prefix=/usr --disable-static --enable-lto     && make -j$(nproc)     &&
+      make install     && make install DESTDIR="/build_proj"     && cd ..     && rm
+      -rf proj     && for i in /build_proj/usr/lib/*; do strip -s $i 2>/dev/null ||
+      /bin/true; done     && for i in /build_proj/usr/bin/*; do strip -s $i 2>/dev/null
+      || /bin/true; done
+    Name: run
+    PrependShell: true
+  - Key: GDAL_VERSION
+    Name: arg
+    Value: 3.0.2
+  - Key: GDAL_RELEASE_DATE
+    Name: arg
+    Value: null
+  - CmdLine:
+    - 'if test "${GDAL_VERSION}" = "master"; then         export GDAL_VERSION=$(curl
+      -Ls https://api.github.com/repos/OSGeo/gdal/commits/HEAD -H "Accept: application/vnd.github.VERSION.sha");         export
+      GDAL_RELEASE_DATE=$(date "+%Y%m%d");     fi     && export GDAL_EXTRA_ARGS=""     &&
+      if test "${GEOS_VERSION}" != ""; then         export GDAL_EXTRA_ARGS="--with-geos
+      ${GDAL_EXTRA_ARGS}";     fi     && if test "${XERCESC_VERSION}" != ""; then         export
+      GDAL_EXTRA_ARGS="--with-xerces ${GDAL_EXTRA_ARGS}";     fi     && if test "${HDF4_VERSION}"
+      != ""; then         apk add --no-cache portablexdr-dev         && export LDFLAGS="-lportablexdr
+      ${LDFLAGS}"         && export GDAL_EXTRA_ARGS="--with-hdf4 ${GDAL_EXTRA_ARGS}";     fi     &&
+      if test "${HDF5_VERSION}" != ""; then         export GDAL_EXTRA_ARGS="--with-hdf5
+      ${GDAL_EXTRA_ARGS}";     fi     && if test "${NETCDF_VERSION}" != ""; then         export
+      GDAL_EXTRA_ARGS="--with-netcdf ${GDAL_EXTRA_ARGS}";     fi     && if test "${SPATIALITE_VERSION}"
+      != ""; then         export GDAL_EXTRA_ARGS="--with-spatialite ${GDAL_EXTRA_ARGS}";     fi     &&
+      if test "${POPPLER_DEV}" != ""; then         export GDAL_EXTRA_ARGS="--with-poppler
+      ${GDAL_EXTRA_ARGS}";     fi     && echo ${GDAL_EXTRA_ARGS}     && mkdir gdal     &&
+      wget -q https://github.com/OSGeo/gdal/archive/v${GDAL_VERSION}.tar.gz -O -         |
+      tar xz -C gdal --strip-components=1     && cd gdal/gdal     && ./configure --prefix=/usr
+      --without-libtool     --with-hide-internal-symbols     --with-proj=/usr     --with-libtiff=internal
+      --with-rename-internal-libtiff-symbols     --with-geotiff=internal --with-rename-internal-libgeotiff-symbols     ${GDAL_EXTRA_ARGS}     &&
+      make -j$(nproc)     && make install DESTDIR="/build"     && cd ../..     &&
+      rm -rf gdal     && mkdir -p /build_gdal_version_changing/usr/include     &&
+      mv /build/usr/lib                    /build_gdal_version_changing/usr     &&
+      mv /build/usr/include/gdal_version.h /build_gdal_version_changing/usr/include     &&
+      mv /build/usr/bin                    /build_gdal_version_changing/usr     &&
+      for i in /build_gdal_version_changing/usr/lib/*; do strip -s $i 2>/dev/null
+      || /bin/true; done     && for i in /build_gdal_version_changing/usr/bin/*; do
+      strip -s $i 2>/dev/null || /bin/true; done     && (for i in             /build/usr/share/gdal/bag*.xml             /build/usr/share/gdal/*.svg             /build/usr/share/gdal/*.png             /build/usr/share/gdal/gmlas*             /build/usr/share/gdal/netcdf_config.xsd        ;do
+      rm $i; done)'
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine as builder
+- As: runner
+  BaseName: python:3-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache         libstdc++ sqlite-libs libcurl zlib zstd-libs         libjpeg-turbo
+      libpng openjpeg libwebp expat libpq     && rm -f /usr/lib/libturbojpeg.so*     &&
+      rm -f /usr/lib/libwebpmux.so* /usr/lib/libwebpdemux.so* /usr/lib/libwebpdecoder.so*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build_thirdparty/usr/
+    - /usr/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build_projgrids/usr/
+    - /usr/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build_proj/usr/share/proj/
+    - /usr/share/proj/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build_proj/usr/include/
+    - /usr/include/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build_proj/usr/bin/
+    - /usr/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build_proj/usr/lib/
+    - /usr/lib/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/usr/share/gdal/
+    - /usr/share/gdal/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/usr/include/
+    - /usr/include/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build_gdal_version_changing/usr/
+    - /usr/
+  - CmdLine:
+    - set -ex   && apk add --no-cache --virtual .build-deps build-base gfortran   &&
+      pip install --no-cache-dir numpy   && pip install --no-cache-dir GDAL=="`gdal-config
+      --version`.*"   && apk del .build-deps   && rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3-alpine
+  Name: runner
+  Platform: ""
+  SourceCode: FROM python:3-alpine as runner

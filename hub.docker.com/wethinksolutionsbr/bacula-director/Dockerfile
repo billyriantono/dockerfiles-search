@@ -1,15 +1,13 @@
-FROM wethinksolutionsbr/bacula-base
+FROM webgarden/php
 
-MAINTAINER WeThink Solutions <contato@wethinksolutions.com.br>
+ADD processUrl.sh /usr/bin/processUrl
+RUN chmod +x /usr/bin/processUrl
 
-ENV EMAIL contato@wethinksolutions.com.br
+## Test it
 
-VOLUME ["/opt/bacula/etc"]
-
-EXPOSE 9101/tcp
-
-ENTRYPOINT ["bacula-dir"]
-
-RUN postfix start
-
-CMD ["-f", "-c", "/opt/bacula/etc/bacula-dir.conf"]
+RUN echo $(bash /usr/bin/processUrl "aym" "ft/branche" "neco.cz") \
+	&& echo $(bash /usr/bin/processUrl "aym" "ft/branche-with-name" "neco.cz") \
+	&& echo $(bash /usr/bin/processUrl "aym" "1.2.3" "neco.cz") \
+	&& echo $(bash /usr/bin/processUrl "aym" "v1.2.3" "neco.cz") \
+	&& echo $(bash /usr/bin/processUrl "aym" "develop" "neco.cz") \
+	&& echo $(bash /usr/bin/processUrl "aym" "master" "neco.cz")

@@ -1,7 +1,7 @@
 FROM ubuntu:18.04
 
 LABEL maintainer="bitbucket@bebef.de" \
-      version="3.2.1" \
+      version="3.2.4" \
       description="Provides TP-Link's Omada Controller Software in a docker container."
 
 COPY --chown=508:508 *.sh /opt/tplink/EAPController/
@@ -21,9 +21,8 @@ RUN export DEBIAN_FRONTEND=noninteractive && \
 RUN cd /tmp && \
   mkdir Omada && \
   cd Omada && \
-  wget --quiet https://static.tp-link.com/2019/201907/20190726/Omada_Controller_v3.2.1_linux_x64.tar.gz && \
+  wget --quiet https://static.tp-link.com/2019/201911/20191108/Omada_Controller_v3.2.4_linux_x64.tar.gz && \
   tar xzf *.tar.gz && \
-  cd $(find . -maxdepth 1 -type d -name 'Omada*') && \
   cd $(find . -maxdepth 1 -type d -name 'Omada*') && \
   cp -r * /opt/tplink/EAPController/ && \
   cd /tmp && \

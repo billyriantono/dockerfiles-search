@@ -1,4 +1,4 @@
-FROM alpine:3.10 as base
+FROM centos:7 as base
 
 ### Stage 1 - add/remove packages ###
 
@@ -6,28 +6,16 @@ FROM alpine:3.10 as base
 COPY ./container/root/scripts/* /scripts/
 
 # - Symlink variant-specific scripts to default location
-# - Add additional repositories to pull packages from
+# - Upgrade base security packages, then clean packaging leftover
 # - Add S6 for zombie reaping, boot-time coordination, signal transformation/distribution: @see https://github.com/just-containers/s6-overlay#known-issues-and-workarounds
 # - Add goss for local, serverspec-like testing
-RUN ln -s /scripts/clean_alpine.sh /clean.sh && \
-    echo '@edge http://dl-cdn.alpinelinux.org/alpine/edge/testing' >> /etc/apk/repositories && \
-    apk update && \
-    apk add --no-cache \
-        sed \
-        bash \
-        grep \
-        curl \
-        gnupg \
-    && \
+RUN ln -s /scripts/clean_centos.sh /clean.sh && \
+    ln -s /scripts/security_updates_centos.sh /security_updates.sh && \
+    /bin/bash -e /security_updates.sh && \
+    rpm -e systemd --nodeps && \
+    /bin/bash -e /clean.sh && \
     /bin/bash -e /scripts/install_s6.sh && \
-    /bin/bash -e /scripts/install_goss.sh && \
-    # https://github.com/gliderlabs/docker-alpine/issues/11#issuecomment-106233554
-    echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' > /etc/nsswitch.conf && \
-    apk del \
-        curl \
-        gnupg \
-    && \
-    /bin/bash -e /clean.sh
+    /bin/bash -e /scripts/install_goss.sh
 
 # Overlay the root filesystem from this repo
 COPY ./container/root /

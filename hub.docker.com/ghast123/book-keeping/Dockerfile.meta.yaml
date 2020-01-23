@@ -1,0 +1,126 @@
+MetaArgs: null
+Stages:
+- As: ca-manager
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - update-ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: ca-manager
+  Platform: ""
+  SourceCode: FROM alpine as ca-manager
+- As: builder
+  BaseName: gobuffalo/buffalo:development
+  Commands:
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - go.*
+    - ./
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - vendor
+    - vendor
+  - CmdLine:
+    - test -f "vendor/modules.txt" || go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - package.json
+    - .
+  - CmdLine:
+    - test -d "node_modules" || npm install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /sources
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - rm -rf vendor && ln -s /build/vendor
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf node_modules && ln -s /build/node_modules
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npx webpack
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - buffalo build --static --skip-build-deps --mod=vendor -o /bin/app
+    Name: run
+    PrependShell: true
+  From:
+    Image: gobuffalo/buffalo:development
+  Name: builder
+  Platform: ""
+  SourceCode: FROM gobuffalo/buffalo:development as builder
+- BaseName: scratch
+  Commands:
+  - Name: workdir
+    Path: /bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /bin/app
+    - .
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/buffalo
+    - /bin/buffalo
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /sources/public
+    - /public
+  - Chown: ""
+    From: ca-manager
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Env:
+    - Key: ADDR
+      Value: 0.0.0.0
+    Name: env
+  - Env:
+    - Key: PORT
+      Value: "3000"
+    Name: env
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - /bin/app
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

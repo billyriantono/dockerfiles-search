@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: alpine:edge
+  Commands:
+  - CmdLine:
+    - apk add --no-cache --update chromium tar zstd &&     cd /usr/lib/chromium/locales/
+      &&     find ./ -maxdepth 1 '!' -path './' '!' -path './en-US.pak' '!' -path
+      './en-US.pak.info' -exec 'rm' '{}' ';' &&     cd /usr/lib  &&     tar cvf /chromium_lib.tar
+      ./chromium &&     zstd --train -r /usr/lib/chromium -o /chromium_lib.dict &&     zstd
+      -f -22 --ultra -D /chromium_lib.dict /chromium_lib.tar
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: base
+  Platform: ""
+  SourceCode: FROM alpine:edge as base
+- As: build
+  BaseName: mhart/alpine-node:10
+  Commands:
+  - Name: workdir
+    Path: /usr/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - yarn.lock
+    - /usr/src/
+  - CmdLine:
+    - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 yarn install --production
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - .
+  - CmdLine:
+    - rm -rf **/README* **/.git*
+    Name: run
+    PrependShell: true
+  From:
+    Image: mhart/alpine-node:10
+  Name: build
+  Platform: ""
+  SourceCode: FROM mhart/alpine-node:10 as build
+- BaseName: mhart/alpine-node:base-10
+  Commands:
+  - Name: workdir
+    Path: /usr/src
+  - Env:
+    - Key: NODE_ENV
+      Value: '"production"'
+    Name: env
+  - Chown: ""
+    From: base
+    Name: copy
+    SourcesAndDest:
+    - /chromium_lib.tar.zst
+    - /chromium_lib.dict
+    - /chrome/
+  - CmdLine:
+    - apk add --no-cache --update tar zstd alsa-lib at-spi2-atk atk cairo cups-libs
+      dbus-libs eudev-libs expat flac fontconfig freetype gdk-pixbuf glib gtk+3.0
+      harfbuzz libatomic libevent libgcc libjpeg-turbo libpng libre2 libstdc++ libwebp
+      libx11 libxcb libxcomposite libxcursor libxdamage libxext libxfixes libxi libxml2
+      libxrandr libxrender libxscrnsaver libxslt libxtst musl nspr nss opus pango
+      snappy ttf-opensans minizip &&     rm -rf /usr/share/gtk-doc
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CHROME_BIN
+      Value: /usr/bin/chromium-browser
+    - Key: CHROME_PATH
+      Value: /usr/lib/chromium/
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/
+    - .
+  - CmdLine:
+    - ./start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: mhart/alpine-node:base-10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM mhart/alpine-node:base-10

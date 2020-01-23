@@ -1,0 +1,154 @@
+MetaArgs:
+- DefaultValue: node:12.2.0-alpine
+  Key: BUILDFRONTENDFROM
+  ProvidedValue: null
+  Value: node:12.2.0-alpine
+- DefaultValue: python:3.7-alpine
+  Key: SERVERFROM
+  ProvidedValue: null
+  Value: python:3.7-alpine
+Stages:
+- As: builder-frontend
+  BaseName: ${BUILDFRONTENDFROM}
+  Commands:
+  - Key: DOCKER_TAG
+    Name: arg
+    Value: null
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - frontend/package.json
+    - /frontend/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - frontend/package-lock.json
+    - /frontend/
+  - Name: workdir
+    Path: /frontend
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - frontend
+    - /frontend
+  - Env:
+    - Key: REACT_APP_VERSION
+      Value: $DOCKER_TAG
+    Name: env
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${BUILDFRONTENDFROM}
+  Name: builder-frontend
+  Platform: ""
+  SourceCode: FROM ${BUILDFRONTENDFROM} as builder-frontend
+- As: builder-wheels
+  BaseName: ${SERVERFROM}
+  Commands:
+  - Name: workdir
+    Path: /usr/src/app
+  - Env:
+    - Key: PYTHONDONTWRITEBYTECODE
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    Name: env
+  - CmdLine:
+    - apk update && apk add     build-base     ca-certificates     musl-dev     postgresql-dev     python3-dev     libffi-dev     openldap-dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - guacozy_server/requirements*.txt
+    - ./
+  - CmdLine:
+    - pip install --upgrade pip &&     pip wheel --no-cache-dir --wheel-dir /usr/src/app/wheels
+      -r requirements-ldap.txt
+    Name: run
+    PrependShell: true
+  From:
+    Image: ${SERVERFROM}
+  Name: builder-wheels
+  Platform: ""
+  SourceCode: FROM ${SERVERFROM} as builder-wheels
+- BaseName: ${SERVERFROM}
+  Commands:
+  - Chown: ""
+    From: builder-wheels
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/wheels
+    - /wheels
+  - CmdLine:
+    - "apk update && apk add --no-cache       bash       libpq       ca-certificates
+      \      openssl       memcached       nginx \t  supervisor"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder-wheels
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/wheels
+    - /wheels
+  - CmdLine:
+    - pip install --upgrade pip &&     pip install --no-cache /wheels/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - guacozy_server
+    - /app
+  - Chown: ""
+    From: builder-frontend
+    Name: copy
+    SourcesAndDest:
+    - /frontend/build
+    - /frontend
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker
+    - /tmp/docker
+  - CmdLine:
+    - mkdir -p /run/nginx &&     mkdir -p /run/daphne &&     cd /tmp/docker &&     mv
+      entrypoint.sh /entrypoint.sh &&     chmod +x /entrypoint.sh &&     mv nginx-default.conf
+      /etc/nginx/conf.d/default.conf &&     mkdir -p /etc/supervisor.d/ &&     mv
+      /tmp/docker/supervisor-app.ini /etc/supervisor.d/ &&     mv /tmp/docker/supervisord.conf
+      /etc/supervisord.conf &&     touch /app/.env
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - supervisord
+    - -n
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: expose
+    Ports:
+    - "443"
+  From:
+    Image: ${SERVERFROM}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ${SERVERFROM}

@@ -1,0 +1,120 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: mcr.microsoft.com/dotnet/core/aspnet:3.0-buster-slim
+  Commands:
+  - CmdLine:
+    - apt update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt install -y libgdiplus
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/lib/libgdiplus.so /lib/x86_64-linux-gnu/libgdiplus.so
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y --no-install-recommends zlib1g fontconfig libfreetype6 libx11-6
+      libxext6 libxrender1 wget gdebi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://github.com/wkhtmltopdf/wkhtmltopdf/releases/download/0.12.5/wkhtmltox_0.12.5-1.stretch_amd64.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gdebi --n wkhtmltox_0.12.5-1.stretch_amd64.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt install libssl1.0
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /usr/local/lib/libwkhtmltox.so /usr/lib/libwkhtmltox.so
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: expose
+    Ports:
+    - "443"
+  From:
+    Image: mcr.microsoft.com/dotnet/core/aspnet:3.0-buster-slim
+  Name: base
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/aspnet:3.0-buster-slim AS base
+- As: build
+  BaseName: mcr.microsoft.com/dotnet/core/sdk:3.0-buster
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Messer.Services.Pdf/Messer.Services.Pdf.csproj
+    - Messer.Services.Pdf/
+  - CmdLine:
+    - dotnet restore "Messer.Services.Pdf/Messer.Services.Pdf.csproj"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Name: workdir
+    Path: '"/src/Messer.Services.Pdf"'
+  - CmdLine:
+    - dotnet build "Messer.Services.Pdf.csproj" -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: mcr.microsoft.com/dotnet/core/sdk:3.0-buster
+  Name: build
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core/sdk:3.0-buster AS build
+- As: publish
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - dotnet publish "Messer.Services.Pdf.csproj" -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build AS publish
+- As: final
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - CmdLine:
+    - dotnet
+    - Messer.Services.Pdf.dll
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: final
+  Platform: ""
+  SourceCode: FROM base AS final

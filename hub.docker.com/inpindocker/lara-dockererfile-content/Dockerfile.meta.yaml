@@ -1,0 +1,73 @@
+MetaArgs: null
+Stages:
+- As: clone
+  BaseName: alpine/git
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Iván Mauricio Montilla Figueroa"'
+    Name: label
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - mkdir srv && cd srv && git clone --progress https://github.com/immontilla/OpenID-Connect-Java-Spring-Server.git
+      && cd .. && mkdir web && cd web && git clone --progress https://github.com/immontilla/simple-web-app.git
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine/git
+  Name: clone
+  Platform: ""
+  SourceCode: FROM alpine/git as clone
+- As: build
+  BaseName: maven:alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: clone
+    Name: copy
+    SourcesAndDest:
+    - /app/srv/OpenID-Connect-Java-Spring-Server
+    - /app/srv
+  - CmdLine:
+    - cd srv && mvn -Dmaven.javadoc.skip=true -DskipTests clean install && mkdir ../WARs
+      && mv openid-connect-server-webapp/target/openid-connect-server-webapp.war ../WARs
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: clone
+    Name: copy
+    SourcesAndDest:
+    - /app/web/simple-web-app
+    - /app/web
+  - CmdLine:
+    - cd web && mvn -DskipTests clean install && mv target/simple-web-app.war ../WARs
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM maven:alpine as build
+- BaseName: tomcat:alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app/WARs
+    - /app
+  - CmdLine:
+    - apk add --no-cache --update openssl && cp *.war /usr/local/tomcat/webapps/ &&
+      rm -rf /usr/local/tomcat/webapps/ROOT/WEB-INF/ && rm /usr/local/tomcat/webapps/ROOT/*
+      && cd /usr/local/tomcat/webapps/ROOT/ && wget https://raw.githubusercontent.com/immontilla/docker-mitreid-oidc-server/master/index.html
+    Name: run
+    PrependShell: true
+  From:
+    Image: tomcat:alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tomcat:alpine

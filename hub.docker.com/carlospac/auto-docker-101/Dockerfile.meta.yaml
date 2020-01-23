@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: ubuntu:18.04
+  Commands:
+  - Maintainer: ccort@github
+    Name: maintainer
+  - Key: OSM_VER
+    Name: arg
+    Value: 0.7.54
+  - Env:
+    - Key: EXEC_DIR
+      Value: /srv/osm3s
+    Name: env
+  - Env:
+    - Key: DB_DIR
+      Value: /srv/osm3s/db
+    Name: env
+  - CmdLine:
+    - apt-get update     && apt-get install -y --force-yes --no-install-recommends
+      g++ make expat libexpat1-dev zlib1g-dev curl wget     osmium-tool bzip2 apache2     &&
+      rm -rf /var/lib/apt/lists/*     && curl -o osm-3s_v$OSM_VER.tar.gz http://dev.overpass-api.de/releases/osm-3s_v$OSM_VER.tar.gz     &&
+      tar -zxvf osm-3s_v${OSM_VER}.tar.gz     && cd osm-3s_v*     && ./configure CXXFLAGS="-O2"
+      --prefix="$EXEC_DIR"     && make install     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as builder
+- As: prod
+  BaseName: ubuntu:18.04
+  Commands:
+  - Key: OSM_VER
+    Name: arg
+    Value: 0.7.54
+  - Env:
+    - Key: EXEC_DIR
+      Value: /srv/osm3s
+    Name: env
+  - Env:
+    - Key: DB_DIR
+      Value: /srv/osm3s/db
+    Name: env
+  - CmdLine:
+    - apt-get update     && apt-get install -y --force-yes --no-install-recommends
+      wget osmium-tool bzip2 apache2     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod cgi     && a2enmod ext_filter     && echo "ServerName localhost" | tee
+      /etc/apache2/conf-available/servername.conf     && a2enconf servername
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./vhost.conf
+    - /etc/apache2/sites-available/ov.conf
+  - CmdLine:
+    - a2ensite ov && a2dissite 000-default && mkdir -p "$EXEC_DIR/"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - '"$EXEC_DIR"'
+    - '"$EXEC_DIR"'
+  - Key: PLANET_FILE
+    Name: arg
+    Value: /mexico_small.osm
+  - CmdLine:
+    - wget -O "$PLANET_FILE" https://overpass-api.de/api/map?bbox=-99.6185,19.0725,-98.6023,19.8649
+      --no-check-certificate -nv     && mkdir -p "$DB_DIR/" && cat "$PLANET_FILE"
+      | /srv/osm3s/bin/update_database --db-dir=$DB_DIR/ --meta
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - service apache2 start && $EXEC_DIR/bin/dispatcher --osm-base --meta --db-dir=$DB_DIR
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: prod
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as prod

@@ -1,0 +1,192 @@
+MetaArgs: null
+Stages:
+- BaseName: phusion/baseimage:0.11
+  Commands:
+  - Env:
+    - Key: TZ
+      Value: '"UTC"'
+    Name: env
+  - CmdLine:
+    - echo $TZ > /etc/timezone
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s/^exit 101$/exit 0/" /usr/sbin/policy-rc.d
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&     DEBIAN_FRONTEND=noninteractive apt-get install -q -y --no-install-recommends
+      apt-transport-https         ca-certificates curl wget tar software-properties-common
+      sudo zip unzip git tzdata         nginx nginx-common nginx-extras         php7.2-fpm
+      php7.2-cli php7.2-gd         php7.2-curl php7.2-xml php7.2-zip php7.2-mysqlnd
+      php7.2-mbstring php7.2-intl php7.2-redis
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'adduser --home /var/azuracast --disabled-password --gecos "" azuracast     &&
+      usermod -aG docker_env azuracast     && mkdir -p /var/azuracast/www     && mkdir
+      -p /var/azuracast/www_tmp     && mkdir -p /var/azuracast/geoip     && mkdir
+      -p /etc/letsencrypt     && chown -R azuracast:azuracast /var/azuracast     &&
+      chown -R azuracast:azuracast /etc/letsencrypt     && chmod -R 777 /var/azuracast/www_tmp     &&
+      echo ''azuracast ALL=(ALL) NOPASSWD: ALL'' >> /etc/sudoers'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /run/php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch /run/php/php7.2-fpm.pid
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./php/php.ini
+    - /etc/php/7.2/fpm/conf.d/05-azuracast.ini
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./php/php.ini
+    - /etc/php/7.2/cli/conf.d/05-azuracast.ini
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./php/phpfpmpool.conf
+    - /etc/php/7.2/fpm/pool.d/www.conf
+  - CmdLine:
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/bin --filename=composer
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/
+    - /usr/local/bin
+  - CmdLine:
+    - chmod -R a+x /usr/local/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz     &&
+      tar -C /var/azuracast/geoip -xzvf GeoLite2-City.tar.gz --strip-components 1     &&
+      rm GeoLite2-City.tar.gz     && chown -R azuracast:azuracast /var/azuracast/geoip
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DOCKERIZE_VERSION
+      Value: '"v0.6.1"'
+    Name: env
+  - CmdLine:
+    - wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz     &&
+      tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz     &&
+      rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./nginx/nginx.conf
+    - /etc/nginx/nginx.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./nginx/azuracast.conf
+    - /etc/nginx/conf.d/azuracast.conf
+  - CmdLine:
+    - add-apt-repository universe     && add-apt-repository ppa:certbot/certbot     &&
+      apt-get update     && DEBIAN_FRONTEND=noninteractive apt-get install -q -y --no-install-recommends
+      certbot
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl dhparam -dsaparam -out /etc/nginx/dhparam.pem 4096
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./runit/
+    - /etc/service/
+  - CmdLine:
+    - chmod +x /etc/service/*/run
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./cron/
+    - /etc/cron.d/
+  - Name: user
+    User: azuracast
+  - CmdLine:
+    - touch /var/azuracast/.docker
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "openssl req -new -nodes -x509 -subj \"/C=US/ST=Texas/L=Austin/O=IT/CN=localhost\"
+      \    -days 365 -extensions v3_ca     -keyout /etc/letsencrypt/selfsigned.key
+      \t-out /etc/letsencrypt/selfsigned.crt"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /etc/letsencrypt/selfsigned.key /etc/letsencrypt/ssl.key     && ln -s
+      /etc/letsencrypt/selfsigned.crt /etc/letsencrypt/ssl.crt
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /etc/letsencrypt
+  - Name: workdir
+    Path: /var/azuracast/www
+  - CmdLine:
+    - git clone --shallow-since=2018-11-15 https://github.com/AzuraCast/AzuraCast.git
+      .     && composer install -o --no-dev
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/azuracast/www
+  - Name: user
+    User: root
+  - Env:
+    - Key: APPLICATION_ENV
+      Value: '"production"'
+    - Key: MYSQL_HOST
+      Value: '"mariadb"'
+    - Key: MYSQL_PORT
+      Value: "3306"
+    - Key: MYSQL_USER
+      Value: '"azuracast"'
+    - Key: MYSQL_PASSWORD
+      Value: '"azur4c457"'
+    - Key: MYSQL_DATABASE
+      Value: '"azuracast"'
+    Name: env
+  - CmdLine:
+    - dockerize
+    - -wait
+    - tcp://mariadb:3306
+    - -wait
+    - tcp://influxdb:8086
+    - -timeout
+    - 20s
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /sbin/my_init
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: phusion/baseimage:0.11
+  Name: ""
+  Platform: ""
+  SourceCode: FROM phusion/baseimage:0.11

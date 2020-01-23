@@ -1,28 +1,56 @@
-FROM base/devel
+# Use the latest version of Ubuntu
+FROM bitnami/node:8.4.0-r1
 
-# Use `/usr/bin/true` as a dummy editor
-ENV EDITOR=true
+# Fetch and install system tools
+RUN apt-get update && apt-get -y -q --no-install-recommends install \
+    build-essential \
+    curl \
+    bash \
+    git \
+    libffi6 \
+    libffi-dev \
+    python \
+    python-dev \
+    ruby \
+    ruby-dev \
+    rubygems
 
-RUN echo '[multilib]' >> /etc/pacman.conf && \
-    echo 'Include = /etc/pacman.d/mirrorlist' >> /etc/pacman.conf && \
-    pacman --noconfirm -Syyu && \
-    pacman --noconfirm -S git && \
-    useradd -m -s /bin/bash aur && \
-    passwd -d aur && \
-    echo 'aur ALL=(ALL) ALL' > /etc/sudoers.d/aur && \
-    echo 'Defaults env_keep += "EDITOR"' >> /etc/sudoers.d/aur && \
-    mkdir -p /home/aur/.gnupg && \
-    echo 'standard-resolver' > /home/aur/.gnupg/dirmngr.conf && \
-    chown -R aur:aur /home/aur && \
-    mkdir /build && \
-    chown -R aur:aur /build && \
-    cd /build && \
-    sudo -u aur gpg --recv-key 465022E743D71E39 && \
-    sudo -u aur git clone --depth 1 https://github.com/polygamma/aurman.git && \
-    cd aurman && \
-    sudo -u aur makepkg --noconfirm -si && \
-    yes | pacman -Scc && \
-    cd / && \
-    rm -rf /build
+# Install gems for sass and scss lint. We do it in a separate pass to make sure
+# that rubygems is available before using it
+RUN gem install \
+    sass \
+    scss_lint
 
+# Make bash the default shell by removing /bin/sh and linking bash to it
+RUN rm /bin/sh && ln -s /bin/bash /bin/sh
+
+# Create the development environment
+RUN  mkdir -p /app/code/ && chmod 777 /app/code/
+
+# If this works it should copy the package.json and gulpfile.js to the code directory
+COPY package.json gulpfile.js /app/
+
+# Make the tree under /opt/bitnami/node/lib/ publically writeable
+RUN /bin/bash -c "chmod -R 777 /opt/bitnami/node/lib/"
+RUN /bin/bash -c "chmod -R 777 /opt/bitnami/node/lib/node_modules/"
+
+# Install Gyp related tools for Node binary packages
+RUN npm install -g \
+    node-pre-gyp \
+    node-gyp
+
+# Install global packages
+RUN npm install -g \
+    assemble \
+    eslint \
+    # firebase-tools \
+    gulp-cli \
+    netlify-cli \
+    && npm install
+
+# Expose default gulp port
+EXPOSE 3000
+
+# Run with bash
+WORKDIR /app/
 CMD ["/bin/bash"]

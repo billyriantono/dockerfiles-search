@@ -1,0 +1,102 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: ubuntu:bionic
+  Commands:
+  - Key: MAJOR_VERSION
+    Name: arg
+    Value: "3"
+  - Key: MINOR_VERSION
+    Name: arg
+    Value: "5"
+  - Key: PATCH_VERSION
+    Name: arg
+    Value: "4"
+  - Key: SHA256_SUM
+    Name: arg
+    Value: ce50b1c91364cb77efe3776f756a6d92b76d9038b0a0782f7d53acf1e997a14d
+  - Env:
+    - Key: ROOTFS
+      Value: /build/rootfs
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - bash -c 'mkdir -p ${ROOTFS}/{bin,sbin,usr/bin,usr/local/bin,opt}'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update       && apt-get -y install apt-utils curl unzip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${ROOTFS}/opt   && curl -L -o mvn.tar.gz http://www-eu.apache.org/dist/maven/maven-${MAJOR_VERSION}/${MAJOR_VERSION}.${MINOR_VERSION}.${PATCH_VERSION}/binaries/apache-maven-${MAJOR_VERSION}.${MINOR_VERSION}.${PATCH_VERSION}-bin.tar.gz   &&
+      echo "$SHA256_SUM mvn.tar.gz" | sha256sum -c -   && tar -xzf mvn.tar.gz   &&
+      rm -f mvn.tar.gz   && mv apache-maven-* maven   && for bin in mvn mvnDebug mvnyjp;
+      do        ln -s /opt/maven/bin/${bin} ${ROOTFS}/usr/bin/${bin};      done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /bin/bash ${ROOTFS}/bin/sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv ${ROOTFS}/sbin ${ROOTFS}/sbin.orig       && mkdir -p ${ROOTFS}/sbin       &&
+      for b in ${ROOTFS}/sbin.orig/*; do            echo 'cmd=$(basename ${BASH_SOURCE[0]});
+      exec /sbin.orig/$cmd "$@"' > ${ROOTFS}/sbin/$(basename $b);            chmod
+      +x ${ROOTFS}/sbin/$(basename $b);          done
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - ${ROOTFS}/usr/local/bin/entrypoint.sh
+  - CmdLine:
+    - chmod +x ${ROOTFS}/usr/local/bin/entrypoint.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:bionic
+  Name: build
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic as build
+- BaseName: actions/java:8u181-jdk-4
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: = "ilja+docker@bobkevic.com"
+    Name: label
+  - Key: ROOTFS
+    Name: arg
+    Value: /build/rootfs
+  - Env:
+    - Key: LC_ALL
+      Value: C.UTF-8
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Env:
+    - Key: M2_HOME
+      Value: /opt/maven
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - ${ROOTFS}
+    - /
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: actions/java:8u181-jdk-4
+  Name: ""
+  Platform: ""
+  SourceCode: FROM actions/java:8u181-jdk-4

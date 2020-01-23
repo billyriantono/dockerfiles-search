@@ -1,0 +1,15 @@
+FROM gocd/gocd-agent-ubuntu-18.04:v19.2.0
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt install -y --no-install-recommends wget gnupg ca-certificates && \
+  wget -q https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb && \
+  dpkg -i packages-microsoft-prod.deb && \
+  apt update && \
+  apt install -y --no-install-recommends apt-transport-https dotnet-sdk-2.2 && \
+  apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF && \
+  echo "deb https://download.mono-project.com/repo/ubuntu stable-bionic main" | tee /etc/apt/sources.list.d/mono-official-stable.list && \
+  apt update && \
+  apt install -y mono-devel nuget openjdk-8-jdk && \
+  dotnet tool install --global dotnet-sonarscanner && \
+  rm -rf /var/lib/apt/lists/*

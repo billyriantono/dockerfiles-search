@@ -1,0 +1,72 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: python:2.7-alpine
+  Commands:
+  - Key: ELASTALERT_VERSION
+    Name: arg
+    Value: 0.1.39
+  - Key: ELASTALERT_HOME
+    Name: arg
+    Value: /opt/elastalert
+  - CmdLine:
+    - apk add --update ca-certificates openssl-dev openssl libffi-dev gcc musl-dev
+      &&     wget https://github.com/Yelp/elastalert/archive/v${ELASTALERT_VERSION}.zip
+      -O elastalert.zip &&     unzip elastalert.zip &&     mv elastalert-* "${ELASTALERT_HOME}"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: '"${ELASTALERT_HOME}"'
+  - CmdLine:
+    - sed -i 's/elasticsearch/elasticsearch<7.0.0/' requirements.txt &&     sed -i
+      "s/'elasticsearch',/'elasticsearch<7.0.0',/" setup.py &&     python setup.py
+      install &&     pip install -r requirements.txt
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:2.7-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM python:2.7-alpine AS builder
+- As: runner
+  BaseName: python:2.7-alpine
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache curl tzdata make libmagic
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/python2.7/site-packages/
+    - /usr/local/lib/python2.7/site-packages/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/elastalert
+    - /opt/elastalert
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/elastalert*
+    - /usr/local/bin/
+  - Name: workdir
+    Path: /opt/elastalert-server
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /opt/elastalert-server
+  - CmdLine:
+    - /usr/local/bin/elastalert
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: python:2.7-alpine
+  Name: runner
+  Platform: ""
+  SourceCode: FROM python:2.7-alpine AS runner

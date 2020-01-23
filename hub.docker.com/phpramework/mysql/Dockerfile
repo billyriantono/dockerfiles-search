@@ -1,10 +1,14 @@
-FROM mysql:5.7.17
+FROM perseidsproject/morpheus-perseids:v1.0.0
 
-MAINTAINER phpramework <phpramework@gmail.com>
+RUN apt-get update -qq && apt-get install -qq -y ruby ruby-dev
 
-ENV MYSQL_ROOT_PASSWORD=my_root \
-    MYSQL_DATABASE=hello_world \
-    MYSQL_USER=benchmarkdbuser \
-    MYSQL_PASSWORD=benchmarkdbpass
+ADD . /app
+WORKDIR /app
 
-COPY create.sql /docker-entrypoint-initdb.d/create.sql
+ENV RACK_ENV=production
+ENV BUNDLE_SILENCE_ROOT_WARNING 1
+
+RUN gem install bundler --version 2.0.1
+RUN bundle install
+
+CMD bundle exec ruby app.rb

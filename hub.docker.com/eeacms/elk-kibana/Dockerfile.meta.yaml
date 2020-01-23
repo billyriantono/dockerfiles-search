@@ -1,0 +1,123 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: centos:7
+  Commands:
+  - CmdLine:
+    - yum -y install epel-release
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum -y update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum -y install npm git curl vim nodejs zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --silent --location https://dl.yarnpkg.com/rpm/yarn.repo | tee /etc/yum.repos.d/yarn.repo
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum -y install yarn-1.10.1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install -g n
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: KIBANA_VERSION
+      Value: 6.8.3
+    Name: env
+  - CmdLine:
+    - git clone https://github.com/elastic/kibana.git /kibana-dev     && cd /kibana-dev     &&
+      git checkout v$KIBANA_VERSION     && sed "s#Loading Kibana#Loading Inpire#g"
+      -i  /kibana-dev/src/ui/ui_render/views/ui_app.pug     && sed "s#title Kibana#title
+      INSPIRE#g" -i /kibana-dev/src/ui/ui_render/views/chrome.pug
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/ui_app.jade
+    - /tmp/ui_app.jade
+  - CmdLine:
+    - sed -i -e '/\.kibanaWelcomeLogo {/{r /tmp/ui_app.jade' -e 'd}' /kibana-dev/src/ui/ui_render/views/ui_app.pug  &&
+      rm /tmp/ui_app.jade
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/*.png
+    - /kibana-dev/src/ui/public/assets/favicons/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/*.ico
+    - /kibana-dev/src/ui/public/assets/favicons
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src/*.svg
+    - /kibana-dev/src/ui/public/assets/favicons
+  - Name: workdir
+    Path: /kibana-dev
+  - CmdLine:
+    - 'n "$(cat .node-version)"  && echo "network-timeout 600000" >> .yarnrc  && sed
+      -i "s/FORCE_DLL_CREATION: ''true''/FORCE_DLL_CREATION: ''true'', NODE_OPTIONS:
+      ''--max-old-space-size=2048''/"    src/dev/build/tasks/optimize_task.js  &&
+      yarn kbn bootstrap  && yarn build --skip-os-packages  && mv /kibana-dev/build/oss/kibana-$KIBANA_VERSION-SNAPSHOT-linux-x86_64
+      /opt/kibana  && sed "s#-SNAPSHOT##g" -i /opt/kibana/package.json'
+    Name: run
+    PrependShell: true
+  From:
+    Image: centos:7
+  Name: build
+  Platform: ""
+  SourceCode: FROM centos:7 AS build
+- BaseName: centos:7
+  Commands:
+  - Maintainer: michimau <mauro.michielon@eea.europa.eu>
+    Name: maintainer
+  - CmdLine:
+    - yum update -y && yum install -y fontconfig freetype && yum clean all
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /opt/kibana
+    - /opt/kibana
+  - Env:
+    - Key: PATH
+      Value: /opt/kibana/bin:$PATH
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - chmod a+x /docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "5601"
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /opt/kibana/bin/kibana
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos:7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:7

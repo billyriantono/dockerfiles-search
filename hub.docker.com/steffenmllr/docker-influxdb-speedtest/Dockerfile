@@ -1,22 +1,14 @@
-FROM node:10
+FROM alpine:latest
 
-RUN apt-get update -qq -y \
-&&  apt-get install -qq -y apt-transport-https unzip \
-&&  curl -sSL https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
-&&  echo "deb [arch=amd64] https://dl.google.com/linux/chrome/deb/ stable main #Google-Chrome" > /etc/apt/sources.list.d/google-chrome.list \
-&&  apt-get update -qq -y \
-&&  apt-get install -qq -y --no-install-recommends google-chrome-stable \
-&&  curl -s https://chromedriver.storage.googleapis.com/"$(curl -s https://chromedriver.storage.googleapis.com/LATEST_RELEASE)"/chromedriver_linux64.zip -o /tmp/chromedriver_linux64.zip \
-&&  unzip -d /usr/bin /tmp/chromedriver_linux64.zip \
-&&  apt-get clean \
-&&  rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+LABEL maintainer "srz_zumix <https://github.com/srz-zumix>"
 
+ARG BRANCH_OR_TAG=master
+RUN env \
+  && apk update && apk upgrade \
+  && apk add --no-cache -q -f git cmake make g++
 
-RUN mkdir app
-WORKDIR /app
-COPY ./package-lock.json ./package-lock.json
-COPY ./package.json ./package.json
-RUN npm install --only=prod
-COPY ./index.js ./index.js
-
-CMD ["node", "index.js"]
+RUN git clone --depth=1 -b $BRANCH_OR_TAG -q https://github.com/google/googletest.git /googletest
+RUN mkdir -p /googletest/build
+WORKDIR /googletest/build
+RUN cmake .. && make && make install \
+  && rm -rf /googletest

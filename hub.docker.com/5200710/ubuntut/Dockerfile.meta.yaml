@@ -1,0 +1,161 @@
+MetaArgs: null
+Stages:
+- As: js
+  BaseName: node:lts-alpine
+  Commands:
+  - Name: workdir
+    Path: /project
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - package-lock.json
+    - tsconfig.json
+    - webpack.config.js
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets
+    - ./assets
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - public
+    - ./public
+  - CmdLine:
+    - ls -la . && ls -la ./assets
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p public/build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:lts-alpine
+  Name: js
+  Platform: ""
+  SourceCode: FROM node:lts-alpine as js
+- BaseName: php:7.3-fpm
+  Commands:
+  - Key: COMPOSER_VERSION
+    Name: arg
+    Value: '''1.9.0'''
+  - Key: TINI_VERSION
+    Name: arg
+    Value: '''0.18.0'''
+  - Name: workdir
+    Path: /project
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - Chown: ""
+    From: js
+    Name: copy
+    SourcesAndDest:
+    - /project/public/build
+    - ./public/build
+  - CmdLine:
+    - apt-get update     && apt-get install -y wget unzip nano     && apt-get install
+      -y         libzip-dev libfreetype6-dev libjpeg62-turbo-dev libmcrypt-dev libpng-dev
+      libicu-dev libpq-dev     && docker-php-ext-install -j$(nproc) zip mbstring json
+      gd iconv pcntl intl pdo pdo_pgsql     && apt-get install -y nginx         &&
+      ln -sf /dev/stdout /var/log/nginx/access.log         && ln -sf /dev/stderr /var/log/nginx/error.log     &&
+      apt-get clean && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/composer/composer/releases/download/${COMPOSER_VERSION}/composer.phar
+    - /usr/local/bin/composer
+  - CmdLine:
+    - chmod +x /usr/local/bin/composer
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/krallin/tini/releases/download/v${TINI_VERSION}/tini
+    - /tini
+  - CmdLine:
+    - chmod +x /tini
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-image/nginx.conf
+    - /etc/nginx/sites-enabled/default
+  - CmdLine:
+    - mkdir -p /sock
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /usr/local/etc/php-fpm.d/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-image/php.conf
+    - /usr/local/etc/php-fpm.d/
+  - CmdLine:
+    - composer install && bin/console cache:clear --no-warmup
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p var/cache var/log && chown www-data:www-data var/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown www-data:www-data uploads/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "APP_ENV=prod" > .env
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /project/uploads/blog
+    - /project/uploads/editor
+    - /project/uploads/parties
+    - /project/uploads/politicians
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: stopsignal
+    Signal: SIGTERM
+  - CmdLine:
+    - /tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - bash
+    - -c
+    - nginx && php-fpm -F
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:7.3-fpm
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.3-fpm

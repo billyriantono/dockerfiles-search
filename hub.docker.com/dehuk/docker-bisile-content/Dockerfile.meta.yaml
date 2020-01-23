@@ -1,0 +1,130 @@
+MetaArgs: null
+Stages:
+- As: uibuilder
+  BaseName: node:12.4-alpine
+  Commands:
+  - Name: workdir
+    Path: /ui
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./ui
+    - .
+  - CmdLine:
+    - npm install -g yarn
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yarn install && yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12.4-alpine
+  Name: uibuilder
+  Platform: ""
+  SourceCode: FROM node:12.4-alpine as uibuilder
+- As: builder
+  BaseName: golang:1.12
+  Commands:
+  - Key: GOBIN
+    Name: arg
+    Value: /go/bin/
+  - Key: GOOS
+    Name: arg
+    Value: linux
+  - Key: GOARCH
+    Name: arg
+    Value: amd64
+  - Key: CGO_ENABLED
+    Name: arg
+    Value: "0"
+  - Key: GO111MODULE
+    Name: arg
+    Value: "on"
+  - Key: PKG_NAME
+    Name: arg
+    Value: github.com/DeFacto-Team/Factom-Open-API
+  - Key: PKG_PATH
+    Name: arg
+    Value: ${GOPATH}/src/${PKG_NAME}
+  - Name: workdir
+    Path: ${PKG_PATH}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ${PKG_PATH}/
+  - CmdLine:
+    - go mod download &&   go build -o /go/bin/factom-open-api main.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12 AS builder
+- BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - set -xe &&   apk --no-cache add bash ca-certificates inotify-tools &&   addgroup
+      -g 1000 app &&   adduser -D -G app -u 1000 app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/app
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/factom-open-api
+    - ./
+  - Chown: ""
+    From: uibuilder
+    Name: copy
+    SourcesAndDest:
+    - /ui/build
+    - ./ui/build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./entrypoint.sh
+    - ./entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./migrations
+    - ./migrations
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docs/swagger.json
+    - ./docs/swagger.json
+  - CmdLine:
+    - mkdir ./values &&   chown -R app:app /home/app
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  - Name: expose
+    Ports:
+    - "8081"
+  - CmdLine:
+    - ./entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - ./factom-open-api
+    - -c
+    - /home/app/values/config.yaml
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

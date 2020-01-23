@@ -1,76 +1,77 @@
-FROM ubuntu:bionic-20180125
+FROM alpine:edge
 
-ARG APT_PROXY
-ARG APT_PROXY_SSL
-ENV DEBIAN_FRONTEND="noninteractive" \
-    SYSTEM_USER="ubuntu" \
-    SYSTEM_USER_UID="1000" \
-    SYSTEM_USER_GID="1000" \
-    TZ="Europe/London" \
-    LANG="en_GB.UTF-8" \
-    LC_ALL="en_GB.UTF-8" \
-    INIT_DEBUG="false" \
-    INIT_TRACE="false" \
-    INIT_GOSU="true" \
-    INIT_RUN_AS=""
+LABEL maintainer "Marvin Steadfast <marvin@xsteadfastx.org>"
 
-RUN set -ex; \
-    \
-    # set internal variables
-    GOSU_VERSION="1.10"; \
-    GOSU_DOWNLOAD_URL="https://github.com/tianon/gosu/releases/download"; \
-    GOSU_GPG_KEY="B42F6819007F00F88E364FD4036A9C25BF357DD4"; \
-    \
-    # install system packages
-    if [ -n "$APT_PROXY" ]; then echo "Acquire::http { Proxy \"http://${APT_PROXY}\"; };" > /etc/apt/apt.conf.d/00proxy; fi; \
-    if [ -n "$APT_PROXY_SSL" ]; then echo "Acquire::https { Proxy \"https://${APT_PROXY_SSL}\"; };" > /etc/apt/apt.conf.d/00proxy; fi; \
-    echo "APT::Install-Recommends 0;\nAPT::Install-Suggests 0;" >> /etc/apt/apt.conf.d/01norecommends; \
-    apt-get --yes update; \
-    apt-get --yes upgrade; \
-    apt-get --yes install \
-        ca-certificates \
-        curl \
-        dirmngr \
-        gnupg \
-        locales \
-    ; \
-    # SEE: https://github.com/tianon/gosu
-    curl -L "$GOSU_DOWNLOAD_URL/$GOSU_VERSION/gosu-amd64" -o /usr/local/bin/gosu; \
-    curl -L "$GOSU_DOWNLOAD_URL/$GOSU_VERSION/gosu-amd64.asc" -o /usr/local/bin/gosu.asc; \
-    export GNUPGHOME="$(mktemp -d)"; \
-    gpg --keyserver hkp://ha.pool.sks-keyservers.net:80 --recv-keys $GOSU_GPG_KEY; \
-    gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu; \
-    rm -rf $GNUPGHOME /usr/local/bin/gosu.asc; \
-    chmod +x /usr/local/bin/gosu; \
-    gosu nobody true; \
-    \
-    # SEE: https://github.com/stefaniuk/dotfiles
-    curl -L https://raw.githubusercontent.com/stefaniuk/dotfiles/master/dotfiles -o - | /bin/bash -s -- \
-        --minimal \
-    ; \
-    # configure system user
-    groupadd --system --gid $SYSTEM_USER_GID $SYSTEM_USER; \
-    useradd --system --create-home --uid $SYSTEM_USER_UID --gid $SYSTEM_USER_GID $SYSTEM_USER; \
-    locale-gen $LANG; \
-    \
-    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/* /var/cache/apt/*; \
-    rm -f /etc/apt/apt.conf.d/00proxy
+ARG WALLABAG_VERSION=2.2.3
 
-COPY assets/ /
+RUN echo http://dl-2.alpinelinux.org/alpine/edge/community/ >> /etc/apk/repositories
+RUN apk --no-cache add shadow
 
-ENTRYPOINT [ "/sbin/entrypoint.sh" ]
+RUN \
+ usermod -u 99 nobody && \
+ usermod -g 100 nobody && \
+ usermod -d /home nobody && \
+ chown -R nobody:users /home
 
-### METADATA ###################################################################
+RUN mkdir -p /config && \
+    chown -R nobody:users /config && \
+    chmod 755 -R /config
 
-ARG IMAGE
-ARG BUILD_DATE
-ARG VERSION
-ARG VCS_REF
-ARG VCS_URL
-LABEL \
-    org.label-schema.name=$IMAGE \
-    org.label-schema.build-date=$BUILD_DATE \
-    org.label-schema.version=$VERSION \
-    org.label-schema.vcs-ref=$VCS_REF \
-    org.label-schema.vcs-url=$VCS_URL \
-    org.label-schema.schema-version="1.0"
+RUN set -ex \
+ && apk update \
+ && apk upgrade --available \
+ && apk add \
+ && apk add \
+      ansible \
+      curl \
+      git \
+      libwebp \
+      mariadb-client \
+      nginx \
+      pcre \
+      php7 \
+      php7-amqp \
+      php7-bcmath \
+      php7-ctype \
+      php7-curl \
+      php7-dom \
+      php7-fpm \
+      php7-gd \
+      php7-gettext \
+      php7-iconv \
+      php7-json \
+      php7-mbstring \
+      php7-openssl \
+      php7-pdo_mysql \
+      php7-pdo_pgsql \
+      php7-pdo_sqlite \
+      php7-phar \
+      php7-session \
+      php7-simplexml \
+      php7-tokenizer \
+      php7-xml \
+      php7-zlib \
+      py-mysqldb \
+      py-psycopg2 \
+      py-simplejson \
+      rabbitmq-c \
+      s6 \
+      tar \
+ && rm -rf /var/cache/apk/* \
+ && ln -sf /dev/stdout /var/log/nginx/access.log \
+ && ln -sf /dev/stderr /var/log/nginx/error.log \
+ && curl -s http://getcomposer.org/installer | php \
+ && mv composer.phar /usr/local/bin/composer \
+ && git clone --branch $WALLABAG_VERSION --depth 1 https://github.com/wallabag/wallabag.git /var/www/wallabag
+
+COPY root /
+
+RUN set -ex \
+ && cd /var/www/wallabag \
+ && SYMFONY_ENV=prod composer install --no-dev -o --prefer-dist \
+ && chown -R nobody:users /var/www/wallabag
+
+VOLUME ["/var/www/wallabag/app/config","/config"]
+EXPOSE 80
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["wallabag"]

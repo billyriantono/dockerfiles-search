@@ -53,11 +53,6 @@ USER          core
 RUN           \
               ssh-keyscan -t rsa github.com | ssh-keygen -lf -
 
-RUN           \
-              cd /opt/sources/boxmls/service-mls-api && \
-              NODE_ENV=production npm install && \
-              sudo NODE_ENV=production npm link
-
 ENTRYPOINT    [ "/bin/bash", "/opt/sources/boxmls/service-mls-api/bin/entrypoint.sh" ]
 
 

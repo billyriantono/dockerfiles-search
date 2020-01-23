@@ -1,16 +1,4 @@
-FROM node:5.11-slim
+FROM ubuntu
 
-EXPOSE 8081
-EXPOSE 9090
-
-WORKDIR /src
-
-COPY package.json /src/package.json
-
-RUN npm install
-
-COPY . /src
-
-RUN ./build-app.sh
-
-CMD ["npm", "start"]
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends openjdk-7-jdk

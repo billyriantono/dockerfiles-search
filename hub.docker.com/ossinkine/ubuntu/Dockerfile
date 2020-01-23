@@ -1,36 +1,30 @@
-FROM ubuntu
+FROM openuniversity/data-analysis
 
-ENV DEBIAN_FRONTEND=noninteractive
+###
+# GIS Stuff
+###
+RUN apt-get update && apt-get install -y -q \ 
+    gdal-bin \
+    libgdal-dev \
+    python-gdal \
+    python3-gdal
 
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+#RUN pip2 install GDAL
+#RUN pip3 install GDAL
 
-RUN apt-get update && apt-get install -y \
-        bzip2 \
-        curl \
-        dnsutils \
-        git \
-        httpie \
-        inetutils-traceroute \
-        iputils-ping \
-        nano \
-        php-cli \
-        php-mbstring \
-        php-xml \
-        php-zip \
-        wget \
-    && rm -rf /var/lib/apt/lists/*
+RUN pip2 install shapely
+RUN pip3 install shapely
 
-RUN curl -sL https://deb.nodesource.com/setup_6.x | bash - \
-    && apt-get update && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+RUN pip2 install fiona
+RUN pip3 install fiona
 
-RUN mkdir -p /root/.ssh \
-    && echo Host \* >> /root/.ssh/config \
-    && echo ServerAliveInterval 30 >> /root/.ssh/config \
-    && echo ServerAliveCountMax 2 >> /root/.ssh/config
+RUN pip2 install descartes
+RUN pip3 install descartes
 
-RUN apt-get update && apt-get install -y apt-transport-https \
-    && curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - \
-    && echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | tee -a /etc/apt/sources.list.d/kubernetes.list \
-    && apt-get update && apt-get install -y kubectl \
-    && rm -rf /var/lib/apt/lists/*
+RUN pip2 install pysal
+RUN pip3 install pysal
+
+# Install GeoPy for Geolocation
+RUN pip2 install geopy
+RUN pip3 install geopy
+

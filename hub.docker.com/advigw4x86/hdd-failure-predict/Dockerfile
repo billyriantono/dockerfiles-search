@@ -1,12 +1,18 @@
-FROM alpine:3.3
-#MAINTAINER Advantech
+FROM alpine:3.2
+MAINTAINER John Axel Eriksson <john.eriksson@playad.se>
 
-RUN apk update \
-  && apk add --no-cache git bash nodejs && \
-  git clone https://github.com/ADVANTECH-Corp/hdd_failure_predict_service.git /home/adv/hdd_failure_predict && \
-  /bin/chmod a+w /home/adv/hdd_failure_predict/Feature.data && /bin/cp /home/adv/hdd_failure_predict/start.sh /usr/local/bin/. && \
-  /bin/chmod a+rwx -R /home/adv/hdd_failure_predict/ && \
-  /bin/rm -rf /tmp/* /var/cache/apk/*
-  
-WORKDIR /home/adv
-ENTRYPOINT ["start.sh"]
+RUN apk update && apk upgrade \
+ && apk add --update ca-certificates wget curl build-base bash zlib-dev yaml-dev openssl-dev gdbm-dev readline-dev ncurses-dev libffi-dev \
+ && curl -sSL -o ruby-install-0.5.0.tar.gz https://github.com/postmodern/ruby-install/archive/v0.5.0.tar.gz \
+ && tar xzvf ruby-install-0.5.0.tar.gz \
+ && cd ruby-install-0.5.0 && make install && cd .. \
+ && rm -rf ruby-install-* \
+ && readonly NPROC=$(grep -c ^processor /proc/cpuinfo 2>/dev/null || 1) \
+ && ruby-install --cleanup -j${NPROC} --system ruby 2.1.6 -- --disable-install-rdoc \
+ && gem install bundler --no-ri --no-rdoc \
+ && gem install io-console --no-ri --no-rdoc \
+ #&& bundle package --all \
+ #&& bundle install --deployment --no-cache --retry 3 --jobs 4 --clean --local
+ && apk del wget build-base linux-headers yaml-dev bash openssl-dev zlib-dev gdbm-dev readline-dev ncurses-dev libffi-dev \
+ && apk add readline ncurses zlib openssl yaml libssl1.0 \
+ && rm -rf /var/cache/apk/*

@@ -1,0 +1,155 @@
+MetaArgs: null
+Stages:
+- As: buildfe
+  BaseName: node:12.2.0
+  Commands:
+  - Maintainer: starforge
+    Name: maintainer
+  - Name: user
+    User: root
+  - CmdLine:
+    - wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key
+      add -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable
+      main" >> /etc/apt/sources.list.d/google.list'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -yq google-chrome-stable
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Env:
+    - Key: PATH
+      Value: /app/node_modules/.bin:$PATH
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - angularclient
+    - /app
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ng build --output-path=dist
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12.2.0
+  Name: buildfe
+  Platform: ""
+  SourceCode: FROM node:12.2.0 AS buildfe
+- As: buildbe
+  BaseName: maven:3.5.2-jdk-8-alpine
+  Commands:
+  - Maintainer: starforge
+    Name: maintainer
+  - Name: user
+    User: root
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /app/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pom.xml
+    - /app
+  - CmdLine:
+    - mvn test package
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.5.2-jdk-8-alpine
+  Name: buildbe
+  Platform: ""
+  SourceCode: FROM maven:3.5.2-jdk-8-alpine AS buildbe
+- BaseName: node:11-alpine
+  Commands:
+  - Maintainer: starforge
+    Name: maintainer
+  - Name: user
+    User: root
+  - CmdLine:
+    - apk update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk fetch openjdk8-jre
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add openjdk8-jre
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - npm install express express-http-proxy
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - express-srv.js
+    - .
+  - Chown: ""
+    From: buildfe
+    Name: copy
+    SourcesAndDest:
+    - /app/dist
+    - /app
+  - Chown: ""
+    From: buildbe
+    Name: copy
+    SourcesAndDest:
+    - /app/target/*.jar
+    - /app/kafka-test-tool.jar
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/main/resources/application.properties
+    - /app/application.properties.example
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/main/resources/log4j2-spring.xml
+    - /app/log4j2-spring.xml
+  - CmdLine:
+    - ls -lah /app
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - sh
+    - run.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: node:11-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:11-alpine

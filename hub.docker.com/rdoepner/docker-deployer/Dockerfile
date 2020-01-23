@@ -1,4 +1,4 @@
-FROM wodby/php:7.1
+FROM wodby/php:7.2
 
 ARG DEPLOYER_VERSION=6.7.3
 

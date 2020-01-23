@@ -1,0 +1,94 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - echo 'http://nl.alpinelinux.org/alpine/edge/community' >> /etc/apk/repositories
+      &&     apk add --no-cache --update --virtual .download wget &&     apk add --no-cache
+      --update ca-certificates wget tcl tclx &&     apk upgrade --update --no-cache
+      &&     update-ca-certificates &&     wget https://github.com/tcltk/tcllib/archive/tcllib-1-19-rc-2.tar.gz
+      -O - | tar -xz -C /tmp &&     tclsh /tmp/tcllib-tcllib-1-19-rc-2/installer.tcl
+      -no-html -no-nroff -no-examples -no-gui -no-apps -no-wait -pkg-path /usr/lib/tcllib1.19
+      &&     apk del .download
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: base
+  Platform: ""
+  SourceCode: FROM alpine:3.9 AS BASE
+- As: builder
+  BaseName: base
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: VERSION
+      Value: ${VERSION}
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /usr/src/tcltm
+  - CmdLine:
+    - apk add --no-cache --update curl make coreutils sed git &&     cd /usr/src/tcltm
+      &&     VERSION=${VERSION} make build &&     make install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base AS BUILDER
+- As: release
+  BaseName: base
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: maintainer
+      Value: '"G.J.R. Timmer"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.build-date
+      Value: ${BUILD_DATE}
+    - Key: org.label-schema.name
+      Value: tcltm
+    - Key: org.label-schema.vendor
+      Value: timmertech
+    - Key: org.label-schema.url
+      Value: '"https://gitlab.timmertech.nl/tcl/tcltm"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://gitlab.timmertech.nl/tcl/tcltm.git"'
+    - Key: org.label-schema.vcs-ref
+      Value: ${VCS_REF}
+    - Key: com.damagehead.gitlab.license
+      Value: MIT
+    Name: label
+  - Chown: ""
+    From: BUILDER
+    Name: copy
+    SourcesAndDest:
+    - /root/.local/bin/tcltm
+    - /usr/local/bin/tcltm
+  - CmdLine:
+    - apk add --no-cache --update make git
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: release
+  Platform: ""
+  SourceCode: FROM base AS RELEASE

@@ -1,7 +1,7 @@
 FROM python:3.6-slim-stretch
 # We choose an Python image based on :
 # - Debian 9, slim version
-# - Python 3.6
+# - Python 3.8.1
 # See here for all Python images : https://hub.docker.com/_/python
 
 # Pipenv install

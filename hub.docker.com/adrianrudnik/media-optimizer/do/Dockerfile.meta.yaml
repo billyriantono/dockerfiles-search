@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- As: tcnative
+  BaseName: centos:7
+  Commands:
+  - CmdLine:
+    - yum install -y apr-devel openssl-devel java-1.8.0-openjdk-devel tar gzip gcc
+      make redhat-rpm-config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && nativeBuildDir="$(mktemp -d)"     && nativeVersion=$(curl -sSf
+      "https://www-eu.apache.org/dist/tomcat/tomcat-connectors/native/" | sed -nE
+      's/.*<a href="([0-9]+\.[0-9]+.[0-9]+)\/">.*/\1/p' | tail -n1)     && curl -sSf
+      "https://www-eu.apache.org/dist/tomcat/tomcat-connectors/native/${nativeVersion}/source/tomcat-native-${nativeVersion}-src.tar.gz"
+      | tar -zxv -C "$nativeBuildDir" --strip-components=1     && export CATALINA_HOME="$PWD"     &&
+      cd "$nativeBuildDir/native"     && ./configure --with-apr=/usr/bin/apr-1-config               --with-java-home=/usr/lib/jvm/java-openjdk                --with-ssl=yes               --prefix=/usr     &&
+      make && make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: centos:7
+  Name: tcnative
+  Platform: ""
+  SourceCode: FROM centos:7 AS TCNATIVE
+- BaseName: centos:7
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"adorsys GmbH & Co. KG"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.vendor
+      Value: '"adorsys GmbH & Co. KG"'
+    - Key: org.label-schema.name
+      Value: '""'
+    - Key: org.label-schema.description
+      Value: '""'
+    - Key: org.label-schema.usage
+      Value: '""'
+    - Key: org.label-schema.license
+      Value: '""'
+    - Key: org.label-schema.build-date
+      Value: '""'
+    Name: label
+  - Name: expose
+    Ports:
+    - "8080"
+  - Env:
+    - Key: TZ
+      Value: Europe/Berlin
+    - Key: JAVA_OPTS
+      Value: '"-Xmx128m"'
+    Name: env
+  - Name: workdir
+    Path: /opt/app-root/src
+  - Chown: ""
+    From: TCNATIVE
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/libtcnative*so
+    - /usr/lib/
+  - CmdLine:
+    - yum update -y && yum clean all && rm -rf /var/cache/yum     && ln -snf /usr/share/zoneinfo/$TZ
+      /etc/localtime && echo $TZ > /etc/timezone     && yum install -y openssl java-1.8.0-openjdk-headless
+      apr && yum clean all     && chmod g=u /etc/passwd
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - root
+    - /
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - exec java $JAVA_OPTS -jar *.jar
+    Name: cmd
+    PrependShell: true
+  - Name: user
+    User: "1001"
+  From:
+    Image: centos:7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:7

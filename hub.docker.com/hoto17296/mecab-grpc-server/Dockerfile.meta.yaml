@@ -1,0 +1,88 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: debian:stretch
+  Commands:
+  - Key: GRPC_RELEASE_TAG
+    Name: arg
+    Value: v1.24.x
+  - CmdLine:
+    - apt-get update &&     apt-get install -y build-essential autoconf libtool git
+      pkg-config curl automake libtool curl make g++ unzip &&     apt-get clean &&     git
+      clone -b ${GRPC_RELEASE_TAG} https://github.com/grpc/grpc /var/local/git/grpc
+      &&     cd /var/local/git/grpc &&     git submodule update --init &&     cd third_party/protobuf
+      &&     git submodule update --init &&     ./autogen.sh && ./configure --enable-shared
+      &&     make -j$(nproc) && make -j$(nproc) check && make install && make clean
+      && ldconfig &&     cd /var/local/git/grpc &&     make -j$(nproc) && make install
+      && make clean && ldconfig &&     rm -rf /var/local/git/grpc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&     apt-get install -y mecab libmecab-dev &&     apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&     apt-get -y install git curl make file sudo &&     apt-get
+      clean &&     git clone --depth 1 https://github.com/neologd/mecab-ipadic-neologd.git
+      &&     echo yes | mecab-ipadic-neologd/bin/install-mecab-ipadic-neologd -n &&     rm
+      -rf mecab-ipadic-neologd
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /build
+  - CmdLine:
+    - cd /build && make clean && make
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch
+  Name: build
+  Platform: ""
+  SourceCode: FROM debian:stretch as build
+- As: runtime
+  BaseName: debian:stretch
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install -y libmecab-dev &&     apt-get clean
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/*.so*
+    - /usr/local/lib/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /build/mecab_server
+    - /usr/local/bin/
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: /usr/local/lib
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/x86_64-linux-gnu/mecab/dic
+    - /usr/lib/x86_64-linux-gnu/mecab/dic
+  - Env:
+    - Key: MECAB_OPTS
+      Value: '''-d /usr/lib/x86_64-linux-gnu/mecab/dic/mecab-ipadic-neologd'''
+    Name: env
+  - CmdLine:
+    - sh
+    - -c
+    - /usr/local/bin/mecab_server
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM debian:stretch as runtime

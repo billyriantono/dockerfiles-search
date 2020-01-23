@@ -1,17 +1,15 @@
-FROM alpine:latest
+# build stage
+FROM eduardoagrj/golang-dep AS builder
+ENV app golang-cep
+COPY Gopkg.* *.go /go/src/${app}/
+WORKDIR /go/src/${app}/
+RUN dep ensure --vendor-only \
+    && CGO_ENABLED=0 GOOS=linux go build -a -v -installsuffix netgo -installsuffix cgo  -o server *.go
 
-ARG CIANTI_JOURNAL_DIR=/srv/fava
-ARG CIANTI_JOURNAL_FILE=/srv/fava/cianti.bean
-
-RUN mkdir -p $CIANTI_JOURNAL_DIR
-COPY cianti.bean $CIANTI_JOURNAL_FILE
-
-RUN apk add --no-cache alpine-sdk bash git libxml2-dev libxslt-dev python3 python3-dev py3-pip vim
-RUN git clone https://github.com/edwardtheharris/beancount /srv/beancount
-RUN pip3 install --upgrade pip
-RUN pip3 install -e /srv/beancount
-RUN pip3 install --no-cache-dir fava fava-plugins
-RUN mkdir -p /srv/fava
-EXPOSE 5000
-
-CMD /usr/bin/fava -d --host 0.0.0.0 $CIANTI_JOURNAL_FILE
+# final stage
+FROM scratch
+ENV app golang-cep
+WORKDIR /app
+COPY --from=builder /go/src/${app}/ /app/
+EXPOSE 8080
+CMD [ "./server"]

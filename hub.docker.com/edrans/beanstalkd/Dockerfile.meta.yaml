@@ -1,27 +1,84 @@
 MetaArgs: null
 Stages:
-- BaseName: edrans/centos6
+- As: base
+  BaseName: microsoft/dotnet:2.1-aspnetcore-runtime
   Commands:
-  - Maintainer: Nicolás de la Torre <ntorre@edrans.com>
-    Name: maintainer
-  - CmdLine:
-    - yum install beanstalkd -y && yum clean all -y
-    Name: run
-    PrependShell: true
+  - Name: workdir
+    Path: /app
   - Name: expose
     Ports:
-    - "11300"
+    - "80"
+  From:
+    Image: microsoft/dotnet:2.1-aspnetcore-runtime
+  Name: base
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1-aspnetcore-runtime AS base
+- As: build
+  BaseName: microsoft/dotnet:2.1-sdk
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - GatechPF/GatechPF.csproj
+    - GatechPF/
   - CmdLine:
-    - usr/bin/beanstalkd
+    - dotnet restore GatechPF/GatechPF.csproj
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Name: workdir
+    Path: /src/GatechPF
+  - CmdLine:
+    - dotnet build GatechPF.csproj -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: microsoft/dotnet:2.1-sdk
+  Name: build
+  Platform: ""
+  SourceCode: FROM microsoft/dotnet:2.1-sdk AS build
+- As: publish
+  BaseName: build
+  Commands:
+  - CmdLine:
+    - dotnet publish GatechPF.csproj -c Release -o /app
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build AS publish
+- As: final
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - CmdLine:
+    - dotnet
+    - GatechPF.dll
     Name: entrypoint
     PrependShell: false
-  - CmdLine:
-    - -u
-    - nobody
-    Name: cmd
-    PrependShell: false
   From:
-    Image: edrans/centos6
-  Name: ""
+    Stage:
+      Index: 0
+      Named: base
+  Name: final
   Platform: ""
-  SourceCode: FROM edrans/centos6
+  SourceCode: FROM base AS final

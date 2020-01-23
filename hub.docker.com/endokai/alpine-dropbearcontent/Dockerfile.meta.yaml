@@ -1,0 +1,53 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:alpine
+  Commands:
+  - Name: workdir
+    Path: /go/src
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./
+    - ./monitor
+  - CmdLine:
+    - sed -i "s/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g" /etc/apk/repositories     &&
+      apk update && apk add --no-cache git upx     && git clone https://github.com/golang/sys.git
+      $GOPATH/src/golang.org/x/sys     && go get github.com/sirupsen/logrus     &&
+      go get github.com/streadway/amqp     && CGO_ENABLED=0 go build -ldflags '-w
+      -s' -o server monitor     && upx server
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:alpine AS build
+- BaseName: alpine
+  Commands:
+  - Env:
+    - Key: TZ
+      Value: Asia/Shanghai
+    Name: env
+  - Name: workdir
+    Path: /usr/local/bin
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/src/server
+    - .
+  - CmdLine:
+    - apk update     && apk add tzdata --no-cache     && cp /usr/share/zoneinfo/$TZ
+      /etc/localtime     && echo $TZ > /etc/timezone     && rm -rf /var/cache/apk
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./server
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

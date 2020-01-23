@@ -1,17 +1,15 @@
-FROM monokrome/wine
+FROM ypzhuang/android-sdk
 
-RUN apt-get update && apt-get install -y nsis unzip make && rm -rf /var/lib/apt/lists/*
+MAINTAINER ypzhuang <sunbei914914@msn.com>
 
-ADD http://nsis.sourceforge.net/mediawiki/images/c/c9/Inetc.zip /tmp/Inetc.zip
-ADD http://nsis.sourceforge.net/mediawiki/images/9/9d/Untgz.zip /tmp/Untgz.zip
-ADD http://nsis.sourceforge.net/mediawiki/images/8/88/NsUnzip.zip /tmp/NsUnzip.zip
+ENV CORDOVA_VERSION 7.0.1
 
-RUN unzip /tmp/Inetc.zip -d /tmp/Inetc/
-RUN unzip /tmp/Untgz.zip -d /tmp/
-RUN unzip /tmp/NsUnzip.zip -d /tmp/NsUnzip/
+WORKDIR /opt
 
-RUN cp /tmp/Inetc/Plugins/x86-ansi/INetC.dll /usr/share/nsis/Plugins/
-RUN cp /tmp/untgz/untgz.dll /usr/share/nsis/Plugins/
-RUN cp /tmp/NsUnzip/nsUnzip.dll /usr/share/nsis/Plugins/
+RUN npm install -g cordova@$CORDOVA_VERSION 
+RUN cordova telemetry off
 
-RUN rm -rf /tmp/{Inetc,Untgz,NsUnzip}{,.zip}
+
+
+
+

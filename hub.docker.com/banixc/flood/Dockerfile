@@ -1,33 +1,18 @@
-ARG NODE_IMAGE=node:10.1-alpine
+FROM ubuntu
 
-FROM ${NODE_IMAGE} as nodebuild
+RUN apt-get update && \
+    apt-get install -y curl wget file git gcc
 
-WORKDIR /usr/src/app
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 
-# Generate node_modules
-COPY package.json ./package.json
-COPY package-lock.json ./package-lock.json
-RUN apk add --no-cache --virtual=build-dependencies \
-    python \
-    build-base && \
-    npm install && \
-    apk del --purge build-dependencies
+ENV PATH "$PATH:/root/.cargo/bin"
 
-# Build static assets and remove devDependencies.
-COPY client ./client
-COPY shared ./shared
-COPY config.docker.js ./config.js
-RUN npm run build && \
-    npm prune --production
-COPY server ./server
+RUN rustup install 1.36.0
+RUN rustup update
 
-# Install runtime dependencies.
-RUN apk --no-cache add \
-    mediainfo
-
-# Hints for consumers of the container.
-EXPOSE 3000
-VOLUME ["/data"]
-
-# Start application.
-CMD [ "npm", "start" ]
+#ENV RUSTFMT_VERSION 0.3.1
+#RUN wget https://github.com/rust-lang-nursery/rustfmt/archive/${RUSTFMT_VERSION}.tar.gz && \
+#    tar xzf ${RUSTFMT_VERSION}.tar.gz && rm ${RUSTFMT_VERSION}.tar.gz && \
+#    cd rustfmt-${RUSTFMT_VERSION} && \
+#    $HOME/.cargo/bin/cargo install --path . && \
+#    cd .. && rm -rf rustfmt-${RUSTFMT_VERSION}

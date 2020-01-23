@@ -1,39 +1,13 @@
-FROM php:alpine
+FROM ubuntu:16.04
+MAINTAINER Wei-Tsung Lin <fasthall@gmail.com>
 
-ARG ALPINE_MIRROR
+RUN apt update
+RUN apt-get install -y python-software-properties software-properties-common wget
+RUN add-apt-repository ppa:jonathonf/python-3.6
+RUN apt update
+RUN apt install -y python3.6 python3.6-dev python3.6-venv
+RUN wget https://bootstrap.pypa.io/get-pip.py
+RUN python3.6 get-pip.py
+RUN ln -s /usr/bin/python3.6 /usr/local/bin/python3
 
-COPY src /webhook/
-WORKDIR /webhook
-
-RUN set -e; \
-# Switch to a mirror if given
-    if [ -n "$ALPINE_MIRROR" ]; then \
-        sed -i 's!http://dl-cdn.alpinelinux.org!'"$ALPINE_MIRROR"'!g' /etc/apk/repositories; \
-    fi; \
-# Install build dependency packages
-    apk add --no-cache --virtual .build-deps $PHPIZE_DEPS; \
-    pecl install swoole; \
-    docker-php-ext-enable swoole; \
-    apk del .build-deps; \
-# Install run dependency packages
-    runDeps="$( \
-        scanelf --needed --nobanner --format '%n#p' --recursive /usr/local/lib/php/extensions \
-        | tr ',' '\n' \
-        | sort -u \
-        | awk 'system("[ -e /usr/local/lib/" $1 " ]") == 0 { next } { print "so:" $1 }' \
-    )"; \
-    apk add --virtual .php-rundeps $runDeps; \
-# Cleanup
-    rm -rf /tmp/pear; \
-    rm -rf /var/cache/apk/*; \
-# System configurations
-    { \
-        echo 'error_reporting = E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED'; \
-        echo 'display_errors = Off'; \
-        echo 'log_errors = On'; \
-    } | tee /usr/local/etc/php/conf.d/docker.ini; \
-    curl -s http://getcomposer.org/installer | php; \
-    php composer.phar install --no-dev; \
-    rm composer.phar;
-
-CMD [ "php", "/webhook/console.php", "webhookd" ]
+ENTRYPOINT /bin/bash

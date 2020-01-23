@@ -1,20 +1,11 @@
-FROM openshift/jenkins-2-centos7
+FROM ivyhjk/php5.6-fpm-mysql-git
 
-USER root
+RUN apk update
 
-ENV MAVEN_VERSION 3.3.9
+RUN curl -L -o /tmp/redis.tar.gz https://github.com/phpredis/phpredis/archive/4.2.0.tar.gz \
+    && tar xfz /tmp/redis.tar.gz \
+    && rm -r /tmp/redis.tar.gz \
+    && mkdir -p /usr/src/php/ext \
+    && mv phpredis-* /usr/src/php/ext/redis
 
-
-COPY ./configuration /opt/openshift/configuration
-
-# Install Maven
-RUN curl -sL -o /tmp/maven.tar.gz \
-      https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${MAVEN_VERSION}/apache-maven-${MAVEN_VERSION}-bin.tar.gz
-    
-RUN mkdir -p /opt/tools && \
-    cd /opt/tools && \
-    tar xfz /tmp/maven.tar.gz && \
-    mv /opt/tools/apache-maven-${MAVEN_VERSION} /opt/tools/maven && \
-    chown -R 1001:0 /opt/tools
-
-USER 1001
+RUN docker-php-ext-install redis

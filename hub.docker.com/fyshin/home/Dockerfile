@@ -1,12 +1,18 @@
-FROM node:7.5.0
+FROM golang:1.11 AS build
 
-ADD package.json package.json
-RUN npm install
+WORKDIR /mu2
+
+ADD go.mod go.sum ./
+RUN go mod download
+
 ADD . .
 
-ARG NODE_ENV=production
-ENV NODE_ENV=$NODE_ENV
+RUN CGO_ENABLED=0 go build -o mu2 main.go
 
-EXPOSE 3000
+FROM alpine:latest AS RUN
 
-CMD ["npm", "start"]
+WORKDIR /app/
+COPY --from=build /mu2/mu2 mu2
+RUN apk add --no-cache ca-certificates
+
+CMD ["./mu2"]

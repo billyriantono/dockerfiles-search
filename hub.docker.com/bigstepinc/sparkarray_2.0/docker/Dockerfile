@@ -1,0 +1,77 @@
+FROM ubuntu:18.04
+
+MAINTAINER "Ben Yanke" <ben@benyanke.com>
+
+WORKDIR /tmp
+
+# Installing base packages, adding PHP repo
+RUN apt-get update -y && \
+    DEBIAN_FRONTEND=noninteractive \
+    apt-get install -y \
+    software-properties-common curl \
+    php-pear apt-transport-https locales gnupg wget && \
+    LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php -y
+
+# Install dependencies for MS SQLSRV PHP Driver
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
+    curl https://packages.microsoft.com/config/ubuntu/18.04/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
+    apt-get update -yqq && \
+    ACCEPT_EULA=Y apt-get install -y msodbcsql17 unixodbc-dev unixodbc --no-install-recommends && \
+    rm -r /var/lib/apt/lists/*
+
+# Install Common PHP modules
+RUN apt-get update -y && \
+    DEBIAN_FRONTEND=noninteractive \
+    apt-get install -y \
+    zip \
+    unzip \
+    php7.2-cli \
+    php7.2-mysqlnd \
+    php7.2-apcu \
+    php7.2-memcached \
+    php7.2-imap \
+    php7.2-pgsql \
+    php7.2-intl \
+    php7.2-mbstring \
+    php7.2-redis \
+    php7.2-mongo \
+    php7.2-sqlite \
+    php7.2-curl \
+    php7.2-json \
+    php7.2-ssh2 \
+    php7.2-gd \
+    php7.2-gmp \
+    php7.2-xml \
+    php7.2-zip \
+    php7.2-soap \
+    php7.2-bcmath \
+    php7.2-dev \
+    php7.2-ldap \
+    php-pear \
+    mcrypt \
+    make \
+    wget \
+    git \
+    curl && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install Composer
+RUN curl --silent --show-error https://getcomposer.org/installer | php && mv composer.phar /usr/bin/composer
+
+# Install SQLSRV PHP Drivers
+RUN pecl install pdo_sqlsrv && \
+    pecl install sqlsrv && \
+    printf "; priority=30\nextension=sqlsrv.so\n" > /etc/php/7.2/mods-available/sqlsrv.ini && \
+    printf "; priority=30\nextension=pdo_sqlsrv.so\n" > /etc/php/7.2/mods-available/pdo_sqlsrv.ini && \
+    phpenmod sqlsrv pdo_sqlsrv
+
+# Enable Opcache
+RUN phpenmod opcache
+
+# Copy configuration
+COPY config/opcache.ini $PHP_INI_DIR/conf.d/
+
+# TODO:downgrade permissions at some point using a format like this
+# RUN groupadd -r postgres && useradd --no-log-init -r -g postgres postgres
+# USER postgres
+
+CMD ["php", "-a"]

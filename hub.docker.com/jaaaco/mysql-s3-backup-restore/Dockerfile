@@ -1,20 +1,18 @@
-FROM debian:jessie-slim
+# Set the base image
+FROM centos:latest
 
-RUN apt-get update && apt-get install -y cron python-pip
-RUN pip install awscli
+# Dockerfile author / maintainer 
+MAINTAINER Julien Coppi <julien.coppi@gmail.com> https://github.com/itchykun/docker-centos-systemd
 
-RUN apt-get install -y mysql-client
+ENV container docker
 
-ADD backup /
-ADD restore /
-ADD cron /
-ADD wait /
-
-RUN chmod +x backup
-RUN chmod +x restore
-RUN chmod +x cron
-RUN chmod +x wait
-
-VOLUME /var/log/
-
-CMD ["./cron"]
+RUN (cd /lib/systemd/system/sysinit.target.wants/; for i in *; do [ $i == systemd-tmpfiles-setup.service ] || rm -f $i; done); \
+rm -f /lib/systemd/system/multi-user.target.wants/*;\
+rm -f /etc/systemd/system/*.wants/*;\
+rm -f /lib/systemd/system/local-fs.target.wants/*; \
+rm -f /lib/systemd/system/sockets.target.wants/*udev*; \
+rm -f /lib/systemd/system/sockets.target.wants/*initctl*; \
+rm -f /lib/systemd/system/basic.target.wants/*;\
+rm -f /lib/systemd/system/anaconda.target.wants/*;
+VOLUME [ "/sys/fs/cgroup" ]
+CMD ["/usr/sbin/init"]

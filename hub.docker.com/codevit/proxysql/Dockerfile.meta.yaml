@@ -1,0 +1,149 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: wodby/alpine:3.10
+  Commands:
+  - Maintainer: Codev-IT <office@codev-it.at>
+    Name: maintainer
+  - Env:
+    - Key: PROXY_SQL_VERS
+      Value: 1.4.15
+    Name: env
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - set -eux   && apk add -t build-depends     git     cmake     patch     bzip2     automake     zlib-dev     build-base     openssl-dev     libc6-compat     libexecinfo-dev   &&
+      git clone https://github.com/sysown/proxysql.git   && cd proxysql   && git checkout
+      v$PROXY_SQL_VERS   && make clean   && make build_deps   && NOJEMALLOC=1 make   &&
+      mkdir -p /src/usr/bin   && mkdir -p /src/var/lib/proxysql   && cp -R /tmp/proxysql/src/proxysql
+      /src/usr/bin/proxysql
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -xe   && mkdir -p /src/usr/local/bin   && cp -R /usr/local/bin/* /src/usr/local/bin/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -eux   && git clone https://bitbucket.org/snippets/codev-it/LeaM7A/discovery-service-manager.git   &&
+      cd discovery-service-manager   && chmod +x discovery-service-manager.sh   &&
+      mv discovery-service-manager.sh /src/usr/bin/discovery-service
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tpl
+    - /src/etc/gotpl
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /src/entrypoint
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-healthcheck.sh
+    - /src/healthcheck
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/docker-cron.sh
+    - /src/usr/bin/docker-cron
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/clustercheck.sh
+    - /src/usr/bin/clustercheck
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/proxysql-admin.sh
+    - /src/usr/bin/proxysql-admin
+  - CmdLine:
+    - set -eux   && chmod +x /src/entrypoint   && chmod +x /src/healthcheck   && chmod
+      +x /src/usr/bin/docker-cron   && chmod +x /src/usr/bin/clustercheck   && chmod
+      +x /src/usr/bin/proxysql-admin
+    Name: run
+    PrependShell: true
+  From:
+    Image: wodby/alpine:3.10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM wodby/alpine:3.10 as builder
+- BaseName: alpine:3.10
+  Commands:
+  - Maintainer: Codev-IT <office@codev-it.at>
+    Name: maintainer
+  - Env:
+    - Key: MONITOR_USERNAME
+      Value: '"monitor"'
+    - Key: MONITOR_PASSWORD
+      Value: '"monitor"'
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src
+    - /
+  - CmdLine:
+    - set -eux   && adduser -D -u 1000 proxy   && apk add --no-cache -t runtime-depends     jq     bash     curl     tzdata     mysql-client   &&
+      chown -R proxy:proxy /var/lib/proxysql
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/lib/proxysql
+  - CmdLine:
+    - /entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - Health:
+      Test:
+      - CMD-SHELL
+      - /healthcheck
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - "6032"
+    - "6033"
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.name
+      Value: '"proxysql"'
+    - Key: org.label-schema.description
+      Value: '"Proxysql Alpine Linux with discovery service support."'
+    - Key: org.label-schema.url
+      Value: '"https://www.codev-it.at"'
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.vcs-url
+      Value: '"https://bitbucket.org/codev-it/docker-databases.git"'
+    - Key: org.label-schema.vendor
+      Value: '"Codev-IT"'
+    - Key: org.label-schema.version
+      Value: $VERSION
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  From:
+    Image: alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10

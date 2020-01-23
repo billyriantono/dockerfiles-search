@@ -1,0 +1,87 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.8
+  Commands:
+  - Name: workdir
+    Path: /go/src/github.com/codekitchen/dinghy-http-proxy
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - join-networks.go
+    - .
+  - CmdLine:
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go get -v github.com/fsouza/go-dockerclient
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v -o join-networks
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.8 as builder
+- BaseName: jwilder/nginx-proxy:alpine
+  Commands:
+  - Maintainer: Brian Palmer <brian@codekitchen.net>
+    Name: maintainer
+  - CmdLine:
+    - apk upgrade --no-cache  && apk add --no-cache --virtual=run-deps       su-exec       curl       dnsmasq  &&
+      rm -rf /tmp/*       /var/cache/apk/*       /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/codekitchen/dinghy-http-proxy/join-networks
+    - /app/join-networks
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Procfile
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - '*.conf'
+    - /etc/nginx/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx.tmpl
+    - Procfile
+    - reload-nginx
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - htdocs
+    - /var/www/default/htdocs/
+  - Env:
+    - Key: DOMAIN_TLD
+      Value: docker
+    Name: env
+  - Env:
+    - Key: DNS_IP
+      Value: 127.0.0.1
+    Name: env
+  - Env:
+    - Key: HOSTMACHINE_IP
+      Value: 127.0.0.1
+    Name: env
+  - Name: expose
+    Ports:
+    - "19322"
+  From:
+    Image: jwilder/nginx-proxy:alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM jwilder/nginx-proxy:alpine

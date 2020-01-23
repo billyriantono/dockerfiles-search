@@ -1,13 +1,11 @@
-FROM jenkinsci/slave:3.27-1-alpine
-LABEL Description="Cloudreach Sceptre Deployer"
-LABEL Maintainer="Ruben Sancho <ruben.sancho@cloudreach.com>"
+FROM       ubuntu:16.04
+MAINTAINER Mauricio Araya
 
-USER root
-RUN apk add --update --no-cache curl py-pip python3 && \
-    pip3 install awscli troposphere sceptre==2.0.1 netaddr && \
-    apk --purge -v del py-pip && \
-    rm -f /var/cache/apk/*
-USER jenkins
-COPY jenkins-slave /usr/local/bin/jenkins-slave
+RUN apt-get update -y
+RUN apt-get -y install git build-essential gcc autoconf python3 python3-pip curl coreutils
+RUN apt-get -y install python-dev libxml2-dev libxslt-dev libtool libffi-dev libssl-dev \
+                       libxml2-dev libxslt1-dev zlib1g-dev software-properties-common libmcrypt4
+RUN pip3 install --upgrade pip
+RUN pip3 install --upgrade awscli --ignore-installed six
 
-ENTRYPOINT ["/usr/local/bin/jenkins-slave"]
+RUN rm -rf /var/lib/apt/lists/*

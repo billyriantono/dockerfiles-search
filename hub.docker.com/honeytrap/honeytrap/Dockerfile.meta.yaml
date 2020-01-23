@@ -1,0 +1,76 @@
+MetaArgs: null
+Stages:
+- As: go
+  BaseName: golang:latest
+  Commands:
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $GOPATH/bin:/usr/local/go/bin:$PATH
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /src/honeytrap
+  - Key: LDFLAGS
+    Name: arg
+    Value: '""'
+  - Name: workdir
+    Path: /src/honeytrap
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -tags="" -ldflags="$(go
+      run scripts/gen-ldflags.go)" -o /go/bin/app .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: go
+  Platform: ""
+  SourceCode: FROM golang:latest AS go
+- BaseName: alpine
+  Commands:
+  - Maintainer: Remco Verhoef <remco.verhoef@dutchsec.com>
+    Name: maintainer
+  - CmdLine:
+    - apk --update upgrade && apk add curl ca-certificates && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add ca-certificates && update-ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /config /data
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -s -o /config/config.toml https://raw.githubusercontent.com/honeytrap/honeytrap-configs/master/server-standalone/config-server-standalone.toml
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: go
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/app
+    - /honeytrap/honeytrap
+  - CmdLine:
+    - /honeytrap/honeytrap
+    - --config
+    - /config/config.toml
+    - --data
+    - /data/
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "5900"
+    - "8022"
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

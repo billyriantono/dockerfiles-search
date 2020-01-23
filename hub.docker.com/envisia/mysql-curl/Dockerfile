@@ -1,4 +1,11 @@
-FROM mysql:5.7.14
+FROM python:2.7-slim
 
-RUN apt-get update && apt-get install -y curl && apt-get clean -y && apt-get autoclean -y && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
-COPY certs/* /etc/ssl/certs/
+RUN mkdir -p /usr/src/app
+WORKDIR /usr/src/app
+
+COPY requirements.txt /usr/src/app/
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . /usr/src/app
+EXPOSE 8080
+CMD python start.py

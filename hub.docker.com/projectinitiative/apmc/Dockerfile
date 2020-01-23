@@ -1,7 +1,6 @@
 FROM alpine:3.7
 LABEL Kyle P. <projectinitiativedev@gmail.com>
 
-COPY prep-server/ /home/prep-server/
 
 RUN apk update &&\
     apk add bash &&\
@@ -11,9 +10,16 @@ RUN apk update &&\
     apk add vim &&\ 
     apk add screen &&\
     apk add openjdk8 &&\
-    apk upgrade &&\
-    find /home/prep-server/ -type f -iname "*.sh" -exec chmod +x {} \;
+    apk upgrade;
+
+COPY prep-server/scripts /opt/server/bin
+
+ENV PATH="/opt/server/bin:${PATH}"
+
+RUN chmod +x /opt/server/bin/* &&\
+    dos2unix /opt/server/bin/*;
 
 EXPOSE 25565
 
-ENTRYPOINT ["/home/prep-server/prep-server.sh"]
+ENTRYPOINT ["prep-server"]
+# ENTRYPOINT ["/home/prep-server/prep-server.sh"]

@@ -1,54 +1,36 @@
-FROM ubuntu:16.04
-MAINTAINER masa1023 "masa373.dev@gmail.com"
+# DESCRIPTION       Pinpoint APM Agent + chromium + maven + openjdk
+# TO_BUILD          docker build -t pinpoint-agent .
+# TO_RUN            docker run --name=pinpoint-agent pinpoint-agent
+# or
+# TO_RUN            docker run -it \
+#                       -e COLLECTOR_IP="192.168.0.18" \
+#                       -e PROFILER_APPLICATIONSERVERTYPE="TOMCAT" \
+#                       -e PROFILER_TOMCAT_CONDITIONAL_TRANSFORM="false" \
+#                       -e PROFILER_SAMPLING_RATE="1" \
+#                       -e PROFILER_JSON_JSONLIB="true" \
+#                       -e PROFILER_JSON_JACKSON="true"\
+#                       -e PROFILER_JSON_GSON="true" \
+#                       pinpoint-agent
 
-# Install necessary tools
-RUN apt-get update && apt-get install -y \
-    apt-utils \
-    git \
-    sudo \
-    vim \
-    lsb-release \
-    curl \
-    wget \
-    lsb-release \
-    libmysqlclient-dev
+FROM persapiens/chromium-maven-openjdk:61-3.5.0-8u144
+MAINTAINER Marcos Alexandre de Melo Medeiros <marcosamm@gmail.com>
 
-# Add user
-ARG user_name="ubuntu"
-ARG user_password="password"
-RUN useradd -m ${user_name} && \
-    echo "${user_name}:${user_password}" | chpasswd
-RUN echo "${user_name} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-USER ${user_name}
+ENV PINPOINT_VERSION 1.6.2
+ENV PINPOINT_AGENT_HOME /opt/pinpoint-agent
 
-# Install python and relevant tools
-RUN sudo apt-get install -y \
-    build-essential \
-    python3 \
-    python \
-    python-dev \
-    libxml2-dev \
-    libxslt-dev \
-    libssl-dev \
-    zlib1g-dev \
-    libyaml-dev \
-    libffi-dev \
-    python-pip
+RUN apt-get update -qqy && \
+  apt-get upgrade -qqy --no-install-recommends && \
+  apt-get install -qqy curl unzip && \
+  mkdir -p $PINPOINT_AGENT_HOME && \
+  curl -fsSL https://github.com/naver/pinpoint/releases/download/$PINPOINT_VERSION/pinpoint-agent-$PINPOINT_VERSION.tar.gz \
+  | tar -xzC $PINPOINT_AGENT_HOME && \
+  cd $PINPOINT_AGENT_HOME && \
+  mv pinpoint-bootstrap-$PINPOINT_VERSION.jar pinpoint-bootstrap.jar && \
+  curl -o /usr/local/bin/configure-agent.sh -fsSL https://raw.githubusercontent.com/marcosamm/docker-pinpoint/master/pinpoint-agent/configure-agent.sh && \
+  chmod +x /usr/local/bin/configure-agent.sh && \
+  apt-get remove --purge --auto-remove -y curl unzip && \
+  apt-get autoclean && apt-get --purge -y autoremove && \
+  rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/cache/apt/*
 
-# Upgrade version of pip
-RUN sudo pip install --upgrade pip
-
-# Set environment variables
-ENV CLOUD_SDK_REPO "cloud-sdk-xenial"
-ENV PYTHONPATH /usr/lib/google-cloud-sdk/platform/google_appengine
-
-# Install Google Cloud SDK libraries
-RUN echo "deb http://packages.cloud.google.com/apt $CLOUD_SDK_REPO main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
-RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-RUN sudo apt-get update && sudo apt-get install -y google-cloud-sdk
-RUN sudo apt-get install -y \
-    google-cloud-sdk-app-engine-python \
-    google-cloud-sdk-app-engine-python \
-    google-cloud-sdk-app-engine-python-extras \
-    google-cloud-sdk-datastore-emulator
-
+ENTRYPOINT ["/usr/local/bin/configure-agent.sh"]
+CMD ["bash"]

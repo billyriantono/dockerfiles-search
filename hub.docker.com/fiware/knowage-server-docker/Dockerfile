@@ -1,10 +1,10 @@
 ARG JAVA_VERSION=8
 FROM openjdk:${JAVA_VERSION}
 
-ARG KNOWAGE_VERSION="7_0_0"
-ARG KNOWAGE_REPO_VERSION="7.0.0"
+ARG KNOWAGE_VERSION="7_1_0"
+ARG KNOWAGE_REPO_VERSION="7.1.0"
 ARG KNOWAGE_EDITION="CE"
-ARG KNOWAGE_RELEASE_DATE="20191022"
+ARG KNOWAGE_RELEASE_DATE="20191230"
 ARG KNOWAGE_PACKAGE_SUFFIX="bin-${KNOWAGE_VERSION}-${KNOWAGE_EDITION}-${KNOWAGE_RELEASE_DATE}"
 ARG FILEEXTENSION=".zip"
 ARG KNOWAGE_OW2_BASE_URL="http://release.ow2.org/knowage/${KNOWAGE_REPO_VERSION}/Applications"
@@ -169,12 +169,18 @@ WORKDIR ${KNOWAGE_DIRECTORY}/${APACHE_TOMCAT_PACKAGE}/conf
 # Override Apache Tomcat server configuration
 COPY server.xml ./
 
+# Copy Knowage Security Policy
+COPY knowage-default.policy ./
+
 WORKDIR ${KNOWAGE_DIRECTORY}/${APACHE_TOMCAT_PACKAGE}/bin
 
 #make the script executable by bash (not only sh) and
 #make knowage running forever without exiting when running the container
 RUN sed -i "s/bin\/sh/bin\/bash/" startup.sh && \
 	sed -i "s/EXECUTABLE\" start/EXECUTABLE\" run/" startup.sh
+
+# Enable Security Manager
+RUN echo "export JAVA_OPTS=\"\$JAVA_OPTS -Djava.security.manager -Djava.security.policy=\$CATALINA_HOME/conf/knowage-default.policy\"" >> setenv.sh
 
 #copy entrypoint to be used at runtime
 COPY ./entrypoint.sh ./ \

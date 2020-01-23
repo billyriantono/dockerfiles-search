@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- As: prep
+  BaseName: ubuntu:18.04
+  Commands:
+  - Labels:
+    - Key: MAINTAINER
+      Value: '"leopere [at] nixc [dot] us"'
+    Name: label
+  - CmdLine:
+    - apt-get update &&   apt-get -y install unzip curl build-essential &&   apt-get
+      autoclean -y &&   rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -o
+    - pipefail
+    - -c
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - stuff/start.sh
+    - start
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - stuff/healthcheck.sh
+    - healthcheck
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - stuff/fix-permissions.c
+    - fix-permissions.c
+  - CmdLine:
+    - curl -L -o ./lbrycrd-linux.zip $(curl -s https://api.github.com/repos/lbryio/lbrycrd/releases
+      | grep -F 'lbrycrd-linux.zip' | grep download | head -n 1 | cut -d'"' -f4) &&   unzip
+      ./lbrycrd-linux.zip &&   gcc fix-permissions.c -o fix-permissions &&   chmod
+      +x ./lbrycrdd ./lbrycrd-cli ./lbrycrd-tx ./start ./healthcheck ./fix-permissions
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: prep
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as prep
+- As: app
+  BaseName: ubuntu:18.04
+  Commands:
+  - Chown: ""
+    From: prep
+    Name: copy
+    SourcesAndDest:
+    - /lbrycrdd
+    - /lbrycrd-cli
+    - /lbrycrd-tx
+    - /start
+    - /healthcheck
+    - /fix-permissions
+    - /usr/bin/
+  - CmdLine:
+    - addgroup --gid 1000 lbrycrd &&   adduser lbrycrd --uid 1000 --gid 1000 --gecos
+      GECOS --shell /bin/bash --disabled-password --home /data &&   chmod a+s /usr/bin/fix-permissions
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: workdir
+    Path: /data
+  - Name: expose
+    Ports:
+    - "9245"
+    - "9246"
+  - Name: user
+    User: lbrycrd
+  - CmdLine:
+    - start
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: app
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as app

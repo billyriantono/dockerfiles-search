@@ -1,17 +1,29 @@
-FROM alpine
-RUN apk add --no-cache \
-    php7 \
-    php7-ctype \
-    php7-json \
-    php7-mbstring \
-    php7-session \
-    tar jq curl tini
-# Download and extract source code in one go
-RUN mkdir /app \
-    && curl -L $(curl -s https://api.github.com/repos/ptrofimov/beanstalk_console/releases/latest beanstalk_console | jq --raw-output '.tarball_url') | tar xvz -C /app --strip-components 1 \
-    && chmod o+w /app/storage.json \
-    && echo '$GLOBALS["config"]["servers"] = explode(",", getenv("SERVERS"));' >> /app/config.php
+FROM jupyter/base-notebook:87210526f381
+# jupyter/base-notebook updated 2010-01-08
+MAINTAINER ome-devel@lists.openmicroscopy.org.uk
 
-USER nobody
-EXPOSE 8080
-ENTRYPOINT ["/sbin/tini", "--", "/usr/bin/php7", "-S", "0.0.0.0:8080", "-t", "/app/public"]
+USER root
+RUN apt-get update -y && \
+    apt-get install -y \
+        build-essential \
+        curl \
+        git
+
+USER jovyan
+# Default workdir: /home/jovyan
+
+# Autoupdate notebooks https://github.com/data-8/nbgitpuller
+# nbval for testing reproducibility
+RUN pip install git+https://github.com/data-8/gitautosync && \
+    jupyter serverextension enable --py nbgitpuller && \
+    conda install -y -q nbval
+
+# create a python2 environment (for OMERO-PY compatibility)
+RUN mkdir .setup
+ADD environment-python2.yml .setup/
+RUN conda env create -n python2 -f .setup/environment-python2.yml && \
+    # Jupyterlab component for ipywidgets (must match jupyterlab version) \
+    jupyter labextension install @jupyter-widgets/jupyterlab-manager@0.38
+
+# Autodetects jupyterhub and standalone modes
+CMD ["start-notebook.sh"]

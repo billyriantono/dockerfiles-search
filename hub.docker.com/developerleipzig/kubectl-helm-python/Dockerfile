@@ -1,27 +1,28 @@
-FROM python:alpine3.10
+FROM debian:jessie
 
-RUN pip install pyyaml pyaes
+MAINTAINER Devan Lai <devan.lai@gmail.com>
 
-ARG VCS_REF
-ARG BUILD_DATE
+RUN dpkg --add-architecture i386
+RUN apt-get -y update && apt-get install -y wine:i386 xvfb procps
 
-ENV HELM_LATEST_VERSION="v2.14.3"
+COPY bin/* /tmp/bin/
 
-RUN apk add --update ca-certificates \
- && apk add --update -t deps wget git openssl bash \
- && wget -q https://storage.googleapis.com/kubernetes-helm/helm-${HELM_LATEST_VERSION}-linux-amd64.tar.gz \
- && tar -xf helm-${HELM_LATEST_VERSION}-linux-amd64.tar.gz \
- && mv linux-amd64/helm /usr/local/bin \
- && apk del --purge deps \
- && rm /var/cache/apk/* \
- && rm -f /helm-${HELM_LATEST_VERSION}-linux-amd64.tar.gz
- 
-ENV KUBE_LATEST_VERSION="v1.14.7"
+ENV WINEDLLOVERRIDES="mscoree,mshtml="
+RUN if [ ! -d ${WINEPREFIX:-~/.wine/} ]; then \
+xvfb-run -a wine winecfg /D && \
+/tmp/bin/waitfor.sh wineserver; \
+fi
 
-RUN apk add --update -t deps curl \
- && curl -L https://storage.googleapis.com/kubernetes-release/release/${KUBE_LATEST_VERSION}/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl \
- && chmod +x /usr/local/bin/kubectl \
- && apk del --purge deps \
- && rm /var/cache/apk/*
+RUN wine reg ADD "HKLM\\Software\\Microsoft\\Windows NT\\CurrentVersion" \
+/v "ProductName" /t REG_SZ /d "Microsoft Windows Vista";
 
-WORKDIR /root
+COPY exe/*.exe /tmp/exe/
+
+RUN xvfb-run -a wine \
+/tmp/exe/dipfree_en.exe /silent /hide; \
+/tmp/bin/waitfor.sh wineserver; \
+test -f "`winepath 'C:\\Program Files\\DipTrace\\Schematic.exe'`" && \
+test -f "`winepath 'C:\\Program Files\\DipTrace\\Pcb.exe'`";
+
+# Ensure any dangling wine/x11 sockets get cleaned up
+RUN rm -rf /tmp/*

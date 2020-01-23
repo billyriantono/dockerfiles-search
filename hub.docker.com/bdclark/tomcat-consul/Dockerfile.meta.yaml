@@ -1,108 +1,161 @@
 MetaArgs: null
 Stages:
-- BaseName: buildpack-deps:jessie-curl
+- BaseName: ubuntu:xenial
   Commands:
+  - Maintainer: TIMWI <contact@timwi.com>
+    Name: maintainer
   - Env:
-    - Key: DUMB_INIT_VERSION
-      Value: 1.2.0
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: ANDROID_HOME
+      Value: /opt/android-sdk-linux
+    - Key: NODE_VERSION
+      Value: 8.2.1
+    - Key: MAVEN_VERSION
+      Value: 3.5.0
+    - Key: SONAR_SCANNER
+      Value: 3.3.0.1492
+    - Key: SONAR_URL
+      Value: http://localhost:9000
+    - Key: DISPLAY
+      Value: '":1"'
     Name: env
   - CmdLine:
-    - set -x   && wget --no-verbose "https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/dumb-init_${DUMB_INIT_VERSION}_amd64.deb"   &&
-      wget --no-verbose "https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/sha256sums"   &&
-      grep "dumb-init_${DUMB_INIT_VERSION}_amd64.deb" sha256sums | sha256sum -c   &&
-      rm sha256sums   && dpkg -i dumb-init_*.deb   && rm -rf dumb-init_*.deb
+    - apt-get update && apt-get -y install tzdata apt-utils
     Name: run
     PrependShell: true
-  - Env:
-    - Key: CTMPL_VERSION
-      Value: 0.18.1
-    Name: env
   - CmdLine:
-    - set -x   && apt-get update   && apt-get install -y --no-install-recommends unzip   &&
-      gpg --keyserver ha.pool.sks-keyservers.net --recv-keys 91A6E7F85D05C65630BEF18951852D87348FFC4C   &&
-      wget --no-verbose https://releases.hashicorp.com/consul-template/${CTMPL_VERSION}/consul-template_${CTMPL_VERSION}_linux_amd64.zip   &&
-      wget --no-verbose https://releases.hashicorp.com/consul-template/${CTMPL_VERSION}/consul-template_${CTMPL_VERSION}_SHA256SUMS   &&
-      wget --no-verbose https://releases.hashicorp.com/consul-template/${CTMPL_VERSION}/consul-template_${CTMPL_VERSION}_SHA256SUMS.sig   &&
-      gpg --batch --verify consul-template_${CTMPL_VERSION}_SHA256SUMS.sig consul-template_${CTMPL_VERSION}_SHA256SUMS   &&
-      grep consul-template_${CTMPL_VERSION}_linux_amd64.zip consul-template_${CTMPL_VERSION}_SHA256SUMS
-      | sha256sum -c   && unzip -d /usr/bin consul-template_${CTMPL_VERSION}_linux_amd64.zip   &&
-      rm -rf consul-template_* /root/.gnupg /var/lib/apt/lists/*
+    - echo "Europe/Paris" > /etc/timezone
     Name: run
     PrependShell: true
-  - Env:
-    - Key: CATALINA_HOME
-      Value: /usr/local/tomcat
-    Name: env
+  - CmdLine:
+    - dpkg-reconfigure -f noninteractive tzdata
+    Name: run
+    PrependShell: true
   - Env:
     - Key: PATH
-      Value: $CATALINA_HOME/bin:$PATH
-    Name: env
-  - Name: workdir
-    Path: $CATALINA_HOME
-  - Env:
-    - Key: TOMCAT_MAJOR
-      Value: "7"
-    Name: env
-  - Env:
-    - Key: TOMCAT_VERSION
-      Value: 7.0.76
+      Value: ${PATH}:/opt/sonar-scanner/bin:/opt/nsis-2.46/bin:/opt/gradle-3.5/bin
     Name: env
   - CmdLine:
-    - set -x   && useradd --uid 1000 tomcat   && tomcat_archive=apache-tomcat-${TOMCAT_VERSION}.tar.gz   &&
-      wget --no-verbose https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_VERSION}/bin/${tomcat_archive}   &&
-      wget --no-verbose https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_VERSION}/bin/${tomcat_archive}.asc   &&
-      wget --no-verbose https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_MAJOR}/KEYS   &&
-      gpg --import KEYS   && gpg --batch --verify ${tomcat_archive}.asc ${tomcat_archive}   &&
-      tar -xf ${tomcat_archive} --strip-components=1   && rm -rf webapps/* logs/*   &&
-      mkdir -p conf/Catalina   && mv conf/server.xml conf/server.xml.original   &&
-      mv conf/tomcat-users.xml conf/tomcat-users.xml.original   && rm -rf ${tomcat_archive}
-      ${tomcat_archive}.asc KEYS /root/.gnupg
+    - apt-get install -y git wget curl unzip bzip2 libfontconfig build-essential python
+      python-dev sshpass
     Name: run
     PrependShell: true
-  - Env:
-    - Key: TOMCAT_PREFIX
-      Value: '"service/tomcat"'
-    - Key: TOMCAT_HTTP_PORT
-      Value: "8080"
-    - Key: TOMCAT_JMX_PORT
-      Value: "9080"
-    - Key: JPDA_ADDRESS
-      Value: "9180"
-    - Key: TOMCAT_JMX_AUTHENTICATE
-      Value: "true"
-    - Key: TOMCAT_JMX_ACCESS_FILE
-      Value: $CATALINA_HOME/conf/jmxremote.access
-    - Key: TOMCAT_JMX_PASSWORD_FILE
-      Value: $CATALINA_HOME/conf/jmxremote.password
-    Name: env
-  - Chown: ""
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - tomcat
-    - $CATALINA_HOME/
-  - Chown: ""
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - docker-entrypoint.sh
-    - /entrypoint.sh
   - CmdLine:
-    - /entrypoint.sh
-    Name: entrypoint
-    PrependShell: false
+    - curl --retry 3 -SLO "http://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.gz"
+      &&   tar -xzf "node-v$NODE_VERSION-linux-x64.tar.gz" -C /usr/local --strip-components=1
+      &&   rm "node-v$NODE_VERSION-linux-x64.tar.gz"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -qqy python-software-properties software-properties-common
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y install openjdk-8-jdk
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key
+      add - &&   echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable
+      main" >> /etc/apt/sources.list.d/google-chrome.list &&   apt-get update -qqy
+      &&   apt-get -qqy install google-chrome-stable &&   rm /etc/apt/sources.list.d/google-chrome.list
+      &&   rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q https://dl.bintray.com/sonarsource/SonarQube/org/sonarsource/scanner/cli/sonar-scanner-cli/${SONAR_SCANNER}/sonar-scanner-cli-${SONAR_SCANNER}-linux.zip
+      &&   unzip sonar-scanner-cli-${SONAR_SCANNER}-linux.zip -d /opt &&   rm sonar-scanner-cli-${SONAR_SCANNER}-linux.zip
+      &&   mv /opt/sonar-scanner-${SONAR_SCANNER}-linux /opt/sonar-scanner &&   sed
+      -i "s|#sonar.host.url=\(.*\)$|sonar.host.url=$SONAR_URL|" /opt/sonar-scanner/conf/sonar-scanner.properties
+      &&   chmod +x /opt/sonar-scanner/bin/sonar-scanner
+    Name: run
+    PrependShell: true
+  - Key: BASE_URL
+    Name: arg
+    Value: https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries
+  - CmdLine:
+    - mkdir -p /usr/share/maven /usr/share/maven/ref   && curl -fSL -o /tmp/apache-maven.tar.gz
+      ${BASE_URL}/apache-maven-${MAVEN_VERSION}-bin.tar.gz   && tar -xzf /tmp/apache-maven.tar.gz
+      -C /usr/share/maven --strip-components=1   && rm -f /tmp/apache-maven.tar.gz   &&
+      ln -s /usr/share/maven/bin/mvn /usr/bin/mvn
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -ms /bin/bash xnet &&   echo 'PATH=${PATH}:/opt/sonar-scanner/bin\n'
+      > /home/xnet/.bashrc &&   echo 'export PATH' >> /home/xnet/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get -y install sudo vim
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo "xnet ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/xnet'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - npmrc
+    - /home/xnet/.npmrc
+  - CmdLine:
+    - chown xnet /home/xnet/.npmrc
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - settings.xml
+    - /home/xnet/
+  - CmdLine:
+    - chown xnet /home/xnet/settings.xml
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: xnet
+  - Name: workdir
+    Path: /home/xnet
+  - Env:
+    - Key: MAVEN_HOME
+      Value: /usr/share/maven
+    Name: env
+  - CmdLine:
+    - mkdir .m2
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - settings.xml
+    - /home/xnet/.m2
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - bashrc
+    - .
+  - CmdLine:
+    - cat bashrc >> .bashrc && rm bashrc
+    Name: run
+    PrependShell: true
   - Name: expose
     Ports:
-    - $JPDA_ADDRESS
-    - $TOMCAT_HTTP_PORT
-    - $TOMCAT_JMX_PORT
+    - "4200"
+  - Name: expose
+    Ports:
+    - "49152"
+  - Name: expose
+    Ports:
+    - "8100"
   - CmdLine:
-    - catalina.sh
-    - run
-    Name: cmd
-    PrependShell: false
+    - bash
+    Name: entrypoint
+    PrependShell: true
   From:
-    Image: buildpack-deps:jessie-curl
+    Image: ubuntu:xenial
   Name: ""
   Platform: ""
-  SourceCode: FROM buildpack-deps:jessie-curl
+  SourceCode: FROM ubuntu:xenial

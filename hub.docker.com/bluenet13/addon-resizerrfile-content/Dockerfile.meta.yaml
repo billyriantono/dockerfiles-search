@@ -1,0 +1,150 @@
+MetaArgs: null
+Stages:
+- BaseName: phusion/baseimage
+  Commands:
+  - Maintainer: blueapple <blueapple1120@qq.com>
+    Name: maintainer
+  - Key: LDAP_SERVERS
+    Name: arg
+    Value: ldap://ad.example.com:389/
+  - Key: LDAP_SEARCH_BASE
+    Name: arg
+    Value: CN=DomainUsers,DC=example,DC=com
+  - Key: LDAP_TIMEOUT
+    Name: arg
+    Value: "15"
+  - Key: LDAP_FILTER
+    Name: arg
+    Value: (sAMAccountName=%U)
+  - Key: LDAP_BIND_DN
+    Name: arg
+    Value: CN=Administrator,CN=Users,DC=example,DC=com
+  - Key: LDAP_PASSWORD
+    Name: arg
+    Value: ADpassword
+  - Key: LDAP_DN_BASE
+    Name: arg
+    Value: dc=my-domain,dc=com
+  - Key: LDAP_ORGANIZATION
+    Name: arg
+    Value: Example
+  - Key: LDAP_ROOT_DN
+    Name: arg
+    Value: cn=Manager,dc=my-domain,dc=com
+  - Key: LDAP_DATABASE
+    Name: arg
+    Value: hdb
+  - Key: LDAP_ROOT_PW
+    Name: arg
+    Value: secret
+  - Env:
+    - Key: OPENLDAP_VERSION
+      Value: 2.4.44
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y   curl   build-essential   groff-base   libdb-dev   libssl1.0.0
+      libssl-dev libiodbc2 libiodbc2-dev libsasl2-2 libsasl2-dev   sasl2-bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'sed -i ''s/MECHANISMS="pam"/MECHANISMS="ldap"/'' /etc/default/saslauthd   &&
+      sed -i ''s/START=no/START=yes/'' /etc/default/saslauthd   && touch /etc/saslauthd.conf   &&
+      echo "mech_list: plain" >> /usr/lib/sasl2/slapd.conf   && echo "pwcheck_method:
+      saslauthd" >> /usr/lib/sasl2/slapd.conf   && echo "saslauthd_path: /var/run/saslauthd/mux"
+      >> /usr/lib/sasl2/slapd.conf'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/saslauthd.conf
+    - /etc/saslauthd.conf
+  - CmdLine:
+    - 'sed -i ''s|ldap:\/\/ad.example.com:389\/|''"$LDAP_SERVERS"''|'' /etc/saslauthd.conf   &&
+      sed -i ''s/CN=DomainUsers,DC=example,DC=com/''"$LDAP_SEARCH_BASE"''/'' /etc/saslauthd.conf   &&
+      sed -i ''s/ldap_timeout: 10/ldap_timeout: ''"$LDAP_TIMEOUT"''/'' /etc/saslauthd.conf   &&
+      sed -i ''s/(sAMAccountName=%U)/''"$LDAP_FILTER"''/'' /etc/saslauthd.conf   &&
+      sed -i ''s/CN=Administrator,CN=Users,DC=example,DC=com/''"$LDAP_BIND_DN"''/''
+      /etc/saslauthd.conf   && sed -i ''s/ADpassword/''"$LDAP_PASSWORD"''/'' /etc/saslauthd.conf'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - service saslauthd start
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -LJO http://mirror.eu.oneandone.net/software/openldap/openldap-release/openldap-${OPENLDAP_VERSION}.tgz   &&
+      gunzip -c openldap-${OPENLDAP_VERSION}.tgz | tar xf -   && rm openldap-${OPENLDAP_VERSION}.tgz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: openldap-${OPENLDAP_VERSION}
+  - CmdLine:
+    - ./configure --enable-spasswd --with-cyrus-sasl --enable-memberof   && make depend   &&
+      make   && make install   && make clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch /usr/local/etc/openldap/create.ldif   cp /usr/local/var/openldap-data/DB_CONFIG.example
+      /usr/local/var/openldap-data/DB_CONFIG
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/slapd.conf
+    - /usr/local/etc/openldap/slapd.conf
+  - CmdLine:
+    - sed -i 's/suffix\s\+"dc=my-domain,dc=com"/suffix          \"'"$LDAP_DN_BASE"'\"/'
+      /usr/local/etc/openldap/slapd.conf   && sed -i 's/cn=Manager,dc=my-domain,dc=com/'"$LDAP_ROOT_DN"'/'
+      /usr/local/etc/openldap/slapd.conf   && sed -i 's/database\s\+mdb/database        '"$LDAP_DATABASE"'/'
+      /usr/local/etc/openldap/slapd.conf   && sed -i 's/rootpw\s\+secret/rootpw          '"$LDAP_ROOT_PW"'/'
+      /usr/local/etc/openldap/slapd.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/create.ldif
+    - /usr/local/etc/openldap/create.ldif
+  - CmdLine:
+    - 'sed -i ''s/dn: dc=my-domain,dc=com/dn: ''"$LDAP_DN_BASE"''/'' /usr/local/etc/openldap/create.ldif   &&
+      sed -i ''s/o: Example/o: ''"$LDAP_ORGANIZATION"''/'' /usr/local/etc/openldap/create.ldif'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - slapadd -l /usr/local/etc/openldap/create.ldif
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - Name: expose
+    Ports:
+    - "389"
+    - "636"
+  - Name: volume
+    Volumes:
+    - /usr/local/etc/openldap
+    - /usr/local/var/openldap-data
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /sbin/docker-entrypoint.sh
+  - CmdLine:
+    - chmod 755 /sbin/docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /sbin/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: phusion/baseimage
+  Name: ""
+  Platform: ""
+  SourceCode: FROM phusion/baseimage

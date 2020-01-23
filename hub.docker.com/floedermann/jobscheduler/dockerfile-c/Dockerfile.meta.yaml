@@ -1,0 +1,93 @@
+MetaArgs: null
+Stages:
+- As: rsbuild
+  BaseName: alpine:edge
+  Commands:
+  - CmdLine:
+    - apk update && apk add ca-certificates cargo gcc git make rust && git clone https://github.com/jedisct1/rust-doh
+      /rust-doh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /rust-doh
+  - CmdLine:
+    - cargo build --release
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: rsbuild
+  Platform: ""
+  SourceCode: FROM alpine:edge as rsbuild
+- BaseName: alpine:latest
+  Commands:
+  - Env:
+    - Key: PORT
+      Value: "3000"
+    Name: env
+  - Env:
+    - Key: LISTEN_ADDR
+      Value: 127.0.0.1:3000
+    Name: env
+  - Env:
+    - Key: SERVER_ADDR
+      Value: 9.9.9.9:53
+    Name: env
+  - Env:
+    - Key: BIND_ADDR
+      Value: 0.0.0.0:0
+    Name: env
+  - Env:
+    - Key: ERR_TTL
+      Value: "2"
+    Name: env
+  - Env:
+    - Key: MAX_TTL
+      Value: "604800"
+    Name: env
+  - Env:
+    - Key: MIN_TTL
+      Value: "10"
+    Name: env
+  - Env:
+    - Key: LOCATION_PATH
+      Value: /dns-query
+    Name: env
+  - Env:
+    - Key: TIMEOUT
+      Value: "10"
+    Name: env
+  - Env:
+    - Key: MAX_CLIENTS
+      Value: "512"
+    Name: env
+  - Name: expose
+    Ports:
+    - $PORT/tcp
+    - $PORT/udp
+  - CmdLine:
+    - apk update && apk add libgcc libunwind
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: rsbuild
+    Name: copy
+    SourcesAndDest:
+    - /rust-doh/target/release/doh-proxy
+    - /usr/local/bin/doh-proxy
+  - CmdLine:
+    - /bin/sh
+    - -c
+    - /usr/local/bin/doh-proxy -E $ERR_TTL -l $LISTEN_ADDR -b $BIND_ADDR -c $MAX_CLIENTS
+      -X $MAX_TTL -T $MIN_TTL -p $LOCATION_PATH -u $SERVER_ADDR -t $TIMEOUT
+    Name: cmd
+    PrependShell: false
+  - Labels:
+    - Key: maintainer
+      Value: '"Marco Kundt"'
+    Name: label
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

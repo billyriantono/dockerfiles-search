@@ -1,27 +1,19 @@
-FROM ubuntu:16.04
+FROM node:10
 
-LABEL description="Hedgehog Cloud by www.eigener-server.ch https://www.eigener-server.ch/en/igel-cloud \
-                   is licensed under a Creative Commons Attribution 4.0 International Lizenz \
-                   http://creativecommons.org/licenses/by/4.0/ \
-                   To remove the links visit https://www.eigener-server.ch/en/igel-cloud"
+# Create app directory
+WORKDIR /usr/src/app
 
-RUN apt-get update && \
-    apt-get -y --no-install-recommends install net-tools tzdata && \
-    apt-get clean && \
-rm -rf /var/lib/apt/lists/*
+# Install app dependencies
+# A wildcard is used to ensure both package.json AND package-lock.json are copied
+# where available (npm@5+)
+COPY package*.json ./
 
-# Disable SSH
-RUN rm -rf /etc/service/sshd /etc/my_init.d/00_regen_ssh_host_keys.sh
+RUN npm install
+# If you are building your code for production
+# RUN npm ci --only=production
 
-# Timezone
-ENV TZ Europe/Zurich
-RUN echo ${TZ} >/etc/timezone && \
-    ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime && \
-    dpkg-reconfigure -f noninteractive tzdata
+# Bundle app source
+COPY . .
 
-# Fix Let's Encrypt CA not included in Ubuntu's CA bundle
-RUN apt-get update && \
-    apt-get -y --no-install-recommends install --reinstall ca-certificates && \
-    apt-get clean && \
-rm -rf /var/lib/apt/lists/*
-
+EXPOSE 80
+CMD [ "node", "main.js" ]

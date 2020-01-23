@@ -1,0 +1,1 @@
+FROM ciantic/haskell-ide-engine:ghc8.6.5

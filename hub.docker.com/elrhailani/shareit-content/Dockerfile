@@ -1,0 +1,23 @@
+FROM ellkinox/docker-debian:9
+
+MAINTAINER Ellkinox <ilyes-litim@utopiascript.fr>
+
+ENV DEBIAN_FRONTEND noninteractive
+
+RUN apt-get update
+
+RUN apt-get -y -f install php-pear php5.6 php5.6-cgi php5.6-fpm php5.6-cli php5.6-gd php5.6-intl php5.6-common \
+                php5.6-curl php5.6-imap php5.6-mysql php5.6-mysqli php5.6-pspell \
+                php5.6-sqlite3 php5.6-tidy php5.6-opcache php5.6-json php5.6-bz2 php5.6-mcrypt \
+                php5.6-readline php5.6-xmlrpc php5.6-xsl libapache2-mod-fcgid php7.0 php7.0-fpm \
+                php7.0-cgi php7.0-cli php7.0-gd php7.0-intl php7.0-common php7.0-curl php7.0-enchant apache2-suexec-custom \
+                php7.0-imap php7.0-ldap php7.0-mcrypt php7.0-readline \
+                php7.0-pspell php7.0-tidy php7.0-xmlrpc php7.0-xsl php7.0-zip php7.0-json php7.0-sqlite3 php7.0-mysql \
+                php7.0-mysqli php7.0-opcache php7.0-bz2 libapache2-mod-php7.0 php7.0-mb \
+                php7.2 php7.2-cli php7.2-gd php7.2-intl php7.2-mbstring php7.2-xml php7.2-odbc php7.2-common libapache2-mod-php7.2 \
+                php7.2-fpm php7.2-imap php7.2-cgi php7.2-curl php7.2-mb php7.2-opcache php7.2-mysql php7.2-json \
+                php7.2-zip php7.2-readline webalizer
+
+RUN rm /etc/apache2/mods-enabled/php7.2.*
+
+CMD ["bash"]

@@ -1,26 +1,37 @@
-#
-# symfony-app
-#
+FROM alpine:3.6
 
-FROM phpmentors/php-app:php72
-MAINTAINER Atsuhiro Kubo <kubo@iteman.jp>
+LABEL MAINTAINER="Aurelien PERRIER <a.perrier89@gmail.com>"
+LABEL APP="fluentd"
+LABEL APP_VERSION="0.14.23"
+LABEL APP_REPOSITORY="https://github.com/fluent/fluentd/releases"
+LABEL APP_DESCRIPTION="logging"
 
-RUN apt-get update
-RUN apt-get install -y libfile-slurp-perl php7.2-sqlite3
+ENV TIMEZONE Europe/Paris
+ENV FLUENTD_VERSION 0.14.23
 
-# Apache2
-ENV APP_DOCUMENT_ROOT /var/app/web
-ADD apache2/passenv.patch /tmp/apache2-passenv.patch
-RUN patch /etc/apache2/sites-available/000-default.conf /tmp/apache2-passenv.patch
+# Installing dependencies
+RUN apk --update add --no-cache ruby ruby-irb
+RUN apk --update add --no-cache --virtual .build-deps \
+    build-base \
+    wget \
+    tar \
+    ruby-dev
 
-# Symfony application
-ENV APP_RUN_MODE dev
-ADD app/console /usr/local/bin/console
-RUN chmod 755 /usr/local/bin/console
-RUN chown root.root /usr/local/bin/console
-ADD app/make-app-accessible /usr/local/sbin/app-make-app-accessible
-RUN chmod 755 /usr/local/sbin/app-make-app-accessible
-RUN chown root.root /usr/local/sbin/app-make-app-accessible
-ADD app/init /tmp/app-init
-RUN cat /usr/local/sbin/app-init /tmp/app-init | sed -e 's/^#!\/bin\/bash//' > /tmp/new-app-init
-RUN sed -i '1i #!/bin/bash' /tmp/new-app-init && cp /tmp/new-app-init /usr/local/sbin/app-init && rm /tmp/new-app-init
+RUN mkdir -p /var/log/td-agent
+
+WORKDIR /root
+
+RUN echo 'gem: --no-document' >> /etc/gemrc && \ 
+        gem install oj -v 2.18.3 && \
+        gem install json -v 2.1.0 && \
+        gem install fluentd -v ${FLUENTD_VERSION} && \
+        gem install fluent-plugin-s3 && \
+        gem install fluent-plugin-elasticsearch && \
+        apk del .build-deps
+
+COPY ./files/*.conf .
+COPY ./scripts/*.sh .
+
+EXPOSE 24224 24224/udp
+
+ENTRYPOINT [ "./start.sh" ]

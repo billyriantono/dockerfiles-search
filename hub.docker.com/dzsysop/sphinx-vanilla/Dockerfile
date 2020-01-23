@@ -1,26 +1,35 @@
-FROM leodido/sphinxsearch:2.2.10
+FROM debian:stretch-slim
 
-RUN yum install sed \
-  && yum install -y epel-release \
-  && sed -i "s/mirrorlist=https/mirrorlist=http/" /etc/yum.repos.d/epel.repo \
-  && yum clean all && yum install -y compat-readline5 \
-  && yum clean all && yum install -y socat \
-  && mkdir -p /usr/local/etc/sphinx \
-  && mkdir -p /usr/local/etc/sphinx/conf.d \
-  && mkdir -p /usr/local/etc/sphinx/data
+ENV DOGECOIND_VERSION 1.14.2
 
-COPY ./root/* /root/
+ENV DOGECOIN_URL https://github.com/dogecoin/dogecoin/releases/download/v${DOGECOIND_VERSION}/dogecoin-$DOGECOIND_VERSION-x86_64-linux-gnu.tar.gz
 
-COPY ./usr/local/etc/sphinx.conf /usr/local/etc/sphinx.conf
-COPY ./usr/local/etc/sphinx/searchd.conf /usr/local/etc/sphinx/searchd.conf
-COPY ./usr/local/etc/sphinx/data/stops.txt /usr/local/etc/sphinx/data/stops.txt
-COPY ./usr/local/etc/sphinx/conf.d/vanilla.conf /usr/local/etc/sphinx/conf.d/sphinx.conf
+ARG USER_ID
+ARG GROUP_ID
 
-RUN chmod +x /root/startup.sh \
- && chmod +x /root/listen.9399.sh
+ENV HOME /home/dogecoin
 
-CMD /root/startup.sh
+# add user with specified (or default) user/group ids
+ENV USER_ID ${USER_ID:-1000}
+ENV GROUP_ID ${GROUP_ID:-1000}
 
-EXPOSE 9312
-EXPOSE 9306
-EXPOSE 9399
+RUN groupadd -g ${GROUP_ID} dogecoin \
+	&& useradd -u ${USER_ID} -g dogecoin -s /bin/bash -m -d ${HOME} dogecoin
+
+RUN set -ex \
+	&& apt-get update \
+	&& apt-get install -qq --no-install-recommends ca-certificates wget gosu \
+	&& rm -rf /var/lib/apt/lists/*
+
+# install dogecoin binaries
+RUN set -ex \
+	&& cd /tmp \
+	&& wget -qO dogecoin.tar.gz "$DOGECOIN_URL" \
+	&& tar -xzvf dogecoin.tar.gz -C /usr/local --strip-components=1 --exclude=*-qt \
+	&& rm -rf /tmp/*
+
+EXPOSE 9998 9999 19998 19999
+
+COPY docker-entrypoint.sh /usr/local/bin/
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["dogecoind"]

@@ -1,40 +1,14 @@
-FROM java:8-jre
+FROM node:latest
 
-ENV ES_VERSION 1.7.5
+RUN mkdir -p /app
+WORKDIR /app
 
-# Install ElasticSearch.
-RUN \
-  cd /tmp && \
-  wget https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-${ES_VERSION}.tar.gz && \
-  tar xvzf elasticsearch-${ES_VERSION}.tar.gz && \
-  rm -f elasticsearch-${ES_VERSION}.tar.gz && \
-  mv /tmp/elasticsearch-${ES_VERSION} /elasticsearch
+COPY ./package.json /app/package.json
+RUN npm install
 
-# Define mountable directories.
-VOLUME ["/data"]
+COPY . /app
 
-# Define working directory.
-WORKDIR /data
+EXPOSE 3000
 
-EXPOSE 9200
-EXPOSE 9300
-
-# Elasticsearch plugins woop!
-RUN /elasticsearch/bin/plugin install elasticsearch/elasticsearch-analysis-icu/2.7.0
-
-
-RUN apt-get update --fix-missing
-RUN apt-get -y install python-pip
-RUN pip install envtpl
-
-# Add etcdenv
-ADD https://github.com/upfluence/etcdenv/releases/download/v0.3.1/etcdenv-linux-amd64-0.3.1 /usr/local/bin/etcdenv
-RUN chmod +x /usr/local/bin/etcdenv
-
-ADD elasticsearch.yml.tpl /elasticsearch/config/elasticsearch.yml.tpl
-
-ADD run /usr/local/bin/run
-RUN chmod +x /usr/local/bin/run
-
-CMD run
-
+ENTRYPOINT ["npm"]
+CMD ["start"]

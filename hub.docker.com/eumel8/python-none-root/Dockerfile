@@ -7,6 +7,7 @@ RUN pip install -r /tmp/requirements.txt
 RUN useradd --create-home appuser
 WORKDIR /home/appuser
 USER appuser
+ENV PYTHONUNBUFFERED=0
 
 # COPY yourscript.py .
 

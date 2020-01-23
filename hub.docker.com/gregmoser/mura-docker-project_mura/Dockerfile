@@ -1,24 +1,23 @@
-# Slatwall Source Build
-FROM lucee/lucee4:latest
-MAINTAINER Greg Moser, greg@gregmoser.com
+FROM ubuntu:14.04
+MAINTAINER Evgeniy A. Cymbalyuk <cimbaluk@saber3d.ru>
 
-RUN apt-get clean
-RUN apt-get update
-RUN apt-get install -y uuid-runtime
-
-# Copy Tomcat & Lucee configs
-COPY ./opt/lucee/server/lucee-server/context/lucee-server.xml /opt/lucee/server/lucee-server/context/lucee-server.xml
-COPY ./opt/lucee/web/lucee-web.xml.cfm /opt/lucee/web/lucee-web.xml.cfm
-
-# Expose Ports
-EXPOSE 8888
-
-COPY ./usr/local/entrypoint.sh /usr/local/entrypoint.sh
-ENTRYPOINT ["/usr/local/entrypoint.sh"]
-RUN chmod -R 755 /usr/local/entrypoint.sh
-
-# Copy Source File Last
-COPY ./var/www/ /var/www/
-RUN chmod -R 755 /var/www/
-
-CMD ["catalina.sh", "run"]
+# link: https://docs.docker.com/engine/installation/linux/ubuntu/
+RUN set -ex                           \
+    && apt-get update                 \
+    && apt-get install -y             \
+        apt-transport-https           \
+        ca-certificates               \
+        curl                          \
+        software-properties-common    \
+    && (curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -) \
+    && add-apt-repository             \
+        "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+        $(lsb_release -cs) stable"    \
+    && apt-get update                 \
+    && apt-get install -y docker-ce   \
+    && apt-get remove -y              \
+        curl                          \
+        ca-certificates               \
+        software-properties-common    \
+    && apt-get autoremove -y          \
+    && rm -rf /var/lib/apt/lists/*

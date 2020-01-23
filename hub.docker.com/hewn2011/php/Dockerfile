@@ -1,11 +1,11 @@
-FROM hewn2011/php:7.2-fpm-base
+FROM hewn2011/php:5.6-fpm-base
 MAINTAINER lujiaming
 
 RUN apk add --no-cache supervisor nginx \
     && mkdir /etc/supervisor.d && mkdir /run/nginx && mkdir /www \
-    && cp /usr/local/etc/php/php.ini-development /usr/local/etc/php.ini
+    && cp /usr/local/etc/php/php.ini-development /usr/local/etc/php/php.ini
 
-COPY etc/php7/php-fpm.d/* /usr/local/etc/php-fpm.d/
+COPY etc/php5/php-fpm.d/* /usr/local/etc/php-fpm.d/
 COPY etc/supervisor.d/* /etc/supervisor.d/
 COPY etc/nginx/conf.d/* /etc/nginx/conf.d/
 COPY www/* /www/

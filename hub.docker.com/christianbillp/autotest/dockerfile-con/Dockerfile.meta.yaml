@@ -1,0 +1,71 @@
+MetaArgs: null
+Stages:
+- BaseName: debian
+  Commands:
+  - Maintainer: Chris MacPherson <chris@macpherson.scot>
+    Name: maintainer
+  - CmdLine:
+    - groupadd -r mysql && useradd -r -g mysql mysql
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-key adv --keyserver ha.pool.sks-keyservers.net --recv-keys A4A9406876FCBD3C456770C88C718D3B5072E1F5
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MYSQL_MAJOR
+      Value: "5.7"
+    Name: env
+  - CmdLine:
+    - echo "deb http://repo.mysql.com/apt/debian/ jessie mysql-${MYSQL_MAJOR}" > /etc/apt/sources.list.d/mysql.list     &&
+      echo "deb-src http://repo.mysql.com/apt/debian/ jessie mysql-${MYSQL_MAJOR}"
+      >> /etc/apt/sources.list.d/mysql.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update      && DEBIAN_FRONTEND=noninteractive apt-get install --assume-yes
+      --no-install-recommends mysql-community-server      && apt-get download mysql-community-server
+      && dpkg-deb -R mysql-community-serve*.deb foo      && cp foo/usr/bin/mysql_tzinfo_to_sql
+      . && rm -r foo mysql-community-serve*.deb      && apt-get clean && rm -r /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/run/mysqld && chown mysql:mysql /var/run/mysqld     && touch /var/log/mysql_general.log
+      && chmod 666 /var/log/mysql_general.log
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start-mysql
+    - stop-mysql
+    - /bin/
+  - CmdLine:
+    - "sed -Ei 's/^(bind-address|log)/#&/' /etc/mysql/my.cnf \t&& echo 'skip-host-cache\\nskip-name-resolve\\npid-file=/var/run/mysqld/mysqld.pid\\nbind-address=0.0.0.0'
+      | awk '{ print } $1 == \"[mysqld]\"         && c == 0 { c = 1; system(\"cat\")
+      }' /etc/mysql/my.cnf > /tmp/my.cnf \t&& mv /tmp/my.cnf /etc/mysql/my.cnf"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - start-mysql &&     echo "UPDATE user SET host = '%' WHERE user = 'root';" |
+      mysql mysql     && ./mysql_tzinfo_to_sql /usr/share/zoneinfo | mysql mysql --force
+      &&     stop-mysql
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3306"
+  - CmdLine:
+    - mysqld
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian

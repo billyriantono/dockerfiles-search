@@ -1,37 +1,28 @@
-FROM nginx:1.13
-LABEL maintainer="Hoc Nguyen hocnt84@gmail.com"
+FROM python:3.5 AS builder
 
-# Install wget and install/updates certificates
-RUN apt-get update \
- && apt-get install -y -q --no-install-recommends \
-    ca-certificates \
-    wget \
- && apt-get clean \
- && rm -r /var/lib/apt/lists/*
+ENV PYTHONUNBUFFERED 1
 
+RUN mkdir -p /opt/memcached_operator
+WORKDIR /opt/memcached_operator
 
-# Configure Nginx and apply fix for very long server names
-RUN echo "daemon off;" >> /etc/nginx/nginx.conf \
- && sed -i 's/worker_processes  1/worker_processes  auto/' /etc/nginx/nginx.conf
+COPY Pipfile \
+     Pipfile.lock \
+     memcached_operator.py \
+     /opt/memcached_operator/
 
-# Install Forego
-ADD https://github.com/jwilder/forego/releases/download/v0.16.1/forego /usr/local/bin/forego
-RUN chmod u+x /usr/local/bin/forego
+COPY memcached_operator/ \
+    /opt/memcached_operator/memcached_operator/
 
-ENV DOCKER_GEN_VERSION 0.7.3
+RUN pip install pipenv \
+    && pipenv install \
+    && ln -s `pipenv --py` /root/.local/share/virtualenvs/python
 
-RUN wget https://github.com/jwilder/docker-gen/releases/download/$DOCKER_GEN_VERSION/docker-gen-linux-amd64-$DOCKER_GEN_VERSION.tar.gz \
- && tar -C /usr/local/bin -xvzf docker-gen-linux-amd64-$DOCKER_GEN_VERSION.tar.gz \
- && rm /docker-gen-linux-amd64-$DOCKER_GEN_VERSION.tar.gz
+FROM python:3.5-slim
 
-COPY network_internal.conf /etc/nginx/
+COPY --from=builder /root/.local/share/virtualenvs /root/.local/share/virtualenvs
+COPY --from=builder /opt/memcached_operator /opt/memcached_operator
 
-COPY . /app/
-WORKDIR /app/
+WORKDIR /opt/memcached_operator
+ENV PATH /root/.local/share/virtualenvs:$PATH
 
-ENV DOCKER_HOST unix:///tmp/docker.sock
-
-VOLUME ["/etc/nginx/certs", "/etc/nginx/dhparam"]
-
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["forego", "start", "-r"]
+ENTRYPOINT ["python", "memcached_operator.py"]

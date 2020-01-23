@@ -1,0 +1,110 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: jrottenberg/ffmpeg:3.4-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache python3 &&     python3 -m ensurepip &&     rm -r /usr/lib/python*/ensurepip
+      &&     pip3 install --upgrade pip setuptools &&     if [ ! -e /usr/bin/pip ];
+      then ln -s pip3 /usr/bin/pip ; fi &&     if [[ ! -e /usr/bin/python ]]; then
+      ln -sf /usr/bin/python3 /usr/bin/python; fi &&     rm -r /root/.cache
+    Name: run
+    PrependShell: true
+  From:
+    Image: jrottenberg/ffmpeg:3.4-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM        jrottenberg/ffmpeg:3.4-alpine AS base
+- As: release
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - /app/
+  - CmdLine:
+    - apk add --no-cache   --virtual=.build-dependencies   build-base python3-dev
+      file &&   apk add --no-cache jpeg-dev zlib-dev freetype-dev lcms2-dev openjpeg-dev   tiff-dev
+      tk-dev tcl-dev &&   apk add tzdata &&   ln -sf /usr/share/zoneinfo/Asia/Shanghai
+      /etc/localtime &&   echo "Asia/Shanghai" > /etc/timezone &&   ln -s locale.h
+      /usr/include/xlocale.h &&   pip install -r /app/requirements.txt &&   rm -r
+      /root/.cache &&   find /usr/lib/python3.*/ -name 'tests' -exec rm -r '{}' +
+      &&   find /usr/lib/python3.*/site-packages/ -name '*.so' -print -exec sh -c
+      'file "{}" | grep -q "not stripped" && strip -s "{}"' \; &&   rm /usr/include/xlocale.h
+      &&   apk del .build-dependencies
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /bin/sh /bin/bash
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DJANGO_PORT
+      Value: "8000"
+    - Key: DJANGO_LOG
+      Value: $PWD
+    - Key: DJANGO_DB_HOST
+      Value: vod_db
+    - Key: TSRTMP_DB_HOST
+      Value: vod_db
+    - Key: NAME
+      Value: '"mysite_app"'
+    - Key: ADDRESS
+      Value: 0.0.0.0
+    - Key: LOG_DIR
+      Value: logs
+    - Key: ERROR_LOG
+      Value: error.log
+    - Key: PID_FILE
+      Value: logs/vod.pid
+    - Key: NUM_WORKERS
+      Value: "4"
+    - Key: TIME_OUT
+      Value: "900000"
+    - Key: DJANGO_SETTINGS_MODULE
+      Value: mysite.settings
+    - Key: DJANGO_WSGI_MODULE
+      Value: mysite.wsgi
+    Name: env
+  - CmdLine:
+    - apk add --no-cache curl
+    Name: run
+    PrependShell: true
+  - Health:
+      Interval: 30000000000
+      Test:
+      - CMD-SHELL
+      - curl -fs http://localhost:$DJANGO_PORT/admin || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /app
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - ""
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - python
+    - manage.py
+    - runserver
+    - 0.0.0.0:8000
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: release
+  Platform: ""
+  SourceCode: FROM base AS release

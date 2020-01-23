@@ -1,4 +1,4 @@
-FROM node:10-alpine
+FROM node:12-alpine
 
 MAINTAINER dev@adex.network
 
@@ -8,7 +8,7 @@ ENV IDENTITY=
 ENV DB_MONGO_URL=
 ENV DB_MONGO_NAME=
 ENV KEYSTORE_FILE=
-ENV KEYSTORE_PASSWORD=
+ENV KEYSTORE_PWD=
 
 RUN echo 'http://dl-3.alpinelinux.org/alpine/edge/testing' >> /etc/apk/repositories && \
     apk upgrade --update

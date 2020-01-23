@@ -1,16 +1,12 @@
-FROM openjdk:8-jdk-slim
+FROM composer:1.4.1
 
-WORKDIR /tmp
+RUN apk --update add git openssh sudo bash && \
+    rm -rf /var/cache/apk/*
 
-RUN apt-get update -qq && \
-    apt-get -y install git binutils pngquant imagemagick librsvg2-bin && \
-    cd /tmp && \
-    git clone https://github.com/Zabrimus/jonglisto-ng.git && \
-    cd jonglisto-ng && \
-    chmod +x ./gradlew && \
-    ./gradlew createLogos && \
-    ./gradlew war && \
-    ./gradlew copySamples && \
-    cd tools && \
-    rm -Rf picicon-repo
 
+COPY ./docker-entrypoint.sh /
+RUN chmod +x /docker-entrypoint.sh
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+
+CMD []

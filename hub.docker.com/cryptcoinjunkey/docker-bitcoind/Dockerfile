@@ -1,55 +1,23 @@
-FROM ubuntu:xenial
-MAINTAINER Kyle Manna <kyle@kylemanna.com>
+FROM amazonlinux:2
 
-ARG USER_ID
-ARG GROUP_ID
+RUN yum -y install python3-pip
+RUN yum -y install wget
+RUN yum -y install perl 
+RUN yum -y install pigz
+RUN yum -y install gzip 
 
-ENV HOME /bitcoin
+COPY pyir/ /tmp/pyir/
+COPY SetupGermlineLibrary.sh /tmp/
+COPY bin/ /tmp/bin/
+COPY edit_imgt_file.pl /tmp/
+COPY setup.py /tmp/
+COPY testing/ /tmp/testing
 
-# add user with specified (or default) user/group ids
-ENV USER_ID ${USER_ID:-1000}
-ENV GROUP_ID ${GROUP_ID:-1000}
 
-# add our user and group first to make sure their IDs get assigned consistently, regardless of whatever dependencies get added
-RUN groupadd -g ${GROUP_ID} bitcoin \
-	&& useradd -u ${USER_ID} -g bitcoin -s /bin/bash -m -d /bitcoin bitcoin
+WORKDIR /tmp
+RUN pip3 install .
 
-RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 8842ce5e && \
-    echo "deb http://ppa.launchpad.net/bitcoin/bitcoin/ubuntu xenial main" > /etc/apt/sources.list.d/bitcoin.list
+RUN sh SetupGermlineLibrary.sh
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-		bitcoind \
-	&& apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# grab gosu for easy step-down from root
-ENV GOSU_VERSION 1.7
-RUN set -x \
-	&& apt-get update && apt-get install -y --no-install-recommends \
-		ca-certificates \
-		curl \
-		wget \
-	&& wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)" \
-	&& wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture).asc" \
-	&& export GNUPGHOME="$(mktemp -d)" \
-	&& gpg --keyserver ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
-	&& gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \
-	&& rm -r "$GNUPGHOME" /usr/local/bin/gosu.asc \
-	&& chmod +x /usr/local/bin/gosu \
-	&& gosu nobody true \
-	&& apt-get purge -y \
-		ca-certificates \
-		wget \
-	&& apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-ADD ./bin /usr/local/bin
-
-VOLUME ["/bitcoin"]
-
-EXPOSE 8332 8333 18332 18333
-
-WORKDIR /bitcoin
-
-COPY docker-entrypoint.sh /usr/local/bin/
-ENTRYPOINT ["docker-entrypoint.sh"]
-
-CMD ["btc_oneshot"]
+ENTRYPOINT ["pyir", "-d", "/tmp/pyir_data"]
+CMD ["/tmp/testing/1K_Seqs.fasta"]

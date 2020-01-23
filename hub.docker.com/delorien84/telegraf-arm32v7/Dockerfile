@@ -1,21 +1,42 @@
-FROM resin/armv7hf-debian
-ARG version=1.3.5
+FROM debian:jessie
 
-RUN [ "cross-build-start" ]
+ADD https://github.com/Yelp/dumb-init/releases/download/v1.1.3/dumb-init_1.1.3_amd64 /usr/local/bin/dumb-init
 
-RUN apt-get update && apt-get install wget && \
-	wget https://dl.influxdata.com/telegraf/releases/telegraf-${version}_linux_armhf.tar.gz && \
-	tar xvfz telegraf-${version}_linux_armhf.tar.gz && \
-	rm telegraf-${version}_linux_armhf.tar.gz && \
-	cp -av telegraf/* / && \
-        rm -fr telegraf && \
-	apt-get purge wget && \
-	apt-get autoremove && \
-	apt-get clean all && \
-	rm -r /var/lib/apt/lists/*
+RUN set -x \
+    # Install qBittorrent-NoX
+    && apt-get update \
+    && apt-get install -y qbittorrent-nox \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
 
-RUN [ "cross-build-end" ]  
+    # Add non-root user
+    && useradd --system --uid 520 -m --shell /usr/sbin/nologin qbittorrent \
 
-EXPOSE 8125 8092 8094
+    # Create symbolic links to simplify mounting
+    && mkdir -p /home/qbittorrent/.config/qBittorrent \
+    && chown qbittorrent:qbittorrent /home/qbittorrent/.config/qBittorrent \
+    && ln -s /home/qbittorrent/.config/qBittorrent /config \
 
-ENTRYPOINT ["/usr/bin/telegraf", "-config", "/etc/telegraf/telegraf.conf", "-config-directory", "/etc/telegraf/telegraf.d"]
+    && mkdir -p /home/qbittorrent/.local/share/data/qBittorrent \
+    && chown qbittorrent:qbittorrent /home/qbittorrent/.local/share/data/qBittorrent \
+    && ln -s /home/qbittorrent/.local/share/data/qBittorrent /torrents \
+
+    && mkdir /downloads \
+    && chown qbittorrent:qbittorrent /downloads \
+
+    # https://github.com/Yelp/dumb-init
+    && chmod +x /usr/local/bin/dumb-init
+
+
+# Default configuration file.
+COPY qBittorrent.conf /default/qBittorrent.conf
+COPY entrypoint.sh /
+
+VOLUME ["/config", "/torrents", "/downloads"]
+
+EXPOSE 8080 6881
+
+USER qbittorrent
+
+ENTRYPOINT ["dumb-init", "/entrypoint.sh"]
+CMD ["qbittorrent-nox"]

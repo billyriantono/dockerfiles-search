@@ -1,0 +1,194 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12.1-stretch
+  Commands:
+  - Maintainer: Filecoin Dev Team
+    Name: maintainer
+  - CmdLine:
+    - apt-get update && apt-get install -y ca-certificates file sudo clang jq
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sSf https://sh.rustup.rs | sh -s -- -y
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SRC_DIR
+      Value: /go/src/github.com/filecoin-project/go-filecoin
+    Name: env
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Key: FILECOIN_PARAMETER_CACHE
+    Name: arg
+    Value: '"./tmp/filecoin-proof-parameters"'
+  - Key: FILECOIN_USE_PRECOMPILED_RUST_PROOFS
+    Name: arg
+    Value: "yes"
+  - Key: FILECOIN_USE_PRECOMPILED_BLS_SIGNATURES
+    Name: arg
+    Value: "yes"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $SRC_DIR
+  - CmdLine:
+    - cd $SRC_DIR   && . $HOME/.cargo/env   && go run ./build/*go deps   && go run
+      ./build/*go build
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SUEXEC_VERSION
+      Value: v0.2
+    Name: env
+  - Env:
+    - Key: TINI_VERSION
+      Value: v0.16.1
+    Name: env
+  - CmdLine:
+    - set -x   && cd /tmp   && git clone https://github.com/ncopa/su-exec.git   &&
+      cd su-exec   && git checkout -q $SUEXEC_VERSION   && make   && cd /tmp   &&
+      wget -q -O tini https://github.com/krallin/tini/releases/download/$TINI_VERSION/tini   &&
+      chmod +x tini
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.1-stretch
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12.1-stretch AS builder
+- As: filecoin
+  BaseName: busybox:1-glibc
+  Commands:
+  - Maintainer: Filecoin Dev Team
+    Name: maintainer
+  - Env:
+    - Key: SRC_DIR
+      Value: /go/src/github.com/filecoin-project/go-filecoin
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $SRC_DIR/tmp/filecoin-proof-parameters/*
+    - /tmp/filecoin-proof-parameters/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $SRC_DIR/go-filecoin
+    - /usr/local/bin/go-filecoin
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $SRC_DIR/bin/container_daemon
+    - /usr/local/bin/start_filecoin
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $SRC_DIR/bin/devnet_start
+    - /usr/local/bin/devnet_start
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $SRC_DIR/bin/node_restart
+    - /usr/local/bin/node_restart
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $SRC_DIR/fixtures/
+    - /data/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - $SRC_DIR/gengen/gengen
+    - /usr/local/bin/gengen
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/su-exec/su-exec
+    - /sbin/su-exec
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/tini
+    - /sbin/tini
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs
+    - /etc/ssl/certs
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /lib/x86_64-linux-gnu/libdl-2.24.so
+    - /lib/libdl.so.2
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /lib/x86_64-linux-gnu/librt.so.1
+    - /lib/librt.so.1
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /lib/x86_64-linux-gnu/libgcc_s.so.1
+    - /lib/libgcc_s.so.1
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /lib/x86_64-linux-gnu/libutil.so.1
+    - /lib/libutil.so.1
+  - CmdLine:
+    - wget -q -O /usr/local/bin/jq https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64   &&
+      chmod +x /usr/local/bin/jq
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "6000"
+  - Name: expose
+    Ports:
+    - "3453"
+  - Env:
+    - Key: FILECOIN_PATH
+      Value: /data/filecoin
+    Name: env
+  - CmdLine:
+    - mkdir -p $FILECOIN_PATH   && adduser -D -h $FILECOIN_PATH -u 1000 -G users filecoin   &&
+      chown filecoin:users $FILECOIN_PATH
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - $FILECOIN_PATH
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /usr/local/bin/start_filecoin
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - daemon
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: busybox:1-glibc
+  Name: filecoin
+  Platform: ""
+  SourceCode: FROM busybox:1-glibc AS filecoin

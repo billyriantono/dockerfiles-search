@@ -1,10 +1,10 @@
-FROM amd64/debian:stretch-slim as builder
+FROM debian:stretch as builder
 
 # Fluent Bit version
 ENV FLB_MAJOR 1
 ENV FLB_MINOR 3
-ENV FLB_PATCH 5
-ENV FLB_VERSION 1.3.5
+ENV FLB_PATCH 6
+ENV FLB_VERSION 1.3.6
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -18,7 +18,7 @@ RUN apt-get update && \
       make \
       wget \
       unzip \
-      libssl-dev \
+      libssl1.0-dev \
       libasl-dev \
       libsasl2-dev \
       pkg-config \
@@ -56,6 +56,11 @@ COPY fluent-bit.conf \
      plugins.conf \
      /fluent-bit/etc/
 
+COPY --from=amd64/busybox:1.31.0 /bin/busybox /bin/busybox
+
+RUN chmod 555 /bin/busybox && \
+    /bin/busybox --install -s /usr/local/bin
+
 FROM gcr.io/distroless/cc
 MAINTAINER Eduardo Silva <eduardo@treasure-data.com>
 LABEL Description="Fluent Bit docker image" Vendor="Fluent Organization" Version="1.1"
@@ -76,8 +81,8 @@ COPY --from=builder /lib/x86_64-linux-gnu/libgpg-error.so* /lib/x86_64-linux-gnu
 
 COPY --from=builder /fluent-bit /fluent-bit
 
-#
-EXPOSE 2020
+COPY --from=builder /usr/local/bin/ /usr/local/bin/
+COPY --from=builder /bin/busybox /bin/
 
 # Entry point
 CMD ["/fluent-bit/bin/fluent-bit", "-c", "/fluent-bit/etc/fluent-bit.conf"]

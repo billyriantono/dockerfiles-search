@@ -1,0 +1,50 @@
+FROM php:7.2.22
+
+RUN curl -sL https://deb.nodesource.com/setup_10.x | bash -
+
+RUN apt-get update \
+    && apt-get install -y  curl build-essential unzip \
+    && apt-get install -y dialog apt-utils \
+    && apt-get install -y \
+        libfreetype6-dev \
+        libjpeg62-turbo-dev \
+        libmcrypt-dev \
+        libpng-dev \
+        wget \
+        git \
+        vim \
+        nodejs \
+    && apt-get install -y libxslt-dev \
+    && apt-get install -y libicu-dev \
+    && apt-get install -y libxml2-dev \
+    && apt-get install -y libzip-dev \
+    && apt-get install -y zlib1g-dev \
+    && apt-get install -y libssl-dev \
+    && docker-php-ext-install -j$(nproc) iconv  \
+    && docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/ \
+    && docker-php-ext-install -j$(nproc) gd \
+    && docker-php-ext-install mbstring \
+    && docker-php-ext-install gettext \
+    && docker-php-ext-configure intl \
+    && docker-php-ext-install intl \
+    && docker-php-ext-install xml \
+    && docker-php-ext-install simplexml \
+    && docker-php-ext-install pdo \
+    && docker-php-ext-install pdo_mysql \
+    && docker-php-ext-install zip \
+    && docker-php-ext-install soap \
+    && docker-php-ext-install bcmath \
+    && docker-php-ext-install xsl \
+    && docker-php-ext-install dom \
+    && docker-php-ext-install fileinfo \
+    && docker-php-ext-install json \
+    && docker-php-ext-install phar
+
+RUN echo "$(curl -sS https://composer.github.io/installer.sig) -" > composer-setup.php.sig \
+    && curl -sS https://getcomposer.org/installer | tee composer-setup.php | sha384sum -c composer-setup.php.sig \
+    && php composer-setup.php --install-dir=/bin --filename=composer \
+    && php -r "unlink('composer-setup.php');"
+
+COPY ./shopware/engine /usr/src/shopware/engine
+
+WORKDIR /usr/src/myapp

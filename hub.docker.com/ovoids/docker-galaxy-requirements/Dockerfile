@@ -1,23 +1,29 @@
-# Galaxy - requirements according to https://wiki.galaxyproject.org/Admin/Config/ToolDependenciesList
-#
-# VERSION   2015.1
-# Updated to ubuntu 17.10 as this is easier than pinning stuff from artful repositories in order to get slurm working.
-
-FROM ubuntu:17.10
-
-MAINTAINER Björn A. Grüning, Dave Bouvier
+FROM debian:jessie
+MAINTAINER Michael Richard <michael.richard@oriaks.com>
 
 ENV DEBIAN_FRONTEND noninteractive
+RUN apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 0xfb40d3e6508ea4c8 && \
+    echo 'deb http://deb.kamailio.org/kamailio jessie main' > /etc/apt/sources.list.d/kamailio.list
+RUN apt-get update -qy && \
+    apt-get install -qy ca-certificates curl kamailio kamailio-ldap-modules kamailio-presence-modules kamailio-sqlite-modules && \
+    apt-get autoremove -qy --purge && \
+    apt-get clean -qy && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-RUN apt-get -qq update && apt-get install --no-install-recommends -y apt-transport-https software-properties-common python-software-properties && \ 
-    apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 36A1D7869245C8950F966E92D8576A8BA88D21E9 && \
-    apt-get update -qq && apt-get upgrade -y && \
-    apt-get install --no-install-recommends -y autoconf automake build-essential gfortran cmake \
-    git-core libatlas-base-dev libblas-dev liblapack-dev openssl \
-    openjdk-8-jre python-dev python-setuptools \
-    python-virtualenv zlib1g-dev libyaml-dev subversion pkg-config slurm-client munge && \
-    apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
-    git clone --branch 1.2 https://github.com/samtools/htslib.git && \
-    git clone --branch 1.2 https://github.com/samtools/bcftools.git && \
-    make -C bcftools && cp bcftools/bcftools /usr/bin && \
-    rm -rf bcftools htslib
+COPY kamctlrc /etc/kamailio/kamctlrc
+COPY kamailio.cfg /etc/kamailio/kamailio.cfg
+COPY kamailio-local.cfg /etc/kamailio/kamailio-local.cfg
+COPY ldap.cfg /etc/kamailio/ldap.cfg
+COPY ldap.conf /etc/ldap/ldap.conf
+
+RUN mkdir -p /var/lib/kamailio && \
+    chown kamailio:kamailio /var/lib/kamailio
+
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+EXPOSE 5060/tcp
+EXPOSE 5060/udp
+
+ENTRYPOINT [ "/docker-entrypoint.sh" ]
+CMD [ "kamailio" ]

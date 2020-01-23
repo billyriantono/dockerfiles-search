@@ -1,0 +1,122 @@
+MetaArgs: null
+Stages:
+- As: dh
+  BaseName: amelia/dhparam:latest
+  Commands: null
+  From:
+    Image: amelia/dhparam:latest
+  Name: dh
+  Platform: ""
+  SourceCode: FROM amelia/dhparam:latest as dh
+- As: composer
+  BaseName: composer:latest
+  Commands: null
+  From:
+    Image: composer:latest
+  Name: composer
+  Platform: ""
+  SourceCode: FROM composer:latest as composer
+- BaseName: nginx:mainline-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"amelia@dorks.io"'
+    Name: label
+  - Env:
+    - Key: COMPOSER_ALLOW_SUPERUSER
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: COMPOSER_NO_INTERACTION
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: COMPOSER_HOME
+      Value: /usr/lib/composer
+    Name: env
+  - Env:
+    - Key: COMPOSER_CACHE_DIR
+      Value: /var/cache/composer
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/keys/php-alpine.rsa.pub
+    - /etc/apk/keys/php-alpine.rsa.pub
+  - CmdLine:
+    - set -x     && addgroup -g 82 -S www-data     && adduser -u 82 -D -S -G www-data
+      www-data     && apk --update add ca-certificates     && update-ca-certificates     &&
+      echo "@php https://php.codecasts.rocks/v3.7/php-7.2" >> /etc/apk/repositories     &&
+      apk --update add         php7@php         php7-fpm@php                 php7-ctype@php         php7-curl@php         php7-dom@php         php7-gd@php         php7-iconv@php         php7-intl@php         php7-json@php         php7-mbstring@php         php7-opcache@php         php7-openssl@php         php7-pcntl@php         php7-phar@php         php7-posix@php         php7-session@php         php7-xml@php         php7-zip@php         php7-zlib@php                 php7-pdo_pgsql@php         php7-pdo_mysql@php                 supervisor     &&
+      ln -s /usr/bin/php7 /usr/bin/php     && rm -rf /var/cache/apk/*     && rm /etc/init.d/php-fpm7     &&
+      mkdir -p /var/log/nginx     && mkdir -p /var/cache/nginx     && mkdir -p /srv/code     &&
+      chown www-data:www-data /srv/code
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: composer
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/composer
+    - /usr/bin
+  - Chown: ""
+    From: dh
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/dhparam.pem
+    - /etc/nginx/dhparam.pem
+  - Chown: ""
+    From: dh
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/snakeoil-cert.pem
+    - /etc/nginx/certs/certificate.pem
+  - Chown: ""
+    From: dh
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/snakeoil-key.pem
+    - /etc/nginx/certs/privkey.pem
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/supervisor/supervisor.conf
+    - /etc/supervisord.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/php-fpm/php-fpm.conf
+    - files/php-fpm/php.ini
+    - /etc/php7/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/nginx/nginx.conf
+    - /etc/nginx/nginx.conf
+  - CmdLine:
+    - composer global require hirak/prestissimo     && rm -rf /var/cache/composer/*     &&
+      nginx -t     && php-fpm7 -t
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /srv/code
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+    - "9000"
+  - CmdLine:
+    - supervisord
+    - -n
+    - -c
+    - /etc/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginx:mainline-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx:mainline-alpine

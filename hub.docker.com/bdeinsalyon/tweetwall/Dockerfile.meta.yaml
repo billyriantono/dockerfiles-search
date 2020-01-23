@@ -1,58 +1,108 @@
 MetaArgs: null
 Stages:
-- BaseName: python:3.5
+- BaseName: buildpack-deps:jessie-curl
   Commands:
-  - Name: expose
-    Ports:
-    - "8000"
+  - Env:
+    - Key: DUMB_INIT_VERSION
+      Value: 1.2.0
+    Name: env
   - CmdLine:
-    - apt-get update
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - apt-get install -y libpq-dev python-dev gcc g++ libxslt-dev libtiff5-dev libjpeg-dev
-      zlib1g-dev libfreetype6-dev liblcms2-dev libwebp-dev tcl8.6-dev tk8.6-dev python-tk
+    - set -x   && wget --no-verbose "https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/dumb-init_${DUMB_INIT_VERSION}_amd64.deb"   &&
+      wget --no-verbose "https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/sha256sums"   &&
+      grep "dumb-init_${DUMB_INIT_VERSION}_amd64.deb" sha256sums | sha256sum -c   &&
+      rm sha256sums   && dpkg -i dumb-init_*.deb   && rm -rf dumb-init_*.deb
     Name: run
     PrependShell: true
   - Env:
-    - Key: LIBRARY_PATH
-      Value: /lib:/usr/lib
+    - Key: CTMPL_VERSION
+      Value: 0.18.1
+    Name: env
+  - CmdLine:
+    - set -x   && apt-get update   && apt-get install -y --no-install-recommends unzip   &&
+      gpg --keyserver ha.pool.sks-keyservers.net --recv-keys 91A6E7F85D05C65630BEF18951852D87348FFC4C   &&
+      wget --no-verbose https://releases.hashicorp.com/consul-template/${CTMPL_VERSION}/consul-template_${CTMPL_VERSION}_linux_amd64.zip   &&
+      wget --no-verbose https://releases.hashicorp.com/consul-template/${CTMPL_VERSION}/consul-template_${CTMPL_VERSION}_SHA256SUMS   &&
+      wget --no-verbose https://releases.hashicorp.com/consul-template/${CTMPL_VERSION}/consul-template_${CTMPL_VERSION}_SHA256SUMS.sig   &&
+      gpg --batch --verify consul-template_${CTMPL_VERSION}_SHA256SUMS.sig consul-template_${CTMPL_VERSION}_SHA256SUMS   &&
+      grep consul-template_${CTMPL_VERSION}_linux_amd64.zip consul-template_${CTMPL_VERSION}_SHA256SUMS
+      | sha256sum -c   && unzip -d /usr/bin consul-template_${CTMPL_VERSION}_linux_amd64.zip   &&
+      rm -rf consul-template_* /root/.gnupg /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CATALINA_HOME
+      Value: /usr/local/tomcat
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $CATALINA_HOME/bin:$PATH
     Name: env
   - Name: workdir
-    Path: /app
-  - Chown: ""
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - requirements.txt
-    - /app
-  - CmdLine:
-    - pip3 install -r requirements.txt
-    Name: run
-    PrependShell: true
-  - Chown: ""
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - .
-    - /app
-  - Name: volume
-    Volumes:
-    - /app/staticfiles
+    Path: $CATALINA_HOME
   - Env:
-    - Key: DATABASE_URL
-      Value: postgres://postgresql:postgresql@db:5432/proman
+    - Key: TOMCAT_MAJOR
+      Value: "7"
+    Name: env
+  - Env:
+    - Key: TOMCAT_VERSION
+      Value: 7.0.76
     Name: env
   - CmdLine:
-    - chmod +x /app/bash/run-prod.sh
+    - set -x   && useradd --uid 1000 tomcat   && tomcat_archive=apache-tomcat-${TOMCAT_VERSION}.tar.gz   &&
+      wget --no-verbose https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_VERSION}/bin/${tomcat_archive}   &&
+      wget --no-verbose https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_VERSION}/bin/${tomcat_archive}.asc   &&
+      wget --no-verbose https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_MAJOR}/KEYS   &&
+      gpg --import KEYS   && gpg --batch --verify ${tomcat_archive}.asc ${tomcat_archive}   &&
+      tar -xf ${tomcat_archive} --strip-components=1   && rm -rf webapps/* logs/*   &&
+      mkdir -p conf/Catalina   && mv conf/server.xml conf/server.xml.original   &&
+      mv conf/tomcat-users.xml conf/tomcat-users.xml.original   && rm -rf ${tomcat_archive}
+      ${tomcat_archive}.asc KEYS /root/.gnupg
     Name: run
     PrependShell: true
+  - Env:
+    - Key: TOMCAT_PREFIX
+      Value: '"service/tomcat"'
+    - Key: TOMCAT_HTTP_PORT
+      Value: "8080"
+    - Key: TOMCAT_JMX_PORT
+      Value: "9080"
+    - Key: JPDA_ADDRESS
+      Value: "9180"
+    - Key: TOMCAT_JMX_AUTHENTICATE
+      Value: "true"
+    - Key: TOMCAT_JMX_ACCESS_FILE
+      Value: $CATALINA_HOME/conf/jmxremote.access
+    - Key: TOMCAT_JMX_PASSWORD_FILE
+      Value: $CATALINA_HOME/conf/jmxremote.password
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tomcat
+    - $CATALINA_HOME/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /entrypoint.sh
   - CmdLine:
-    - /app/bash/run-prod.sh
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - $JPDA_ADDRESS
+    - $TOMCAT_HTTP_PORT
+    - $TOMCAT_JMX_PORT
+  - CmdLine:
+    - catalina.sh
+    - run
     Name: cmd
-    PrependShell: true
+    PrependShell: false
   From:
-    Image: python:3.5
+    Image: buildpack-deps:jessie-curl
   Name: ""
   Platform: ""
-  SourceCode: FROM python:3.5
+  SourceCode: FROM buildpack-deps:jessie-curl

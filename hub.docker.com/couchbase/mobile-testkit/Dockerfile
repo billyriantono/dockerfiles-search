@@ -1,60 +1,25 @@
-FROM centos:7
+FROM ubuntu:trusty
+MAINTAINER Nemanja Miletic <nemanja@nemanjamiletic.com>
 
-# Update Yum and install epel
-RUN yum update -y && \
-    yum install -y epel-release && \
-    yum groupinstall -y development
+# Prevent dpkg errors
+ENV TERM=xterm-256color
 
-# Install dependencies
-RUN yum install -y \
-    git \
-    libevent \
-    openssl-devel \
-    unzip \
-    wget \
-    httpie \
-    net-tools
+# Set mirrors to NZ
+# RUN sed -i "s/http:\/\/archive./http:\/\/nz.archive./g" /etc/apt/sources.list 
 
-# Install prerequisites for the Couchbase Server python SDK
-# https://developer.couchbase.com/documentation/server/current/sdk/python/start-using-sdk.html
-RUN wget http://packages.couchbase.com/releases/couchbase-release/couchbase-release-1.0-2-x86_64.rpm; \
-    rpm -iv couchbase-release-1.0-2-x86_64.rpm; \
-    yum install -y \
-        libcouchbase-devel \
-        gcc \
-        gcc-c++ \
-        python-devel \
-        python-pip \
-        sudo
+# Install node.js
+RUN apt-get update && \
+    apt-get install curl -y && \
+    curl -sL https://deb.nodesource.com/setup_4.x | sudo -E bash - && \
+    apt-get install -y nodejs 
 
-RUN pip install --upgrade pip
+COPY . /app
+WORKDIR /app
 
-# Install docker binary for docker in docker
-RUN curl -fsSLO https://get.docker.com/builds/Linux/x86_64/docker-17.05.0-ce.tgz && \
-    tar --strip-components=1 -xvzf docker-17.05.0-ce.tgz -C /usr/local/bin
+# Install application dependencies
+RUN npm install -g mocha && \
+    npm install
 
-WORKDIR /opt
+# Set mocha test runner as entrypoint
+ENTRYPOINT ["mocha"]
 
-# Git clone mobile-testkit
-RUN git clone https://github.com/couchbaselabs/mobile-testkit.git
-
-WORKDIR /opt/mobile-testkit
-
-# Install dependencies
-RUN pip install --ignore-installed -U ipaddress
-RUN pip install --ignore-installed -U requests
-RUN pip install -r requirements.txt
-
-# Create ansible config for sample
-RUN cp ansible.cfg.example ansible.cfg
-
-# Set the correct default user
-RUN sed -i 's/remote_user = vagrant/remote_user = root/' ansible.cfg
-
-# set python env
-ENV PYTHONPATH=/opt/mobile-testkit/
-ENV ANSIBLE_CONFIG=/opt/mobile-testkit/ansible.cfg
-
-# Cop test runner script to repo
-COPY ./entrypoint.sh /opt/mobile-testkit
-CMD ["/bin/bash"]

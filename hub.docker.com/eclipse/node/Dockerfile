@@ -1,25 +1,46 @@
-# Copyright (c) 2012-2016 Codenvy, S.A.
-# All rights reserved. This program and the accompanying materials
-# are made available under the terms of the Eclipse Public License v1.0
-# which accompanies this distribution, and is available at
-# http://www.eclipse.org/legal/epl-v10.html
-# Contributors:
-# Codenvy, S.A. - initial API and implementation
+FROM ubuntu:14.04
 
-FROM eclipse/stack-base:debian
+MAINTAINER Sebastian Tramp <sebastian.tramp@eccenca.com>
 
-RUN sudo apt-get update && \
-    sudo apt-get -y install build-essential libkrb5-dev gcc make ruby-full rubygems debian-keyring python2.7 && \
-    sudo gem install --no-rdoc --no-ri sass -v 3.4.22 && \
-    sudo gem install --no-rdoc --no-ri compass && \
-    sudo apt-get clean && \
-    sudo apt-get -y autoremove && \
-    sudo apt-get -y clean && \
-    sudo rm -rf /var/lib/apt/lists/*
+ENV ECC_IMAGE_PREFIX nareike
+ENV ECC_IMAGE_NAME adhs
 
-RUN wget -qO- https://deb.nodesource.com/setup_8.x | sudo -E bash -
-RUN sudo apt update && sudo apt -y install nodejs
+# Let the conatiner know that there is no tty
+ENV DEBIAN_FRONTEND noninteractive
 
-EXPOSE 1337 3000 4200 5000 9000 8003
-RUN sudo npm install --unsafe-perm -g yarn gulp bower grunt grunt-cli yeoman-generator yo generator-angular generator-karma generator-webapp typescript typescript-language-server
-LABEL che:server:8003:ref=angular che:server:8003:protocol=http che:server:3000:ref=node-3000 che:server:3000:protocol=http che:server:9000:ref=node-9000 che:server:9000:protocol=http
+# http://jaredmarkell.com/docker-and-locales/
+RUN locale-gen en_US.UTF-8
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+
+# update ubuntu as well as install python3
+RUN apt-get update && \
+    apt-get -y upgrade && \
+    apt-get install -qy python3 python3-pip && \
+    apt-get clean
+RUN ln -s /usr/bin/python3 /usr/bin/python
+RUN ln -s /usr/bin/pip3 /usr/bin/pip
+
+ENV ADHS_HOME /opt/adhs
+RUN mkdir $ADHS_HOME
+WORKDIR $ADHS_HOME
+COPY adhs.py $ADHS_HOME/adhs.py
+COPY adhs_response.py $ADHS_HOME/adhs_response.py
+COPY requirements.txt $ADHS_HOME/requirements.txt
+COPY templates $ADHS_HOME/templates
+RUN pip install -r requirements.txt
+RUN ln -s $ADHS_HOME/adhs.py /usr/local/bin/adhs
+
+RUN mkdir /data
+COPY adhs.ttl /data/adhs.ttl
+
+VOLUME /data
+VOLUME /opt/adhs/templates
+EXPOSE 80
+
+ENV ADHS_INPUT turtle
+ENV ADHS_FILE /data/adhs.ttl
+
+CMD /opt/adhs/adhs.py -p 80 --host 0.0.0.0 -i $ADHS_INPUT $ADHS_FILE
+

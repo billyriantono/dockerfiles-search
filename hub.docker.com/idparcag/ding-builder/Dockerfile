@@ -8,7 +8,7 @@ RUN apk --no-cache add \
 
 RUN gem install etc:1.0.1 fpm:1.10.2 --no-rdoc --no-ri
 
-FROM idparcag/gcloud-sdk-alpine:254-0-0_1
+FROM idparcag/gcloud-sdk-alpine:276-0-0_0
 
 COPY --from=builder /usr/lib/ruby/gems/ /usr/lib/ruby/gems/
 COPY --from=builder /usr/bin/fpm /usr/bin/fpm
@@ -50,13 +50,13 @@ RUN apk --no-cache add \
 
 RUN pip3 install ansible==2.6.4 awscli==1.16.18
 
-RUN curl -L https://github.com/sbt/sbt/releases/download/v1.2.4/sbt-1.2.4.tgz | tar -xz -C /usr/bin --strip 2 sbt/bin/
+RUN curl -L https://github.com/sbt/sbt/releases/download/v1.3.7/sbt-1.3.7.tgz | tar -xz -C /usr/bin --strip 2 sbt/bin/
 
 RUN curl -L https://unpkg.com/@pnpm/self-installer | PNPM_VERSION=2.16.0 node
 
 RUN npm config set user 0
 RUN npm config set unsafe-perm true
-RUN npm install -g browserify node-sass rimraf babel-cli envify uglify-es uglifyify
+RUN npm install -g browserify node-sass@4.13.0 rimraf babel-cli envify uglify-es uglifyify
 
 RUN ln -s /usr/lib/jvm/java-1.8-openjdk/bin/javadoc /bin/javadoc
 ENV JAVA_HOME=/usr/lib/jvm/default-jvm

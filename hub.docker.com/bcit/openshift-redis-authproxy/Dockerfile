@@ -1,10 +1,8 @@
-FROM bcit/openshift-stunnel
+FROM bbvainnotech/ubuntu-base:latest
+MAINTAINER BBVA Innovation <eurocloud-oneteam.group@bbva.com>
 
-COPY stunnel.conf.template /etc/stunnel/stunnel.conf.template
-COPY 70-stunnel-psk.sh /docker-entrypoint.d/
+ADD     data /
 
-ENV STUNNEL_ACCEPT 0.0.0.0:6379
-ENV STUNNEL_SERVICE redis
-ENV STUNNEL_CONNECT ""
-ENV STUNNEL_PSK ""
-EXPOSE 6379
+RUN     chown root:root /bootstrap/*.sh && chmod a+x /bootstrap/*.sh
+
+ENTRYPOINT  ["/bootstrap/bootstrap.sh"]

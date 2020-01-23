@@ -1,0 +1,81 @@
+MetaArgs: null
+Stages:
+- BaseName: fmidev/smartmet-cibase:latest
+  Commands:
+  - Env:
+    - Key: http_proxy
+      Value: http://wwwcache.fmi.fi:8080
+    - Key: https_proxy
+      Value: http://wwwcache.fmi.fi:8080
+    - Key: no_proxy
+      Value: weatherproof.fi
+    Name: env
+  - Maintainer: '"fmi"'
+    Name: maintainer
+  - Name: user
+    User: root
+  - Env:
+    - Key: PGDATA
+      Value: /var/lib/pgsql/data/9.5
+    Name: env
+  - CmdLine:
+    - groupadd -r postgres && useradd -r -g postgres postgres &&    sed -i '/\[base\]/,/gpgkey=/{/gpgkey=/s/$/\'$'\n''exclude
+      = postgres*/;}' /etc/yum.repos.d/CentOS-Base.repo &&    sed -i '/\[updates\]/,/gpgkey=/{/gpgkey=/s/$/\'$'\n''exclude
+      = postgres*/;}' /etc/yum.repos.d/CentOS-Base.repo &&    echo "ip_resolve=IPv4"
+      >> /etc/yum.conf &&    ( test -r /etc/yum.repos.d/epel.repo || yum -y install
+      "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm" ) &&    yum
+      -y update  &&    yum -y localinstall https://download.postgresql.org/pub/repos/yum/9.5/redhat/rhel-7-x86_64/pgdg-centos95-9.5-2.noarch.rpm
+      &&    yum -y reinstall --setopt=override_install_langs='' --setopt=tsflags=''
+      glibc-common &&    yum -y install postgresql95 postgresql95-server postgresql95-contrib
+      postgresql95-libs postgis2_95 pv &&    yum clean all && rm -rf /tmp/* &&    yum
+      -y install lsof
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - db-dump.bz2
+    - /tmp/
+  - CmdLine:
+    - mkdir -p ${PGDATA} &&     mkdir -p /etc/provision /var/run/postgresql &&     chown
+      -R postgres ${PGDATA} /var/run/postgresql /tmp /etc/provision
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: postgres
+  - CmdLine:
+    - /usr/pgsql-9.5/bin/initdb -E 'UTF-8' -D ${PGDATA}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/postgresql.conf
+    - ${PGDATA}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - etc/pg_hba.conf
+    - ${PGDATA}
+  - CmdLine:
+    - cd /tmp &&     /usr/pgsql-9.5/bin/pg_ctl -w -s -D ${PGDATA} -o "-p 5432" start
+      &&     bzcat db-dump.bz2 | sed -e 's/^CREATE ROLE postgres;//' > db.sql &&     /usr/pgsql-9.5/bin/psql
+      -f db.sql --set ON_ERROR_STOP=on &&     /usr/pgsql-9.5/bin/pg_ctl -w -s -D ${PGDATA}
+      -o "-p 5432" stop &&     chmod 0700 ${PGDATA} &&     rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "5444"
+  - CmdLine:
+    - exec /usr/pgsql-9.5/bin/postgres -o "-p 5444" -D /var/lib/pgsql/data/9.5
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: fmidev/smartmet-cibase:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM fmidev/smartmet-cibase:latest

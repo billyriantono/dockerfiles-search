@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: keymetrics/pm2:12-alpine
+  Commands:
+  - Name: workdir
+    Path: /usr/src/markbot
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package*.json
+    - ./
+  - CmdLine:
+    - apk add --no-cache make gcc g++ python &&     npm ci --only=production &&     apk
+      del make gcc g++ python
+    Name: run
+    PrependShell: true
+  From:
+    Image: keymetrics/pm2:12-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM keymetrics/pm2:12-alpine as base
+- As: build
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - npm i
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: build
+  Platform: ""
+  SourceCode: FROM base as build
+- As: deploy
+  BaseName: keymetrics/pm2:12-alpine
+  Commands:
+  - Name: workdir
+    Path: /usr/src/markbot
+  - Env:
+    - Key: NPM_CONFIG_LOGLEVEL
+      Value: warn
+    Name: env
+  - Chown: ""
+    From: base
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/markbot/node_modules
+    - ./node_modules/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/markbot/dist
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package*.json
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ecosystem.config.js
+    - .
+  - CmdLine:
+    - mkdir config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pm2-runtime
+    - start
+    - ecosystem.config.js
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: keymetrics/pm2:12-alpine
+  Name: deploy
+  Platform: ""
+  SourceCode: FROM keymetrics/pm2:12-alpine as deploy

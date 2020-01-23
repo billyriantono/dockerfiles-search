@@ -1,12 +1,26 @@
-from mongo
+FROM debian:wheezy
+MAINTAINER Fernando de Alcântara Correia <fernando@fernandocorreia.info>
 
-RUN apt-get update
-RUN apt-get install -y python-pip
-RUN pip install awscli
-RUN mkdir -p /backup/data
+RUN \
+  DEBIAN_FRONTEND=noninteractive apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    build-essential \
+    curl \
+    ruby \
+    ruby-dev \
+  && curl -sL https://deb.nodesource.com/setup | bash - \
+  && apt-get install -y nodejs \
+  && gem install --no-ri --no-rdoc \
+    jekyll \
+  && mkdir /src \
+  && DEBIAN_FRONTEND=noninteractive apt-get purge -y \
+    build-essential \
+    ruby-dev \
+  && DEBIAN_FRONTEND=noninteractive apt-get autoremove -y \
+  && DEBIAN_FRONTEND=noninteractive apt-get clean \
+  && rm -Rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-ADD backup /backup/run
-WORKDIR /backup
-
-ENTRYPOINT ["./run"]
-CMD ["backup"]
+EXPOSE 4000
+VOLUME /src
+WORKDIR /src
+ENTRYPOINT ["jekyll"]

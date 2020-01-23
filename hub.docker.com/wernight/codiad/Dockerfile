@@ -1,37 +1,12 @@
-FROM alpine:3.6
-LABEL Maintainer1="Werner Beroux <werner@beroux.com>"
-
-# Install required packages.
-RUN set -x \
-  && apk add --no-cache \
-    expect \
-    git \
-    nginx \
-    openssh-client \
-    php5-fpm \
-    php5-json \
-    php5-ldap \
-    php5-openssl \
-    php5-zip \
-    s6 \
-    shadow \
-    tini \
-  # Create non-root user (with a randomly chosen UID/GID).
-  && adduser john -Du 2743 -h /code/workspace \
-  # forward request and error logs to docker log collector
-  && ln -sf /dev/stdout /var/log/nginx/access.log \
-  && ln -sf /dev/stderr /var/log/nginx/error.log
-
-# Codiad and config files.
-RUN git clone https://github.com/Codiad/Codiad /default-code
-COPY root /
-
-RUN mkdir /code && chown -R nginx /code
-VOLUME /code
-
-# Ports and volumes.
-EXPOSE 80
-
-# Remove error on collaboration on startup.
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["s6-svscan", "/etc/s6"]
+ARG NODE_VERSION=8.11.1
+FROM node:${NODE_VERSION} as meteor
+ENV LANG C.UTF-8
+ENV LC_ALL C.UTF-8
+ARG METEOR_VERSION=1.6.1.1
+ENV METEOR_VERSION=${METEOR_VERSION}
+RUN curl https://install.meteor.com/?release=${METEOR_VERSION} | sh
+RUN npm -g install node-gyp
+USER node
+ENV NPM_CONFIG_PREFIX=/home/node/.npm-global
+ENV PATH=$PATH:/home/node/.npm-global/bin
+RUN mkdir /home/node/app && meteor || :

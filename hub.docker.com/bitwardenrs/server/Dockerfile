@@ -48,6 +48,27 @@ ARG TERM=xterm-256color
 # Don't download rust docs
 RUN rustup set profile minimal
 
+# Install required build libs for armhf architecture.
+RUN sed 's/^deb/deb-src/' /etc/apt/sources.list > \
+        /etc/apt/sources.list.d/deb-src.list \
+    && dpkg --add-architecture armhf \
+    && apt-get update \
+    && apt-get install -y \
+        --no-install-recommends \
+        libssl-dev:armhf \
+        libc6-dev:armhf
+
+RUN apt-get update \
+    && apt-get install -y \
+        --no-install-recommends \
+        gcc-arm-linux-gnueabihf \
+    && mkdir -p ~/.cargo \
+    && echo '[target.armv7-unknown-linux-gnueabihf]' >> ~/.cargo/config \
+    && echo 'linker = "arm-linux-gnueabihf-gcc"' >> ~/.cargo/config
+
+ENV CARGO_HOME "/root/.cargo"
+ENV USER "root"
+
 # Creates a dummy project used to grab dependencies
 RUN USER=root cargo new --bin /app
 WORKDIR /app
@@ -57,6 +78,11 @@ COPY ./Cargo.* ./
 COPY ./rust-toolchain ./rust-toolchain
 COPY ./build.rs ./build.rs
 
+ENV CC_armv7_unknown_linux_gnueabihf="/usr/bin/arm-linux-gnueabihf-gcc"
+ENV CROSS_COMPILE="1"
+ENV OPENSSL_INCLUDE_DIR="/usr/include/arm-linux-gnueabihf"
+ENV OPENSSL_LIB_DIR="/usr/lib/arm-linux-gnueabihf"
+RUN rustup target add armv7-unknown-linux-gnueabihf
 # Builds your dependencies and removes the
 # dummy project, except the target folder
 # This folder contains the compiled dependencies
@@ -72,16 +98,18 @@ RUN touch src/main.rs
 
 # Builds again, this time it'll just be
 # your actual source files being built
-RUN cargo build --features ${DB} --release
+RUN cargo build --features ${DB} --release --target=armv7-unknown-linux-gnueabihf
 
 ######################## RUNTIME IMAGE  ########################
 # Create a new stage with a minimal image
 # because we already have a binary built
-FROM debian:buster-slim
+FROM balenalib/armv7hf-debian:buster
 
 ENV ROCKET_ENV "staging"
 ENV ROCKET_PORT=80
 ENV ROCKET_WORKERS=10
+
+RUN [ "cross-build-start" ]
 
 # Install needed libraries
 RUN apt-get update && apt-get install -y \
@@ -93,6 +121,9 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir /data
+
+RUN [ "cross-build-end" ]
+
 VOLUME /data
 EXPOSE 80
 EXPOSE 3012
@@ -101,7 +132,7 @@ EXPOSE 3012
 # and the binary from the "build" stage to the current stage
 COPY Rocket.toml .
 COPY --from=vault /web-vault ./web-vault
-COPY --from=build app/target/release/bitwarden_rs .
+COPY --from=build /app/target/armv7-unknown-linux-gnueabihf/release/bitwarden_rs .
 
 COPY docker/healthcheck.sh ./healthcheck.sh
 

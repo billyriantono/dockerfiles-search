@@ -1,0 +1,102 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:latest
+  Commands:
+  - Maintainer: John Dondapati <john@apex-its.com> (@johndondapati)
+    Name: maintainer
+  - CmdLine:
+    - apt-get update && apt-get dist-upgrade -y      && apt-get install -y wget unzip     &&
+      apt-get autoclean && apt-get --purge -y autoremove     && rm -rf /var/lib/apt/lists/*
+      /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_VER
+      Value: "8"
+    - Key: JAVA_REL
+      Value: "0"
+    - Key: JAVA_MF
+      Value: "2.10"
+    Name: env
+  - CmdLine:
+    - TARGET_ARCH=$(uname -i)     && JAVA_VRMF=$JAVA_VER.$JAVA_REL-$JAVA_MF     &&
+      YML_FILENAME=ibm-java-jre-$JAVA_VRMF-linux-$TARGET_ARCH-javase.yml     && BASE_URL="https://public.dhe.ibm.com/ibmdl/export/pub/systems/cloud/runtimes/java/meta"     &&
+      wget -q -U UA-IBM_JAVA_Docker -O /tmp/ibm-java.yml $BASE_URL/$JAVA_VER$JAVA_REL/$YML_FILENAME     &&
+      JAVA_URL=$(cat /tmp/ibm-java.yml | sed -n 's/\s*uri:\s//p' | tr -d '\r')     &&
+      wget -q -U UA-IBM-JAVA-Docker -O /tmp/ibm-java.bin $JAVA_URL     && ESUM=$(cat
+      /tmp/ibm-java.yml | sed -n 's/\s*md5sum:\s//p' | tr -d '\r')     && echo "$ESUM
+      /tmp/ibm-java.bin" | md5sum -c -     && rm -f /tmp/ibm-java.yml     && echo
+      "INSTALLER_UI=silent" > /tmp/response.properties     && echo "USER_INSTALL_DIR=/opt/ibm/java"
+      >> /tmp/response.properties     && echo "LICENSE_ACCEPTED=TRUE" >> /tmp/response.properties     &&
+      mkdir -p /opt/ibm     && chmod +x /tmp/ibm-java.bin     && /tmp/ibm-java.bin
+      -i silent -f /tmp/response.properties     && rm -f /tmp/response.properties     &&
+      rm -f /tmp/ibm-java.bin
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_HOME
+      Value: /opt/ibm/java
+    - Key: PATH
+      Value: /opt/ibm/java/jre/bin:$PATH
+    Name: env
+  - Env:
+    - Key: LIBERTY_VERSION
+      Value: 8.5.5_08
+    Name: env
+  - CmdLine:
+    - LIBERTY_URL=$(wget -q -O - https://public.dhe.ibm.com/ibmdl/export/pub/software/websphere/wasdev/downloads/wlp/index.yml  |
+      grep $LIBERTY_VERSION -A 6 | sed -n 's/\s*kernel:\s//p' | tr -d '\r')      &&
+      wget -q $LIBERTY_URL -U UA-IBM-WebSphere-Liberty-Docker -O /tmp/wlp.zip     &&
+      unzip -q /tmp/wlp.zip -d /opt/ibm     && rm /tmp/wlp.zip
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /opt/ibm/wlp/bin:$PATH
+    Name: env
+  - Env:
+    - Key: LOG_DIR
+      Value: /logs
+    - Key: WLP_OUTPUT_DIR
+      Value: /opt/ibm/wlp/output
+    Name: env
+  - CmdLine:
+    - ln -s $WLP_OUTPUT_DIR/defaultServer /output     && ln -s /opt/ibm/wlp/usr/servers/defaultServer
+      /config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /opt/ibm/wlp/bin/server create     && rm -rf $WLP_OUTPUT_DIR/.classCache
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9080"
+    - "9443"
+  - CmdLine:
+    - installUtility install --acceptLicense collectiveMember-1.0 monitor-1.0 webCache-1.0
+      ldapRegistry-3.0 appSecurity-2.0 localConnector-1.0 restConnector-1.0 ssl-1.0
+      requestTiming-1.0 sessionDatabase-1.0
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server.xml
+    - /opt/ibm/wlp/usr/servers/defaultServer/
+  - CmdLine:
+    - installUtility install --acceptLicense defaultServer     && rm -rf /opt/ibm/wlp/usr/servers/defaultServer/workarea
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /opt/ibm/wlp/bin/server
+    - run
+    - defaultServer
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:latest

@@ -1,23 +1,25 @@
-FROM ubuntu:14.04
+FROM alpine:3.4
 
-MAINTAINER Tom Rudick <tmrudick@gmail.com>
+ENV TILE38_VERSION 1.12.0
+ENV TILE38_DOWNLOAD_URL https://github.com/tidwall/tile38/releases/download/$TILE38_VERSION/tile38-$TILE38_VERSION-linux-amd64.tar.gz
 
-# Update packages and install builds tools
-RUN apt-get update && \
-    apt-get install -y git-core build-essential curl libffi-dev libgdbm-dev libncurses5-dev libreadline-dev libssl-dev libyaml-dev zlib1g-dev libpq-dev && \
-    apt-get clean && \
-    rm -rf /var/lib/apt
+RUN addgroup -S tile38 && adduser -S -G tile38 tile38
 
-# Build Ruby
-WORKDIR /root
-RUN curl http://cache.ruby-lang.org/pub/ruby/2.1/ruby-2.1.2.tar.gz  | tar -xzvf - && \
-  cd /root/ruby-2.1.2 && \
-  ./configure && \
-  make && \
-  make install && \
-  cd / && \
-  rm -rf /root/ruby-2.1.2
+RUN apk update \
+    && apk add ca-certificates \
+    && update-ca-certificates \
+    && apk add openssl \
+    && wget -O tile38.tar.gz "$TILE38_DOWNLOAD_URL" \
+    && tar -xzvf tile38.tar.gz \
+    && rm -f tile38.tar.gz \
+    && mv tile38-$TILE38_VERSION-linux-amd64/tile38-server /usr/local/bin \
+    && mv tile38-$TILE38_VERSION-linux-amd64/tile38-cli /usr/local/bin \
+    && rm -fR tile38-$TILE38_VERSION-linux-amd64
 
-# Install bundler
-RUN echo "gem: --no-ri --no-rdoc" > ~/.gemrc
-RUN gem install bundler
+RUN mkdir /data && chown tile38:tile38 /data
+
+VOLUME /data
+WORKDIR /data
+
+EXPOSE 9851
+CMD ["tile38-server"]

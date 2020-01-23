@@ -1,17 +1,30 @@
-FROM audkar/docker-android-sdk
+FROM ubuntu:xenial
 
-# npm
-RUN apk --update add npm bash coreutils
+# metadata (there are a few other labels you can add, these are optional but preferred!)
+LABEL base.image="ubuntu:xenial"
+LABEL version="1"
+LABEL software="seqyclean"
+LABEL software.version="1.10.09"
+LABEL description="Trims and cleans fastq files"
+LABEL website="https://github.com/ibest/seqyclean"
+LABEL license="https://github.com/ibest/seqyclean/blob/master/LICENSE"
 
-# gradle
-RUN wget -q -O gradle.zip "https://services.gradle.org/distributions/gradle-4.9-bin.zip"
-RUN unzip gradle.zip
-RUN mv "gradle-4.9" "/opt/gradle/"
-RUN rm gradle.zip
-RUN ln -s "/opt/gradle/bin/gradle" /usr/bin/gradle
-RUN addgroup -S -g 1100 gradle
-RUN adduser -D -S -G gradle -u 1100 -s /bin/ash gradle
-RUN mkdir /home/gradle/.gradle
-RUN export GRADLE_USER_HOME=/home/gradle/.gradle
-RUN chown -R gradle:gradle /home/gradle
-ENV PATH "${PATH}:/opt/gradle/bin"
+MAINTAINER Erin Young <eriny@utah.gov>
+
+# getting dependencies
+RUN apt-get update && \
+    apt-get -y install zlib1g-dev wget make gcc g++
+
+RUN wget https://github.com/ibest/seqyclean/archive/1.10.09.tar.gz && \
+    tar -xzf 1.10.09.tar.gz && \
+    rm -r 1.10.09.tar.gz && \
+    cd /seqyclean-1.10.09 && \
+    make && mkdir /data
+
+RUN wget https://raw.githubusercontent.com/StaPH-B/docker-builds/master/seqyclean/Adapters_plus_PhiX_174.fasta
+
+# Set working directory
+WORKDIR /data
+
+# add to path
+ENV PATH="/seqyclean-1.10.09/bin:${PATH}"

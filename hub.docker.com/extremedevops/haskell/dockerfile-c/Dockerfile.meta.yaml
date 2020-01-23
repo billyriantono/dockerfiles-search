@@ -1,0 +1,158 @@
+MetaArgs: null
+Stages:
+- BaseName: exoplatform/jdk:8-ubuntu-1804
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"eXo Platform <docker@exoplatform.com>"'
+    Name: label
+  - CmdLine:
+    - apt-get -qq update &&   apt-get -qq -y upgrade ${_APT_OPTIONS} &&   apt-get
+      -qq -y install ${_APT_OPTIONS} xmlstarlet jq &&   echo "ttf-mscorefonts-installer
+      msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections
+      &&   echo "ttf-mscorefonts-installer msttcorefonts/present-mscorefonts-eula
+      note" | debconf-set-selections &&   apt-get -qq -y install ${_APT_OPTIONS} ttf-mscorefonts-installer
+      &&   apt-get -qq -y install ${_APT_OPTIONS} libreoffice-calc libreoffice-draw
+      libreoffice-impress libreoffice-math libreoffice-writer &&   apt-get -qq -y
+      autoremove &&   apt-get -qq -y clean &&   rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'wget -nv -q -O /usr/bin/yq https://github.com/mikefarah/yq/releases/download/1.15.0/yq_linux_amd64
+      &&   echo "35d8b1123849350daa5ff11dd23c81b8 /usr/bin/yq" | md5sum -c -   ||
+      {   echo "ERROR: the [/usr/bin/yq] binary downloaded from a github release was
+      modified while is should not !!";   return 1;   } && chmod a+x /usr/bin/yq'
+    Name: run
+    PrependShell: true
+  - Key: EXO_VERSION
+    Name: arg
+    Value: 6.0.0-M15
+  - Key: DOWNLOAD_URL
+    Name: arg
+    Value: null
+  - Key: DOWNLOAD_USER
+    Name: arg
+    Value: null
+  - Key: ADDONS
+    Name: arg
+    Value: '"exo-jdbc-driver-mysql:1.4.1 exo-jdbc-driver-postgresql:1.3.0"'
+  - Key: ARCHIVE_BASE_DIR
+    Name: arg
+    Value: platform-${EXO_VERSION}
+  - Env:
+    - Key: EXO_APP_DIR
+      Value: /opt/exo
+    Name: env
+  - Env:
+    - Key: EXO_CONF_DIR
+      Value: /etc/exo
+    Name: env
+  - Env:
+    - Key: EXO_DATA_DIR
+      Value: /srv/exo
+    Name: env
+  - Env:
+    - Key: EXO_SHARED_DATA_DIR
+      Value: /srv/exo/shared
+    Name: env
+  - Env:
+    - Key: EXO_LOG_DIR
+      Value: /var/log/exo
+    Name: env
+  - Env:
+    - Key: EXO_TMP_DIR
+      Value: /tmp/exo-tmp
+    Name: env
+  - Env:
+    - Key: EXO_USER
+      Value: exo
+    Name: env
+  - Env:
+    - Key: EXO_GROUP
+      Value: ${EXO_USER}
+    Name: env
+  - CmdLine:
+    - useradd --create-home -u 999 --user-group --shell /bin/bash ${EXO_USER}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${EXO_DATA_DIR}         && chown ${EXO_USER}:${EXO_GROUP} ${EXO_DATA_DIR}
+      &&   mkdir -p ${EXO_SHARED_DATA_DIR}  && chown ${EXO_USER}:${EXO_GROUP} ${EXO_SHARED_DATA_DIR}
+      &&   mkdir -p ${EXO_TMP_DIR}          && chown ${EXO_USER}:${EXO_GROUP} ${EXO_TMP_DIR}  &&   mkdir
+      -p ${EXO_LOG_DIR}          && chown ${EXO_USER}:${EXO_GROUP} ${EXO_LOG_DIR}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'if [ -n "${DOWNLOAD_USER}" ]; then PARAMS="-u ${DOWNLOAD_USER}"; fi &&   if
+      [ ! -n "${DOWNLOAD_URL}" ]; then   echo "Building an image with eXo Platform
+      version : ${EXO_VERSION}";   EXO_VERSION_SHORT=$(echo ${EXO_VERSION} | awk -F
+      "\." ''{ print $1"."$2}'');   DOWNLOAD_URL="https://downloads.exoplatform.org/public/releases/platform/${EXO_VERSION_SHORT}/${EXO_VERSION}/platform-${EXO_VERSION}.zip";   fi
+      &&   curl ${PARAMS} -sS -L -o /srv/downloads/eXo-Platform-${EXO_VERSION}.zip
+      ${DOWNLOAD_URL} &&   unzip -q /srv/downloads/eXo-Platform-${EXO_VERSION}.zip
+      -d /srv/downloads/ &&   rm -f /srv/downloads/eXo-Platform-${EXO_VERSION}.zip
+      &&   mv /srv/downloads/${ARCHIVE_BASE_DIR} ${EXO_APP_DIR} &&   chown -R ${EXO_USER}:${EXO_GROUP}
+      ${EXO_APP_DIR} &&   ln -s ${EXO_APP_DIR}/gatein/conf /etc/exo &&   rm -rf ${EXO_APP_DIR}/logs
+      && ln -s ${EXO_LOG_DIR} ${EXO_APP_DIR}/logs'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - bin/setenv-docker-customize.sh
+    - ${EXO_APP_DIR}/bin/setenv-docker-customize.sh
+  - CmdLine:
+    - 'chmod 755 ${EXO_APP_DIR}/bin/setenv-docker-customize.sh &&   chown ${EXO_USER}:${EXO_GROUP}
+      ${EXO_APP_DIR}/bin/setenv-docker-customize.sh &&   sed -i ''/# Load custom settings/i   \#
+      Load custom settings for docker environment\n  [ -r "$CATALINA_BASE/bin/setenv-docker-customize.sh"
+      ]   && . "$CATALINA_BASE/bin/setenv-docker-customize.sh"   || echo "No Docker
+      eXo Platform customization file : $CATALINA_BASE/bin/setenv-docker-customize.sh"\n  ''
+      ${EXO_APP_DIR}/bin/setenv.sh &&   grep ''setenv-docker-customize.sh'' ${EXO_APP_DIR}/bin/setenv.sh'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'wget -nv -q --no-cookies --no-check-certificate   --header "Cookie: gpw_e24=http%3A%2F%2Fwww.oracle.com%2F;
+      oraclelicense=accept-securebackup-cookie"   -O "/tmp/jai.tar.gz" "http://download.oracle.com/otn-pub/java/jai/1.1.2_01-fcs/jai-1_1_2_01-lib-linux-i586.tar.gz"   &&
+      cd "/tmp"   && tar --no-same-owner -xvf "/tmp/jai.tar.gz"   && mv -v /tmp/jai-*/lib/jai_*.jar
+      "${JAVA_HOME}/jre/lib/ext/"   && mv -v /tmp/jai-*/*-jai.txt "${JAVA_HOME}/"   &&
+      mv -v /tmp/jai-*/UNINSTALL-jai "${JAVA_HOME}/"   && rm -rf /tmp/*'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'wget -nv -q --no-cookies --no-check-certificate   --header "Cookie: gpw_e24=http%3A%2F%2Fwww.oracle.com%2F;
+      oraclelicense=accept-securebackup-cookie"   -O "/tmp/jai_imageio.tar.gz" "http://download.oracle.com/otn-pub/java/jai_imageio/1.0_01/jai_imageio-1_0_01-lib-linux-i586.tar.gz"   &&
+      cd "/tmp"   && tar --no-same-owner -xvf "/tmp/jai_imageio.tar.gz"   && mv -v
+      /tmp/jai_imageio-*/lib/jai_*.jar "${JAVA_HOME}/jre/lib/ext/"   && mv -v /tmp/jai_imageio-*/*-jai_imageio.txt
+      "${JAVA_HOME}/"   && mv -v /tmp/jai_imageio-*/UNINSTALL-jai_imageio "${JAVA_HOME}/"   &&
+      rm -rf /tmp/*'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'wget -nv -q --no-cookies --no-check-certificate   --header "Cookie: gpw_e24=http%3A%2F%2Fwww.oracle.com%2F;
+      oraclelicense=accept-securebackup-cookie"   -O "/tmp/jai_ccm.tar.gz" "http://download.oracle.com/otn-pub/java/jai_jaicmm/1.0/JAICMM.tar.gz"   &&
+      cd "/tmp"   && tar --no-same-owner -xvf "/tmp/jai_ccm.tar.gz"   && mv -v /tmp/*.pf
+      "${JAVA_HOME}/jre/lib/cmm/"   && rm -rf /tmp/*'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${EXO_USER}
+  - CmdLine:
+    - for a in ${ADDONS}; do echo "Installing addon $a"; /opt/exo/addon install $a;
+      done
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${EXO_LOG_DIR}
+  - CmdLine:
+    - /usr/local/bin/tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /opt/exo/start_eXo.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: exoplatform/jdk:8-ubuntu-1804
+  Name: ""
+  Platform: ""
+  SourceCode: FROM  exoplatform/jdk:8-ubuntu-1804

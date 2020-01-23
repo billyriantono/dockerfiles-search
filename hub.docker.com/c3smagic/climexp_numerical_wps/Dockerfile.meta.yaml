@@ -1,0 +1,162 @@
+MetaArgs: null
+Stages:
+- BaseName: continuumio/miniconda3
+  Commands:
+  - Maintainer: https://github.com/c3s-magic/climexp_numerical_wps
+    Name: maintainer
+  - Labels:
+    - Key: Description
+      Value: '"Climate Explorer WPS service WPS"'
+    - Key: Vendor
+      Value: '"Birdhouse"'
+    - Key: Version
+      Value: '"0.1.0"'
+    Name: label
+  - CmdLine:
+    - apt-get update && apt-get install -y  build-essential && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - conda update -n base conda
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /opt/wps
+  - Name: workdir
+    Path: /opt/wps
+  - CmdLine:
+    - conda env create -n wps -f environment.yml
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - Env:
+    - Key: MY_CONDA_ENV
+      Value: /opt/conda/envs/wps
+    Name: env
+  - Env:
+    - Key: gsl_CFLAGS
+      Value: '"-I${MY_CONDA_ENV}/include"'
+    Name: env
+  - Env:
+    - Key: gsl_LIBS
+      Value: '"-L${MY_CONDA_ENV}/lib"'
+    Name: env
+  - CmdLine:
+    - ln -fs /opt/conda/envs/wps/lib/libopenblas.so /opt/conda/envs/wps/lib/libblas.so
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - curl -L "https://doku.lrz.de/download/attachments/28051060/fgsl-1.2.0.tar.gz"
+      > fgsl.tar.gz && tar -xzvf fgsl.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    - -c
+    - source activate wps && cd /src/fgsl-1.2.0 && ./configure --prefix ${MY_CONDA_ENV}/
+      && make && make install
+    Name: run
+    PrependShell: false
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - curl -L "http://www.netlib.org/lapack/lapack-3.8.0.tar.gz" > lapack-3.8.0.tar.gz
+      && tar -xzvf lapack-3.8.0.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    - -c
+    - 'source activate wps && cd /src/lapack-3.8.0 && cp make.inc.example make.inc
+      && make lapacklib && cp liblapack.a ${MY_CONDA_ENV}/lib '
+    Name: run
+    PrependShell: false
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - git clone https://github.com/c3s-magic/climexp_numerical
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CPPFLAGS
+      Value: '"-I${MY_CONDA_ENV}/include -I${MY_CONDA_ENV}/include/fgsl ${CPPFLAGS}"'
+    Name: env
+  - Env:
+    - Key: LDFLAGS
+      Value: '"-L${MY_CONDA_ENV}/lib ${LDFLAGS}"'
+    Name: env
+  - Env:
+    - Key: FORTRAN_FLAGS
+      Value: ${CPPFLAGS} ${LDFLAGS}
+    Name: env
+  - Env:
+    - Key: PVM_ARCH
+      Value: build
+    Name: env
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: ${MY_CONDA_ENV}:${LD_LIBRARY_PATH}
+    Name: env
+  - Name: workdir
+    Path: /src/climexp_numerical/${PVM_ARCH}
+  - CmdLine:
+    - cp /src/climexp_numerical/Docker/Makefile.docker /src/climexp_numerical/${PVM_ARCH}/Makefile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    - -c
+    - source activate wps && make
+    Name: run
+    PrependShell: false
+  - Env:
+    - Key: CLIMATE_EXPLORER_BUILD
+      Value: /src/climexp_numerical/build/
+    Name: env
+  - Name: workdir
+    Path: /src/climexp_numerical/python
+  - CmdLine:
+    - /bin/bash
+    - -c
+    - source activate wps && python setup.py install
+    Name: run
+    PrependShell: false
+  - Name: workdir
+    Path: /opt/wps
+  - CmdLine:
+    - /bin/bash
+    - -c
+    - source activate wps && python setup.py develop
+    Name: run
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /opt/wps
+  - Name: expose
+    Ports:
+    - "5000"
+  - CmdLine:
+    - /bin/bash
+    - -c
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - source activate wps && exec climexp_numerical_wps start --hostname ${HOSTNAME}
+      -b 0.0.0.0 -c /opt/wps/etc/demo.cfg
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: continuumio/miniconda3
+  Name: ""
+  Platform: ""
+  SourceCode: FROM continuumio/miniconda3

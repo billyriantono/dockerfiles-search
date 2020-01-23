@@ -1,0 +1,119 @@
+MetaArgs:
+- DefaultValue: null
+  Key: ARCH
+  ProvidedValue: null
+  Value: null
+- DefaultValue: null
+  Key: BASEIMAGE_BRANCH
+  ProvidedValue: null
+  Value: null
+Stages:
+- BaseName: $ARCH/ubuntu:$BASEIMAGE_BRANCH
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build_tmp/qemu/
+    - /usr/bin/
+  - Key: OMADA_DOWNLOAD_LINK
+    Name: arg
+    Value: https://static.tp-link.com/2019/201911/20191108/Omada_Controller_v3.2.4_linux_x64.tar.gz
+  - CmdLine:
+    - "export LC_ALL=C && \texport DEBIAN_FRONTEND=noninteractive && \techo 'debconf
+      debconf/frontend select Noninteractive' | debconf-set-selections && \tapt-get
+      update && \tapt-get install -y --no-install-recommends \t\tapt-utils && \tapt-get
+      install -y --no-install-recommends \t\tca-certificates \t\tbash \t\tcurl \t\tvim
+      \t\tlibcap-dev \t\topenjdk-8-jre-headless \t\tjsvc \t\tnet-tools && \techo \"deb
+      http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/4.0 multiverse\" > /etc/apt/sources.list.d/mongodb-org-4.0.list
+      && \tapt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv E52529D4 &&
+      \tapt-get update && \tapt-get install -y --no-install-recommends \t\tmongodb
+      && \tapt-get clean && \trm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/* && \tcurl
+      -o /tmp/Omada.tar.gz $OMADA_DOWNLOAD_LINK && \ttar -zxvf /tmp/Omada.tar.gz -C
+      /tmp/ && \trm /tmp/Omada.tar.gz && \tmv $(find /tmp -maxdepth 1 -type d -name
+      Omada*) /tmp/Omada && \tmkdir -p /opt/EAP-Controller && \tmkdir -p /opt/EAP-Controller/bin
+      && \tmkdir -p /opt/EAP-Controller/logs && \tmkdir -p /opt/EAP-Controller/work
+      && \tmv /tmp/Omada/readme.txt /opt/EAP-Controller/ && \tmv /tmp/Omada/data /opt/EAP-Controller/
+      && \tmv /tmp/Omada/keystore /opt/EAP-Controller/ && \tmv /tmp/Omada/lib /opt/EAP-Controller/
+      && \tmv /tmp/Omada/properties /opt/EAP-Controller/ && \tmv /tmp/Omada/webapps
+      /opt/EAP-Controller/ && \tln -s /usr/bin/mongod /opt/EAP-Controller/bin/mongod
+      && \tgroupadd omada && \tuseradd -g omada -d /opt/EAP-Controller omada && \tchgrp
+      -R omada /opt/EAP-Controller && \tchown -R omada /opt/EAP-Controller/data /opt/EAP-Controller/keystore
+      /opt/EAP-Controller/properties /opt/EAP-Controller/logs /opt/EAP-Controller/work
+      && \tfind /opt/EAP-Controller/ -type d -exec chmod 755 {} \\; && \tfind /opt/EAP-Controller/
+      -type f -exec chmod 644 {} \\; && \tchmod 600 /opt/EAP-Controller/keystore/*"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: omada
+  - Name: workdir
+    Path: /opt/EAP-Controller
+  - CmdLine:
+    - "java \t-client \t-Xms128m \t-Xmx768m \t-XX:MinHeapFreeRatio=30 \t-XX:MaxHeapFreeRatio=60
+      \t-XX:+HeapDumpOnOutOfMemoryError \t-cp /usr/share/java/commons-daemon.jar:/opt/EAP-Controller/lib/*
+      \t-Deap.home=/opt/EAP-Controller \tcom.tp_link.eap.start.EapLinuxMain"
+    Name: cmd
+    PrependShell: true
+  - Health:
+      Interval: 60000000000
+      StartPeriod: 120000000000
+      Test:
+      - CMD-SHELL
+      - curl --fail http://127.0.0.1:8088 || exit 1
+      Timeout: 15000000000
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - 27001/udp
+    - 27002/tcp
+    - 29810/udp
+    - 29811/tcp
+    - 29812/tcp
+    - 29813/tcp
+    - 8043/tcp
+    - 8088/tcp
+  - Name: volume
+    Volumes:
+    - /opt/EAP-Controller/data
+    - /opt/EAP-Controller/logs
+    - /opt/EAP-Controller/work
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: maintainer
+      Value: '"Edoardo Federici <hello@edoardofederici.com>"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0.0-rc.1"'
+    - Key: org.label-schema.vendor
+      Value: '"Edoardo Federici"'
+    - Key: org.label-schema.url
+      Value: '"https://edoardofederici.com"'
+    - Key: org.label-schema.name
+      Value: '"omada-eap-controller"'
+    - Key: org.label-schema.description
+      Value: '"TP-Link Omada EAP Controller lightweight Docker image"'
+    - Key: org.label-schema.version
+      Value: $VERSION
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/EdoFede/Omada-EAP-Controller"'
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.docker.cmd
+      Value: '"docker create --name Omada-EAP-Controller --env TZ=Europe/Rome --network
+        host --volume omada_data:/opt/EAP-Controller/data --volume omada_logs:/opt/EAP-Controller/logs
+        --volume omada_work:/opt/EAP-Controller/work edofede/omada-eap-controller:latest"'
+    Name: label
+  From:
+    Image: $ARCH/ubuntu:$BASEIMAGE_BRANCH
+  Name: ""
+  Platform: ""
+  SourceCode: FROM $ARCH/ubuntu:$BASEIMAGE_BRANCH

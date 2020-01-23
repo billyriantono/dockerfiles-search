@@ -1,49 +1,65 @@
 MetaArgs: null
 Stages:
-- BaseName: alpine:3.8
+- BaseName: alpine:3.10
   Commands:
-  - Labels:
-    - Key: maintainer
-      Value: '"searx <https://github.com/asciimoo/searx>"'
-    Name: label
-  - Labels:
-    - Key: description
-      Value: '"A privacy-respecting, hackable metasearch engine."'
-    Name: label
-  - Env:
-    - Key: BASE_URL
-      Value: "False"
-    - Key: IMAGE_PROXY
-      Value: "False"
-    - Key: HTTP_PROXY_URL
-      Value: ""
-    - Key: HTTPS_PROXY_URL
-      Value: ""
-    Name: env
-  - Name: expose
-    Ports:
-    - "8888"
-  - Name: workdir
-    Path: /usr/local/searx
   - CmdLine:
     - /sbin/tini
     - --
-    - /usr/local/searx/run.sh
-    Name: cmd
+    - /usr/local/searx/dockerfiles/docker-entrypoint.sh
+    Name: entrypoint
     PrependShell: false
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: volume
+    Volumes:
+    - /etc/searx
+  - Name: volume
+    Volumes:
+    - /var/log/uwsgi
+  - Key: VERSION_GITCOMMIT
+    Name: arg
+    Value: unknown
+  - Key: SEARX_GIT_VERSION
+    Name: arg
+    Value: unknown
+  - Key: SEARX_GID
+    Name: arg
+    Value: "977"
+  - Key: SEARX_UID
+    Name: arg
+    Value: "977"
   - CmdLine:
-    - 'adduser -D -h /usr/local/searx -s /bin/sh searx searx  && echo ''#!/bin/sh''
-      >> run.sh  && echo ''test -d config && cp config/settings.yml searx/settings.yml''
-      >> run.sh  && echo ''sed -i "s|base_url : False|base_url : $BASE_URL|g" searx/settings.yml''
-      >> run.sh  && echo ''sed -i "s/image_proxy : False/image_proxy : $IMAGE_PROXY/g"
-      searx/settings.yml'' >> run.sh  && echo ''sed -i "s/ultrasecretkey/`openssl
-      rand -hex 16`/g" searx/settings.yml'' >> run.sh  && echo ''if [ -n "$HTTP_PROXY_URL"
-      ] || [ -n "$HTTPS_PROXY_URL" ]; then'' >> run.sh  && echo ''  sed -i "s~^#    proxies
-      :~    proxies:\\n      http: ${HTTP_PROXY_URL}\\n      https: ${HTTPS_PROXY_URL}\\n~"
-      searx/settings.yml'' >> run.sh  && echo ''fi'' >> run.sh  && echo ''python searx/webapp.py''
-      >> run.sh  && chmod +x run.sh'
+    - addgroup -g ${SEARX_GID} searx &&     adduser -u ${SEARX_UID} -D -h /usr/local/searx
+      -s /bin/sh -G searx searx
     Name: run
     PrependShell: true
+  - Key: TIMESTAMP_SETTINGS
+    Name: arg
+    Value: "0"
+  - Key: TIMESTAMP_UWSGI
+    Name: arg
+    Value: "0"
+  - Key: LABEL_VCS_REF
+    Name: arg
+    Value: ""
+  - Key: LABEL_VCS_URL
+    Name: arg
+    Value: ""
+  - Env:
+    - Key: INSTANCE_NAME
+      Value: searx
+    - Key: AUTOCOMPLETE
+      Value: ""
+    - Key: BASE_URL
+      Value: ""
+    - Key: MORTY_KEY
+      Value: ""
+    - Key: MORTY_URL
+      Value: ""
+    Name: env
+  - Name: workdir
+    Path: /usr/local/searx
   - Chown: ""
     From: ""
     Name: copy
@@ -51,31 +67,54 @@ Stages:
     - requirements.txt
     - ./requirements.txt
   - CmdLine:
-    - echo "@commuedge http://nl.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories  &&
-      apk -U add     build-base     python     python-dev     py-pip     libxml2     libxml2-dev     libxslt     libxslt-dev     libffi-dev     openssl     openssl-dev     ca-certificates     tini@commuedge  &&
-      pip install --upgrade pip  && pip install --no-cache -r requirements.txt  &&
-      apk del     build-base     python-dev     libffi-dev     openssl-dev     libxslt-dev     libxml2-dev     openssl-dev     ca-certificates  &&
-      rm -f /var/cache/apk/*
+    - apk upgrade --no-cache  && apk add --no-cache -t build-dependencies     build-base     py3-setuptools     python3-dev     libffi-dev     libxslt-dev     libxml2-dev     openssl-dev     tar     git  &&
+      apk add --no-cache     ca-certificates     su-exec     python3     libxml2     libxslt     openssl     tini     uwsgi     uwsgi-python3  &&
+      pip3 install --upgrade pip  && pip3 install --no-cache -r requirements.txt  &&
+      apk del build-dependencies
     Name: run
     PrependShell: true
-  - Chown: ""
+  - Chown: searx:searx
     From: ""
     Name: copy
     SourcesAndDest:
     - .
     - .
   - CmdLine:
-    - chown -R searx:searx *
+    - su searx -c "/usr/bin/python3 -m compileall -q searx";     touch -c --date=@${TIMESTAMP_SETTINGS}
+      searx/settings.yml;     touch -c --date=@${TIMESTAMP_UWSGI} dockerfiles/uwsgi.ini;     if
+      [ ! -z $VERSION_GITCOMMIT ]; then      echo "VERSION_STRING = VERSION_STRING
+      + \"-$VERSION_GITCOMMIT\"" >> /usr/local/searx/searx/version.py;     fi
     Name: run
     PrependShell: true
-  - Name: user
-    User: searx
-  - CmdLine:
-    - sed -i "s/127.0.0.1/0.0.0.0/g" searx/settings.yml
-    Name: run
-    PrependShell: true
+  - Key: LABEL_DATE
+    Name: arg
+    Value: ""
+  - Labels:
+    - Key: maintainer
+      Value: '"searx <https://github.com/asciimoo/searx>"'
+    - Key: description
+      Value: '"A privacy-respecting, hackable metasearch engine."'
+    - Key: version
+      Value: '"${SEARX_GIT_VERSION}"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.name
+      Value: '"searx"'
+    - Key: org.label-schema.version
+      Value: '"${SEARX_GIT_VERSION}"'
+    - Key: org.label-schema.url
+      Value: '"${LABEL_VCS_URL}"'
+    - Key: org.label-schema.vcs-ref
+      Value: ${LABEL_VCS_REF}
+    - Key: org.label-schema.vcs-url
+      Value: ${LABEL_VCS_URL}
+    - Key: org.label-schema.build-date
+      Value: '"${LABEL_DATE}"'
+    - Key: org.label-schema.usage
+      Value: '"https://github.com/searx/searx-docker"'
+    Name: label
   From:
-    Image: alpine:3.8
+    Image: alpine:3.10
   Name: ""
   Platform: ""
-  SourceCode: FROM alpine:3.8
+  SourceCode: FROM alpine:3.10

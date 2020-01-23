@@ -1,0 +1,112 @@
+MetaArgs: null
+Stages:
+- BaseName: python:2-alpine3.10
+  Commands:
+  - Env:
+    - Key: RSA_KEY_SIZE
+      Value: "4096"
+    Name: env
+  - Env:
+    - Key: CERTBOT_VERSION
+      Value: 0.36.0
+    Name: env
+  - Env:
+    - Key: NGINX_VERSION
+      Value: 1.16.0
+    Name: env
+  - Env:
+    - Key: NJS_VERSION
+      Value: 0.3.2
+    Name: env
+  - Env:
+    - Key: PKG_RELEASE
+      Value: "1"
+    Name: env
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - Name: volume
+    Volumes:
+    - /srv
+  - Name: workdir
+    Path: /opt/certbot
+  - Name: stopsignal
+    Signal: SIGTERM
+  - CmdLine:
+    - /run.sh
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - apk add --no-cache bash     && mkdir -p src     && wget -O certbot-${CERTBOT_VERSION}.tar.gz
+      https://github.com/certbot/certbot/archive/v${CERTBOT_VERSION}.tar.gz     &&
+      tar xf certbot-${CERTBOT_VERSION}.tar.gz     && cp certbot-${CERTBOT_VERSION}/CHANGELOG.md
+      certbot-${CERTBOT_VERSION}/README.rst certbot-${CERTBOT_VERSION}/setup.py src/     &&
+      cp certbot-${CERTBOT_VERSION}/letsencrypt-auto-source/pieces/dependency-requirements.txt
+      .     && cp -r certbot-${CERTBOT_VERSION}/tools tools     && cp -r certbot-${CERTBOT_VERSION}/acme
+      src/acme     && cp -r certbot-${CERTBOT_VERSION}/certbot src/certbot     &&
+      rm -rf certbot-${CERTBOT_VERSION}.tar.gz certbot-${CERTBOT_VERSION}     && cat
+      dependency-requirements.txt | tools/strip_hashes.py > unhashed_requirements.txt     &&
+      cat tools/dev_constraints.txt unhashed_requirements.txt | tools/merge_requirements.py
+      > docker_constraints.txt     && apk add --no-cache --virtual .certbot-deps         libffi         libssl1.1         openssl         ca-certificates         binutils     &&
+      apk add --no-cache --virtual .certbot-build-deps         gcc         linux-headers         openssl-dev         musl-dev         libffi-dev     &&
+      pip install -r dependency-requirements.txt     && pip install --no-cache-dir
+      --no-deps         --editable src/acme         --editable src     && apk del
+      .certbot-build-deps     && set -x     && addgroup -g 101 -S nginx     && adduser
+      -S -D -H -u 101 -h /srv/cache -s /sbin/nologin -G nginx -g nginx nginx     &&
+      apkArch="$(cat /etc/apk/arch)"     && nginxPackages="         nginx=${NGINX_VERSION}-r${PKG_RELEASE}         nginx-module-xslt=${NGINX_VERSION}-r${PKG_RELEASE}         nginx-module-geoip=${NGINX_VERSION}-r${PKG_RELEASE}         nginx-module-image-filter=${NGINX_VERSION}-r${PKG_RELEASE}         nginx-module-njs=${NGINX_VERSION}.${NJS_VERSION}-r${PKG_RELEASE}     "     &&
+      case "$apkArch" in         x86_64)             set -x             && KEY_SHA512="e7fa8303923d9b95db37a77ad46c68fd4755ff935d0a534d26eba83de193c76166c68bfe7f65471bf8881004ef4aa6df3e34689c305662750c0172fca5d8552a
+      *stdin"             && apk add --no-cache --virtual .cert-deps                 openssl             &&
+      wget -O /tmp/nginx_signing.rsa.pub https://nginx.org/keys/nginx_signing.rsa.pub             &&
+      if [ "$(openssl rsa -pubin -in /tmp/nginx_signing.rsa.pub -text -noout | openssl
+      sha512 -r)" = "$KEY_SHA512" ]; then                 echo "key verification succeeded!";                 mv
+      /tmp/nginx_signing.rsa.pub /etc/apk/keys/;             else                 echo
+      "key verification failed!";                 exit 1;             fi             &&
+      printf "%s%s%s\n"                 "https://nginx.org/packages/alpine/v"                 `egrep
+      -o '^[0-9]+\.[0-9]+' /etc/alpine-release`                 "/main"             |
+      tee -a /etc/apk/repositories             && apk del .cert-deps             ;;         *)             set
+      -x             && tempDir="$(mktemp -d)"             && chown nobody:nobody
+      $tempDir             && apk add --no-cache --virtual .build-deps                 gcc                 libc-dev                 make                 openssl-dev                 pcre-dev                 zlib-dev                 linux-headers                 libxslt-dev                 gd-dev                 geoip-dev                 perl-dev                 libedit-dev                 mercurial                 bash                 alpine-sdk                 findutils             &&
+      su nobody -s /bin/sh -c "                 export HOME=${tempDir}                 &&
+      cd ${tempDir}                 && hg clone https://hg.nginx.org/pkg-oss                 &&
+      cd pkg-oss                 && hg up -r 417                 && cd alpine                 &&
+      make all                 && apk index -o ${tempDir}/packages/alpine/${apkArch}/APKINDEX.tar.gz
+      ${tempDir}/packages/alpine/${apkArch}/*.apk                 && abuild-sign -k
+      ${tempDir}/.abuild/abuild-key.rsa ${tempDir}/packages/alpine/${apkArch}/APKINDEX.tar.gz                 "             &&
+      echo "${tempDir}/packages/alpine/" >> /etc/apk/repositories             && cp
+      ${tempDir}/.abuild/abuild-key.rsa.pub /etc/apk/keys/             && apk del
+      .build-deps             ;;     esac     && apk add --no-cache $nginxPackages     &&
+      if [ -n "$tempDir" ]; then rm -rf "$tempDir"; fi     && if [ -n "/etc/apk/keys/abuild-key.rsa.pub"
+      ]; then rm -f /etc/apk/keys/abuild-key.rsa.pub; fi     && if [ -n "/etc/apk/keys/nginx_signing.rsa.pub"
+      ]; then rm -f /etc/apk/keys/nginx_signing.rsa.pub; fi     && sed -i '$ d' /etc/apk/repositories     &&
+      apk add --no-cache --virtual .gettext gettext     && mv /usr/bin/envsubst /tmp/         &&
+      runDeps="$(         scanelf --needed --nobanner /tmp/envsubst             |
+      awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }'             | sort -u             |
+      xargs -r apk info --installed             | sort -u     )"     && apk add --no-cache
+      $runDeps     && apk del .gettext     && mv /tmp/envsubst /usr/local/bin/     &&
+      apk add --no-cache tzdata     && ln -sf /dev/stdout /var/log/nginx/access.log     &&
+      ln -sf /dev/stderr /var/log/nginx/error.log     && touch /srv/nginx.pid /srv/nginx.lock     &&
+      mkdir -p /srv/cache     && ln -sf /srv/nginx.pid /var/run/nginx.pid     && ln
+      -sf /srv/nginx.lock /var/run/nginx.lock     && rmdir /var/cache/nginx     &&
+      ln -sf /srv/cache /var/cache/nginx     && wget -O /etc/nginx/options-ssl-nginx.conf
+      https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot_nginx/tls_configs/options-ssl-nginx.conf     &&
+      wget -O /etc/nginx/ssl-dhparams.pem https://raw.githubusercontent.com/certbot/certbot/master/certbot/ssl-dhparams.pem
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx-certbot.conf
+    - /etc/nginx/nginx.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx-certbot.sh
+    - /run.sh
+  From:
+    Image: python:2-alpine3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:2-alpine3.10

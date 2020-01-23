@@ -1,41 +1,69 @@
 MetaArgs: null
 Stages:
-- BaseName: otasys/java:1.8.0_66
+- BaseName: openzipkin/zipkin-builder
   Commands:
   - Name: workdir
-    Path: /opt
+    Path: /code
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /code
   - CmdLine:
-    - "wget http://ftp.ps.pl/pub/apache/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz
-      && \ttar xvf apache-maven-3.3.9-bin.tar.gz && \trm -rf apache-maven-3.3.9-bin.tar.gz
-      && \tupdate-alternatives  --install /usr/bin/mvn mvn /opt/apache-maven-3.3.9/bin/mvn
-      1 && \tupdate-alternatives  --set mvn /opt/apache-maven-3.3.9/bin/mvn"
+    - mvn -B --no-transfer-progress package -DskipTests=true -pl module -am
     Name: run
     PrependShell: true
-  - Chown: ""
-    Name: add
-    SourcesAndDest:
-    - settings.xml
-    - settings.xml
-  - Chown: ""
-    Name: add
-    SourcesAndDest:
-    - extensions.xml
-    - extensions.xml
-  - Chown: ""
-    Name: add
-    SourcesAndDest:
-    - setup.sh
-    - setup.sh
-  - Name: expose
-    Ports:
-    - "8080"
   - CmdLine:
-    - sh
-    - setup.sh
-    Name: cmd
-    PrependShell: false
+    - cd /code && mkdir -p /zipkin-storage-kafka &&     cp module/target/zipkin-module-storage-kafka-*-module.jar
+      /zipkin-storage-kafka &&     cd /zipkin-storage-kafka &&     jar xf *.jar &&     rm
+      *.jar
+    Name: run
+    PrependShell: true
   From:
-    Image: otasys/java:1.8.0_66
+    Image: openzipkin/zipkin-builder
   Name: ""
   Platform: ""
-  SourceCode: FROM otasys/java:1.8.0_66
+  SourceCode: FROM openzipkin/zipkin-builder
+- BaseName: openzipkin/zipkin:2.19.1
+  Commands:
+  - Maintainer: Zipkin "https://zipkin.io/"
+    Name: maintainer
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /zipkin-storage-kafka/
+    - /zipkin/lib/
+  - CmdLine:
+    - echo > .kafka_profile
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MODULE_OPTS
+      Value: '"-Dloader.path=lib -Dspring.profiles.active=kafka"'
+    Name: env
+  - Env:
+    - Key: STORAGE_TYPE
+      Value: kafka
+    Name: env
+  - Env:
+    - Key: KAFKA_STORAGE_DIR
+      Value: /data
+    Name: env
+  - Name: user
+    User: root
+  - CmdLine:
+    - mkdir /data && chown zipkin:zipkin /data
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data
+  - Name: user
+    User: zipkin
+  From:
+    Image: openzipkin/zipkin:2.19.1
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openzipkin/zipkin:2.19.1

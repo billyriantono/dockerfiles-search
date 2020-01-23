@@ -1,26 +1,25 @@
-FROM alpine:latest
+FROM ubuntu:14.04
 
-ENV CONFIG_JSON=none CERT_PEM=none KEY_PEM=none VER=3.36
+MAINTAINER Walid ZIOUCHE <01walid@gmail.com>
 
-RUN apk add --no-cache --virtual .build-deps ca-certificates curl \
- && mkdir -m 777 /v2raybin \ 
- && cd /v2raybin \
- && curl -L -H "Cache-Control: no-cache" -o v2ray.zip https://github.com/v2ray/v2ray-core/releases/download/v$VER/v2ray-linux-64.zip \
- && unzip v2ray.zip \
- && mv /v2raybin/v2ray-v$VER-linux-64/v2ray /v2raybin/ \
- && mv /v2raybin/v2ray-v$VER-linux-64/v2ctl /v2raybin/ \
- && mv /v2raybin/v2ray-v$VER-linux-64/geoip.dat /v2raybin/ \
- && mv /v2raybin/v2ray-v$VER-linux-64/geosite.dat /v2raybin/ \
- && chmod +x /v2raybin/v2ray \
- && rm -rf v2ray.zip \
- && rm -rf v2ray-v$VER-linux-64 \
- && chgrp -R 0 /v2raybin \
- && chmod -R g+rwX /v2raybin 
- 
-ADD entrypoint.sh /entrypoint.sh
+RUN apt-get update && apt-get install -y git python-pip gettext
 
-RUN chmod +x /entrypoint.sh 
+RUN pip install pyparsing
 
-ENTRYPOINT  /entrypoint.sh 
+RUN git clone --depth 1 https://github.com/Alfanous-team/alfanous.git
 
-EXPOSE 8080
+RUN cd alfanous/src/alfanous-django && pip install -r requirements.txt
+
+RUN cd alfanous && make build_api && make clean_all
+
+RUN python /alfanous/src/alfanous-django/manage.py compilemessages
+
+# clean the image a bit
+RUN apt-get clean
+RUN rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+ENTRYPOINT ["python", "/alfanous/src/alfanous-django/manage.py"]
+
+CMD ["runserver", "0.0.0.0:8000"]
+
+EXPOSE 8000

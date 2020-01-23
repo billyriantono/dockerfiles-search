@@ -1,51 +1,27 @@
-# port number 3838
-# script runs from /srv/shiny-server/
-# logs stored at /var/log/shiny-server/
-FROM ausvet/shinypy
+FROM jupyter/base-notebook:latest
+MAINTAINER Aurelio Amerio
 
-ENV APPLICATION_LOGS_TO_STDOUT true
-ENV LOCAL_DATA_PATH "/srv/data"
-ENV R_DATA_FOLDER "/RData"
-# TODO: [FD-56] update default remote path to a production setting.
-ENV default_remote_path "/Shared/Divisions/AnimalHealth/FVG/Global/Fishvet_Dashboard/Scotland/dashboard_files"
-ENV default_domain "bmk.egnyte.com"
+USER root
 
-# move install packages higher so it can be cached.
-COPY ./src/installpackages.r /srv/installpackages.r
-RUN Rscript /srv/installpackages.r
+RUN apt-get update &&\
+    apt-get install -y wget gnupg dirmngr apt-transport-https ca-certificates &&\
+    apt-get clean &&\
+    conda update conda -y &&\
+    conda update --all &&\
+    conda install -c anaconda numpy scipy matplotlib astropy pandas -y &&\
+    conda install -c numba numba -y &&\
+    conda install -c conda-forge pycamb python-language-server -y &&\
+    conda clean --yes --all
 
-# install nginx
-RUN apt-get install -y nginx
-COPY ./proxy.nginx /etc/nginx/sites-available/default
-# forward request and error logs to docker log collector
-RUN ln -sf /dev/stdout /var/log/nginx/access.log \
-    && ln -sf /dev/stderr /var/log/nginx/error.log
+#add project path to python path
+ENV PYTHONPATH=/opt/project
 
-# setup pipenv
-COPY ./Pipfile /srv/Pipfile
-COPY ./Pipfile.lock /srv/Pipfile.lock
-WORKDIR /srv
-RUN pipenv install
-COPY ./sync /srv/sync
+#set working dir to the project directory
+WORKDIR /opt/project
+ENV HOME=/opt/project
 
-## copy data
-RUN mkdir $LOCAL_DATA_PATH
-RUN chmod -R 777 $LOCAL_DATA_PATH
-VOLUME $LOCAL_DATA_PATH
+# set secret token
+ENV JUPYTER_TOKEN=4eYoitinuQyPHaxnQr9QNU5eu5GUXqiq6qY4VV
 
-# copy scripts
-RUN rm -R /srv/shiny-server/*
-COPY src/. /srv/shiny-server/
-RUN chown -R shiny:shiny /srv/shiny-server
-
-# expose network ports
-#EXPOSE 3838
-EXPOSE 80
-
-COPY ./docker_entrypoint.sh /srv/docker_entrypoint.sh
-RUN chmod +x /srv/docker_entrypoint.sh
-#ENTRYPOINT ["service", "nginx", "restart;"]
-ENTRYPOINT ["/srv/docker_entrypoint.sh"]
-
-# run server
-CMD ["/usr/bin/shiny-server.sh"]
+#switch back to not root user
+USER $NB_UID

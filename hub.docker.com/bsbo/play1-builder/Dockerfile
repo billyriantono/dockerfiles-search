@@ -1,8 +1,26 @@
-FROM criluc/play1:1.5.0
-MAINTAINER Marco Andreini <marco.andreini@gmail.com>
+FROM python:alpine
 
-USER root
-RUN apt-get update && apt-get -y install fabric rsync openssh-client make gcc g++ git && \
-   curl -LO http://mirrors.kernel.org/ubuntu/pool/main/libp/libpng/libpng12-0_1.2.54-1ubuntu1_amd64.deb && \
-   dpkg -i libpng12*.deb && rm libpng12*.deb
-USER play
+MAINTAINER buluba89
+
+RUN mkdir /build &&\
+    pip3 install pipenv
+
+ADD Pipfile* /build/
+
+RUN cd /build &&\
+    pipenv install --system
+
+
+ADD requirements.txt README.rst setup.py /build/
+
+ADD yatcobot /build/yatcobot
+
+RUN cd /build &&\
+    python setup.py install
+
+VOLUME ["/yatcobot"]
+
+WORKDIR /yatcobot
+
+ENTRYPOINT ["yatcobot"]
+CMD []

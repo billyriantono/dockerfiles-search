@@ -17,6 +17,6 @@ RUN apk add --update \
   && rm -rf /var/cache/apk/*
 
 RUN pip install certbot
-RUN pip install git+git://github.com/alexjpaz/certbot-s3front.git@master
+RUN pip install certbot-s3front
 
 CMD ["certbot"]

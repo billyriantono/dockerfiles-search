@@ -1,11 +1,13 @@
-FROM ubuntu:14.04
-MAINTAINER Docker Education Team <education@docker.com>
+FROM golang:1.6
 
-RUN apt-get update
-RUN apt-get install -y nginx
-RUN echo 'Hi, I am in Charuta container' \
-    >/usr/share/nginx/html/index.html
+MAINTAINER minimum@cepave.com
 
-CMD [ "nginx", "-g", "daemon off;" ]
+ARG BRANCH=master
+ARG MODULE=agent
+ENV BRANCH=${BRANCH:-master} MODULE=${MODULE:-agent} REPO=github.com/Cepave/open-falcon-backend
+ENV WORKPATH=${GOPATH}/src/${REPO}
 
-EXPOSE 80
+RUN mkdir -p ${WORKPATH}
+
+COPY docker-entrypoint.sh /
+CMD /docker-entrypoint.sh

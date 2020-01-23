@@ -1,0 +1,162 @@
+MetaArgs: null
+Stages:
+- BaseName: jenkins/jenkins:lts-alpine
+  Commands:
+  - Maintainer: Hleb Rubanau <g.rubanau@gmail.com>
+    Name: maintainer
+  - Name: user
+    User: root
+  - Key: compose_version
+    Name: arg
+    Value: 1.18.0
+  - CmdLine:
+    - apk --no-cache add python py-pip git &&    git clone --branch ${compose_version}
+      https://github.com/docker/compose.git /code/compose &&    cd /code/compose &&    pip
+      --no-cache-dir install -r requirements.txt -r requirements-dev.txt pyinstaller==3.1.1
+      &&    git rev-parse --short HEAD > compose/GITSHA &&    ln -s /lib /lib64 &&
+      ln -s /lib/libc.musl-x86_64.so.1 ldd && ln -s /lib/ld-musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2
+      &&     pyinstaller docker-compose.spec &&    unlink /lib/ld-linux-x86-64.so.2
+      /lib64 ldd ||true &&    mv dist/docker-compose /usr/local/bin/docker-compose-original
+      &&    pip freeze | xargs pip uninstall -y &&    rm -rf /code /root/.cache /var/cache/apk/*
+      &&    chmod +x /usr/local/bin/docker-compose-original
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --update     sudo pwgen ansible py-pip terraform git jq     && rm -rf
+      /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install awscli --upgrade
+    Name: run
+    PrependShell: true
+  - Key: DOCKER_CLI_VERSION
+    Name: arg
+    Value: 17.03.2
+  - CmdLine:
+    - wget -q -O /tmp/docker.tgz         https://download.docker.com/linux/static/stable/$(uname
+      -m)/docker-${DOCKER_CLI_VERSION}-ce.tgz     && cd /tmp                  && tar
+      -xzf docker.tgz      && cp docker/docker /usr/local/bin/docker-cli     && rm
+      -rf /tmp/docker*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch /var/jenkins_home/.dockercfg     && chown jenkins:jenkins /var/jenkins_home/.dockercfg     &&
+      ln -sf /var/jenkins_home/.dockercfg /root/.dockercfg
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_OPTS
+      Value: '"-Djenkins.install.runSetupWizard=false"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - security.groovy
+    - /usr/share/jenkins/ref/init.groovy.d/security.groovy
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - plugins.txt
+    - /usr/share/jenkins_cloudbuilder/default_plugins_list.txt
+  - CmdLine:
+    - /usr/local/bin/install-plugins.sh < /usr/share/jenkins_cloudbuilder/default_plugins_list.txt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ssh_keyscan.sh
+    - /usr/local/bin
+  - CmdLine:
+    - chmod a+x /usr/local/bin/ssh_keyscan.sh && /bin/bash /usr/local/bin/ssh_keyscan.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - jenkins_log.properties.template
+    - /usr/share/jenkins_cloudbuilder/jenkins_log.properties.template
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sudoers
+    - /etc/sudoers
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker_wrapper
+    - /usr/local/bin/docker
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker_compose_wrapper
+    - /usr/local/bin/docker-compose
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - secrets_adapter.sh
+    - /usr/local/bin/jenkins_cloudbuilder_secrets_adapter.sh
+  - CmdLine:
+    - chmod 0544 /usr/local/bin/jenkins_cloudbuilder_secrets_adapter.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bootstrapper.sh
+    - /usr/share/jenkins_cloudbuilder/bootstrapper.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-sigkill.sh
+    - /usr/local/bin/docker-sigkill
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - fix_mount_permissions.sh
+    - /usr/local/bin/fix_mount_permissions.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/local/bin/jenkins_cloudbuilder_entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sudoers_injector.sh
+    - /usr/local/bin/sudoers_injector.sh
+  - CmdLine:
+    - bash -c 'for util in docker docker-compose jenkins_cloudbuilder_entrypoint.sh
+      sudoers_injector.sh fix_mount_permissions.sh docker-sigkill; do chown jenkins:jenkins
+      /usr/local/bin/$util && chmod 0554 /usr/local/bin/$util ; done'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/jenkins_cloudbuilder_entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: user
+    User: jenkins
+  - Env:
+    - Key: PRIVATE_REGISTRY_PORT
+      Value: "443"
+    Name: env
+  From:
+    Image: jenkins/jenkins:lts-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM jenkins/jenkins:lts-alpine

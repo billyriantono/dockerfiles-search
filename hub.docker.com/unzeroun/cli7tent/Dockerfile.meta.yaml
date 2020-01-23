@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: umputun/baseimage:buildgo-latest
+  Commands:
+  - Key: CI
+    Name: arg
+    Value: null
+  - Key: GIT_BRANCH
+    Name: arg
+    Value: null
+  - Key: SKIP_TEST
+    Name: arg
+    Value: null
+  - Env:
+    - Key: GOFLAGS
+      Value: '"-mod=vendor"'
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /app
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - if [ -z "$SKIP_TEST" ] ; then         go test -timeout=30s  ./... &&         golangci-lint
+      run --disable-all --deadline=300s --enable=vet --enable=vetshadow --enable=golint           --enable=staticcheck
+      --enable=ineffassign --enable=goconst --enable=errcheck --enable=unconvert           --enable=deadcode
+      --enable=gosimple ./... ;     else echo "skip tests and linter" ; fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ -z "$CI" ] ; then     echo "runs outside of CI" && version=$(/script/git-rev.sh);     else
+      version=${GIT_BRANCH}-${GITHUB_SHA:0:7}-$(date +%Y%m%dT%H:%M:%S); fi &&     echo
+      "version=$version" &&     go build -o rlb-stats -ldflags "-X main.revision=${version}"
+      ./app &&     ls -la /app/rlb-stats
+    Name: run
+    PrependShell: true
+  From:
+    Image: umputun/baseimage:buildgo-latest
+  Name: build
+  Platform: ""
+  SourceCode: FROM umputun/baseimage:buildgo-latest as build
+- BaseName: umputun/baseimage:app-latest
+  Commands:
+  - CmdLine:
+    - apk add --update ca-certificates && update-ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app/rlb-stats
+    - /srv/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - webapp
+    - /srv/webapp
+  - CmdLine:
+    - chown -R app:app /srv
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  - Name: workdir
+    Path: /srv
+  - CmdLine:
+    - /srv/rlb-stats
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - /init.sh
+    - /srv/rlb-stats
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: umputun/baseimage:app-latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM umputun/baseimage:app-latest

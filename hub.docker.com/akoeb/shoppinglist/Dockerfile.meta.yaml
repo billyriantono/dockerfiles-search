@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk add git && apk add ca-certificates && apk add build-base &&
+      apk add --update nodejs nodejs-npm && apk add python2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -D -g '' appuser
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $GOPATH/src/github.com/akoeb/shoppinglist/
+  - Name: workdir
+    Path: $GOPATH/src/github.com/akoeb/shoppinglist/
+  - CmdLine:
+    - go get -d -v
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -tags netgo
+      -ldflags='-w -extldflags "-static"' -o /go/bin/shoppinglist
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install && node_modules/.bin/foundation build
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- BaseName: alpine
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/passwd
+    - /etc/passwd
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/shoppinglist
+    - /shoppinglist
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/akoeb/shoppinglist/public
+    - /public
+  - Env:
+    - Key: DATABASE_FILE
+      Value: '"/data/shoppinglist.db"'
+    Name: env
+  - Env:
+    - Key: DOMAIN
+      Value: '"localhost"'
+    Name: env
+  - Env:
+    - Key: HTTP_USER
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: HTTP_PASSWORD
+      Value: '""'
+    Name: env
+  - Name: user
+    User: appuser
+  - Name: volume
+    Volumes:
+    - /data
+  - CmdLine:
+    - /shoppinglist -db /data/shoppinglist.db -domain $DOMAIN -user $HTTP_USER -password
+      $HTTP_PASSWORD
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

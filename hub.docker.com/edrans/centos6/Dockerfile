@@ -1,5 +1,13 @@
-FROM centos:centos6
+FROM java:alpine
 
-MAINTAINER ntorre@edrans.com
+WORKDIR /moco
 
-RUN yum install -y http://dl.fedoraproject.org/pub/epel/6/i386/epel-release-6-8.noarch.rpm && yum update -y && yum clean all -y
+COPY moco-runner-1.0.0-standalone.jar .
+
+VOLUME ["/moco/config"]
+
+EXPOSE 12306
+
+ENTRYPOINT ["/usr/bin/java"]
+
+CMD ["-jar", "moco-runner-1.0.0-standalone.jar", "http", "-p", "12306", "-c", "config/*.json"]

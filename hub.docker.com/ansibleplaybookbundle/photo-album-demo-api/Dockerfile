@@ -1,28 +1,28 @@
-FROM centos:7
+FROM ubuntu:14.04
 
-EXPOSE 8080
+RUN apt-get update && apt-get install -y software-properties-common \
+&& add-apt-repository ppa:v-launchpad-jochen-sprickerhof-de/pcl -y 
 
-RUN mkdir -p /usr/src/demo-app
-COPY requirements.txt /usr/src/demo-app
-WORKDIR /usr/src/demo-app/
+RUN apt-get update && apt-get install -y libpcl-all 
 
-RUN yum -y install centos-release-scl && \
-    yum -y install --setopt=tsflags=nodocs rh-python35-python-pip && \
-    source scl_source enable rh-python35 && \
-    pip install --no-cache-dir -U pip setuptools && \
-    pip install --no-cache-dir -r requirements.txt && \
-    python -m pip uninstall -y pip setuptools && \
-    yum clean all
+RUN apt-get install -y python-pip \
+python-dev \
+git \
+&& pip install cython==0.25.2 \
+&& pip install numpy
 
-# entrypoint to enable scl python at runtime
-RUN echo $'#!/bin/sh\n\
-source scl_source enable rh-python35\n\
-exec "$@"' > /usr/bin/entrypoint.sh && \
-    chmod +x /usr/bin/entrypoint.sh
+RUN cd /root \
+&& git clone https://github.com/strawlab/python-pcl \
+&& cd python-pcl 
 
-COPY src /usr/src/demo-app/src
-WORKDIR /usr/src/demo-app/src
+COPY setup.py /root/python-pcl/
 
-USER 99
-ENTRYPOINT [ "entrypoint.sh" ]
-CMD python app.py
+#install pypcap 
+#RUN apt-get install -y python-pyrex libpcap0.8 libpcap0.8-dev \
+#&& cd /root \
+#&& git clone https://github.com/pynetwork/pypcap \
+#&& cd pypcap 
+RUN apt-get install -y libpcap0.8 libpcap0.8-dev \
+&& pip install pypcap \
+&& cd /root/python-pcl \ 
+

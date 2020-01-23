@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:sid-slim
+  Commands:
+  - CmdLine:
+    - apt-get update &&     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends         ca-certificates         gettext-base         ldap-account-manager         libcap2-bin         patch         wget     &&     setcap
+      CAP_NET_BIND_SERVICE=+ep /usr/sbin/apache2 &&     install -d -m 750 -o root
+      -g www-data /var/log/apache2 &&     install -d -m 755 -o www-data -g root /run/apache2
+      &&     a2enmod status &&     ln -sf /dev/stdout /var/log/apache2/access.log
+      &&     ln -sf /dev/stderr /var/log/apache2/error.log &&     ln -sf /dev/stdout
+      /var/log/apache2/lam.log &&     ln -sf /dev/stdout /var/log/apache2/other_vhosts_access.log
+      &&     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/* /var/cache/apt/archives/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: APACHE_RUN_DIR
+      Value: /run/apache2
+    - Key: APACHE_LOG_DIR
+      Value: /var/log/apache2
+    - Key: APACHE_RUN_USER
+      Value: www-data
+    - Key: APACHE_RUN_GROUP
+      Value: www-data
+    - Key: APACHE_PID_FILE
+      Value: /run/apache2/apache2.pid
+    Name: env
+  - Chown: root:root
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - patch.diff
+    - /root/
+  - Chown: root:root
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint
+    - /usr/local/bin/
+  - Chown: root:root
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - lam-setpass
+    - /usr/local/bin/
+  - CmdLine:
+    - patch --strip 0 --verbose --directory / --input /root/patch.diff &&     apache2
+      -t
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LDAP_URI
+      Value: ldapi:///
+    - Key: LAM_PASSWORD
+      Value: lam
+    Name: env
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: user
+    User: '"www-data"'
+  - Name: workdir
+    Path: /var/www
+  - CmdLine:
+    - entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - apache2
+    - -DFOREGROUND
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Test:
+      - CMD-SHELL
+      - wget --spider --quiet http://localhost/lam/ --user-agent 'Healthcheck' ||
+        exit 1
+    Name: healthcheck
+  From:
+    Image: debian:sid-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:sid-slim

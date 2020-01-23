@@ -1,40 +1,61 @@
-FROM alpine:3.6
-MAINTAINER Craig Dunn <craig@craigdunn.org>
+FROM jenkins/jenkins:alpine
 
-ARG RUNTIME_UID=99901
-ARG RUNTIME_GID=99901
+LABEL maintainer="Hexosse <hexosse@gmail.com>" \
+      description="Minimal Alpine image used as a base image."
 
-ENV RUBYOPTS="-W0"  JERAKIA_CONFIG="/etc/jerakia/config/jerakia.yaml"
+ARG JENKINS_USER=jenkins
+ARG ROOT_USER=root
+ARG DOCKER_GROUP=docker
+ARG DOCKER_GID=10001
 
-RUN apk update && apk upgrade && apk add bash curl-dev ruby-dev build-base && \
-    apk add ruby ruby-bundler ruby-io-console sqlite-dev ruby-nokogiri
+ENV JENKINS_USER $JENKINS_USER
+ENV JENKINS_HOME $JENKINS_HOME
+ENV DOCKER_GROUP $DOCKER_GROUP
 
+ENV JENKINS_ADMIN_USER=admin
+ENV JENKINS_ADMIN_PASS=password
+ENV JENKINS_NB_EXECUTORS=2
 
-RUN addgroup -g $RUNTIME_GID jerakia && adduser -u $RUNTIME_UID -G jerakia jerakia -S && \
-    mkdir -p /usr/app /var/log/jerakia /etc/jerakia /etc/jerakia/policy.d /var/db/jerakia /var/lib/jerakia/plugins /var/lib/jerakia/schema /etc/jerakia/config && \
-    chown jerakia.jerakia -R /usr/app /var/log/jerakia /var/db/jerakia /var/lib/jerakia/plugins /var/lib/jerakia/schema /etc/jerakia
+# Switch to root user
+USER ${ROOT_USER}
 
-VOLUME /etc/jerakia/policy.d /var/lib/jerakia/plugins /var/lib/jerakia/data /var/lib/jerakia/schema /var/db/jerakia /etc/jerakia/config
+# Create docker group and add user jenkins to the group
+RUN addgroup -g ${DOCKER_GID} ${DOCKER_GROUP} \
+	&& addgroup ${JENKINS_USER} ${DOCKER_GROUP}
 
-WORKDIR /usr/app
+# Add user jenkins to list of sudoers
+RUN echo "jenkins ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
-ADD lib ./lib
-ADD bin ./bin
-COPY Gemfile /usr/app
-COPY jerakia.gemspec .
+# Install docker && alpine-base
+RUN \
+	# Print executed commands
+	set -x \
+    # Download the install script and run it
+    && curl -s -o /tmp/install-base.sh https://raw.githubusercontent.com/craftdock/Install-Scripts/master/alpine-base/install-base.sh \
+    && sh /tmp/install-base.sh \
+    # Update repository indexes
+    && apk update --update-cache \
+    # Install docker and sudo
+    && apk-install --repository http://dl-cdn.alpinelinux.org/alpine/edge/community/ \
+        docker \ 
+        sudo \
+	# Clear apk's cache
+	&& apk-cleanup
 
-RUN bundle config build.nokogiri --use-system-libraries && \
-    bundle install --without development test
+# Switch to user jenkins
+USER ${JENKINS_USER}
 
-RUN bundle config build.nokogiri --use-system-libraries && \
-    bundle install --without development test &&\
-    bundle  exec gem build jerakia.gemspec && \
-    bundle exec gem install --no-rdoc --no-ri ./jerakia*.gem
+# Install default plugins
+RUN install-plugins.sh \
+    # Matrix Authorization Strategy: https://plugins.jenkins.io/matrix-auth
+    matrix-auth \
+    # OWASP Markup Formatter: https://plugins.jenkins.io/antisamy-markup-formatter
+    antisamy-markup-formatter
 
-VOLUME /etc/jerakia/policy.d /var/lib/jerakia/plugins /var/lib/jerakia/data /var/lib/jerakia/schema /var/db/jerakia /etc/jerakia/config
+# Copy fs files to file system
+COPY fs/groovy/* /usr/share/jenkins/ref/init.groovy.d/
+COPY fs/banner /
+COPY fs/entrypoint /
 
-RUN rm -rf /var/cache/apk*
-
-USER jerakia
-ENTRYPOINT ["jerakia"]
-CMD ["server"]
+# Entrypoint
+ENTRYPOINT ["/entrypoint"]

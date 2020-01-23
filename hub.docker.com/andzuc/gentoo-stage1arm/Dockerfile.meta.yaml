@@ -1,0 +1,155 @@
+MetaArgs: null
+Stages:
+- As: seed
+  BaseName: andzuc/gentoo-armbuilder-seed0
+  Commands: null
+  From:
+    Image: andzuc/gentoo-armbuilder-seed0
+  Name: seed
+  Platform: ""
+  SourceCode: FROM andzuc/gentoo-armbuilder-seed0 as seed
+- As: seedsys
+  BaseName: scratch
+  Commands:
+  - Env:
+    - Key: STAGE1_FEATURES
+      Value: '"-sandbox -usersandbox buildpkg noman noinfo nodoc"'
+    Name: env
+  - Env:
+    - Key: STAGE1_CFLAGS
+      Value: '"-Ofast -mfpu=vfp -mfloat-abi=hard -march=armv6zk -mtune=arm1176jzf-s
+        -fomit-frame-pointer -pipe -fno-stack-protector -U_FORTIFY_SOURCE"'
+    Name: env
+  - Chown: ""
+    From: seed
+    Name: copy
+    SourcesAndDest:
+    - /builder/seed
+    - /
+  - Chown: ""
+    From: seed
+    Name: copy
+    SourcesAndDest:
+    - /usr/portage
+    - /usr/portage
+  - Chown: ""
+    From: seed
+    Name: copy
+    SourcesAndDest:
+    - /builder/ext/qemu
+    - /emu/
+  - Chown: ""
+    From: seed
+    Name: copy
+    SourcesAndDest:
+    - /builder/ext/resin/resin-xbuild
+    - /emu/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - emu
+    - /emu/
+  - CmdLine:
+    - /emu/qemu-arm
+    - -help
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - /emu/qemu-arm
+    - -execve
+    - /emu/qemu-arm
+    - /bin/bash
+    - -c
+    - 'echo Hello from ARM container: ${TC_PROFILE}'
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - /emu/qemu-arm
+    - -execve
+    - /emu/qemu-arm
+    - /bin/bash
+    - -c
+    - /emu/xbuild.install
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - /usr/bin/cross-build-start
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - "gcc --version     && gcc -dumpmachine     && python --version     && echo \"FEATURES='${STAGE1_FEATURES}'\"
+      >>/etc/portage/make.conf     && sed -i \t   's/CFLAGS=\".*\"/CFLAGS=\"'\"${STAGE1_CFLAGS}\"'\"/'
+      \t   /etc/portage/make.conf"
+    Name: run
+    PrependShell: true
+  From:
+    Scratch: true
+  Name: seedsys
+  Platform: ""
+  SourceCode: FROM scratch as seedsys
+- As: portage
+  BaseName: seedsys
+  Commands:
+  - CmdLine:
+    - mkdir /opt     && cd /opt     && git clone --depth 1 --branch master https://anongit.gentoo.org/git/proj/portage.git     &&
+      cd portage     && echo "[build_ext]" >>setup.cfg     && echo "portage-ext-modules=true"
+      >>setup.cfg     && python setup.py install     && cd /     && emerge --info     &&
+      PYTHON_TARGETS="python3_6" ebuild /usr/portage/sys-apps/portage/portage-2.3.51-r1.ebuild
+      package
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: seedsys
+  Name: portage
+  Platform: ""
+  SourceCode: FROM seedsys as portage
+- As: stage1
+  BaseName: seedsys
+  Commands:
+  - Chown: ""
+    From: portage
+    Name: copy
+    SourcesAndDest:
+    - /usr/portage/packages
+    - /usr/portage/packages
+  - CmdLine:
+    - tar -xvjf /usr/portage/packages/sys-apps/portage-2.3.51-r1.tbz2 -C /
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /st1     && emerge --root /st1 --sysroot /st1 --root-deps=rdeps -pv @system
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/cross-build-end
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - /emu/qemu-arm
+    - -execve
+    - /emu/qemu-arm
+    - /bin/bash
+    - -c
+    - /emu/xbuild.uninstall
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - /emu/qemu-arm
+    - -execve
+    - /emu/qemu-arm
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: seedsys
+  Name: stage1
+  Platform: ""
+  SourceCode: FROM seedsys as stage1

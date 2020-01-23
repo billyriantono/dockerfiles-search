@@ -1,29 +1,27 @@
-# Minecraft 1.8.7 Dockerfile - Example with notes
+FROM ubuntu:14.04.3
 
+MAINTAINER Chris Daish <chrisdaish@gmail.com>
 
-# Use the offical Debian Docker image with a specified version tag, Wheezy, so not all
-# versions of Debian images are downloaded.
-FROM debian:wheezy
+ENV DEBIAN_FRONTEND noninteractive
 
-MAINTAINER Michael Chiang <mchiang@docker.com>
+RUN useradd -m libreoffice; \
+    apt-get update \
+    && apt-get install -y --no-install-recommends wget \
+                                                  libdbus-glib-1-2 \
+                                                  libsm6 \
+                                                  openjdk-7-jre \
+    && rm -rf /var/lib/apt/lists/*
 
-# Use APT (Advanced Packaging Tool) built in the Linux distro to download Java, a dependency
-# to run Minecraft.
-RUN apt-get -y update
-RUN apt-get -y install openjdk-7-jre-headless wget
+ENV LIBREOFFICEPACKAGE LibreOffice_5.3.4_Linux_x86-64_deb.tar.gz
+ENV LIBREOFFICEDIR LibreOffice_5.3.4.2_Linux_x86-64_deb
 
-# Download Minecraft Server components
-RUN wget -q https://s3.amazonaws.com/Minecraft.Download/versions/1.8.7/minecraft_server.1.8.7.jar
+RUN wget -q http://mirror.switch.ch/ftp/mirror/tdf/libreoffice/stable/5.3.4/deb/x86_64/$LIBREOFFICEPACKAGE -O /tmp/$LIBREOFFICEPACKAGE \
+    && mkdir /tmp/LibreOffice \
+    && tar -xzf /tmp/$LIBREOFFICEPACKAGE -C /tmp/LibreOffice \
+    && dpkg -i /tmp/LibreOffice/$LIBREOFFICEDIR/DEBS/*.deb \
+    && rm -f /tmp/$LIBREOFFICEPACKAGE \
+    && rm -rf /tmp/LibreOffice
 
-# Sets working directory for the CMD instruction (also works for RUN, ENTRYPOINT commands)
-# Create mount point, and mark it as holding externally mounted volume
-WORKDIR /data
-VOLUME /data
+COPY start-libreoffice.sh /tmp/
 
-RUN echo $MINECRAFT_OPS > ops.json
-
-# Expose the container's network port: 25565 during runtime.
-EXPOSE 25565
-
-#Automatically accept Minecraft EULA, and start Minecraft server
-CMD echo eula=true > /data/eula.txt && java -jar /minecraft_server.1.8.7.jar
+ENTRYPOINT ["/tmp/start-libreoffice.sh"]

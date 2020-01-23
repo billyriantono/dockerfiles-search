@@ -1,30 +1,21 @@
-FROM java:openjdk-8-jre
+FROM microsoft/aspnetcore:2.0 AS base
+WORKDIR /app
+EXPOSE 80
 
-ENV DEBIAN_FRONTEND="noninteractive"
-ENV SCALA_VERSION="2.11"
-ENV KAFKA_VERSION="0.9.0.1"
-ENV KAFKA_HOME=/opt/kafka_"$SCALA_VERSION"-"$KAFKA_VERSION"
-ENV PATH="$PATH:$KAFKA_HOME/bin"
+FROM microsoft/aspnetcore-build:2.0 AS build
+WORKDIR /src
+COPY *.sln ./
+COPY ToDoApi/ToDoApi.csproj ToDoApi/
+RUN dotnet restore
+COPY . .
+WORKDIR /src/ToDoApi
+RUN dotnet build -c Release -o /app 
 
-# Expose default Kafka port
-EXPOSE 9092
+FROM build AS publish
+RUN dotnet publish -c Release -o /app -r linux-arm
 
-# Expose metrics via JMX
-EXPOSE 9999
-
-# Expose JMX RMI Port
-EXPOSE 9998
-
-# https://github.com/Yelp/dumb-init
-RUN curl -fLsS -o /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.0.2/dumb-init_1.0.2_amd64 && chmod +x /usr/local/bin/dumb-init
-
-# Install Kafka and dependencies
-RUN wget -q http://apache.mirrors.spacedump.net/kafka/"$KAFKA_VERSION"/kafka_"$SCALA_VERSION"-"$KAFKA_VERSION".tgz -O /tmp/kafka_"$SCALA_VERSION"-"$KAFKA_VERSION".tgz && \
-    tar xfz /tmp/kafka_"$SCALA_VERSION"-"$KAFKA_VERSION".tgz -C /opt && \
-    rm /tmp/kafka_"$SCALA_VERSION"-"$KAFKA_VERSION".tgz
-
-# Copy over init script
-COPY start-kafka.sh /usr/bin/start-kafka.sh
-
-ENTRYPOINT ["/usr/local/bin/dumb-init"]
-CMD ["/usr/bin/start-kafka.sh"]
+#FROM base AS final
+FROM frankfax/dotnet-docker-samples:Arm32
+WORKDIR /app
+COPY --from=publish /app .
+ENTRYPOINT ["dotnet", "ToDoApi.dll"]

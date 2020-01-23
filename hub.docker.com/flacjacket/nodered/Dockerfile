@@ -17,7 +17,7 @@ RUN apk add --no-cache \
 
 WORKDIR /usr/src/node-red/
 
-RUN  npm install node-red-contrib-home-assistant-websocket@0.16.3 \
+RUN  npm install node-red-contrib-home-assistant-websocket@0.19.4 \
   && npm install node-red-contrib-bigtimer@2.2.5
 
 FROM nodered/node-red-docker:0.20.8-slim-v8

@@ -1,28 +1,10 @@
-FROM java:8-jdk-alpine
+FROM alpine:3.10
 
-ENV WILDFLY_VERSION="10.0.0.Final" \
-    WILDFLY_UID="1000" \
-    WILDFLY_GID="1000" \
-    WILDFLY_USER="wildfly" \
-    WILDFLY_GROUP="wildfly" \
-    S6_VERSION="1.17.1.1" \
-    JBOSS_HOME="/opt/wildfly" \
-    JAVA_HOME="/usr/lib/jvm/default-jvm" \
-	JOLOKIA_VERSION="1.3.3"
+RUN wget --quiet -O /tmp/wrangler.tar.gz "https://github.com/cloudflare/wrangler/releases/download/v1.6.0/wrangler-v1.6.0-x86_64-unknown-linux-musl.tar.gz"; \
+    tar xzvf /tmp/wrangler.tar.gz -C /usr/local/bin wrangler-v1.6.0-x86_64-unknown-linux-musl/wrangler --strip-components 1; \
+    rm -f /tmp/wrangler.tar.gz; \
+    chmod +x /usr/local/bin/wrangler
 
-ONBUILD ADD jboss-cli /opt/jboss-cli/
-ONBUILD ADD jboss-modules $JBOSS_HOME/modules/
-ONBUILD ADD jboss-deployments $JBOSS_HOME/standalone/deployments/
-ONBUILD RUN /build.sh jboss-cli-only
-
-# Expose the ports we're interested in
-EXPOSE 8080 8009 9990
-
-ADD scripts /
-RUN chmod 755 /build.sh /run.sh
-RUN /build.sh
-
-ADD jolokia-web.xml $JBOSS_HOME/standalone/deployments/jolokia.war/WEB-INF/web.xml
-
-ENTRYPOINT [ "/init" ]
-CMD ["/run.sh"]
+COPY entrypoint.sh /
+ENTRYPOINT [ "/entrypoint.sh" ]
+CMD ["wrangler"]

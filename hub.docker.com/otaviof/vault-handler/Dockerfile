@@ -1,48 +1,28 @@
-#
-# Build
-#
+FROM node:12
 
-FROM golang:1.12-alpine AS builder
+WORKDIR /user/src/app
 
-ENV GO_DOMAIN="github.com" \
-    GO_GROUP="otaviof" \
-    GO_PROJECT="vault-handler"
+## Install and build steps separated and orderer by assumed change frequency to leverage Docker build caching
 
-ENV APP_DIR="${GOPATH}/src/${GO_DOMAIN}/${GO_GROUP}/${GO_PROJECT}"
+# Install server dependencies
+COPY --chown=node server/package.json server/package.json
+RUN cd server && npm install
 
-RUN apk --update add git make
-RUN go get -u github.com/golang/dep/cmd/dep
+# Install client dependencies
+COPY --chown=node client/package.json client/package.json
+RUN cd client && npm install
 
-RUN mkdir -v -p ${APP_DIR}
-WORKDIR ${APP_DIR}
+# Copy main package definition file
+COPY --chown=node:node package.json package.json
 
-COPY Makefile Gopkg.* ./
-RUN make clean clean-vendor bootstrap
+# Copy server source code and build it
+COPY --chown=node:node ./server ./server
+RUN cd server && npm run build
 
-COPY . ./
-RUN make
+# Copy client source code and build it
+COPY --chown=node:node ./client ./client
+RUN cd client && npm run build
 
-#
-# Run
-#
+ENV NODE_ENV="production"
 
-FROM golang:1.12-alpine
-
-ENV GO_DOMAIN="github.com" \
-    GO_GROUP="otaviof" \
-    GO_PROJECT="vault-handler"
-
-ENV APP_DIR="${GOPATH}/src/${GO_DOMAIN}/${GO_GROUP}/${GO_PROJECT}" \
-    USER_UID="1111" \
-    VAULT_HANDLER_OUTPUT_DIR="/var/lib/vault-handler"
-
-RUN apk --update add bash
-COPY --from=builder ${APP_DIR}/build/${GO_PROJECT} /usr/local/bin/${GO_PROJECT}
-
-RUN adduser -h ${VAULT_HANDLER_OUTPUT_DIR} -D -u ${USER_UID} ${GO_PROJECT}
-USER ${USER_UID}
-
-VOLUME ${VAULT_HANDLER_OUTPUT_DIR}
-WORKDIR ${VAULT_HANDLER_OUTPUT_DIR}
-
-ENTRYPOINT [ "/usr/local/bin/vault-handler" ]
+CMD ["npm", "start"]

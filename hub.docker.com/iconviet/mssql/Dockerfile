@@ -1,2 +1,2 @@
-FROM agiper/mssql:latest
+FROM agiper/mssql
 MAINTAINER Tom Nuen <tomnuen@iconviet.io>

@@ -1,0 +1,70 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: mcr.microsoft.com/dotnet/core-nightly/sdk:2.2
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - src
+  - CmdLine:
+    - dotnet build src/IssueMl.Web
+    Name: run
+    PrependShell: true
+  From:
+    Image: mcr.microsoft.com/dotnet/core-nightly/sdk:2.2
+  Name: build
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core-nightly/sdk:2.2 as build
+- As: publish
+  BaseName: build
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - dotnet publish src/IssueMl.Web -c Release -o /app -r linux-x64
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build
+  Name: publish
+  Platform: ""
+  SourceCode: FROM build as publish
+- As: runtime
+  BaseName: mcr.microsoft.com/dotnet/core-nightly/runtime:2.2
+  Commands:
+  - Env:
+    - Key: DOTNET_USE_POLLING_FILE_WATCHER
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: Kestrel__Certificates__Default__Path
+      Value: /app/Cert/cert-aspnetcore.pfx
+    Name: env
+  - Env:
+    - Key: Kestrel__Certificates__Default__Password
+      Value: "1234"
+    Name: env
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: publish
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - CmdLine:
+    - dotnet IssueMl.Web.dll --urls https://+:443
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: mcr.microsoft.com/dotnet/core-nightly/runtime:2.2
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM mcr.microsoft.com/dotnet/core-nightly/runtime:2.2 AS runtime

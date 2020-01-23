@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2018-2019 Junpei Kawamoto
+# Copyright (C) 2018-2020 Junpei Kawamoto
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 #
-FROM fluent/fluentd-kubernetes-daemonset:v1.7.4-debian-elasticsearch7-1.0
+FROM fluent/fluentd-kubernetes-daemonset:v1-debian-elasticsearch
 LABEL maintainer="Junpei Kawamoto <kawamoto.junpei@gmail.com>"
 
 RUN gem install -N \

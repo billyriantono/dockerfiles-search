@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: debian:latest
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get upgrade -y && apt-get install -y curl bzip2 build-essential
+      libssl-dev
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:latest
+  Name: base
+  Platform: ""
+  SourceCode: FROM debian:latest AS BASE
+- As: nmap
+  BaseName: BASE
+  Commands:
+  - Key: NMAP_VERSION
+    Name: arg
+    Value: '"7.70"'
+  - CmdLine:
+    - curl -vs -o "nmap-${NMAP_VERSION}.tar.bz2" "https://nmap.org/dist/nmap-7.70.tar.bz2"
+      &&     bzip2 -cd "nmap-${NMAP_VERSION}.tar.bz2" | tar xvf - &&     cd "nmap-${NMAP_VERSION}"
+      &&     ./configure &&     make &&     su root &&     make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: BASE
+  Name: nmap
+  Platform: ""
+  SourceCode: FROM BASE as NMAP
+- As: vuldb
+  BaseName: NMAP
+  Commands:
+  - Key: VULDB_VERSION
+    Name: arg
+    Value: '"2.0"'
+  - CmdLine:
+    - mkdir -p /usr/local/share/nmap/scripts/vulscan/ &&     curl -vs -o "/tmp/vulscan.tar.gz"     "https://www.computec.ch/projekte/vulscan/download/nmap_nse_vulscan-${VULDB_VERSION}.tar.gz"
+      &&     tar xzvf "/tmp/vulscan.tar.gz" -C "/usr/local/share/nmap/scripts/" &&     rm
+      "/tmp/vulscan.tar.gz"
+    Name: run
+    PrependShell: true
+  From:
+    Image: NMAP
+  Name: vuldb
+  Platform: ""
+  SourceCode: FROM NMAP AS VULDB
+- As: gobuilder
+  BaseName: asecurityteam/sdcli:v1
+  Commands:
+  - CmdLine:
+    - mkdir -p /go/src/github.com/asecurityteam/nmap-scaner
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/asecurityteam/nmap-scanner
+  - Chown: sdcli:sdcli
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - GO111MODULE=on CGO_ENABLED=0 GOOS=linux go build -a -o /opt/app main.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: asecurityteam/sdcli:v1
+  Name: gobuilder
+  Platform: ""
+  SourceCode: FROM asecurityteam/sdcli:v1 AS GOBUILDER
+- As: runtime
+  BaseName: VULDB
+  Commands:
+  - Chown: ""
+    From: GOBUILDER
+    Name: copy
+    SourcesAndDest:
+    - /opt/app
+    - /opt/app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/*
+    - /usr/local/share/nmap/scripts/custom/
+  - CmdLine:
+    - /opt/app
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: VULDB
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM VULDB AS RUNTIME

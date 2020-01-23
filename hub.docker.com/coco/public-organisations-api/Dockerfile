@@ -1,6 +1,6 @@
-FROM golang:1.12-alpine
+FROM golang:1.10-alpine
 
-ENV PROJECT=public-organisations-api
+ENV PROJECT=coco-elb-dns-registrator
 COPY . /${PROJECT}-sources/
 
 RUN apk --no-cache --virtual .build-dependencies add git curl \
@@ -21,11 +21,11 @@ RUN apk --no-cache --virtual .build-dependencies add git curl \
   && echo "Fetching dependencies..." \
   && curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh \
   && $GOPATH/bin/dep ensure -vendor-only \
-  && go build -ldflags="${LDFLAGS}" \
+  && CGO_ENABLED=0 go build -a -installsuffix cgo -ldflags="${LDFLAGS}" \
   && mv ${PROJECT} /${PROJECT} \
   && apk del .build-dependencies \
   && rm -rf $GOPATH /var/cache/apk/*
 
 WORKDIR /
 
-CMD [ "/public-organisations-api" ]
+CMD [ "/coco-elb-dns-registrator" ]

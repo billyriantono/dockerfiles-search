@@ -1,0 +1,66 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.13
+  Commands:
+  - Name: workdir
+    Path: /go/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - CGO_ENABLED=0 go build -v -ldflags="-s -w -X github.com/coredns/coredns/coremain.GitCommit=$(shell
+      git describe --dirty --always)" -o coredns
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.13 as builder
+- As: certs
+  BaseName: debian:stable-slim
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get -uy upgrade
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y install ca-certificates && update-ca-certificates
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stable-slim
+  Name: certs
+  Platform: ""
+  SourceCode: FROM debian:stable-slim as certs
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: certs
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs
+    - /etc/ssl/certs
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/coredns
+    - /coredns
+  - Name: expose
+    Ports:
+    - "53"
+    - 53/udp
+  - CmdLine:
+    - /coredns
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

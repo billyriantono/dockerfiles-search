@@ -1,0 +1,170 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: ubuntu:xenial
+  Commands:
+  - CmdLine:
+    - apt-get -y update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y install software-properties-common curl wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update -qq
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get dist-upgrade -qqy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install --yes git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install --yes sudo
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y autoconf automake libtool curl make g++ unzip build-essential
+      libsnappy-dev zlib1g-dev libbz2-dev
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:xenial
+  Name: base
+  Platform: ""
+  SourceCode: FROM ubuntu:xenial AS base
+- As: goinstall
+  BaseName: base
+  Commands:
+  - Key: GO_VERSION
+    Name: arg
+    Value: 1.10.8
+  - CmdLine:
+    - mkdir -p /tmp/golang     && cd /tmp/golang     && wget --quiet https://studygolang.com/dl/golang/go${GO_VERSION}.linux-amd64.tar.gz     &&
+      tar -zvxf go${GO_VERSION}.linux-amd64.tar.gz
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: goinstall
+  Platform: ""
+  SourceCode: FROM base AS goinstall
+- As: buildbase
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: GOROOT
+      Value: /opt/go
+    Name: env
+  - Env:
+    - Key: GOPATH
+      Value: /opt/gopath
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:${GOROOT}/bin:${GOPATH}/bin
+    Name: env
+  - Chown: ""
+    From: goinstall
+    Name: copy
+    SourcesAndDest:
+    - /tmp/golang
+    - /opt/
+  - CmdLine:
+    - mkdir -p /opt/gopath && chmod a+rw -R ${GOPATH}
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: buildbase
+  Platform: ""
+  SourceCode: FROM base AS buildbase
+- As: dbinstall
+  BaseName: base
+  Commands:
+  - Key: ROCKSDB_VERSION
+    Name: arg
+    Value: 5.17.2
+  - CmdLine:
+    - mkdir -p /tmp/rocksdb     && cd /tmp/rocksdb     && wget https://github.com/facebook/rocksdb/archive/v${ROCKSDB_VERSION}.tar.gz     &&
+      tar -zxvf v${ROCKSDB_VERSION}.tar.gz     && cd rocksdb-${ROCKSDB_VERSION}     &&
+      PORTABLE=1 make shared_lib -j2     && INSTALL_PATH=/tmp/rocksdbinst make install-shared
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: dbinstall
+  Platform: ""
+  SourceCode: FROM base AS dbinstall
+- As: coderepo
+  BaseName: buildbase
+  Commands:
+  - CmdLine:
+    - go get -u github.com/golang/protobuf/protoc-gen-go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${GOPATH}/src/google.golang.org     && cd ${GOPATH}/src/google.golang.org     &&
+      git clone https://github.com/googleapis/go-genproto genproto     && git clone
+      https://github.com/grpc/grpc-go.git grpc     && cd grpc     && git checkout
+      v1.18.1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${GOPATH}/src/golang.org/x     && cd ${GOPATH}/src/golang.org/x     &&
+      git clone https://github.com/golang/net.git     && git clone https://github.com/golang/sys.git     &&
+      git clone https://github.com/golang/text.git     && git clone https://github.com/golang/crypto.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf $(find ${GOPATH}/src -name .git -type d)
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 2
+      Named: buildbase
+  Name: coderepo
+  Platform: ""
+  SourceCode: FROM buildbase AS coderepo
+- BaseName: buildbase
+  Commands:
+  - Chown: ""
+    From: dbinstall
+    Name: copy
+    SourcesAndDest:
+    - /tmp/rocksdbinst
+    - /usr/local
+  - CmdLine:
+    - ldconfig -v
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: coderepo
+    Name: copy
+    SourcesAndDest:
+    - ${GOPATH}/src
+    - ${GOPATH}/src/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /
+    - ${GOPATH}/src/github.com/abchain/fabric/
+  From:
+    Stage:
+      Index: 2
+      Named: buildbase
+  Name: ""
+  Platform: ""
+  SourceCode: FROM buildbase

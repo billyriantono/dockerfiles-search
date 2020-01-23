@@ -1,53 +1,33 @@
-############################################################
-# Dockerfile to build CentOS,Nginx,PHP-fpm installed  Container
-# Based on CentOS
-############################################################
+FROM ubuntu
+MAINTAINER Eric Windisch <ewindisch@docker.com>
 
-# Set the base image to CentOS
-FROM centos:centos6
+RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 36A1D7869245C8950F966E92D8576A8BA88D21E9
 
-# File Author / Maintainer
-MAINTAINER "Henry Snow" <henry.snow@nielsen.com>
+RUN sh -c "echo deb http://get.docker.io/ubuntu docker main\
+    > /etc/apt/sources.list.d/docker.list"
 
-# Clean up yum repos to save spaces
-RUN yum update -y >/dev/null
+RUN apt-get update; \
+    apt-get install -qqy lxc-docker python-pip apparmor \
+                         socat; \
+    apt-get clean
+RUN pip install -U fig
 
-# Install epel repos
-RUN rpm -Uvh http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm
-RUN rpm -Uvh http://rpms.famillecollet.com/enterprise/remi-release-6.rpm
+RUN mkdir -p /opt/dind
+COPY wrapdocker /opt/dind/
+COPY docker-wrapper /opt/dind/
+COPY run-fig /opt/dind/
 
-# Installing epel
-RUN yum -y install epel-release
+RUN ln -s /opt/dind/docker-wrapper /opt/dind/docker
+RUN ln -s /opt/dind/docker-wrapper /opt/dind/fig
 
-# Install Nginx and php-fpm and useful tool
-RUN yum --enablerepo=remi install -y wget nginx php-fpm php-common php-mysql php-cli php-ldap php-mbstring \
-php-gd php-pdo php-xml php-soap vim java
+# Add /opt/dind to PATH
+ENV PATH /opt/dind:$PATH
 
-# Installing supervisor (watch dog)
-RUN wget https://svn.apache.org/repos/asf/oodt/tools/oodtsite.publisher/trunk/distribute_setup.py
-RUN python distribute_setup.py
-RUN yum install -y python-setuptools
-RUN easy_install pip
-RUN pip install distribute --upgrade
-RUN pip install supervisor
-RUN touch /var/log/php5-fpm.log
+RUN mkdir -p /opt/figapp
 
-# Adding the configuration file of the nginx
-ADD nginx.conf /etc/nginx/nginx.conf
-ADD default.conf /etc/nginx/conf.d/default.conf
+ONBUILD WORKDIR /opt/figapp
+ONBUILD COPY fig.yml /opt/figapp/
 
-# Adding the configuration file of the Supervisor
-ADD supervisord.conf /etc/
-
-# Adding the default file
-ADD index.php /var/www/index.php
-
-# Setup Volume
-VOLUME ["/var/www/", "/etc/nginx/conf.d/"]
-
-# Set the port to 80 && 443
-EXPOSE 80
-EXPOSE 443
-
-# Executing supervisord  (-n, --nodaemon Run supervisord in the foreground.)
-CMD /usr/bin/supervisord -c /etc/supervisord.conf
+COPY README.md /opt/dind/README.md
+WORKDIR /opt/figapp
+ENTRYPOINT ["/opt/dind/run-fig"]

@@ -1,0 +1,118 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: ubuntu:16.04
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get --no-install-recommends --yes install         ca-certificates         cmake         g++         make         pkg-config         graphviz         doxygen         git         curl         libtool-bin         autoconf         automake         libunbound-dev         libminiupnpc-dev         libldns-dev         libboost-all-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/local
+  - Key: OPENSSL_VERSION
+    Name: arg
+    Value: 1.0.2n
+  - Key: OPENSSL_HASH
+    Name: arg
+    Value: 370babb75f278c39e0c50e8c4e7493bc0f18db6867478341a832a982fd15a8fe
+  - CmdLine:
+    - curl -s -O https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz     &&
+      echo "${OPENSSL_HASH} openssl-${OPENSSL_VERSION}.tar.gz" | sha256sum -c     &&
+      tar -xzf openssl-${OPENSSL_VERSION}.tar.gz     && cd openssl-${OPENSSL_VERSION}     &&
+      ./Configure linux-x86_64 no-shared --static -fPIC     && make build_crypto build_ssl     &&
+      make install
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: OPENSSL_ROOT_DIR
+      Value: /usr/local/openssl-${OPENSSL_VERSION}
+    Name: env
+  - Key: READLINE_VERSION
+    Name: arg
+    Value: "7.0"
+  - Key: READLINE_HASH
+    Name: arg
+    Value: 750d437185286f40a369e1e4f4764eda932b9459b5ec9a731628393dd3d32334
+  - CmdLine:
+    - curl -s -O https://ftp.gnu.org/gnu/readline/readline-${READLINE_VERSION}.tar.gz     &&
+      echo "${READLINE_HASH} readline-${READLINE_VERSION}.tar.gz" | sha256sum -c     &&
+      tar -xzf readline-${READLINE_VERSION}.tar.gz     && cd readline-${READLINE_VERSION}     &&
+      CFLAGS="-fPIC" CXXFLAGS="-fPIC" ./configure     && make     && make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Key: NPROC
+    Name: arg
+    Value: null
+  - CmdLine:
+    - rm -rf build &&     if [ -z "$NPROC" ];then make -j$(nproc) release-static;else
+      make -j$NPROC release-static;fi
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.04
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04 as builder
+- BaseName: ubuntu:16.04
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get --no-install-recommends --yes install ca-certificates
+      &&     apt-get clean &&     rm -rf /var/lib/apt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/build/release/bin/*
+    - /usr/local/bin/
+  - Name: volume
+    Volumes:
+    - /root/.graft
+  - Name: volume
+    Volumes:
+    - /wallet
+  - Env:
+    - Key: LOG_LEVEL
+      Value: "0"
+    Name: env
+  - Env:
+    - Key: P2P_BIND_IP
+      Value: 0.0.0.0
+    Name: env
+  - Env:
+    - Key: P2P_BIND_PORT
+      Value: "18080"
+    Name: env
+  - Env:
+    - Key: RPC_BIND_IP
+      Value: 127.0.0.1
+    Name: env
+  - Env:
+    - Key: RPC_BIND_PORT
+      Value: "18081"
+    Name: env
+  - Name: expose
+    Ports:
+    - "18080"
+  - Name: expose
+    Ports:
+    - "18081"
+  - CmdLine:
+    - graftnoded --log-level=$LOG_LEVEL --p2p-bind-ip=$P2P_BIND_IP --p2p-bind-port=$P2P_BIND_PORT
+      --rpc-bind-ip=$RPC_BIND_IP --rpc-bind-port=$RPC_BIND_PORT
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:16.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04

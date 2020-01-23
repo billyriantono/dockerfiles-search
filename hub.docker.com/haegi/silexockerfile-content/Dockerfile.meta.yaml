@@ -1,0 +1,128 @@
+MetaArgs: null
+Stages:
+- BaseName: nginx:1.15.2-alpine
+  Commands:
+  - Maintainer: Hacklab  sysadmin@hacklab.com.br
+    Name: maintainer
+  - Env:
+    - Key: DEBUG
+      Value: "false"
+    - Key: RAP_DEBUG
+      Value: '"info"'
+    Name: env
+  - Key: VERSION_RANCHER_GEN
+    Name: arg
+    Value: '"artifacts/master"'
+  - CmdLine:
+    - "apk add --no-cache --virtual .build-deps         gcc         libc-dev         make
+      \        openssl-dev         pcre-dev         zlib-dev         linux-headers
+      \        curl         gnupg         libxslt-dev         gd-dev         perl-dev
+      \    && apk add --no-cache --virtual .libmodsecurity-deps         pcre-dev         libxml2-dev
+      \        git         libtool         automake         autoconf         g++         flex
+      \        bison        yajl-dev     && apk add --no-cache \tyajl         libstdc++
+      \    && mkdir -p /tmp/ModSecurity"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/ModSecurity
+  - CmdLine:
+    - echo "Installing ModSec Library" &&     git clone -b v3/master --single-branch
+      https://github.com/SpiderLabs/ModSecurity . &&     git submodule init &&     git
+      submodule update &&     ./build.sh &&     ./configure       --with-http_geoip_module=dynamic       --with-http_v2_module       --with-threads       --with-stream       --with-stream_ssl_module       --with-stream_ssl_preread_module       --with-stream_realip_module       --with-stream_geoip_module=dynamic       --with-http_slice_module       --with-mail       --with-mail_ssl_module       --with-http_ssl_module
+      &&     make && make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - echo 'Installing ModSec - Nginx connector' &&     git clone --depth 1 https://github.com/SpiderLabs/ModSecurity-nginx.git
+      &&     wget http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz &&     tar
+      zxvf nginx-$NGINX_VERSION.tar.gz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/nginx-$NGINX_VERSION
+  - CmdLine:
+    - ./configure --with-compat --add-dynamic-module=../ModSecurity-nginx &&     make
+      modules &&     cp objs/ngx_http_modsecurity_module.so /etc/nginx/modules
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Begin installing ModSec OWASP Rules" &&     git clone -b v3.0/master https://github.com/SpiderLabs/owasp-modsecurity-crs
+      &&     mv owasp-modsecurity-crs/ /usr/local/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx/nginx.conf
+    - /etc/nginx/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx/modsec/
+    - /etc/nginx/modsec/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - owasp/
+    - /usr/local/owasp-modsecurity-crs/
+  - CmdLine:
+    - chown -R nginx:nginx /usr/share/nginx /etc/nginx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk del .build-deps &&     apk del .libmodsecurity-deps &&     rm -rf /tmp/ModSecurity
+      &&     rm -rf /tmp/ModSecurity-nginx &&     rm -rf /tmp/nginx-$NGINX_VERSION.tar.gz
+      &&     rm -rf /tmp/nginx-$NGINX_VERSION &&     echo "ModSecurty Installed"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache nano ca-certificates unzip wget certbot bash openssl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/jwilder/forego/releases/download/v0.16.1/forego
+    - /usr/local/bin/forego
+  - CmdLine:
+    - "wget \"https://gitlab.com/adi90x/rancher-gen-rap/builds/$VERSION_RANCHER_GEN/download?job=compile-go\"
+      -O /tmp/rancher-gen-rap.zip \t&& unzip /tmp/rancher-gen-rap.zip -d /usr/local/bin
+      \t&& chmod +x /usr/local/bin/rancher-gen \t&& chmod u+x /usr/local/bin/forego
+      \t&& rm -f /tmp/rancher-gen-rap.zip"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /app/
+    - /app/
+  - Name: workdir
+    Path: /app/
+  - CmdLine:
+    - chmod +x /app/letsencrypt.sh     && mkdir -p /etc/nginx/certs /etc/nginx/vhost.d
+      /etc/nginx/conf.d /usr/share/nginx/html /etc/letsencrypt     && echo "daemon
+      off;" >> /etc/nginx/nginx.conf     && chmod u+x /app/remove
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    - /app/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - forego
+    - start
+    - -r
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginx:1.15.2-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx:1.15.2-alpine

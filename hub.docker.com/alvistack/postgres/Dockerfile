@@ -19,7 +19,7 @@ ENV LC_ALL "en_US.utf8"
 ENV SHELL  "/bin/bash"
 ENV TZ     "UTC"
 
-ENV POSTGRES_RELEASE "11"
+ENV POSTGRES_RELEASE "12"
 ENV PGDATA           "/var/lib/postgresql/data"
 ENV PATH             "$PATH:/usr/lib/postgresql/$POSTGRES_RELEASE/bin"
 
@@ -28,7 +28,7 @@ WORKDIR $PGDATA
 
 EXPOSE 5432
 
-ENTRYPOINT [ "dumb-init", "--", "docker-entrypoint.sh" ]
+ENTRYPOINT [ "tini", "-g", "--", "docker-entrypoint.sh" ]
 CMD        [ "postgres" ]
 
 # Hotfix for en_US.utf8 locale

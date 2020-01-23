@@ -1,0 +1,78 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:3.11.2
+  Commands:
+  - CmdLine:
+    - apk add --no-cache bash git go build-base
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build/go-init
+  - Env:
+    - Key: GOPATH
+      Value: /build/go-init/gospace
+    Name: env
+  - CmdLine:
+    - go get -u github.com/betterplace/go-init
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.11.2
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.11.2 AS builder
+- As: runner
+  BaseName: node:13-alpine3.11
+  Commands:
+  - CmdLine:
+    - apk add --no-cache bash ca-certificates
+    Name: run
+    PrependShell: true
+  - Key: APP_DIR
+    Name: arg
+    Value: /app
+  - CmdLine:
+    - adduser -h ${APP_DIR} -s /bin/bash -D appuser
+    Name: run
+    PrependShell: true
+  - Chown: appuser:appuser
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/go-init/gospace/bin/go-init
+    - /opt/bin/
+  - Env:
+    - Key: PATH
+      Value: /opt/bin:${PATH}
+    Name: env
+  - Name: workdir
+    Path: ${APP_DIR}
+  - Chown: appuser:appuser
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ${APP_DIR}
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - /usr/local/bin/yarn --network-timeout 1000000 --network-concurrency 4
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - patch -p0 < ws.patch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /opt/bin/go-init
+    - -main
+    - ./start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: node:13-alpine3.11
+  Name: runner
+  Platform: ""
+  SourceCode: FROM node:13-alpine3.11 AS runner

@@ -1,12 +1,12 @@
-FROM debian:jessie
-MAINTAINER Alan Franzoni <username@franzoni.eu>
-COPY 80-acquire-retries /etc/apt/apt.conf.d/
-RUN apt-get update && apt-get -y install apt-transport-https curl
-RUN curl https://www.franzoni.eu/keys/D401AB61.txt | apt-key add -
-RUN echo "deb https://dl.bintray.com/alanfranz/apt-current-v1-debian-jessie jessie main" > /etc/apt/sources.list.d/apt-current-v1.list
-RUN apt-get -y update 
-RUN apt-get -y install apt-current
-RUN /bin/echo -e "MAXDELTA=3600\nCLEANUP_DOWNLOADED_PACKAGES=\"true\"\nCLEANUP_DOWNLOADED_LISTS=\"true\"\n" > /etc/apt-current.conf
-RUN apt-get-current -y install rubygems-integration ruby-dev ruby build-essential rsync
-RUN apt-get-current -y dist-upgrade
-RUN gem install fpm -v 1.11.0
+FROM ruby:2.2.3
+
+MAINTAINER urasin <urasin2012@gmail.com>
+
+ADD http://dev.mysql.com/get/mysql-apt-config_0.1.5-2ubuntu14.04_all.deb /tmp/
+RUN DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/mysql-apt-config_0.1.5-2ubuntu14.04_all.deb
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y install mysql-server
+
+RUN apt-get -y update && \
+    apt-get install -y python-yaml python-jinja2 python-httplib2 python-keyczar python-paramiko python-setuptools python-pkg-resources git python-pip nodejs
+RUN pip install ansible
+ENTRYPOINT /etc/init.d/mysql start && /bin/bash

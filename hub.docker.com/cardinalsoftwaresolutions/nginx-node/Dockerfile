@@ -1,4 +1,12 @@
-FROM nginx:alpine
+#
+# Dockerfile for py-kms
+#
 
-RUN apk add --update nodejs=8.9.3-r0 git
-RUN node -v && npm -v && git --version
+FROM python:2-alpine
+MAINTAINER Samuel X. S. Tseng <i@xlibc.me>
+
+ADD ./kms /kms
+
+EXPOSE 1688
+
+CMD ["python", "/kms/server.py"]

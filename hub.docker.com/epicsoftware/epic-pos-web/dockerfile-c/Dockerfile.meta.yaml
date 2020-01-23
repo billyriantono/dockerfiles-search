@@ -1,0 +1,154 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stretch
+  Commands:
+  - Maintainer: Petr Michalec "<epcim@apealive.net>"
+    Name: maintainer
+  - Key: salt_version
+    Name: arg
+    Value: '"git develop"'
+  - Key: salt_formula_revision
+    Name: arg
+    Value: '"nightly"'
+  - Key: salt_ext_pillar
+    Name: arg
+    Value: '""'
+  - Env:
+    - Key: SALT_BOOTSTRAP_OPTS
+      Value: '"-dX ${salt_version}"'
+    Name: env
+  - Env:
+    - Key: SALT_EXT_PILLAR
+      Value: $salt_ext_pillar
+    Name: env
+  - Env:
+    - Key: SALT_FORMULA_REVISION
+      Value: $salt_formula_revision
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Env:
+    - Key: LANGUAGE
+      Value: $LANG
+    Name: env
+  - Env:
+    - Key: TZ
+      Value: Etc/UTC
+    Name: env
+  - CmdLine:
+    - echo "Layer prerequisites and common packages"  && apt-get update -q  && apt-get
+      upgrade -qy  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends       gpgv       wget       curl       git       sudo       python-pip       python-wheel       python-setuptools       python-dev              vim-tiny       gcc       zlib1g-dev       apt-transport-https       ca-certificates       tzdata       netcat   &&
+      pip install ruamel.yaml   && apt-get clean   && rm -rf /var/lib/apt/lists/*
+      /tmp/* /var/tmp/* /root/.cache /home/*/.cache
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Layer wheelhouse" &&    git clone https://github.com/epcim/wheelhouse.git
+      /wh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Layer salt" &&    mkdir -p /var/run/salt /var/cache/salt /var/log/salt
+      /etc/salt/pki/master/minions &&    curl -L https://bootstrap.saltstack.com |
+      $SUDO sh -s -- -M ${SALT_BOOTSTRAP_OPTS} &&    useradd --system salt &&    chown
+      -R salt:salt /etc/salt /var/cache/salt /var/log/salt /var/run/salt &&    apt-get
+      clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: APT_REPOSITORY
+      Value: '"deb http://apt.mirantis.com/xenial ${salt_formula_revision} salt"'
+    Name: env
+  - Env:
+    - Key: APT_REPOSITORY_GPG
+      Value: '"http://apt.mirantis.com/public.gpg"'
+    Name: env
+  - CmdLine:
+    - echo "Layer salt-formulas" &&    echo "$APT_REPOSITORY" | tee /etc/apt/sources.list.d/salt-formulas.list
+      >/dev/null &&    curl -sL $APT_REPOSITORY_GPG | $SUDO apt-key add - &&    apt-get
+      -qq update &&    DEBIAN_FRONTEND=noninteractive apt-get install -o Dpkg::Options::="--force-confdef"
+      -o Dpkg::Options::="--force-confold" salt-formula-* -y --fix-missing ;    mkdir
+      -p /srv/salt/env/dev ;    ln -s /usr/share/salt-formulas/env /srv/salt/env/prd
+      ;    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Layer reclass" &&    mkdir -p /etc/reclass /srv/salt/reclass/classes/system
+      &&    git clone https://github.com/Mirantis/reclass-system-salt-model /srv/salt/reclass/classes/system
+      &&    pip install --install-option="--prefix=" --upgrade --force-reinstall -I       git+https://github.com/salt-formulas/reclass.git@develop
+      &&    ln -s /usr/share/salt-formulas/reclass/service /srv/salt/reclass/classes/service
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "Layer saltclass" &&    mkdir -p mkdir /srv/salt/saltclass/classes/system
+      &&    git clone https://github.com/epcim/saltclass-system /srv/salt/saltclass/classes/system
+      &&    cp -a /usr/share/salt-formulas/reclass /usr/share/salt-formulas/saltclass
+      &&    for i in $(grep -r -e '^applications:' -e '^parameters:' -l ${SALT_CLASS_SERVICE:-/usr/share/salt-formulas/saltclass/service});
+      do       sed -i 's/applications:/states:/g;s/parameters:/pillars:/g' $i;     done
+      &&    ln -s /usr/share/salt-formulas/saltclass/service /srv/salt/saltclass/classes/service
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TINI_VERSION
+      Value: 0.16.1
+    Name: env
+  - Env:
+    - Key: TINI_SHA
+      Value: 5e01734c8b2e6429a1ebcc67e2d86d3bb0c4574dd7819a0aff2dca784580e040
+    Name: env
+  - CmdLine:
+    - curl -s -S -L "https://github.com/krallin/tini/releases/download/v${TINI_VERSION}/tini-static-amd64"
+      -o /bin/tini && chmod +x /bin/tini   && echo "$TINI_SHA  /bin/tini" | sha256sum
+      -c -
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - '[''/etc/salt/pki'''
+    - '''/srv/salt/env'''
+    - '''/srv/salt/pillar'''
+    - '''/srv/salt/reclass'''
+    - '''/srv/salt/saltclass'']'
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/reclass/reclass-config.yml
+    - /etc/reclass/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/salt/master.conf
+    - /etc/salt/master.d/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/salt/saltclass.conf
+    - /tmp/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/salt/reclass.conf
+    - /tmp/
+  - Name: expose
+    Ports:
+    - "4505"
+    - "4506"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - /bin/tini
+    - --
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch

@@ -1,34 +1,47 @@
-FROM docker:dind
+FROM ubuntu:16.04
 
-ENV BOWTIE_BIN /bowtie/bin
+# Install dependencies
+RUN apt-get update && apt-get install -y wget curl git
+RUN apt-get update && apt-get install -y software-properties-common python-software-properties
+RUN add-apt-repository ppa:ubuntugis/ppa
+RUN apt-get update && apt-get install -y gdal-bin libgdal-dev python-gdal
 
-RUN apk add --no-cache \
-    # Core Dependencies
-    gcc git make musl-dev curl bash openssh libffi-dev openssl-dev \
-    # Python (2 + 3) NodeJS + Yarn
-    python3 python3-dev python2-dev py-pip nodejs npm yarn \
-    # Ensure pip3 and requests are latest versions
-    && pip3 install --upgrade pip \
-    && pip3 install --upgrade --user urllib3==1.24.3 PyYAML==3.13 \
-    # Ensure npm is latest version
-    && npm install --global npm \
-    # Installl awscli and docker-compose using pip3
-    && pip3 install awscli docker-compose \
-    # Ensure BOWTIE_BIN directory exists
-    && mkdir -p $BOWTIE_BIN \
-    # Download CodeClimate linux test-reporter
-    && curl -Ls -o $BOWTIE_BIN/cc-test-reporter https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 \
-    # Ensure downloaded test-reporter is executable
-    && chmod +x $BOWTIE_BIN/cc-test-reporter
+# Install Go
+RUN apt-get update && apt-get install -y --no-install-recommends \
+		g++ \
+		gcc \
+		libc6-dev \
+		make \
+		pkg-config \
+	&& rm -rf /var/lib/apt/lists/*
 
-COPY bin/* $BOWTIE_BIN/
+ENV GOLANG_VERSION 1.7.5
+ENV GOLANG_DOWNLOAD_URL https://golang.org/dl/go$GOLANG_VERSION.linux-amd64.tar.gz
+ENV GOLANG_DOWNLOAD_SHA256 2e4dd6c44f0693bef4e7b46cc701513d74c3cc44f2419bf519d7868b12931ac3
 
-RUN chmod +x $BOWTIE_BIN/*
+RUN curl -fsSL "$GOLANG_DOWNLOAD_URL" -o golang.tar.gz \
+	&& echo "$GOLANG_DOWNLOAD_SHA256  golang.tar.gz" | sha256sum -c - \
+	&& tar -C /usr/local -xzf golang.tar.gz \
+	&& rm golang.tar.gz
 
-ENV PATH $BOWTIE_BIN:$PATH
+ENV GOPATH /go
+ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 
-COPY entrypoint.sh /
+RUN mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 777 "$GOPATH"
 
-ENTRYPOINT [ "/entrypoint.sh" ]
+# Install Tyler
+RUN touch .env
 
-CMD [ "bash" ]
+ENV PKG_CONFIG_PATH /go/src/github.com/botlink/botlink-tyler/vendor/github.com/botlink/gdal
+ENV CGO_CFLAGS -I/go/src/github.com/botlink/botlink-tyler/vendor/github.com/botlink/gdal
+
+COPY . /go/src/github.com/botlink/botlink-tyler
+WORKDIR /go/src/github.com/botlink/botlink-tyler
+
+RUN go get github.com/joho/godotenv/cmd/godotenv
+
+EXPOSE 3000
+
+RUN go build
+
+CMD godotenv -f /go/src/github.com/botlink/botlink-tyler/.env ./botlink-tyler

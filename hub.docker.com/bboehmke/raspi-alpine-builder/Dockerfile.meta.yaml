@@ -1,0 +1,138 @@
+MetaArgs: null
+Stages:
+- As: build_base
+  BaseName: debian:buster
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install -y build-essential git wget bison flex
+      gcc-arm-linux-gnueabi device-tree-compiler bc
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:buster
+  Name: build_base
+  Platform: ""
+  SourceCode: FROM debian:buster AS build_base
+- As: uboot
+  BaseName: build_base
+  Commands:
+  - CmdLine:
+    - mkdir /uboot_build/ &&     mkdir /uboot/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /uboot_build/
+  - CmdLine:
+    - wget ftp://ftp.denx.de/pub/u-boot/u-boot-2019.10.tar.bz2 &&     tar -xjf u-boot-2019.10.tar.bz2
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /uboot_build/u-boot-2019.10/
+  - CmdLine:
+    - make CROSS_COMPILE=arm-linux-gnueabi- distclean &&     make CROSS_COMPILE=arm-linux-gnueabi-
+      rpi_defconfig &&     make CROSS_COMPILE=arm-linux-gnueabi- -j8 u-boot.bin &&     cp
+      u-boot.bin /uboot/u-boot_rpi1.bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make CROSS_COMPILE=arm-linux-gnueabi- distclean &&     make CROSS_COMPILE=arm-linux-gnueabi-
+      rpi_0_w_defconfig &&     make CROSS_COMPILE=arm-linux-gnueabi- -j8 u-boot.bin
+      &&     cp u-boot.bin /uboot/u-boot_rpi0_w.bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make CROSS_COMPILE=arm-linux-gnueabi- distclean &&     make CROSS_COMPILE=arm-linux-gnueabi-
+      rpi_2_defconfig &&     make CROSS_COMPILE=arm-linux-gnueabi- -j8 u-boot.bin
+      &&     cp u-boot.bin /uboot/u-boot_rpi2.bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make CROSS_COMPILE=arm-linux-gnueabi- distclean &&     make CROSS_COMPILE=arm-linux-gnueabi-
+      rpi_3_32b_defconfig &&     make CROSS_COMPILE=arm-linux-gnueabi- -j8 u-boot.bin
+      &&     cp u-boot.bin /uboot/u-boot_rpi3.bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make CROSS_COMPILE=arm-linux-gnueabi- distclean &&     make CROSS_COMPILE=arm-linux-gnueabi-
+      rpi_4_32b_defconfig &&     make CROSS_COMPILE=arm-linux-gnueabi- -j8 u-boot.bin
+      &&     cp u-boot.bin /uboot/u-boot_rpi4.bin
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build_base
+  Name: uboot
+  Platform: ""
+  SourceCode: FROM build_base AS uboot
+- As: uboot_tool
+  BaseName: build_base
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./resources/uboot.c
+    - /uboot.c
+  - CmdLine:
+    - arm-linux-gnueabi-gcc -Wall -static -static-libgcc -o /uboot_tool /uboot.c
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build_base
+  Name: uboot_tool
+  Platform: ""
+  SourceCode: FROM build_base AS uboot_tool
+- BaseName: alpine:3.10
+  Commands:
+  - CmdLine:
+    - apk update &&     apk add automake build-base git autoconf confuse-dev linux-headers             findutils
+      mtools e2fsprogs-extra alpine-sdk dosfstools uboot-tools &&     rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/pengutronix/genimage.git /tmp/genimage &&     cd
+      /tmp/genimage &&     ./autogen.sh &&     ./configure CFLAGS='-g -O0' --prefix=/usr
+      &&     make install &&     cd &&     rm -rf /tmp/genimage
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./resources/genext2fs
+    - /genext2fs
+  - CmdLine:
+    - cd /genext2fs &&     abuild-keygen -a -i -q &&     abuild -F -P /tmp/pkg &&     apk
+      add /tmp/pkg/x86_64/genext2fs-1*.apk &&     rm -rf /tmp/pkg/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./resources
+    - /resources
+  - Chown: ""
+    From: uboot
+    Name: copy
+    SourcesAndDest:
+    - /uboot/
+    - /uboot/
+  - Chown: ""
+    From: uboot_tool
+    Name: copy
+    SourcesAndDest:
+    - /uboot_tool
+    - /uboot_tool
+  - Name: workdir
+    Path: /work
+  - CmdLine:
+    - /bin/sh
+    - /resources/build.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10

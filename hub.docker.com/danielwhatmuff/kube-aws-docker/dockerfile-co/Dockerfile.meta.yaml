@@ -1,0 +1,63 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache alpine-sdk
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache     musl-dev     zlib-dev     tar     bzip2
+    Name: run
+    PrependShell: true
+  - Key: DROPBEAR_VERSION
+    Name: arg
+    Value: "2019.78"
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - curl -sSL https://matt.ucc.asn.au/dropbear/releases/dropbear-${DROPBEAR_VERSION}.tar.bz2     |
+      tar --strip-components=1 -xvj
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PROGRAMS
+      Value: '"dropbear dbclient dropbearkey dropbearconvert scp"'
+    Name: env
+  - CmdLine:
+    - ./configure       --enable-static       --disable-utmp       --disable-wtmp       --disable-lastlog     &&
+      make -j4 PROGRAMS="$PROGRAMS" MULTI=1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /dropbear/bin /dropbear/etc/dropbear     && (cd /dropbear/bin         &&
+      cp /src/dropbearmulti ./         && for program in $PROGRAMS ssh; do ln -s dropbearmulti
+      $program; done)     && chmod 0700 /dropbear/etc/dropbear
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine AS builder
+- BaseName: busybox
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /dropbear/
+    - /
+  - CmdLine:
+    - dropbear
+    - -R
+    - -F
+    - -E
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: busybox
+  Name: ""
+  Platform: ""
+  SourceCode: FROM busybox

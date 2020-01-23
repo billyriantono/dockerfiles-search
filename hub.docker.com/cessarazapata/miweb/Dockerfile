@@ -1,12 +1,22 @@
-#
-# Mi sitio web
-#
+FROM ceroic/jnlp-slave:2.59
+MAINTAINER Ceroic <ops@ceroic.com>
 
-# Se construye sobre la base de la imagen nginx
-FROM nginx:1.11-alpine
+ENV DOCKER_VERSION 1.11.2
 
-# Se agregan metadatos a la imagen
-LABEL Descripción="Mi servicio web" Autor="Manuel Morejón" Versión="v1.0.0"
+# Base image sets user to jenkins, switch back to root for this.
+USER root
 
-# Se copian los ficheros hacia la carpeta de nginx
-COPY static-html /usr/share/nginx/html
+# Install Docker
+RUN \
+    apt-get update && \
+    apt-get install -y \
+        apt-transport-https && \
+    apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D && \
+    echo 'deb https://apt.dockerproject.org/repo debian-jessie main' | tee /etc/apt/sources.list.d/docker.list && \
+    apt-get update && \
+    apt-cache policy docker-engine && \
+    apt-get install -y \
+    apt-transport-https \
+    docker-engine=${DOCKER_VERSION}-0~jessie && \
+    gpasswd -a jenkins docker
+

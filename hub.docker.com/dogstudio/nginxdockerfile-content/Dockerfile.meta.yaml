@@ -1,0 +1,111 @@
+MetaArgs: null
+Stages:
+- As: dev
+  BaseName: golang:1.13
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - go.sum
+    - ./
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  From:
+    Image: golang:1.13
+  Name: dev
+  Platform: ""
+  SourceCode: FROM golang:1.13 as dev
+- As: builder
+  BaseName: dev
+  Commands:
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /api .
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: dev
+  Name: builder
+  Platform: ""
+  SourceCode: FROM dev as builder
+- As: alpine
+  BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk --no-cache add tzdata zip ca-certificates
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/share/zoneinfo
+  - CmdLine:
+    - zip -r -0 /zoneinfo.zip .
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: alpine
+  Platform: ""
+  SourceCode: FROM alpine:latest as alpine
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /api
+    - /api
+  - Env:
+    - Key: ZONEINFO
+      Value: /zoneinfo.zip
+    Name: env
+  - Chown: ""
+    From: alpine
+    Name: copy
+    SourcesAndDest:
+    - /zoneinfo.zip
+    - /
+  - Chown: ""
+    From: alpine
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/
+  - Name: expose
+    Ports:
+    - "80"
+  - Env:
+    - Key: DB_HOST
+      Value: localhost
+    - Key: DB_NAME
+      Value: manager
+    - Key: PORT
+      Value: "80"
+    - Key: RECORD_DIR
+      Value: /records
+    Name: env
+  - Name: volume
+    Volumes:
+    - /records
+    - /archive
+  - CmdLine:
+    - /api
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

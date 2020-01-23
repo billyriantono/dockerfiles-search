@@ -1,33 +1,54 @@
-#Build Stage Start
+# Based on https://github.com/frol/docker-alpine-python-machinelearning
+FROM guitarmind/python-nginx
+MAINTAINER markpeng@exosite.com
 
-#Specify a base image
-FROM node:alpine as builder 
+RUN apk update && \
+    apk add --no-cache \
+        --virtual=.build-dependencies \
+        g++ gfortran file binutils \
+        musl-dev python3-dev cython openblas-dev \
+        build-base freetype-dev libpng-dev \
+        libffi-dev openssl-dev \
+        llvm-dev \
+        && \
 
-#Specify a working directory
-WORKDIR '/app'
+    apk add libstdc++ openblas \
+        && \
 
-#Copy the dependencies file
-COPY package.json .
+    ln -s locale.h /usr/include/xlocale.h \
+        && \
 
-#Install dependencies
-RUN npm install
+    # Minimum required packages
+    pip install Cython \
+        numpy \
+        pandas \
+        scipy \
+        && \
 
-#Copy remaining files
-COPY . .
+    # Dependency packages
+    pip install scikit-learn \
+        matplotlib \
+        statsmodels \
+        PyWavelets \
+        librosa \
+        psutil \
+        && \
 
-ARG REACT_APP_GRAPHQL_URL
+    # Model hosting related packages
+    pip install flask \
+        gevent \
+        gunicorn \
+        requests \
+        && \
 
-ENV REACT_APP_GRAPHQL_URL $REACT_APP_GRAPHQL_URL
+    # Cleanup
+    rm -rf /var/cache/apk/* && \
 
-#Build the project for production
-RUN npm run build 
+    rm -r /root/.cache && \
+    find /usr/lib/python3.*/ -name 'tests' -exec rm -r '{}' + && \
+    find /usr/lib/python3.*/site-packages/ -name '*.so' -print -exec sh -c 'file "{}" | grep -q "not stripped" && strip -s "{}"' \; \
+        && \
 
-#Run Stage Start
-FROM nginx
-
-#Change content of default.conf
-RUN rm -rf /etc/nginx/conf.d
-COPY conf /etc/nginx
-
-#Copy production build files from builder phase to nginx
-COPY --from=builder /app/build /usr/share/nginx/html
+    rm /usr/include/xlocale.h \
+        && \
+    apk del .build-dependencies

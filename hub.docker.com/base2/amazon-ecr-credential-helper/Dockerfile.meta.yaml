@@ -1,0 +1,71 @@
+MetaArgs: null
+Stages:
+- As: source
+  BaseName: alpine:latest
+  Commands:
+  - Maintainer: '"base2Services" <itsupport@base2services.com>'
+    Name: maintainer
+  - Key: SOURCE_SHA1
+    Name: arg
+    Value: '"16f099b"'
+  - Env:
+    - Key: SHA1
+      Value: $SOURCE_SHA1
+    Name: env
+  - CmdLine:
+    - apk update && apk upgrade &&     apk add --no-cache bash git openssh make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /src
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/awslabs/amazon-ecr-credential-helper.git /src
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /src     git checkout $SHA1
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: source
+  Platform: ""
+  SourceCode: FROM alpine:latest as source
+- As: binaries
+  BaseName: golang:1.8-alpine
+  Commands:
+  - Chown: ""
+    From: source
+    Name: copy
+    SourcesAndDest:
+    - /src
+    - /go/src/github.com/awslabs/amazon-ecr-credential-helper
+  - CmdLine:
+    - apk update && apk upgrade &&     apk add --no-cache make bash
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /go/src/github.com/awslabs/amazon-ecr-credential-helper       && make       &&
+      cp bin/local/docker-credential-ecr-login /bin
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.8-alpine
+  Name: binaries
+  Platform: ""
+  SourceCode: FROM golang:1.8-alpine as binaries
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: binaries
+    Name: copy
+    SourcesAndDest:
+    - /bin/docker-credential-ecr-login
+    - /bin/docker-credential-ecr-login
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

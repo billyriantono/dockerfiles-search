@@ -1,33 +1,23 @@
-# Developer: Maik Ellerbrock <opensource@frapsoft.com>
-#
-# GitHub:  https://github.com/ellerbrock
-# Twitter: https://twitter.com/frapsoft
-# Docker:  https://hub.docker.com/u/ellerbrock
-# Quay:    https://quay.io/user/ellerbrock
+FROM eikek/ox-common
 
-FROM alpine:3.8
+ENV APACHE_RUN_USER www-data
+ENV APACHE_RUN_GROUP www-data
+ENV APACHE_LOG_DIR /var/log/apache2
 
-LABEL com.frapsoft.maintainer="Maik Ellerbrock" \
-      com.frapsoft.version="0.2.0"
+RUN a2enmod proxy proxy_http proxy_balancer expires deflate headers rewrite mime setenvif lbmethod_byrequests
+RUN a2enmod ssl
 
-# Optional Configuration Parameter
-ARG SERVICE_USER
-ARG SERVICE_HOME
+EXPOSE 80
 
-# Default Settings
-ENV SERVICE_USER ${SERVICE_USER:-mysql}
-ENV SERVICE_HOME ${SERVICE_HOME:-/home/${SERVICE_USER}}
+RUN rm /etc/apache2/sites-enabled/000-default.conf
 
-RUN \
-  adduser -h ${SERVICE_HOME} -s /sbin/nologin -u 1000 -D ${SERVICE_USER} && \
-  apk add --no-cache \
-    dumb-init \
-    mariadb-client
+ADD default /etc/apache2/sites-available/default
+ADD proxy_http.conf /etc/apache2/conf-available/proxy_http.conf
 
-USER    ${SERVICE_USER}
-WORKDIR ${SERVICE_HOME}
-VOLUME  ${SERVICE_HOME}
-EXPOSE  3306
+RUN /bin/ln -sf ../sites-available/default /etc/apache2/sites-enabled/002-default.conf
+RUN /bin/ln -sf ../conf-available/proxy_http.conf /etc/apache2/conf-enabled/proxy_http.conf
 
-ENTRYPOINT [ "/usr/bin/dumb-init" ]
-CMD [ "mysql" ]
+WORKDIR /
+ADD oxweb ./
+RUN chmod a+x oxweb
+CMD ["/oxweb"]

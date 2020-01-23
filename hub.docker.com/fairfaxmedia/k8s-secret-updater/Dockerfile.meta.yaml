@@ -1,0 +1,111 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: python:3-alpine3.8
+  Commands: null
+  From:
+    Image: python:3-alpine3.8
+  Name: base
+  Platform: ""
+  SourceCode: FROM python:3-alpine3.8 AS base
+- As: builder
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /srv
+  - CmdLine:
+    - apk add --no-cache --update alpine-sdk~=1.0 libffi~=3.2 libffi-dev~=3.2 openssl-dev~=1.0
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./secretupdater/requirements.txt
+    - .
+  - CmdLine:
+    - pip install --install-option="--prefix=/srv" --requirement ./requirements.txt
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base AS builder
+- As: app
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /srv
+    - /usr/local
+  - Name: workdir
+    Path: /srv
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - secretupdater/
+    - secretupdater
+  - Name: workdir
+    Path: /srv/secretupdater
+  - CmdLine:
+    - ./runserver.py
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: app
+  Platform: ""
+  SourceCode: FROM base AS app
+- As: test
+  BaseName: app
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./secretupdater/requirements-testing.txt
+    - .
+  - CmdLine:
+    - pip install --quiet --requirement ./requirements-testing.txt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip freeze
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find ./secretupdater -name '*.py' -exec python -m py_compile {} \;
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python -m compileall -q .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pylama .
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 2
+      Named: app
+  Name: test
+  Platform: ""
+  SourceCode: FROM app AS test
+- BaseName: app
+  Commands: null
+  From:
+    Stage:
+      Index: 2
+      Named: app
+  Name: ""
+  Platform: ""
+  SourceCode: FROM app

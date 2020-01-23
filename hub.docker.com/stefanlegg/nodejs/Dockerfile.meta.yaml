@@ -1,53 +1,93 @@
-MetaArgs: null
+MetaArgs:
+- DefaultValue: "3.7"
+  Key: pyversion
+  ProvidedValue: null
+  Value: "3.7"
 Stages:
-- BaseName: stefanlegg/base
+- BaseName: python:${pyversion}-buster
   Commands:
-  - Maintainer: Stefan Legg <legg.stefan@gmail.com>
-    Name: maintainer
+  - Key: pyversion
+    Name: arg
+    Value: "3.7"
+  - Env:
+    - Key: PYVERSION
+      Value: ${pyversion:-3.7}
+    Name: env
   - CmdLine:
-    - apt-get -qq update
+    - apt-get -yqq update &&     apt-get -yqq install apache2 apache2-dev locales
+      &&     apt-get clean
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./locale.gen
+    - /etc/locale.gen
+  - CmdLine:
+    - locale-gen
     Name: run
     PrependShell: true
   - CmdLine:
-    - apt-get -yqq upgrade
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - apt-get -yqq install build-essential python wget
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - wget http://nodejs.org/dist/v0.10.23/node-v0.10.23.tar.gz
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - tar -zxvf node-v0.10.23.tar.gz
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - rm node-v0.10.23.tar.gz
+    - mkdir /app
     Name: run
     PrependShell: true
   - Name: workdir
-    Path: node-v0.10.23
+    Path: /app
   - CmdLine:
-    - ./configure
+    - python -m venv ./virtualenv
     Name: run
     PrependShell: true
   - CmdLine:
-    - make
+    - ./virtualenv/bin/pip install --upgrade pip setuptools
     Name: run
     PrependShell: true
   - CmdLine:
-    - make install
+    - ./virtualenv/bin/pip install mod_wsgi
     Name: run
     PrependShell: true
+  - CmdLine:
+    - ln -s /app/virtualenv/lib/python$PYVERSION/site-packages/mod_wsgi/server/mod_wsgi-*.so
+      /app/virtualenv/lib/python$PYVERSION/site-packages/mod_wsgi/server/mod_wsgi.so
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir ./pylibs
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./start-apache.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./wsgi.conf.tmpl
+    - /tmp/wsgi.conf.tmpl
+  - CmdLine:
+    - a2dismod mpm_event && a2enmod mpm_prefork
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -e s/\$PYVERSION/$PYVERSION/g /tmp/wsgi.conf.tmpl | sed -e s/\$PYV/`echo
+      $PYVERSION | sed -e "s/\\.//"`/g >/etc/apache2/mods-enabled/wsgi.conf
+    Name: run
+    PrependShell: true
+  - Expression: COPY apache.conf /etc/apache2/sites-available/000-default.conf
+    Name: onbuild
   - Name: expose
     Ports:
-    - "443"
     - "80"
+  - CmdLine:
+    - /bin/sh
+    - /start-apache.sh
+    Name: cmd
+    PrependShell: false
   From:
-    Image: stefanlegg/base
+    Image: python:${pyversion}-buster
   Name: ""
   Platform: ""
-  SourceCode: FROM stefanlegg/base
+  SourceCode: FROM python:${pyversion}-buster

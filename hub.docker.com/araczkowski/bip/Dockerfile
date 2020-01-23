@@ -1,24 +1,33 @@
-FROM java:7
+FROM lsiobase/alpine:3.7
+MAINTAINER aptalca
 
-MAINTAINER Andrzej Raczkowski <araczkowski@gmail.com>
+# environment settings
+ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 
-# get rid of the message: "debconf: unable to initialize frontend: Dialog"
-ENV DEBIAN_FRONTEND noninteractive
+# install packages
+RUN \
+ apk add --no-cache \
+ 	logrotate \
+	nano \
+	perl-compress-raw-zlib \
+	perl-gd \
+	perl-html-parser \
+	perl-http-cookies \
+	perl-json \
+	perl-json-maybexs \
+	perl-lwp-protocol-https \
+	perl-lwp-useragent-determined \
+	wget && \
+ apk add --no-cache \
+ 	--repository http://nl.alpinelinux.org/alpine/edge/testing \
+	perl-json-xs && \
 
-EXPOSE 1527	7001
+# fix logrotate
+ sed -i "s#/var/log/messages {}.*# #g" /etc/logrotate.conf
 
+# copy local files
+COPY root/ /
 
-# all installation files
-COPY scripts /scripts
+# ports and volumes
+VOLUME /config
 
-# ! to speed up the build process - only to tests the build process !!!
-#COPY files /files
-# ! to speed up the build process - only to tests the build process !!!
-
-# start the installation
-RUN /scripts/install_main.sh
-
-
-# ENTRYPOINT
-ADD entrypoint.sh /
-ENTRYPOINT ["/entrypoint.sh"]

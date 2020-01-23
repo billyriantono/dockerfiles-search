@@ -1,0 +1,230 @@
+MetaArgs:
+- DefaultValue: bookmarks-backend
+  Key: APP_NAME
+  ProvidedValue: null
+  Value: bookmarks-backend
+- DefaultValue: "3000"
+  Key: APP_PORT
+  ProvidedValue: null
+  Value: "3000"
+- DefaultValue: 12.13-alpine
+  Key: NODE_VERSION
+  ProvidedValue: null
+  Value: 12.13-alpine
+Stages:
+- As: install
+  BaseName: node:${NODE_VERSION}
+  Commands:
+  - Key: APP_NAME
+    Name: arg
+    Value: null
+  - Env:
+    - Key: APP_DIR
+      Value: /${APP_NAME}
+    Name: env
+  - CmdLine:
+    - apk add --no-cache build-base python;   mkdir -p ${APP_DIR}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${APP_DIR}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - package-lock.json
+    - ./
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:${NODE_VERSION}
+  Name: install
+  Platform: ""
+  SourceCode: FROM node:${NODE_VERSION} as install
+- As: development
+  BaseName: node:${NODE_VERSION}
+  Commands:
+  - Key: APP_NAME
+    Name: arg
+    Value: null
+  - Key: APP_PORT
+    Name: arg
+    Value: null
+  - Key: DOCKER
+    Name: arg
+    Value: "true"
+  - Key: NODE_ENV
+    Name: arg
+    Value: development
+  - Env:
+    - Key: APP_DIR
+      Value: /${APP_NAME}
+    Name: env
+  - Env:
+    - Key: DOCKER
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: NODE_ENV
+      Value: ${NODE_ENV}
+    Name: env
+  - Env:
+    - Key: PORT
+      Value: ${APP_PORT}
+    Name: env
+  - CmdLine:
+    - apk add --no-cache build-base python;   mkdir -p ${APP_DIR}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${APP_DIR}
+  - Chown: ""
+    From: install
+    Name: copy
+    SourcesAndDest:
+    - ${APP_DIR}/node_modules
+    - ./node_modules
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Health:
+      Interval: 300000000000
+      Test:
+      - CMD-SHELL
+      - curl -f http://localhost:${PORT}/healthcheck || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - npm
+    - run
+    - dev
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: node:${NODE_VERSION}
+  Name: development
+  Platform: ""
+  SourceCode: FROM node:${NODE_VERSION} as development
+- As: build
+  BaseName: node:${NODE_VERSION}
+  Commands:
+  - Key: APP_NAME
+    Name: arg
+    Value: null
+  - Env:
+    - Key: APP_DIR
+      Value: /${APP_NAME}
+    Name: env
+  - CmdLine:
+    - apk add --no-cache build-base python;   mkdir -p ${APP_DIR}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${APP_DIR}
+  - Chown: ""
+    From: install
+    Name: copy
+    SourcesAndDest:
+    - ${APP_DIR}/node_modules
+    - ./node_modules
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:${NODE_VERSION}
+  Name: build
+  Platform: ""
+  SourceCode: FROM node:${NODE_VERSION} as build
+- As: production
+  BaseName: node:${NODE_VERSION}
+  Commands:
+  - Key: APP_NAME
+    Name: arg
+    Value: null
+  - Key: APP_PORT
+    Name: arg
+    Value: null
+  - Key: DOCKER
+    Name: arg
+    Value: "true"
+  - Key: NODE_ENV
+    Name: arg
+    Value: development
+  - Env:
+    - Key: APP_DIR
+      Value: /${APP_NAME}
+    Name: env
+  - Env:
+    - Key: DOCKER
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - Env:
+    - Key: PORT
+      Value: ${APP_PORT}
+    Name: env
+  - CmdLine:
+    - apk add --no-cache build-base python;   mkdir -p ${APP_DIR}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${APP_DIR}
+  - Chown: ""
+    From: install
+    Name: copy
+    SourcesAndDest:
+    - ${APP_DIR}/node_modules
+    - ./node_modules
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - ${APP_DIR}/build
+    - ./build
+  - CmdLine:
+    - npm prune --production
+    Name: run
+    PrependShell: true
+  - Health:
+      Interval: 300000000000
+      Test:
+      - CMD-SHELL
+      - curl -f http://localhost:${PORT}/healthcheck || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - ${PORT}
+  - CmdLine:
+    - npm
+    - run
+    - start
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: node:${NODE_VERSION}
+  Name: production
+  Platform: ""
+  SourceCode: FROM node:${NODE_VERSION} as production

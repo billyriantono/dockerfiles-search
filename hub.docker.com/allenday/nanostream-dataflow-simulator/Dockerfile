@@ -1,10 +1,14 @@
-FROM python:3-alpine
+FROM google/cloud-sdk
 
-WORKDIR /simulator
+# install maven for compile java code
+RUN apt-get install -y maven wget
+RUN mvn --version
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# Install standalone binary of firebase-tools (https://firebase.google.com/docs/cli)
+RUN wget https://firebase.tools/bin/linux/latest -O /usr/bin/firebase && chmod +x /usr/bin/firebase
+RUN firebase --version
 
-COPY simulator.py /simulator/simulator.py
+WORKDIR /application
+COPY ./ /application
 
-CMD python simulator.py $SOURCE_FILE $DESTINATION_BUCKET $PUBLISHING_SPEED
+CMD ["python3", "-u", "/application/launcher/install.py"]

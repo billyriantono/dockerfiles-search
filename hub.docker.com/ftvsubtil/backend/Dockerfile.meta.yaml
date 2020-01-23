@@ -1,0 +1,78 @@
+MetaArgs: null
+Stages:
+- As: ex_builder
+  BaseName: elixir:1.8.1-alpine
+  Commands:
+  - CmdLine:
+    - apk update &&     apk add --no-cache     ca-certificates     curl     gawk     git     make     nodejs     python     tar     wget     g++     &&     mix
+      local.hex --force &&     mix local.rebar --force &&     mix hex.info &&     cd
+      /usr/local/bin &&     curl -o- -L https://yarnpkg.com/install.sh | sh -s --
+      --version 1.9.4
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Env:
+    - Key: MIX_ENV
+      Value: prod
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /root/.yarn/bin:/root/.config/yarn/global/node_modules/.bin:$PATH
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - mix deps.get &&     mix release.init &&     mix release --env=$MIX_ENV &&     mix
+      generate_documentation &&     cd assets &&     yarn &&     yarn run lint &&     yarn
+      run release &&     cd .. &&     mix phx.digest
+    Name: run
+    PrependShell: true
+  From:
+    Image: elixir:1.8.1-alpine
+  Name: ex_builder
+  Platform: ""
+  SourceCode: FROM elixir:1.8.1-alpine AS ex_builder
+- BaseName: alpine:3.9
+  Commands:
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - apk update &&     apk add bash openssl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ex_builder
+    Name: copy
+    SourcesAndDest:
+    - /app/_build/prod/rel/ex_backend
+    - .
+  - Chown: ""
+    From: ex_builder
+    Name: copy
+    SourcesAndDest:
+    - /app/priv/static
+    - static/
+  - Chown: ""
+    From: ex_builder
+    Name: copy
+    SourcesAndDest:
+    - /app/documentation.json
+    - .
+  - CmdLine:
+    - backend="$(ls -1 lib/ | grep ex_backend)" && mv static lib/$backend/priv/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./bin/ex_backend
+    - foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

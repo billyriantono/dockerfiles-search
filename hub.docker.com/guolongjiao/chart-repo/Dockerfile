@@ -1,0 +1,1 @@
+from quay.io/helmpack/chart-repo:v1.0.3

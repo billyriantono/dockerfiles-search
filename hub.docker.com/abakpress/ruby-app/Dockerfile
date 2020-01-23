@@ -16,6 +16,7 @@ RUN apt-key adv --keyserver ha.pool.sks-keyservers.net --recv-keys B97B0AFCAA1A4
     less \
     libxml2-dev \
     libxslt-dev \
+    libssl-dev \
     pkg-config \
     libcurl3-dev \
     libpq-dev \
@@ -50,7 +51,7 @@ ENV LC_ALL en_US.UTF-8
 
 ENV RVM_PATH /usr/local/rvm
 ENV RVM ${RVM_PATH}/bin/rvm
-ENV RVM_RUBY ruby-2.3.7
+ENV RVM_RUBY ruby-2.4.6
 RUN gpg2 --keyserver hkp://keys.gnupg.net --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3 7D2BAF1CF37B13E2069D6956105BD0E739499BDB \
   && (\curl -ksSL https://get.rvm.io | bash -s stable)
 RUN $RVM install $RVM_RUBY
@@ -63,7 +64,7 @@ ENV BUNDLE_SILENCE_ROOT_WARNING 1
 RUN echo 'gem: --no-rdoc --no-ri --no-document' > /root/.gemrc \
   && ssh-keyscan -H github.com >> /etc/ssh/ssh_known_hosts \
   && gem update --system \
-  && gem install bundler --version 1.17.3 \
+  && gem install bundler \
   && gem install executable-hooks -v ">=1.3.2" \
   && gem regenerate_binstubs \
   && bundle config --global jobs 7 \
@@ -73,6 +74,16 @@ RUN echo 'gem: --no-rdoc --no-ri --no-document' > /root/.gemrc \
 ENV TINI_VERSION v0.18.0
 ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
 RUN chmod +x /tini
+
+ENV EXCEL2CSV_VERSION v0.1.4
+ENV LIBXL_VERSION 3.8.8.2
+RUN set -ex; \
+  curl -o /tmp/libxl-$LIBXL_VERSION.tar.gz https://www.libxl.com/download/libxl-lin-$LIBXL_VERSION.tar.gz; \
+  tar -xzf /tmp/libxl-$LIBXL_VERSION.tar.gz -C /tmp; \
+  cp /tmp/libxl-$LIBXL_VERSION/lib64/libxl.so /usr/lib; \
+  rm -rf /tmp/libxl-$LIBXL_VERSION.tar.gz /tmp/libxl-$LIBXL_VERSION;
+
+ADD excel2csv /usr/bin
 
 ENTRYPOINT ["/tini", "--"]
 

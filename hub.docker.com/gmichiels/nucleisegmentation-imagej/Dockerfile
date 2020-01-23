@@ -1,14 +1,18 @@
-FROM neubiaswg5/fiji-base:latest
+FROM golang:1.11 AS builder
 
-RUN cd plugins && wget -O imagescience.jar https://imagescience.org/meijering/software/download/imagescience.jar
-RUN cd plugins && wget -O FeatureJ_.jar https://imagescience.org/meijering/software/download/FeatureJ_.jar
+RUN curl https://raw.githubusercontent.com/golang/dep/v0.5.0/install.sh | sh
 
-ADD macro.ijm /fiji/macros/macro.ijm                                           
-ADD run.sh /fiji/run.sh
-ADD wrapper.py /
-RUN cd /fiji && chmod a+x run.sh
+WORKDIR $GOPATH/src/github.com/glutamatt/webstun
+COPY Gopkg.toml Gopkg.lock ./
+RUN dep ensure --vendor-only
+COPY server ./server
+COPY client ./client
+COPY main.go ./
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix nocgo -o /webstun .
 
-FROM gmichiels/python-client-base
-
-ENTRYPOINT ["python", "/wrapper.py"]
-
+FROM alpine:3.8
+WORKDIR /
+COPY --from=builder /webstun /bin
+ARG server_port=443
+ENV PORT=$server_port
+CMD ["/bin/sh", "-c", "webstun -run server -port ${PORT} -insecure"]

@@ -1,0 +1,141 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: elixir:1.7.4-alpine
+  Commands:
+  - Key: APP_NAME
+    Name: arg
+    Value: null
+  - Key: APP_VERSION
+    Name: arg
+    Value: null
+  - Key: MIX_ENV
+    Name: arg
+    Value: prod
+  - Env:
+    - Key: APP_NAME
+      Value: ${APP_NAME}
+    - Key: APP_VERSION
+      Value: ${APP_VERSION}
+    - Key: MIX_ENV
+      Value: ${MIX_ENV}
+    Name: env
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - apk update &&     apk upgrade --no-cache &&     apk add --no-cache nodejs npm
+      git build-base python yaml-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mix local.rebar --force &&     mix local.hex --force
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mix.*
+    - ./
+  - CmdLine:
+    - mix deps.get --only ${MIX_ENV}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mix deps.compile
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - mix compile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mix phx.digest
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/build &&     mix release --verbose &&     cp _build/${MIX_ENV}/rel/${APP_NAME}/releases/${APP_VERSION}/${APP_NAME}.tar.gz
+      /opt/build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opt/build &&     tar -xzf ${APP_NAME}.tar.gz &&     rm ${APP_NAME}.tar.gz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - webapp
+    - /opt/build/webapp
+  - CmdLine:
+    - cd /opt/build &&     npm ci --prefix webapp --no-audit --no-color
+    Name: run
+    PrependShell: true
+  From:
+    Image: elixir:1.7.4-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM elixir:1.7.4-alpine AS builder
+- BaseName: alpine:3.9
+  Commands:
+  - Key: APP_NAME
+    Name: arg
+    Value: null
+  - Key: APP_VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: APP_NAME
+      Value: ${APP_NAME}
+    - Key: APP_VERSION
+      Value: ${APP_VERSION}
+    Name: env
+  - CmdLine:
+    - apk --no-cache update &&     apk --no-cache upgrade &&     apk --no-cache add
+      bash openssl ca-certificates erlang-crypto yaml-dev nodejs npm
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/accent
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/build
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - priv/scripts/docker-entrypoint.sh
+    - /usr/local/bin
+  - CmdLine:
+    - chmod a+x /usr/local/bin/docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'adduser -D accent &&     chown -R accent: /opt/accent'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: accent
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

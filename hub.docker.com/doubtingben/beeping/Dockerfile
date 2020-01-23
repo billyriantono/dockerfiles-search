@@ -1,13 +1,23 @@
-FROM golang:1.8
+FROM ruby:2.3.3-alpine
 
-ENV BEEPING_VERSION="0.5.0"
+MAINTAINER Kale Worsley <kale@worsley.co.nz>
 
-RUN curl -sSfL "https://github.com/yanc0/beeping/releases/download/v$BEEPING_VERSION/beeping" > /usr/bin/beeping && \
-    chmod +x /usr/bin/beeping
+WORKDIR /app
+ENV RAILS_ENV production
+ENV PORT 3000
+ENV BINDING 0.0.0.0
+ENV LOG_LEVEL INFO
 
-EXPOSE 8080
+COPY Gemfile /app/
+COPY Gemfile.lock /app/
 
-ADD ./support_files/docker-startup.sh /docker-startup.sh
-RUN chmod +x /docker-startup.sh
+RUN apk --update add --no-cache --update --virtual build-dependencies \
+   build-base ruby-dev postgresql-dev tzdata nodejs
+RUN gem install bundler && bundle install --without development test
 
-CMD ["/docker-startup.sh", "/usr/bin/beeping"]
+COPY . /app/
+RUN chown -R nobody:nogroup /app/
+USER nobody
+
+EXPOSE 3000
+ENTRYPOINT ["./docker-entrypoint.sh"]

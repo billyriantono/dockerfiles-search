@@ -1,0 +1,79 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go get -v -ldflags="-s -w" github.com/zuBux/badbucket/cmd/badbucket/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /tmp/thisIsEmpty
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM golang:alpine AS build-env
+- As: pack-env
+  BaseName: alpine:edge
+  Commands:
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - apk add --no-cache upx
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/badbucket
+    - /
+  - CmdLine:
+    - upx --brute badbucket -obadbucket.upx
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: pack-env
+  Platform: ""
+  SourceCode: FROM alpine:edge AS pack-env
+- As: scratch-packed
+  BaseName: scratch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Glenn ''devalias'' Grant <glenn@devalias.net>"'
+    Name: label
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://curl.haxx.se/ca/cacert.pem
+    - /etc/ssl/certs/ca-certificates.crt
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /tmp/thisIsEmpty
+    - /tmp
+  - Chown: ""
+    From: pack-env
+    Name: copy
+    SourcesAndDest:
+    - /badbucket.upx
+    - /badbucket
+  - CmdLine:
+    - /badbucket
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: scratch-packed
+  Platform: ""
+  SourceCode: FROM scratch as scratch-packed

@@ -1,6 +1,6 @@
 FROM nvidia/opencl
 
-RUN DEBIAN_FRONTEND=non-interactive apt-get update -qqy && DEBIAN_FRONTEND=non-interactive apt-get -qqy install magic-wormhole tcpdump tshark p7zip-full wget curl cmake build-essential make libssl-dev zlib1g-dev libcurl4-openssl-dev git aria2 tmux  nvidia-opencl-dev vim
+RUN DEBIAN_FRONTEND=non-interactive apt-get update -qqy && DEBIAN_FRONTEND=non-interactive apt-get -qqy install magic-wormhole tcpdump tshark p7zip-full wget curl cmake build-essential make libssl-dev zlib1g-dev libcurl4-openssl-dev git aria2 tmux vim #nvidia-opencl-dev
 
 WORKDIR /opt
 RUN wget https://hashcat.net/files/hashcat-5.1.0.7z && 7z x hashcat-5.1.0.7z && rm -rf hashcat-5.1.0.7z
@@ -29,7 +29,7 @@ RUN git clone https://github.com/ZerBea/hcxtools.git && cd hcxtools && make && m
 
 # Install hashcat tools git
 WORKDIR /opt/
-RUN git clone https://github.com/hashcat/hashcat.git && cd hashcat && make && make install
+RUN git clone https://github.com/hashcat/hashcat.git hashcat-git && cd hashcat-git && make && make install
 
 WORKDIR /opt/
 RUN git clone https://github.com/hashcat/maskprocessor.git && cd maskprocessor/src && make && install -m 755 *.bin /usr/local/bin/

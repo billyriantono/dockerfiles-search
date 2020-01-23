@@ -1,0 +1,154 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:stretch-slim
+  Commands:
+  - CmdLine:
+    - "set -ex; \tif ! command -v gpg > /dev/null; then \t\tapt-get update; \t\tapt-get
+      install -y --no-install-recommends \t\t\tgnupg \t\t\tdirmngr \t\t; \t\trm -rf
+      /var/lib/apt/lists/*; \tfi"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -eux; \tgroupadd -r postgres --gid=999; \tuseradd -r -g postgres --uid=999
+      --home-dir=/var/lib/postgresql --shell=/bin/bash postgres; \tmkdir -p /var/lib/postgresql;
+      \tchown -R postgres:postgres /var/lib/postgresql"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOSU_VERSION
+      Value: "1.10"
+    Name: env
+  - CmdLine:
+    - "set -x \t&& apt-get update && apt-get install -y --no-install-recommends ca-certificates
+      wget && rm -rf /var/lib/apt/lists/* \t&& wget -O /usr/local/bin/gosu \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg
+      --print-architecture)\" \t&& wget -O /usr/local/bin/gosu.asc \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg
+      --print-architecture).asc\" \t&& export GNUPGHOME=\"$(mktemp -d)\" \t&& gpg
+      --batch --keyserver ipv4.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4
+      \t&& gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \t&& {
+      command -v gpgconf > /dev/null && gpgconf --kill all || :; } \t&& rm -rf \"$GNUPGHOME\"
+      /usr/local/bin/gosu.asc \t&& chmod +x /usr/local/bin/gosu \t&& gosu nobody true
+      \t&& apt-get purge -y --auto-remove ca-certificates wget"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -eux; \tif [ -f /etc/dpkg/dpkg.cfg.d/docker ]; then \t\tgrep -q '/usr/share/locale'
+      /etc/dpkg/dpkg.cfg.d/docker; \t\tsed -ri '/\\/usr\\/share\\/locale/d' /etc/dpkg/dpkg.cfg.d/docker;
+      \t\t! grep -q '/usr/share/locale' /etc/dpkg/dpkg.cfg.d/docker; \tfi; \tapt-get
+      update; apt-get install -y locales; rm -rf /var/lib/apt/lists/*; \tlocaledef
+      -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: en_US.utf8
+    Name: env
+  - CmdLine:
+    - "set -eux; \tapt-get update; \tapt-get install -y --no-install-recommends libnss-wrapper;
+      \trm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /docker-entrypoint-initdb.d
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -ex; \tkey='B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8'; \texport GNUPGHOME=\"$(mktemp
+      -d)\"; \tgpg --batch --keyserver ipv4.pool.sks-keyservers.net --recv-keys \"$key\";
+      \tgpg --batch --export \"$key\" > /etc/apt/trusted.gpg.d/postgres.gpg; \tcommand
+      -v gpgconf > /dev/null && gpgconf --kill all; \trm -rf \"$GNUPGHOME\"; \tapt-key
+      list"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PG_MAJOR
+      Value: "11"
+    Name: env
+  - Env:
+    - Key: PG_VERSION
+      Value: 11.1-1.pgdg90+1
+    Name: env
+  - CmdLine:
+    - "set -ex; \t\texport PYTHONDONTWRITEBYTECODE=1; \t\techo \"deb http://apt.postgresql.org/pub/repos/apt/
+      stretch-pgdg main $PG_MAJOR\" > /etc/apt/sources.list.d/pgdg.list; \techo \"deb-src
+      http://apt.postgresql.org/pub/repos/apt/ stretch-pgdg main $PG_MAJOR\" > /etc/apt/sources.list.d/pgdg.list;
+      \techo 'deb http://deb.debian.org/debian stretch-backports main' >> /etc/apt/sources.list.d/pgdg.list;
+      \t\ttempDir=\"$(mktemp -d)\"; \tcd \"$tempDir\"; \t\tsavedAptMark=\"$(apt-mark
+      showmanual)\"; \t\tapt-get update; \tapt-get build-dep -y \t\tpostgresql-common
+      pgdg-keyring \t\t\"postgresql-$PG_MAJOR=$PG_VERSION\" \t; \tapt-get source --compile
+      postgresql-common pgdg-keyring; \tapt-get install -y curl; \tapt-get source
+      \"postgresql-$PG_MAJOR=$PG_VERSION\"; \tcurl -o postgresql-11-11.1/debian/patches/matviewtriggers-v3.patch
+      https://www.postgresql.org/message-id/attachment/95772/matviewtriggers-v3.patch;
+      \tcurl -o postgresql-11-11.1/debian/patches/tempmatviews-v4.patch https://www.postgresql.org/message-id/attachment/95771/tempmatviews-v4.patch;
+      \techo \"matviewtriggers-v3.patch\" >> postgresql-11-11.1/debian/patches/series;
+      \techo \"tempmatviews-v4.patch\" >> postgresql-11-11.1/debian/patches/series;
+      \tcd postgresql-11-11.1; \tDEB_BUILD_OPTIONS=\"nocheck parallel=$(nproc)\" dpkg-buildpackage
+      --no-sign; \tcd ..; \t\tapt-mark showmanual | xargs apt-mark auto > /dev/null;
+      \tapt-mark manual $savedAptMark; \t\tls -lAFh; \tdpkg-scanpackages . > Packages;
+      \tgrep '^Package: ' Packages; \techo \"deb [ trusted=yes ] file://$tempDir ./\"
+      > /etc/apt/sources.list.d/temp.list; \tapt-get -o Acquire::GzipIndexes=false
+      update; \t\tapt-get install -y postgresql-common; \tsed -ri 's/#(create_main_cluster)
+      .*$/\\1 = false/' /etc/postgresql-common/createcluster.conf; \tapt-get install
+      -y \t\t\"postgresql-$PG_MAJOR=$PG_VERSION\" \t; \t\trm -rf /var/lib/apt/lists/*;
+      \t\tif [ -n \"$tempDir\" ]; then \t\tapt-get purge -y --auto-remove; \t\trm
+      -rf \"$tempDir\" /etc/apt/sources.list.d/temp.list; \tfi; \t\tfind /usr -name
+      '*.pyc' -type f -exec bash -c 'for pyc; do dpkg -S \"$pyc\" &> /dev/null ||
+      rm -vf \"$pyc\"; done' -- '{}' +"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -eux; \tdpkg-divert --add --rename --divert \"/usr/share/postgresql/postgresql.conf.sample.dpkg\"
+      \"/usr/share/postgresql/$PG_MAJOR/postgresql.conf.sample\"; \tcp -v /usr/share/postgresql/postgresql.conf.sample.dpkg
+      /usr/share/postgresql/postgresql.conf.sample; \tln -sv ../postgresql.conf.sample
+      \"/usr/share/postgresql/$PG_MAJOR/\"; \tsed -ri \"s!^#?(listen_addresses)\\s*=\\s*\\S+.*!\\1
+      = '*'!\" /usr/share/postgresql/postgresql.conf.sample; \tgrep -F \"listen_addresses
+      = '*'\" /usr/share/postgresql/postgresql.conf.sample"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/run/postgresql && chown -R postgres:postgres /var/run/postgresql
+      && chmod 2777 /var/run/postgresql
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: $PATH:/usr/lib/postgresql/$PG_MAJOR/bin
+    Name: env
+  - Env:
+    - Key: PGDATA
+      Value: /var/lib/postgresql/data
+    Name: env
+  - CmdLine:
+    - 'mkdir -p "$PGDATA" && chown -R postgres:postgres "$PGDATA" && chmod 777 "$PGDATA"
+      # this 777 will be replaced by 700 at runtime (allows semi-arbitrary "--user"
+      values)'
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/lib/postgresql/data
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - 'ln -s usr/local/bin/docker-entrypoint.sh / # backwards compat'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "5432"
+  - CmdLine:
+    - postgres
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

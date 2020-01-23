@@ -1,0 +1,129 @@
+MetaArgs:
+- DefaultValue: '"ojs-3_1_1-4"'
+  Key: tag_name
+  ProvidedValue: null
+  Value: '"ojs-3_1_1-4"'
+- DefaultValue: '"https://github.com/pkp/ojs.git"'
+  Key: repo_url
+  ProvidedValue: null
+  Value: '"https://github.com/pkp/ojs.git"'
+Stages:
+- As: clone_code
+  BaseName: alpine:latest
+  Commands:
+  - Key: tag_name
+    Name: arg
+    Value: null
+  - Key: repo_url
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk add --update-cache --no-cache git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --progress -b "${tag_name}" --single-branch --depth 1 --recurse-submodules
+      -j 4 ${repo_url} /app
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: clone_code
+  Platform: ""
+  SourceCode: FROM alpine:latest AS CLONE_CODE
+- As: build_composer
+  BaseName: composer:1.8
+  Commands:
+  - Chown: ""
+    From: CLONE_CODE
+    Name: copy
+    SourcesAndDest:
+    - /app/
+    - /app/
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - composer --working-dir=lib/pkp update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - composer --working-dir=plugins/paymethod/paypal update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - composer --working-dir=plugins/generic/citationStyleLanguage update
+    Name: run
+    PrependShell: true
+  From:
+    Image: composer:1.8
+  Name: build_composer
+  Platform: ""
+  SourceCode: FROM composer:1.8 AS BUILD_COMPOSER
+- As: build_node
+  BaseName: node:8.15-alpine
+  Commands:
+  - Chown: ""
+    From: BUILD_COMPOSER
+    Name: copy
+    SourcesAndDest:
+    - /app/
+    - /app/
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find . | grep .git | xargs rm -rf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/*
+    - /app/
+  From:
+    Image: node:8.15-alpine
+  Name: build_node
+  Platform: ""
+  SourceCode: FROM node:8.15-alpine AS BUILD_NODE
+- BaseName: php:7.3-apache
+  Commands:
+  - Env:
+    - Key: APP_DIR
+      Value: /var/www/html
+    Name: env
+  - Chown: www-data:www-data
+    From: BUILD_NODE
+    Name: copy
+    SourcesAndDest:
+    - /app/
+    - ${APP_DIR}
+  - CmdLine:
+    - mv ${APP_DIR}/config-creator.php /bin/config-creator  && mv ${APP_DIR}/pkp.sh
+      /bin/pkp  && mv ${APP_DIR}/entrypoint.sh /entrypoint.sh  && mv ${APP_DIR}/ojs.config.env
+      /etc/ojs.config.env  && chmod +x /bin/config-creator  && chmod +x /bin/pkp  &&
+      chmod +x /entrypoint.sh  && docker-php-ext-install mysqli  && echo "error_log=/dev/stderr"
+      > $PHP_INI_DIR/conf.d/error.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - apache2ctl
+    - -DFOREGROUND
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:7.3-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.3-apache

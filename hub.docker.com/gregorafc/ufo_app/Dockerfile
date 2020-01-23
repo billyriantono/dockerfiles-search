@@ -1,21 +1,9 @@
-FROM ruby:2.3.3
+FROM python:3-alpine
 
-MAINTAINER gregor.afc@gmail.com
+LABEL maintainer "Alex Chan <alex@alexwlchan.net>"
+LABEL description "A Python 3-based image for running Twine"
 
-RUN apt-get update -qq && apt-get install -y build-essential
+COPY requirements.txt /
+RUN pip3 install -r /requirements.txt
 
-RUN apt-get install -y node.js
-
-RUN mkdir /ufo_app
-
-COPY . /ufo_app
-
-WORKDIR /ufo_app
-
-RUN bundle install
-
-RUN bundle exec rake db:migrate
-
-EXPOSE 3000
-
-CMD bin/rails server --port 3000 --binding 0.0.0.0
+ENTRYPOINT ["twine"]

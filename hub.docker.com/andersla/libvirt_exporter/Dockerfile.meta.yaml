@@ -1,0 +1,76 @@
+MetaArgs: null
+Stages:
+- BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk add --update git gcc g++ make libc-dev portablexdr-dev linux-headers libnl-dev
+      perl libtirpc-dev pkgconfig wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget ftp://xmlsoft.org/libxml2/libxml2-2.9.4.tar.gz -P /tmp &&     tar -xf /tmp/libxml2-2.9.4.tar.gz
+      -C /tmp
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/libxml2-2.9.4
+  - CmdLine:
+    - ./configure --disable-shared --enable-static &&     make -j2 &&     make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://libvirt.org/sources/libvirt-3.2.0.tar.xz -P /tmp &&     tar -xf
+      /tmp/libvirt-3.2.0.tar.xz -C /tmp
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/libvirt-3.2.0
+  - CmdLine:
+    - ./configure --disable-shared --enable-static --localstatedir=/var --without-storage-mpath
+      &&     make -j2 &&     make install &&     sed -i 's/^Libs:.*/& -lnl -ltirpc
+      -lxml2/' /usr/local/lib/pkgconfig/libvirt.pc
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LIBVIRT_EXPORTER_PATH
+      Value: /go/src/github.com/kumina/libvirt_exporter
+    Name: env
+  - CmdLine:
+    - mkdir -p $LIBVIRT_EXPORTER_PATH
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $LIBVIRT_EXPORTER_PATH
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - go get -d ./... &&     go build --ldflags '-extldflags "-static"' &&     strip
+      libvirt_exporter
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM golang:alpine
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/kumina/libvirt_exporter/libvirt_exporter
+    - .
+  - CmdLine:
+    - ./libvirt_exporter
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

@@ -1,7 +1,9 @@
-FROM visionai/clouddream
-WORKDIR /opt/caffe
-RUN ./data/ilsvrc12/get_ilsvrc_aux.sh
-RUN pip install -r examples/web_demo/requirements.txt
-EXPOSE 5000
-ADD app.py /opt/caffe/examples/web_demo/app.py
-CMD python examples/web_demo/app.py
+FROM docker:17.12-dind
+
+COPY docker.aai.com.crt  /certs/
+RUN cat /certs/docker.aai.com.crt >> /etc/ssl/certs/ca-certificates.crt
+
+RUN apk --update add \
+    bash \
+    openssh
+CMD ["--insecure-registry", "docker.aai.com"]

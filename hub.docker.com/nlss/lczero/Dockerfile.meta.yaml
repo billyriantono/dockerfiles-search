@@ -1,0 +1,56 @@
+MetaArgs: null
+Stages:
+- As: lczero-build
+  BaseName: debian:stable-slim
+  Commands:
+  - Key: LCZERO_REPOSITORY
+    Name: arg
+    Value: https://github.com/LeelaChessZero/lc0.git
+  - Key: LCZERO_VERSION
+    Name: arg
+    Value: "0.22"
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - apt update     && DEBIAN_FRONTEND=noninteractive        apt install --yes  --no-install-recommends             build-essential             git             libopenblas-dev             ninja-build             python3             python3-setuptools             python3-pip             python             libgtest-dev             cmake             protobuf-compiler             libprotobuf-dev     &&
+      apt-get clean     && rm -rf /var/lib/apt/lists/     && pip3 install meson     &&
+      git clone -b "release/${LCZERO_VERSION}" --depth=1 --recurse-submodules "${LCZERO_REPOSITORY}"
+      lczero     && cd  lczero     && ./build.sh     && rm lczero/build/release/{*@exe,*.ninja,meson-*,compile_*,*_test}
+      -rf
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stable-slim
+  Name: lczero-build
+  Platform: ""
+  SourceCode: FROM debian:stable-slim AS lczero-build
+- As: lczero-service
+  BaseName: nlss/xinetd:latest
+  Commands:
+  - CmdLine:
+    - 'apt update     && DEBIAN_FRONTEND=noninteractive        apt install libprotobuf-dev
+      libopenblas-dev --yes --no-install-recommends     && adduser --shell /bin/false
+      --disabled-password --gecos "LCZero User" --home "/lczero" "lczero"     && apt-get
+      clean     && rm -rf /var/lib/apt/lists/     && echo "lczero          3333/tcp                        #
+      LCZero" >> "/etc/services"'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - rootfs
+    - /
+  - Chown: ""
+    From: lczero-build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/lczero/build/release
+    - /lczero/bin
+  - Name: volume
+    Volumes:
+    - /lczero/resources
+  From:
+    Image: nlss/xinetd:latest
+  Name: lczero-service
+  Platform: ""
+  SourceCode: FROM nlss/xinetd:latest AS lczero-service

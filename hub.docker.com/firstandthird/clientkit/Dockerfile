@@ -1,17 +1,24 @@
-FROM node:10.14-alpine
+ARG DOCKER_TAG=latest
+FROM docker.io/fermilabqc/base-notebook:${DOCKER_TAG}
 
-ENV NODE_ENV production
-ENV FORCE_COLOR 1
+USER root
+ENV GITDIR=/srv/git
 
-RUN apk add --update git
+RUN dnf -y install git libgomp gcc
+RUN mkdir -p $GITDIR && chown $NB_UID:$NB_GID $GITDIR && ln -s /home/$NB_USER $GITDIR/work
 
-RUN mkdir -p /ck && mkdir -p /app
-WORKDIR /app
+USER $NB_USER
+WORKDIR $GITDIR
 
-COPY package.json /ck/
-RUN cd /ck && npm install --production
-COPY . /ck
+# Cirq, QISKit, QuTiP
+RUN source activate && pip install cirq==0.3.1.35 && pip install qiskit==0.6.1
 
-RUN chmod 777 /ck/index.js && ln -s /ck/index.js /usr/local/bin/clientkit
+# OpenFermion
+RUN source activate && LC_ALL=en_US.UTF-8 pip install \
+	openfermion==0.8.1 openfermionpyscf==0.3 openfermionpsi4==0.4 openfermioncirq==0.2.1a35
+# hackery - users need write access to openfermion/data (!)
+RUN chown -R $NB_UID:$NB_GID $CONDA_DIR/lib/python3.6/site-packages/openfermion/data
+RUN git clone https://github.com/quantumlib/OpenFermion && git clone https://github.com/kevinsung/OpenFermion-Hands-On-Tutorials
 
-ENTRYPOINT ["/usr/local/bin/clientkit"]
+# QuTiP
+RUN conda install qutip==4.3.1 && conda clean -tipsy

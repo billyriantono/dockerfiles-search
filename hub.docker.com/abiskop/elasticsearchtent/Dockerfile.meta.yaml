@@ -1,0 +1,125 @@
+MetaArgs: null
+Stages:
+- BaseName: phusion/baseimage:0.9.22
+  Commands:
+  - CmdLine:
+    - groupadd -r mysql && useradd -r -g mysql mysql
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOSU_VERSION
+      Value: "1.10"
+    Name: env
+  - CmdLine:
+    - "set -ex; \t\tfetchDeps=' \t\tca-certificates \t\twget \t'; \tapt-get update;
+      \tapt-get install -y --no-install-recommends $fetchDeps; \trm -rf /var/lib/apt/lists/*;
+      \t\tdpkgArch=\"$(dpkg --print-architecture | awk -F- '{ print $NF }')\"; \twget
+      -O /usr/local/bin/gosu \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch\";
+      \twget -O /usr/local/bin/gosu.asc \"https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch.asc\";
+      \t\texport GNUPGHOME=\"$(mktemp -d)\"; \tgpg --keyserver ha.pool.sks-keyservers.net
+      --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4; \tgpg --batch --verify
+      /usr/local/bin/gosu.asc /usr/local/bin/gosu; \trm -r \"$GNUPGHOME\" /usr/local/bin/gosu.asc;
+      \t\tchmod +x /usr/local/bin/gosu; \tgosu nobody true; \t\tapt-get purge -y --auto-remove
+      $fetchDeps"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /docker-entrypoint-initdb.d
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get update && apt-get install -y --no-install-recommends \t\tapt-transport-https
+      ca-certificates \t\tpwgen \t&& rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GPG_KEYS
+      Value: "199369E5404BD5FC7D2FE43BCBCB082A1BB943DB \t430BDF5C56E7C94E848EE60C1C4CBDCDCD2EFD2A
+        \t4D1BB29D63D98E422B2113B19334A25F8507EFA5"
+    Name: env
+  - CmdLine:
+    - "set -ex; \texport GNUPGHOME=\"$(mktemp -d)\"; \tfor key in $GPG_KEYS; do \t\tgpg
+      --keyserver ha.pool.sks-keyservers.net --recv-keys \"$key\"; \tdone; \tgpg --export
+      $GPG_KEYS > /etc/apt/trusted.gpg.d/mariadb.gpg; \trm -r \"$GNUPGHOME\"; \tapt-key
+      list"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "echo \"deb https://repo.percona.com/apt jessie main\" > /etc/apt/sources.list.d/percona.list
+      \t&& { \t\techo 'Package: *'; \t\techo 'Pin: release o=Percona Development Team';
+      \t\techo 'Pin-Priority: 998'; \t} > /etc/apt/preferences.d/percona"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MARIADB_MAJOR
+      Value: "10.3"
+    Name: env
+  - Env:
+    - Key: MARIADB_VERSION
+      Value: 10.3.3+maria~jessie
+    Name: env
+  - CmdLine:
+    - "echo \"deb http://ftp.osuosl.org/pub/mariadb/repo/$MARIADB_MAJOR/debian jessie
+      main\" > /etc/apt/sources.list.d/mariadb.list \t&& { \t\techo 'Package: *';
+      \t\techo 'Pin: release o=MariaDB'; \t\techo 'Pin-Priority: 999'; \t} > /etc/apt/preferences.d/mariadb"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "{ \t\techo \"mariadb-server-$MARIADB_MAJOR\" mysql-server/root_password password
+      'unused'; \t\techo \"mariadb-server-$MARIADB_MAJOR\" mysql-server/root_password_again
+      password 'unused'; \t} | debconf-set-selections \t&& apt-get update \t&& apt-get
+      install -y \t\t\"mariadb-server=$MARIADB_VERSION\" \t\tpercona-xtrabackup-24
+      \t\tsocat \t&& rm -rf /var/lib/apt/lists/* \t&& sed -ri 's/^user\\s/#&/' /etc/mysql/my.cnf
+      /etc/mysql/conf.d/* \t&& rm -rf /var/lib/mysql && mkdir -p /var/lib/mysql /var/run/mysqld
+      \t&& chown -R root:mysql /var/lib/mysql /var/run/mysqld \t&& chmod 777 /var/run/mysqld
+      \t&& find /etc/mysql/ -name '*.cnf' -print0 \t\t| xargs -0 grep -lZE '^(bind-address|log)'
+      \t\t| xargs -rt -0 sed -Ei 's/^(bind-address|log)/#&/'"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MYSQL_INITDB_SKIP_TZINFO
+      Value: "true"
+    Name: env
+  - CmdLine:
+    - "ln -sf /dev/stdout /var/log/mysql/mysql.log \t&& ln -sf /dev/stderr /var/log/mysql/error.log"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/lib/mysql
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - 'ln -s usr/local/bin/docker-entrypoint.sh / # backwards compat'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 755 /usr/local/bin/docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/custom.cnf
+    - /etc/mysql/conf.d/docker.cnf
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "3306"
+  - CmdLine:
+    - mysqld
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: phusion/baseimage:0.9.22
+  Name: ""
+  Platform: ""
+  SourceCode: FROM phusion/baseimage:0.9.22

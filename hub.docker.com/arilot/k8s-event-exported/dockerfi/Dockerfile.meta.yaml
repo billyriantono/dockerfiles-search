@@ -1,0 +1,250 @@
+MetaArgs:
+- DefaultValue: debian:10-slim
+  Key: BASE_IMAGE
+  ProvidedValue: null
+  Value: debian:10-slim
+Stages:
+- As: builder
+  BaseName: golang:1.12.6
+  Commands:
+  - CmdLine:
+    - echo 'deb http://deb.debian.org/debian buster-backports main' >> /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y     openssh-server     nginx     fcgiwrap     git     git-lfs     make     wget     gcc     zip
+      &&     apt-get clean &&     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - hack/install.sh
+    - .
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - hack/installers
+    - installers
+  - CmdLine:
+    - ./install.sh dep-linux
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./install.sh packr-linux
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./install.sh kubectl-linux
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./install.sh ksonnet-linux
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./install.sh helm-linux
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./install.sh kustomize-linux
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./install.sh aws-iam-authenticator-linux
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.6
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12.6 as builder
+- As: argocd-base
+  BaseName: $BASE_IMAGE
+  Commands:
+  - Name: user
+    User: root
+  - CmdLine:
+    - echo 'deb http://deb.debian.org/debian buster-backports main' >> /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd -g 999 argocd &&     useradd -r -u 999 -g argocd argocd &&     mkdir
+      -p /home/argocd &&     chown argocd:0 /home/argocd &&     chmod g=u /home/argocd
+      &&     chmod g=u /etc/passwd &&     apt-get update &&     apt-get install -y
+      git git-lfs &&     apt-get clean &&     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - hack/git-ask-pass.sh
+    - /usr/local/bin/git-ask-pass.sh
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/ks
+    - /usr/local/bin/ks
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/helm
+    - /usr/local/bin/helm
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/kubectl
+    - /usr/local/bin/kubectl
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/kustomize
+    - /usr/local/bin/kustomize
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/aws-iam-authenticator
+    - /usr/local/bin/aws-iam-authenticator
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - uid_entrypoint.sh
+    - /usr/local/bin/uid_entrypoint.sh
+  - CmdLine:
+    - mkdir -p /app/config/ssh &&     touch /app/config/ssh/ssh_known_hosts &&     ln
+      -s /app/config/ssh/ssh_known_hosts /etc/ssh/ssh_known_hosts
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /app/config/tls
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: USER
+      Value: argocd
+    Name: env
+  - Name: user
+    User: argocd
+  - Name: workdir
+    Path: /home/argocd
+  From:
+    Image: $BASE_IMAGE
+  Name: argocd-base
+  Platform: ""
+  SourceCode: FROM $BASE_IMAGE as argocd-base
+- As: argocd-ui
+  BaseName: node:11.15.0
+  Commands:
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ui/package.json
+    - ui/yarn.lock
+    - ./
+  - CmdLine:
+    - yarn install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ui/
+    - .
+  - Key: ARGO_VERSION
+    Name: arg
+    Value: latest
+  - Env:
+    - Key: ARGO_VERSION
+      Value: $ARGO_VERSION
+    Name: env
+  - CmdLine:
+    - NODE_ENV='production' yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:11.15.0
+  Name: argocd-ui
+  Platform: ""
+  SourceCode: FROM node:11.15.0 as argocd-ui
+- As: argocd-build
+  BaseName: golang:1.12.6
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/dep
+    - /usr/local/bin/dep
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/packr
+    - /usr/local/bin/packr
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gopkg.toml
+    - ${GOPATH}/src/dummy/Gopkg.toml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gopkg.lock
+    - ${GOPATH}/src/dummy/Gopkg.lock
+  - CmdLine:
+    - cd ${GOPATH}/src/dummy &&     dep ensure -vendor-only &&     mv vendor/* ${GOPATH}/src/
+      &&     rmdir vendor
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/argoproj/argo-cd
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - make cli server controller repo-server argocd-util &&     make CLI_NAME=argocd-darwin-amd64
+      GOOS=darwin cli
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.6
+  Name: argocd-build
+  Platform: ""
+  SourceCode: FROM golang:1.12.6 as argocd-build
+- BaseName: argocd-base
+  Commands:
+  - Chown: ""
+    From: argocd-build
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/argoproj/argo-cd/dist/argocd*
+    - /usr/local/bin/
+  - Chown: ""
+    From: argocd-ui
+    Name: copy
+    SourcesAndDest:
+    - ./src/dist/app
+    - /shared/app
+  From:
+    Stage:
+      Index: 1
+      Named: argocd-base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM argocd-base

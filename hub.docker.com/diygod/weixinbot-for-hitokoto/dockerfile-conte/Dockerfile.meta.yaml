@@ -1,0 +1,74 @@
+MetaArgs: null
+Stages:
+- As: javabuilder
+  BaseName: maven:3-jdk-8-alpine
+  Commands:
+  - Name: workdir
+    Path: /sources
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - src
+    - src
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - pom.xml
+    - .
+  - CmdLine:
+    - mvn clean test
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3-jdk-8-alpine
+  Name: javabuilder
+  Platform: ""
+  SourceCode: FROM maven:3-jdk-8-alpine AS javaBuilder
+- As: toolbuilder
+  BaseName: oracle/graalvm-ce:19.0.0
+  Commands:
+  - Name: workdir
+    Path: /build
+  - CmdLine:
+    - gu install native-image
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: javaBuilder
+    Name: copy
+    SourcesAndDest:
+    - /sources/target
+    - target
+  - CmdLine:
+    - native-image -cp target/classes eu.diversit.k8s.prisma.server.InitConfig /build/prisma-init-config
+    Name: run
+    PrependShell: true
+  From:
+    Image: oracle/graalvm-ce:19.0.0
+  Name: toolbuilder
+  Platform: ""
+  SourceCode: FROM oracle/graalvm-ce:19.0.0 AS toolBuilder
+- As: runner
+  BaseName: oraclelinux:7-slim
+  Commands:
+  - Env:
+    - Key: SECRETS_FOLDER
+      Value: /secrets
+    Name: env
+  - Env:
+    - Key: PRISMA_CONFIG
+      Value: /prisma/prisma.config
+    Name: env
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: toolBuilder
+    Name: copy
+    SourcesAndDest:
+    - /build/prisma-init-config
+    - /usr/local/bin
+  From:
+    Image: oraclelinux:7-slim
+  Name: runner
+  Platform: ""
+  SourceCode: FROM oraclelinux:7-slim AS runner

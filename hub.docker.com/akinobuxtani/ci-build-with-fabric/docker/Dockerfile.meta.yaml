@@ -1,0 +1,130 @@
+MetaArgs:
+- DefaultValue: latest
+  Key: BASE_IMAGE_TAG
+  ProvidedValue: null
+  Value: latest
+Stages:
+- BaseName: akhomy/alpine-base:${BASE_IMAGE_TAG}
+  Commands:
+  - Key: VARNISH_VER
+    Name: arg
+    Value: 6.0.3
+  - Env:
+    - Key: VARNISH_VER
+      Value: ${VARNISH_VER}
+    - Key: LIBVMOD_GEOIP
+      Value: '"1.0.3"'
+    Name: env
+  - Env:
+    - Key: GOTPL_VER
+      Value: '"0.1.5"'
+    Name: env
+  - Env:
+    - Key: PROMETHEUS_VARNISH_EXPORTER_VERSION
+      Value: '"1.4.1"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - patches
+    - /tmp/patches/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - GeoIP.dat.gz
+    - /usr/share/GeoIP/
+  - CmdLine:
+    - "set -ex;         addgroup -g 101 -S varnish; \tadduser -u 100 -D -S -s /bin/bash
+      -G varnish varnish; \techo \"PS1='\\w\\$ '\" >> /home/varnish/.bashrc;         apk
+      --update --no-cache -t .varnish-run-deps add         gcc         libc-dev         libedit
+      \        libexecinfo         geoip         libgcc         make         ncurses-libs
+      \        pcre         pwgen;         gotpl_url=\"https://github.com/wodby/gotpl/releases/download/${GOTPL_VER}/gotpl-alpine-linux-amd64-${GOTPL_VER}.tar.gz\";
+      \        wget -qO- \"${gotpl_url}\" | tar xz -C /usr/local/bin;                 curl
+      -L https://github.com/jonnenauha/prometheus_varnish_exporter/releases/download/${PROMETHEUS_VARNISH_EXPORTER_VERSION}/prometheus_varnish_exporter-${PROMETHEUS_VARNISH_EXPORTER_VERSION}.linux-amd64.tar.gz
+      \        | tar --strip-components=1 -xz -C /usr/bin &&         chmod +x /usr/bin/prometheus_varnish_exporter
+      &&         mkdir /lib64 &&         ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2;
+      \    rm -rf /var/cache/apk/*;     apk --update --no-cache -t .varnish-build-deps
+      add         attr         autoconf         automake         build-base         git
+      \        geoip-dev         libedit-dev         libexecinfo-dev         libtool
+      \        linux-headers         ncurses-dev         pcre-dev         py-docutils
+      \        py-sphinx         python         rsync;         varnish_url=\"http://varnish-cache.org/_downloads/varnish-${VARNISH_VER}.tgz\";
+      \    wget -qO- \"${varnish_url}\" | tar xz -C /tmp/;     cd /tmp/varnish-*;
+      \    mkdir -p /tmp/pkg;     for i in /tmp/patches/\"${VARNISH_VER:0:1}\"/*.patch;
+      do patch -p1 -i \"${i}\"; done;         ./configure \t\t--build=x86_64-alpine-linux-musl
+      \t\t--host=x86_64-alpine-linux-musl \t\t--prefix=/usr \t\t--sysconfdir=/etc
+      \t\t--mandir=/usr/share/man \t\t--infodir=/usr/share/info \t\t--localstatedir=/var/lib
+      \t\t--without-jemalloc;         make -j \"$(nproc)\";     make DESTDIR=/tmp/pkg
+      install;         mkdir -p /usr/share/varnish;     mv LICENSE /usr/share/varnish/;
+      \        pkgdir=\"/tmp/pkg\";     binfiles=$(scanelf -R \"$pkgdir\" | grep ET_DYN
+      | sed \"s:$pkgdir\\/::g\" | sed \"s:ET_DYN ::g\");     for f in $binfiles; do
+      \        srcdir=$(dirname $pkgdir/$f);         srcfile=$(basename $pkgdir/$f);
+      \        cd $srcdir;         XATTR=$(getfattr --match=\"\" --dump \"${srcfile}\");
+      \        strip $srcfile;         [ -n \"$XATTR\" ] && { echo \"$XATTR\" | setfattr
+      --restore=-; }     done;         pkgdir=/tmp/pkg;     for i in doc man info
+      html sgml gtk-doc ri help; do         if [ -d \"$pkgdir/usr/share/$i\" ]; then
+      \            rm -rf \"$pkgdir/usr/share/$i\";         fi;     done;         cd
+      /tmp/pkg;     libdirs=usr/;     [ -d lib/ ] && libdirs=\"lib/ $libdirs\";     for
+      i in usr/include/* usr/lib/pkgconfig/varnish* usr/share/aclocal/varnish*             usr/share/gettext
+      usr/bin/*-config             usr/share/vala/vapi usr/share/gir-[0-9]*             usr/share/qt*/mkspecs
+      \            usr/lib/qt*/mkspecs             usr/lib/cmake             $(find
+      $libdirs -name '*.[acho]'                 -o -name '*.prl' 2>/dev/null); do
+      \        if [ -e \"$pkgdir/$i\" ] || [ -L \"$pkgdir/$i\" ]; then             echo
+      \"/$i\" >> /tmp/varnish-dev-files;         fi;     done;         for i in lib/*.so
+      usr/lib/*.so; do         if [ -L \"$i\" ]; then             echo \"/$i\" >>
+      /tmp/varnish-dev-files;         fi;     done;         rsync -a --links /tmp/pkg/
+      /;         libvmod_geoip_url=\"https://github.com/varnish/libvmod-geoip/archive/libvmod-geoip-${LIBVMOD_GEOIP}.tar.gz\";
+      \    wget -qO- \"${libvmod_geoip_url}\" | tar xz -C /tmp/;     gunzip /usr/share/GeoIP/GeoIP.dat.gz;
+      \    cd /tmp/libvmod-geoip-*;     ./autogen.sh;     ./configure;     make;     make
+      install;     make check;         git clone --depth 1 -b master --single-branch
+      https://github.com/varnish/varnish-modules /tmp/varnish-modules;     cd /tmp/varnish-modules;
+      \    ./bootstrap;     ./configure;     make;     make install;     make check;
+      \        install -d -o varnish -g varnish -m750 \t\t/var/cache/varnish \t\t/var/log/varnish
+      \t\t/var/lib/varnish;         install -d -o root -g varnish -m750 \t    /etc/varnish
+      \t    /etc/varnish/defaults \t    /etc/varnish/includes;         touch /etc/varnish/preset.vcl
+      /etc/init.d/varnishd;     chown varnish:varnish /etc/varnish/preset.vcl /etc/init.d/varnishd;
+      \    chmod +x /etc/init.d/varnishd;         while IFS= read -r file ; do rm
+      -rf -- \"${file}\" ; done < /tmp/varnish-dev-files;     apk del --purge .varnish-build-deps;
+      \    rm -rf /tmp/*;     rm -rf /var/cache/apk/*"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "6081"
+    - "6082"
+    - "9131"
+  - Name: volume
+    Volumes:
+    - /var/lib/varnish
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - templates
+    - /etc/gotpl/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /etc/init.d/varnishd
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: akhomy/alpine-base:${BASE_IMAGE_TAG}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM akhomy/alpine-base:${BASE_IMAGE_TAG}

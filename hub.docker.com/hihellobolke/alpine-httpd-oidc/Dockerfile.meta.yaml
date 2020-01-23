@@ -1,0 +1,156 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - "set -x \t&& addgroup -g 82 -S www-data \t&& adduser -u 82 -D -S -G www-data
+      www-data"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: INSTALL_BASE
+      Value: '"/usr/local"'
+    Name: env
+  - Env:
+    - Key: HTTPD_PREFIX
+      Value: '"${INSTALL_BASE}/apache2"'
+    Name: env
+  - Env:
+    - Key: HTTPD_DEP_PREFIX
+      Value: '"${INSTALL_BASE}"'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"$HTTPD_PREFIX/bin:$PATH"'
+    Name: env
+  - Env:
+    - Key: JANSSON_VERSION
+      Value: "2.11"
+    Name: env
+  - Env:
+    - Key: CJOSE_VERSION
+      Value: 0.6.1
+    Name: env
+  - Env:
+    - Key: OIDC_VERSION
+      Value: 2.3.7
+    Name: env
+  - Env:
+    - Key: OIDC_URL
+      Value: '"https://github.com/zmartzone/mod_auth_openidc/archive/v${OIDC_VERSION}.zip"'
+    Name: env
+  - Env:
+    - Key: OIDC_URL_DEV
+      Value: '"https://github.com/zmartzone/mod_auth_openidc/archive/master.zip"'
+    Name: env
+  - Env:
+    - Key: HTTPD_VERSION
+      Value: 2.4.34
+    Name: env
+  - Env:
+    - Key: HTTPD_SHA256
+      Value: fa53c95631febb08a9de41fd2864cfff815cf62d9306723ab0d4b8d7aa1638f0
+    Name: env
+  - Env:
+    - Key: HTTPD_PATCHES
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: APACHE_DIST_URLS
+      Value: "https://www.apache.org/dyn/closer.cgi?action=download&filename= \thttps://www-us.apache.org/dist/
+        \thttps://www.apache.org/dist/ \thttps://archive.apache.org/dist/"
+    Name: env
+  - Env:
+    - Key: INSTALL_DEPS
+      Value: '"${INSTALL_BASE}/install.deps"'
+    Name: env
+  - Name: workdir
+    Path: $HTTPD_PREFIX
+  - CmdLine:
+    - "set -eux;         mkdir -p \"$HTTPD_PREFIX\" && chown www-data:www-data \"$HTTPD_PREFIX\";
+      \t\trunDeps=' \t\tapr-dev \t\tapr-util-dev \t\tapr-util-ldap \t\tperl \t'; \tapk
+      add --no-cache --virtual .build-deps \t\t$runDeps \t\tca-certificates \t\tcoreutils
+      \t\tdpkg-dev dpkg \t\tgcc \t\tgnupg \t\tlibc-dev \t\tlibressl \t\tlibressl-dev
+      \t\tlibxml2-dev \t\tlua-dev \t\tmake \t\tnghttp2-dev \t\tpcre-dev \t\ttar \t\tzlib-dev
+      \                        git         curl         curl-dev         hiredis         hiredis-dev
+      \        automake         autoconf;"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/app/local/lib/pkgconfig     &&
+      mkdir -p /tmp/src /tmp/download     && /usr/bin/wget -nv -O /tmp/download/jansson.tar.gz
+      http://www.digip.org/jansson/releases/jansson-${JANSSON_VERSION}.tar.gz         &&
+      tar -zxf /tmp/download/jansson.tar.gz -C /tmp/src             && cd /tmp/src/jansson*
+      && ./configure                 --prefix="${HTTPD_DEP_PREFIX}"             &&
+      make > mk.log             && make install         && cd /         && /bin/rm
+      -rf /tmp/download/jansson.tar.gz /tmp/src/jansson*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && /usr/bin/wget -nv -O /tmp/download/cjose.tar.gz https://github.com/cisco/cjose/archive/${CJOSE_VERSION}.tar.gz     &&
+      tar -zxf /tmp/download/cjose.tar.gz -C /tmp/src         && cd /tmp/src/cjose*
+      && ./configure             --prefix="${HTTPD_DEP_PREFIX}"             --with-jansson="${HTTPD_DEP_PREFIX}"         &&
+      make > mk.log         && make install     && cd /     && /bin/rm -rf /tmp/download/cjose.tar.gz
+      /tmp/src/cjose*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -eux;     \tddist() { \t\tlocal f=\"$1\"; shift; \t\tlocal distFile=\"$1\";
+      shift; \t\tlocal success=; \t\tlocal distUrl=; \t\tfor distUrl in $APACHE_DIST_URLS;
+      do \t\t\tif wget -O \"$f\" \"$distUrl$distFile\" && [ -s \"$f\" ]; then \t\t\t\tsuccess=1;
+      \t\t\t\tbreak; \t\t\tfi; \t\tdone; \t\t[ -n \"$success\" ]; \t}; \t\tddist 'httpd.tar.bz2'
+      \"httpd/httpd-$HTTPD_VERSION.tar.bz2\"; \techo \"$HTTPD_SHA256 *httpd.tar.bz2\"
+      | sha256sum -c -; \t\tddist 'httpd.tar.bz2.asc' \"httpd/httpd-$HTTPD_VERSION.tar.bz2.asc\";
+      \texport GNUPGHOME=\"$(mktemp -d)\"; \tfor key in \t\tA93D62ECC3C8EA12DB220EC934EA76E6791485A8
+      \t\tB9E8213AEFB861AF35A41F2C995E35221AD84DFF \t; do \t\tgpg --keyserver ha.pool.sks-keyservers.net
+      --recv-keys \"$key\"; \tdone; \tgpg --batch --verify httpd.tar.bz2.asc httpd.tar.bz2;
+      \tcommand -v gpgconf && gpgconf --kill all || :; \trm -rf \"$GNUPGHOME\" httpd.tar.bz2.asc;
+      \t\tmkdir -p src; \ttar -xf httpd.tar.bz2 -C src --strip-components=1; \trm
+      httpd.tar.bz2; \tcd src; \t\tpatches() { \t\twhile [ \"$#\" -gt 0 ]; do \t\t\tlocal
+      patchFile=\"$1\"; shift; \t\t\tlocal patchSha256=\"$1\"; shift; \t\t\tddist
+      \"$patchFile\" \"httpd/patches/apply_to_$HTTPD_VERSION/$patchFile\"; \t\t\techo
+      \"$patchSha256 *$patchFile\" | sha256sum -c -; \t\t\tpatch -p0 < \"$patchFile\";
+      \t\t\trm -f \"$patchFile\"; \t\tdone; \t}; \tpatches $HTTPD_PATCHES; \t\tgnuArch=\"$(dpkg-architecture
+      --query DEB_BUILD_GNU_TYPE)\"; \t./configure \t\t--build=\"$gnuArch\" \t\t--prefix=\"$HTTPD_PREFIX\"
+      \t\t--enable-mods-shared=reallyall \t\t--enable-mpms-shared=all \t; \tmake -j
+      \"$(nproc)\"; \tmake install; \t\tcd ..; \trm -r src man manual; \t\tsed -ri
+      \t\t-e 's!^(\\s*CustomLog)\\s+\\S+!\\1 /proc/self/fd/1!g' \t\t-e 's!^(\\s*ErrorLog)\\s+\\S+!\\1
+      /proc/self/fd/2!g' \t\t\"$HTTPD_PREFIX/conf/httpd.conf\";"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/app/local/lib/pkgconfig     &&
+      /usr/bin/wget -nv -O /tmp/download/mod_auth_openidc.zip $OIDC_URL_DEV     &&
+      cd /tmp/src && unzip /tmp/download/mod_auth_openidc.zip     && cd /tmp/src/mod_*         &&
+      ./autogen.sh         && ./configure --with-apxs2=${HTTPD_PREFIX}/bin/apxs         &&
+      make          && make install     && cd /     && /bin/rm -rf /tmp/download/mod_auth_openidc.zip
+      /tmp/src/mod_auth_openidc*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -x     && runDeps=\"$runDeps $(         scanelf --needed --nobanner --format
+      '%n#p' --recursive ${INSTALL_BASE}             | tr ',' '\\n'             |
+      sort -u             | awk 'system(\"[ -e /app/local/lib/\" $1 \" ]\") == 0 {
+      next } { print \"so:\" $1 }'             | grep -v libcjose             | grep
+      -v libjansson         )\"     && echo $runDeps > $INSTALL_DEPS     && apk add
+      --virtual .httpd-rundeps $runDeps \t&& apk del .build-deps"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - httpd-foreground
+    - /usr/local/bin/
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - httpd-foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

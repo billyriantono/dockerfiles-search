@@ -1,0 +1,76 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: ubuntu:18.04
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"don@agilicus.com"'
+    Name: label
+  - Env:
+    - Key: APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE
+      Value: DontWarn
+    Name: env
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - apt-get update &&     apt-get install -y build-essential git tree wget software-properties-common
+      &&     add-apt-repository -y ppa:nginx/stable &&     sed -i -e 's?^# ??' /etc/apt/sources.list.d/nginx-ubuntu-stable-bionic.list
+      &&     sed -i -e 's?# deb-src?deb-src?' /etc/apt/sources.list &&     apt-get
+      update &&     apt-get -y build-dep nginx &&     apt-get -y source nginx &&     git
+      clone https://github.com/AirisX/nginx_cookie_flag_module &&     tar xvf nginx_1.16.1.orig.tar.gz
+      &&     mkdir -p modules &&     cd nginx-1.16.1 &&     ./configure --with-compat
+      --add-dynamic-module=../nginx_cookie_flag_module/ &&     make modules &&     cp
+      objs/ngx_http_cookie_flag_filter_module.so /src/modules
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /src &&     wget -qO - https://openresty.org/package/pubkey.gpg | apt-key
+      add - &&     add-apt-repository -y "deb http://openresty.org/package/ubuntu
+      $(lsb_release -sc) main" &&     apt-get update &&     apt-get -y source pcre3
+      &&     apt-get -y install liblua5.1-dev python luarocks openresty &&     git
+      clone https://github.com/p0pr0ck5/lua-resty-waf &&     cd lua-resty-waf &&     git
+      submodule init &&     git submodule update &&     (cd src; make PREFIX=/usr
+      CFLAGS="-c -O3 -Wall -fpic"  decode.o) &&     make PREFIX=/usr &&     make PREFIX=/usr
+      install
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: build
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as build
+- BaseName: ubuntu:18.04
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install -y wget gnupg2 &&     wget -qO - https://openresty.org/package/pubkey.gpg
+      | apt-key add - &&     echo deb http://openresty.org/package/ubuntu bionic main
+      | tee -a /etc/apt/sources.list &&     apt-get update &&     apt-get install
+      -y software-properties-common openresty luarocks liblua5.1-dev &&     add-apt-repository
+      -y ppa:nginx/stable &&     apt-get update &&     apt-get -y install nginx-extras
+      &&     dpkg -r build-essential &&     apt-get -y autoremove
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /src/modules/*
+    - /usr/lib/nginx/modules/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/lua
+    - /usr/local/lib/lua
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/luarocks
+    - /usr/local/lib/luarocks
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

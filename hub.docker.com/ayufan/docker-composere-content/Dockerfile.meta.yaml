@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.10-alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk upgrade
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add make gcc git musl-dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - /go/src/github.com/Axway/elasticsearch-docker-beat
+  - Name: workdir
+    Path: /go/src/github.com/Axway/elasticsearch-docker-beat
+  - Key: LDFLAGS
+    Name: arg
+    Value: '"-s -w"'
+  - CmdLine:
+    - make LDFLAGS="${LDFLAGS}"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -ldflags "${LDFLAGS}" -o ./updater /go/src/github.com/Axway/elasticsearch-docker-beat/starter/main.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.10-alpine as BUILD
+- BaseName: alpine:3.8
+  Commands:
+  - CmdLine:
+    - apk --no-cache add curl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: BUILD
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/Axway/elasticsearch-docker-beat/elasticsearch-docker-beat
+    - /etc/dbeat/dbeat
+  - Chown: ""
+    From: BUILD
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/Axway/elasticsearch-docker-beat/updater
+    - /etc/dbeat/updater
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./start.sh
+    - /etc/dbeat/start.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./dbeat-confimage.yml
+    - /etc/beatconf/dbeat.yml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./*.json
+    - /etc/dbeat/
+  - Name: workdir
+    Path: /etc/dbeat
+  - Health:
+      Interval: 10000000000
+      Retries: 12
+      Test:
+      - CMD-SHELL
+      - curl -s -f localhost:3000/api/v1/health
+      Timeout: 15000000000
+    Name: healthcheck
+  - CmdLine:
+    - /etc/dbeat/start.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -c
+    - /etc/beatconf/dbeat.yml
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

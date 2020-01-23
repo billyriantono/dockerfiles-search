@@ -1,0 +1,159 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.9
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Ruud van Engelenhoven <ruud.vanengelenhoven@gmail.com"'
+    Name: label
+  - Env:
+    - Key: PHPIZE_DEPS
+      Value: autoconf   dpkg-dev dpkg   file   g++   gcc   libc-dev   make   pcre-dev   pkgconf   re2c
+    Name: env
+  - CmdLine:
+    - apk --update add --no-cache --virtual .persistent-deps   ca-certificates   curl   git   tar   wget   xz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x   && addgroup -g 82 -S www-data   && adduser -u 82 -D -S -G www-data
+      www-data
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_INI_DIR
+      Value: '"/usr/local/etc/php"'
+    Name: env
+  - CmdLine:
+    - mkdir -p $PHP_INI_DIR/conf.d
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_EXTRA_CONFIGURE_ARGS
+      Value: '"--enable-fpm --with-fpm-user=www-data --with-fpm-group=www-data"'
+    Name: env
+  - Env:
+    - Key: PHP_CFLAGS
+      Value: '"-fstack-protector-strong -fpic -fpie -O2"'
+    Name: env
+  - Env:
+    - Key: PHP_CPPFLAGS
+      Value: '"$PHP_CFLAGS"'
+    Name: env
+  - Env:
+    - Key: PHP_LDFLAGS
+      Value: '"-Wl,-O1 -Wl,--hash-style=both -pie"'
+    Name: env
+  - Env:
+    - Key: GPG_KEYS
+      Value: CBAF69F173A0FEA4B537F470D66C9593118BCCB6 F38252826ACD957EF380D39F2F7956BC5DA04B5D
+    Name: env
+  - Env:
+    - Key: PHP_VERSION
+      Value: 7.3.6
+    Name: env
+  - Env:
+    - Key: PHP_URL
+      Value: '"https://secure.php.net/get/php-7.3.6.tar.xz/from/this/mirror"'
+    Name: env
+  - Env:
+    - Key: PHP_ASC_URL
+      Value: '"https://secure.php.net/get/php-7.3.6.tar.xz.asc/from/this/mirror"'
+    Name: env
+  - Env:
+    - Key: PHP_SHA256
+      Value: '"fefc8967daa30ebc375b2ab2857f97da94ca81921b722ddac86b29e15c54a164"'
+    Name: env
+  - Env:
+    - Key: PHP_MD5
+      Value: '""'
+    Name: env
+  - CmdLine:
+    - set -xe;     apk add --no-cache --virtual .fetch-deps   gnupg   openssl   ;     mkdir
+      -p /usr/src;   cd /usr/src;     wget -O php.tar.xz "$PHP_URL";     if [ -n "$PHP_SHA256"
+      ]; then   echo "$PHP_SHA256 *php.tar.xz" | sha256sum -c -;   fi;     if [ -n
+      "$PHP_MD5" ]; then   echo "$PHP_MD5 *php.tar.xz" | sha256sum -c -;   fi;     if
+      [ -n "$PHP_ASC_URL" ]; then   wget -O php.tar.xz.asc "$PHP_ASC_URL";   export
+      GNUPGHOME="$(mktemp -d)";   for key in $GPG_KEYS; do   gpg --keyserver ha.pool.sks-keyservers.net
+      --recv-keys "$key";   done;   gpg --batch --verify php.tar.xz.asc php.tar.xz;   rm
+      -rf "$GNUPGHOME";   fi;   apk del .fetch-deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-source
+    - /usr/local/bin/
+  - CmdLine:
+    - chmod +x /usr/local/bin/docker-php-source
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -xe   && apk add --no-cache --virtual .build-deps   $PHPIZE_DEPS   argon2-dev   coreutils   curl-dev   libedit-dev   libsodium-dev   libxml2-dev   openssl-dev   sqlite-dev     &&
+      export CFLAGS="$PHP_CFLAGS"   CPPFLAGS="$PHP_CPPFLAGS"   LDFLAGS="$PHP_LDFLAGS"   &&
+      docker-php-source extract   && cd /usr/src/php   && gnuArch="$(dpkg-architecture
+      --query DEB_BUILD_GNU_TYPE)"   && ./configure   --build="$gnuArch"   --with-config-file-path="$PHP_INI_DIR"   --with-config-file-scan-dir="$PHP_INI_DIR/conf.d"     --enable-option-checking=fatal     --with-mhash     --enable-ftp   --enable-mbstring   --enable-mysqlnd   --with-password-argon2   --with-sodium=shared     --with-curl   --with-libedit   --with-openssl   --with-zlib     $(test
+      "$gnuArch" = 's390x-linux-gnu' && echo '--without-pcre-jit')     $PHP_EXTRA_CONFIGURE_ARGS   &&
+      make -j "$(nproc)"   && find -type f -name '*.a' -delete   && make install   &&
+      { find /usr/local/bin /usr/local/sbin -type f -perm +0111 -exec strip --strip-all
+      '{}' + || true; }   && make clean     && cp -v php.ini-* "$PHP_INI_DIR/"     &&
+      cd /   && docker-php-source delete     && runDeps="$(   scanelf --needed --nobanner
+      --format '%n#p' --recursive /usr/local   | tr ',' '\n'   | sort -u   | awk 'system("[
+      -e /usr/local/lib/" $1 " ]") == 0 { next } { print "so:" $1 }'   )"   && apk
+      add --no-cache $runDeps     && apk del --no-network .build-deps     && pecl
+      update-channels   && rm -rf /tmp/pear ~/.pearrc
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-ext-*
+    - docker-php-entrypoint
+    - /usr/local/bin/
+  - CmdLine:
+    - chmod +x /usr/local/bin/docker-php-ext-*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /usr/local/bin/docker-php-entrypoint
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-ext-enable sodium
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - Name: workdir
+    Path: /var/www/html
+  - CmdLine:
+    - set -ex   && cd /usr/local/etc   && if [ -d php-fpm.d ]; then   sed 's!=NONE/!=!g'
+      php-fpm.conf.default | tee php-fpm.conf > /dev/null;   cp php-fpm.d/www.conf.default
+      php-fpm.d/www.conf;   else   mkdir php-fpm.d;   cp php-fpm.conf.default php-fpm.d/www.conf;   {   echo
+      '[global]';   echo 'include=etc/php-fpm.d/*.conf';   } | tee php-fpm.conf;   fi   &&
+      {   echo '[global]';   echo 'error_log = /proc/self/fd/2';   echo; echo '; https://github.com/docker-library/php/pull/725#issuecomment-443540114';
+      echo 'log_limit = 8192';   echo;   echo '[www]';   echo '; if we send this to
+      /proc/self/fd/1, it never appears';   echo 'access.log = /proc/self/fd/2';   echo;   echo
+      'clear_env = no';   echo;   echo '; Ensure worker stdout and stderr are sent
+      to the main error log.';   echo 'catch_workers_output = yes';   echo 'decorate_workers_output
+      = no';   } | tee php-fpm.d/docker.conf   && {   echo '[global]';   echo 'daemonize
+      = no';   echo;   echo '[www]';   echo 'listen = 9000';   } | tee php-fpm.d/zz-docker.conf
+    Name: run
+    PrependShell: true
+  - Name: stopsignal
+    Signal: SIGQUIT
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - php-fpm
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

@@ -1,29 +1,29 @@
-FROM ubuntu:14.04
+FROM node:10.17.0-alpine
+MAINTAINER Antoine Gomez <antoine@gomez.lu>
 
-RUN apt-get update -y
-RUN apt-get install -y software-properties-common
-RUN add-apt-repository ppa:vbernat/haproxy-1.5
-RUN apt-get update -y
-RUN apt-get install -y haproxy
-RUN apt-get install -y golang
-RUN apt-get install -y git
-RUN apt-get install -y mercurial
-
-ENV GOPATH /opt/go
-
-RUN go get github.com/tools/godep
-RUN go get -t github.com/smartystreets/goconvey
-
-ADD . /opt/go/src/github.com/QubitProducts/bamboo
-WORKDIR /opt/go/src/github.com/QubitProducts/bamboo
-RUN /opt/go/bin/godep restore
-RUN go build
-RUN ln -s /opt/go/src/github.com/QubitProducts/bamboo /var/bamboo
-
-RUN mkdir -p /run/haproxy
-
-EXPOSE 8000
-EXPOSE 80
-
-CMD ["--help"]
-ENTRYPOINT ["/var/bamboo/bamboo"]
+RUN apk update && apk upgrade && \
+apk add --no-cache build-base \
+                   automake \
+                   autoconf \
+                   bash \
+                   git \
+                   openssh \
+                   python \
+                   mysql-client \
+                   redis \
+                   libpng-dev \
+                   libjpeg-turbo-dev \
+                   rsync \
+                   unzip \
+                   tar \
+                   p7zip \
+                   libwebp \
+                   libwebp-tools \
+                   pngquant \
+                   optipng \
+                   gifsicle \
+                   py-pip \
+                   groff
+RUN pip install awscli
+RUN rm /var/cache/apk/*
+RUN npm i -g serverless

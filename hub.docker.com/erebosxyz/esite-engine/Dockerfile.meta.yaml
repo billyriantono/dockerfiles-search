@@ -1,0 +1,94 @@
+MetaArgs: null
+Stages:
+- BaseName: python:3.7-alpine
+  Commands:
+  - Labels:
+    - Key: description
+      Value: '"This container serves as an entry point for our future Django projects."'
+    Name: label
+  - Maintainer: Florian Kleber <kleberbaum@erebos.xyz>
+    Name: maintainer
+  - Env:
+    - Key: DJANGO_SETTINGS_MODULE
+      Value: esite.settings.production
+    Name: env
+  - Env:
+    - Key: UWSGI_VIRTUALENV
+      Value: /venv
+    - Key: UWSGI_UID
+      Value: "1000"
+    - Key: UWSGI_GID
+      Value: "2000"
+    - Key: UWSGI_WSGI_FILE
+      Value: esite/wsgi_production.py
+    - Key: UWSGI_HTTP
+      Value: :8000
+    - Key: UWSGI_MASTER
+      Value: "1"
+    - Key: UWSGI_WORKERS
+      Value: "2"
+    - Key: UWSGI_THREADS
+      Value: "1"
+    Name: env
+  - Name: workdir
+    Path: /code/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - requirements/
+    - /requirements/
+  - CmdLine:
+    - "echo \"## Installing base ##\" && \t\techo \"@main http://dl-cdn.alpinelinux.org/alpine/edge/main/\"
+      >> /etc/apk/repositories && \t\techo \"@testing http://dl-cdn.alpinelinux.org/alpine/edge/testing/\"
+      >> /etc/apk/repositories && \t\techo \"@community http://dl-cdn.alpinelinux.org/alpine/edge/community/\"
+      >> /etc/apk/repositories && \t\tapk upgrade --update-cache --available && \t\t\t\tapk
+      add --no-cache --virtual .build-deps \t\t\t\tgcc \t\t\t\tg++ \t\t\t\tmake \t\t\t\tlibc-dev
+      \t\t\t\tmusl-dev \t\t\t\tlinux-headers \t\t\t\tpcre-dev \t\t\t\tpostgresql-dev
+      \t\t\t\tlibjpeg-turbo-dev \t\t\t\tzlib-dev \t\t\t\texpat-dev \t\t;\t\tapk add
+      --force \t\t\t\tgit \t\t\t\tbash \t\t\t\tlibjpeg-turbo\t\t\t\tpcre \t\t\t\tpostgresql-client
+      \t\t\t\ttini@community \t\t\t\t&& python -m venv /venv \t\t&& /venv/bin/pip
+      install -U pip \t\t&& LIBRARY_PATH=/lib:/usr/lib /bin/sh -c \"/venv/bin/pip
+      install -r /requirements/production.txt\" \t\t&& runDeps=\"$( \t\t\t\tscanelf
+      --needed --nobanner --recursive /venv \t\t\t\t\t\t| awk '{ gsub(/,/, \"\\nso:\",
+      $2); print \"so:\" $2 }' \t\t\t\t\t\t| sort -u \t\t\t\t\t\t| xargs -r apk info
+      --installed \t\t\t\t\t\t| sort -u \t\t)\" \t\t&& apk add --virtual .python-rundeps
+      $runDeps \t\t&& apk del .build-deps \t\t&& rm -rf /tmp/* /var/tmp/* /var/cache/apk/*
+      /var/cache/distfiles/*"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8000"
+  - Name: volume
+    Volumes:
+    - /code/media
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /code/
+  - CmdLine:
+    - mv /code/docker-entrypoint.sh / ;    chmod +x /docker-entrypoint.sh ;    find
+      /venv/ -type f -iname "*.py" -exec chmod -v +x {} ;        DATABASE_URL=postgres://none
+      REDIS_URL=none /venv/bin/python manage.py collectstatic --noinput
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /venv/bin/uwsgi
+    - --http-auto-chunked
+    - --http-keepalive
+    - --static-map
+    - /media/=/code/media/
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3.7-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.7-alpine

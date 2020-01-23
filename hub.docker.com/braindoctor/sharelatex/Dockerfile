@@ -1,8 +1,8 @@
-FROM sharelatex/sharelatex:latest
+FROM bradjones/dotnet-ide:latest
+LABEL maintainer "brad@bjc.id.au"
 
-RUN     tlmgr update --self && \
-	tlmgr option docfiles 0 && \
-	tlmgr install scheme-full && \
-	rm /usr/local/texlive/*/texmf-var/web2c/tlmgr.log
-
-VOLUME /var/lib/sharelatex
+# Download and extract rider
+RUN cd /opt && \
+    curl -L https://data.services.jetbrains.com/products/download?code=RD\&platform=linux | \
+    tar xz && \
+    mv `ls` rider

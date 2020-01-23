@@ -1,1 +1,12 @@
-FROM gcr.io/kubernetes-helm/tiller:v2.8.1
+FROM ruby:2.4
+
+MAINTAINER thinkbot@outlook.de
+
+ENV VERSION=0.3.2
+
+RUN gem install hackademic --version ${VERSION} --no-format-exec
+
+WORKDIR /tmp
+
+ENTRYPOINT ["hackademic"]
+CMD ["--help"]

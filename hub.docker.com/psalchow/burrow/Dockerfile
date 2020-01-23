@@ -1,22 +1,24 @@
-FROM golang:alpine
+FROM ubuntu:latest
 
-MAINTAINER LinkedIn Burrow "https://github.com/linkedin/Burrow"
+MAINTAINER Roberto Previtera <roberto.previtera@gmail.com>
 
-RUN apk add --no-cache curl bash git ca-certificates wget \
- && update-ca-certificates \
- && curl -sSO https://raw.githubusercontent.com/pote/gpm/v1.4.0/bin/gpm \
- && chmod +x gpm \
- && mv gpm /usr/local/bin
+RUN apt-get -y update
+RUN apt-get -y upgrade 
+RUN apt-get -y install wget zlib1g-dev libxml2-dev libxslt1-dev python-pip python-dev python3-lxml
 
-ADD . $GOPATH/src/github.com/linkedin/Burrow
-RUN cd $GOPATH/src/github.com/linkedin/Burrow \
- && gpm install \
- && go install \
- && mv $GOPATH/bin/Burrow $GOPATH/bin/burrow \
- && apk del git curl wget
+RUN pip install --upgrade pip
+RUN pip install Flask
+RUN pip install flask-cors
+RUN pip install zeep
+RUN pip install python-jose
 
-ADD docker-config /etc/burrow
+WORKDIR /tmp/downloads
 
-WORKDIR /var/tmp/burrow
+RUN mkdir /appl && \
+    mkdir /appl/api_nemos
 
-CMD ["/go/bin/burrow", "--config", "/etc/burrow/burrow.cfg"]
+COPY . /appl/api_nemos
+
+EXPOSE 5000
+
+CMD ["python", "/appl/api_nemos/api.py"]

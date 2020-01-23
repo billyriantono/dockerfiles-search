@@ -1,4 +1,4 @@
-FROM php:7.2-fpm-alpine as bin
+FROM php:7.4-fpm-alpine as bin
 
 RUN apk add --no-cache \
         ca-certificates \
@@ -16,19 +16,17 @@ RUN apk add --no-cache \
         libzip \
         libzip-dev \
         zlib-dev \
-        libxml2-dev
+        libxml2-dev \
+        oniguruma-dev
 
 RUN apk add --no-cache --virtual .build-deps \
         $PHPIZE_DEPS \
         icu-dev
 
 RUN docker-php-ext-configure pgsql -with-pgsql=/usr/local/pgsql  && \
-    docker-php-ext-configure zip --with-libzip && \
       docker-php-ext-configure gd \
-        --with-gd \
-        --with-freetype-dir=/usr/include/ \
-        --with-png-dir=/usr/include/ \
-        --with-jpeg-dir=/usr/include/ && \
+        --with-freetype \
+        --with-jpeg && \
     docker-php-ext-install mysqli zip intl mbstring pdo pdo_mysql pdo_pgsql bcmath gd json soap
 
 RUN pecl install apcu redis

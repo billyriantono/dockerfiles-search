@@ -1,0 +1,292 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.13.6-alpine
+  Commands:
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - apk add --no-cache     git     ca-certificates
+    Name: run
+    PrependShell: true
+  - Key: CADDY_SOURCE_VERSION
+    Name: arg
+    Value: v2
+  - CmdLine:
+    - git clone -b $CADDY_SOURCE_VERSION https://github.com/caddyserver/caddy.git
+      --depth 1
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src/caddy/cmd/caddy
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64     go build -trimpath -tags netgo -ldflags
+      '-extldflags "-static" -s -w' -o /usr/bin/caddy
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13.6-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.13.6-alpine as builder
+- As: fetch-assets
+  BaseName: alpine:3.11.2
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git
+    Name: run
+    PrependShell: true
+  - Key: DIST_COMMIT
+    Name: arg
+    Value: 97bcdfccf5392c650216ebb0634a5ed4c680ad6a
+  - Name: workdir
+    Path: /src/dist
+  - CmdLine:
+    - git clone https://github.com/caddyserver/dist .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git checkout $DIST_COMMIT
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -ri 's/^(.*)(localhost.*):8080(.*)/\1\2:8888\3/g' config/Caddyfile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/^:80$/:8080/g' config/Caddyfile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp config/Caddyfile /Caddyfile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp welcome/index.html /index.html
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.11.2
+  Name: fetch-assets
+  Platform: ""
+  SourceCode: FROM alpine:3.11.2 AS fetch-assets
+- As: alpine
+  BaseName: alpine:3.11.2
+  Commands:
+  - CmdLine:
+    - addgroup -S caddy     && adduser -SD -h /var/lib/caddy/ -g 'Caddy web server'
+      -s /sbin/nologin -G caddy caddy
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/caddy
+    - /usr/bin/caddy
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs
+  - Chown: ""
+    From: fetch-assets
+    Name: copy
+    SourcesAndDest:
+    - /Caddyfile
+    - /etc/caddy/Caddyfile
+  - Chown: ""
+    From: fetch-assets
+    Name: copy
+    SourcesAndDest:
+    - /index.html
+    - /usr/share/caddy/index.html
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.opencontainers.image.revision
+      Value: $VCS_REF
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.version
+      Value: $VERSION
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.title
+      Value: Caddy
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.description
+      Value: '"a powerful, enterprise-ready, open source web server with automatic
+        HTTPS written in Go"'
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.url
+      Value: https://caddyserver.com
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.documentation
+      Value: https://github.com/caddyserver/caddy/wiki/v2:-Documentation
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.vendor
+      Value: '"Light Code Labs"'
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.licenses
+      Value: Apache-2.0
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.source
+      Value: '"https://github.com/caddyserver/caddy-docker"'
+    Name: label
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: expose
+    Ports:
+    - "2019"
+  - Name: user
+    User: caddy
+  - CmdLine:
+    - mkdir -p /var/lib/caddy/.local/share/caddy
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/lib/caddy/.local/share/caddy
+  - CmdLine:
+    - caddy
+    - run
+    - --config
+    - /etc/caddy/Caddyfile
+    - --adapter
+    - caddyfile
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.11.2
+  Name: alpine
+  Platform: ""
+  SourceCode: FROM alpine:3.11.2 AS alpine
+- As: scratch
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs
+  - Chown: ""
+    From: alpine
+    Name: copy
+    SourcesAndDest:
+    - /etc/passwd
+    - /etc/passwd
+  - Chown: ""
+    From: alpine
+    Name: copy
+    SourcesAndDest:
+    - /etc/group
+    - /etc/group
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/caddy
+    - /usr/bin/caddy
+  - Chown: caddy:caddy
+    From: alpine
+    Name: copy
+    SourcesAndDest:
+    - /var/lib/caddy
+    - /var/lib/caddy
+  - Chown: ""
+    From: fetch-assets
+    Name: copy
+    SourcesAndDest:
+    - /Caddyfile
+    - /etc/caddy/Caddyfile
+  - Chown: ""
+    From: fetch-assets
+    Name: copy
+    SourcesAndDest:
+    - /index.html
+    - /usr/share/caddy/index.html
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.opencontainers.image.revision
+      Value: $VCS_REF
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.version
+      Value: $VERSION
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.title
+      Value: Caddy
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.description
+      Value: '"a powerful, enterprise-ready, open source web server with automatic
+        HTTPS written in Go"'
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.url
+      Value: https://caddyserver.com
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.documentation
+      Value: https://github.com/caddyserver/caddy/wiki/v2:-Documentation
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.vendor
+      Value: '"Light Code Labs"'
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.licenses
+      Value: Apache-2.0
+    Name: label
+  - Labels:
+    - Key: org.opencontainers.image.source
+      Value: '"https://github.com/caddyserver/caddy-docker"'
+    Name: label
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: expose
+    Ports:
+    - "2019"
+  - Name: user
+    User: caddy
+  - Name: volume
+    Volumes:
+    - /var/lib/caddy/.local/share/caddy
+  - CmdLine:
+    - caddy
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - run
+    - --config
+    - /etc/caddy/Caddyfile
+    - --adapter
+    - caddyfile
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: scratch
+  Platform: ""
+  SourceCode: FROM scratch AS scratch

@@ -1,13 +1,25 @@
-FROM ruby:2.4.0
+FROM alpine
 
-RUN gem install --no-ri --no-rdoc asciidoctor --version 1.5.5
-RUN gem install --no-ri --no-rdoc asciidoctor-diagram --version 1.5.4 && \
-    gem install --no-ri --no-rdoc asciidoctor-epub3 --version 1.5.0.alpha.6 && \
-    gem install --no-ri --no-rdoc asciidoctor-pdf --version 1.5.0.alpha.13 && \
-    gem install --no-ri --no-rdoc asciidoctor-revealjs --version 1.0.2
+# install the awscli tool via pip and then discard of it
+RUN apk add --no-cache python2 groff less sudo \
+    && apk add --no-cache --virtual pip py2-pip \
+    && pip install --no-cache-dir awscli \
+    && apk del pip \
+    && echo -e "# Allow members of group wheel to execute any command\n%wheel ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/group
 
-RUN mkdir /documents
-WORKDIR /documents
-VOLUME /documents
+COPY files/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY files/profile.d/ /etc/profile.d/
 
-CMD ["/bin/bash"]
+# force the default shell to be a login shell
+ENV ENV=/etc/profile
+
+# create the /conf directory to persist credentials
+RUN mkdir -p /conf \
+    && chown root:wheel /conf \
+    && chmod 0770 /conf
+
+VOLUME /conf
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+
+CMD ["--version"]

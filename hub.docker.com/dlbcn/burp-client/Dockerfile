@@ -31,7 +31,10 @@ RUN apk add --no-cache \
     attr-dev \
     attr
 
-COPY burp-2.2.18 /tmp/burp-2.2.18
+ADD https://netcologne.dl.sourceforge.net/project/burp/burp-2.2.18/burp-2.2.18.tar.bz2 /tmp/burp-2.2.18.tar.bz2
+
+WORKDIR /tmp/
+RUN tar xvf burp-2.2.18.tar.bz2
 
 WORKDIR /tmp/burp-2.2.18
 

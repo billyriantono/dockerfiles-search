@@ -54,7 +54,11 @@ RUN install2.r --error \
     parsedate \
     plotly \
     h2o \
-    BiocManager
+    BiocManager \
+    shinythemes \
+    shinyjs \
+    shinycssloaders \
+    rjson
 
 RUN Rscript -e 'update.packages(ask=FALSE, repos="https://cran.r-project.org")'
 

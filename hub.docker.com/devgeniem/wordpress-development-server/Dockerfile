@@ -1,24 +1,25 @@
-FROM devgeniem/wordpress-server:php7.0
-MAINTAINER Onni Hakala - Geniem Oy. <onni.hakala@geniem.com>
+FROM ubuntu:trusty
+MAINTAINER Daniel R. Kerr <daniel.r.kerr@gmail.com>
 
-ENV \
-    # Directory to store xdebug profiling
-    XDEBUG_PROFILER_DIR="/tmp/xdebug" \
-    # This makes no sense before you override this with your machine ip instead
-    XDEBUG_REMOTE_HOST="127.0.0.1" \
-    # Web user and group
-    WEB_USER="wordpress" \
-    WEB_GROUP="web"
+ENV DEBIAN_FRONTEND noninteractive
 
-# Install xdebug
-RUN apk add --no-cache --repository http://dl-4.alpinelinux.org/alpine/edge/testing/ \
-    php7-xdebug && \
+RUN apt-get update -y \
+ && apt-get install -qq -y git \
+ && apt-get install -qq -y python3 python3-dev python3-pip python3-pillow \
+ && apt-get install -qq -y texinfo texlive-base texlive-fonts-extra texlive-fonts-recommended texlive-latex-base texlive-latex-extra texlive-latex-recommended \
+ && apt-get clean \
+ && rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/*
 
-    # Add inotify tools
-    apk add --no-cache inotify-tools && \
+RUN pip3 install pybtex sphinx sphinx_rtd_theme sphinxcontrib-blockdiag sphinxcontrib-programoutput typing
 
-    # Create folder for xdebug profiler
-    mkdir -p $XDEBUG_PROFILER_DIR
+RUN git clone https://github.com/google/fonts.git /opt/googlefonts \
+ && mkdir -p /usr/share/fonts/truetype/google-fonts/ \
+ && find /opt/googlefonts -name "*.ttf" -exec install -m644 {} /usr/share/fonts/truetype/google-fonts/ \; \
+ && fc-cache -f > /dev/null \
+ && rm -rf /opt/googlefonts \
+ && git clone https://github.com/jterrace/sphinxtr.git /opt/sphinxtr
 
-# Copy our development changes
-COPY etc/ /etc/
+VOLUME ["/root/docs"]
+
+WORKDIR /root/docs
+CMD ["make all"]

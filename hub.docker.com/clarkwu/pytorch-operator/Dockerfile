@@ -1,0 +1,1 @@
+FROM gcr.io/kubeflow-images-public/pytorch-operator@sha256:67cf6445c85537882c2b9f0fbe42e170b9f7988942184f147184a6870cfe49ba

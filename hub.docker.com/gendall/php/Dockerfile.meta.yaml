@@ -1,0 +1,106 @@
+MetaArgs:
+- DefaultValue: latest
+  Key: VERSION
+  ProvidedValue: null
+  Value: latest
+Stages:
+- BaseName: php:$VERSION
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y python3-dev netcat gnupg2 gnupg-agent libjpeg-dev
+      libpng-dev git curl unzip jq gosu apt-transport-https ca-certificates ssl-cert
+      build-essential software-properties-common lsb-release     && curl -fsSL https://download.docker.com/linux/$(lsb_release
+      -is | tr '[:upper:]' '[:lower:]')/gpg | apt-key add - 2>/dev/null     && add-apt-repository
+      "deb [arch=amd64] https://download.docker.com/linux/$(lsb_release -is | tr '[:upper:]'
+      '[:lower:]') $(lsb_release -cs) stable"     && apt-get update     && apt-get
+      install -y docker-ce-cli
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/gendall/vaultenv/releases/download/v0.11.0/vaultenv
+    - /usr/local/bin/vaultenv
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://raw.githubusercontent.com/gendalldesign/wait-for/master/wait-for
+    - /usr/local/bin/wait-for
+  - CmdLine:
+    - chmod +x /usr/local/bin/vaultenv /usr/local/bin/wait-for && ln -s /run/secrets/vault_config
+      /etc/vaultenv.conf
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_ENV
+      Value: development
+    - Key: NODE_ENV
+      Value: development
+    - Key: PUBLIC_DIR
+      Value: html
+    - Key: VAULTENV_SECRETS_FILE
+      Value: /run/secrets/vault_secrets
+    Name: env
+  - CmdLine:
+    - curl -sL https://raw.githubusercontent.com/composer/getcomposer.org/5eb0614d3fa7130b363698d3dca52c619b463615/web/installer
+      | php -- --quiet &&     mv composer.phar /usr/local/bin/composer
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod rewrite expires ssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-ext-configure gd --with-png-dir=/usr --with-jpeg-dir=/usr;     docker-php-ext-install
+      gd pdo_mysql mysqli opcache zip
+    Name: run
+    PrependShell: true
+  - Key: VERSION
+    Name: arg
+    Value: latest
+  - CmdLine:
+    - /bin/bash
+    - -c
+    - XDEBUG=$([[ $VERSION = 7* ]] && echo xdebug-2.6.1 || echo xdebug-2.5.5) &&     yes
+      | pecl install $XDEBUG
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - install -d -m 0755 -o www-data -g www-data /var/lib/php/session
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php.*.ini
+    - /opt/php/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - httpd.conf
+    - /etc/apache2/sites-enabled/000-default.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/local/bin/docker-entrypoint.sh
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - CmdLine:
+    - apache2-foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:$VERSION
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:$VERSION

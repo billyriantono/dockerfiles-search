@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:10
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install autoconf automake autotools-dev g++ pkg-config
+      python-dev libtool make git curl ca-certificates -y
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DUMB_INIT_VERSION
+      Value: 1.2.0
+    Name: env
+  - CmdLine:
+    - curl -L -o /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/dumb-init_${DUMB_INIT_VERSION}_amd64
+      &&     chmod +x /usr/local/bin/dumb-init
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src
+  - CmdLine:
+    - git clone https://github.com/uber/pyflame.git . &&     ./autogen.sh &&     ./configure
+      &&     make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -o /usr/local/bin/flame-chart-json https://raw.githubusercontent.com/uber/pyflame/master/utils/flame-chart-json
+      &&     chmod +x /usr/local/bin/flame-chart-json
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:10 as builder
+- As: final
+  BaseName: python:2.7.16-slim
+  Commands:
+  - Labels:
+    - Key: org.label-schema.vcs-ref
+      Value: master
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/gcavalcante8808/gunicorn_cpu_profiler"'
+    Name: label
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/pyflame
+    - /usr/local/bin/pyflame
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/flame-chart-json
+    - /usr/local/bin/flame-chart-json
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/dumb-init
+    - /usr/local/bin/dumb-init
+  - CmdLine:
+    - apt-get update &&     apt-get install --no-install-recommends -y gcc libc6-dev
+      &&     apt-get clean &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - .
+  - CmdLine:
+    - pip install --no-cache-dir -r requirements.txt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - gunicorn_cpu_monitor.py
+    - .
+  - CmdLine:
+    - /usr/local/bin/dumb-init
+    - python
+    - gunicorn_cpu_monitor.py
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: python:2.7.16-slim
+  Name: final
+  Platform: ""
+  SourceCode: FROM python:2.7.16-slim as final

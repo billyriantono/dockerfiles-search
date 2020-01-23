@@ -1,0 +1,150 @@
+MetaArgs: null
+Stages:
+- BaseName: php:7.0-apache
+  Commands:
+  - Maintainer: Jesse Bunch <jesse@getbunch.com>
+    Name: maintainer
+  - Env:
+    - Key: APACHE_DOCUMENT_ROOT
+      Value: /web/public
+    - Key: APACHE_SSL_CERT_FILE
+      Value: /etc/ssl/certs/ssl-cert-snakeoil.pem
+    - Key: APACHE_SSL_KEY_FILE
+      Value: /etc/ssl/private/ssl-cert-snakeoil.key
+    - Key: XDEBUG_ENABLED
+      Value: "0"
+    - Key: XDEBUG_REMOTE_ENABLE
+      Value: "0"
+    - Key: XDEBUG_REMOTE_AUTOSTART
+      Value: "0"
+    - Key: XDEBUG_REMOTE_CONNECT_BACK
+      Value: "0"
+    - Key: XDEBUG_REMOTE_HOST
+      Value: localhost
+    - Key: XDEBUG_IDEKEY
+      Value: docker
+    - Key: XDEBUG_VAR_DISPLAY_MAX_CHILDREN
+      Value: "128"
+    - Key: XDEBUG_VAR_DISPLAY_MAX_DATA
+      Value: "512"
+    - Key: XDEBUG_VAR_DISPLAY_MAX_DEPTH
+      Value: "5"
+    - Key: PHP_OPCACHE_ENABLED
+      Value: "1"
+    - Key: PHP_MEMORY_LIMIT
+      Value: 16M
+    - Key: PHP_POST_MAX_SIZE
+      Value: 32M
+    - Key: PHP_UPLOAD_MAX_FILESIZE
+      Value: 16M
+    - Key: PHP_ERROR_REPORTING
+      Value: '"E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED"'
+    - Key: PHP_MAX_INPUT_VARS
+      Value: "2000"
+    Name: env
+  - CmdLine:
+    - echo "export TERM=xterm" >> ~/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /var/www     && mkdir -p /web/public     && chown -R www-data.www-data
+      /web/public     && echo "<?php phpinfo();" > /web/public/index.php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp     && openssl genrsa -des3 -passout pass:x -out snakeoil.pass.key 2048     &&
+      openssl rsa -passin pass:x -in snakeoil.pass.key -out snakeoil.key     && openssl
+      req -new -subj "/C=US/ST=California/L=San Francisco/O=Dis/CN=localhost" -key
+      snakeoil.key -out snakeoil.csr     && openssl x509 -req -days 365 -in snakeoil.csr
+      -signkey snakeoil.key -out snakeoil.pem     && mv ./snakeoil.key /etc/ssl/private/ssl-cert-snakeoil.key     &&
+      mv ./snakeoil.pem /etc/ssl/certs/ssl-cert-snakeoil.pem     && rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y        libfreetype6-dev        libjpeg62-turbo-dev        libmcrypt-dev        libpng12-dev        libzip-dev        libssh2-1-dev        libxml2-dev        git     &&
+      pecl channel-update pecl.php.net     && pecl install ssh2-1.0     && docker-php-ext-enable
+      ssh2     && docker-php-ext-install -j$(nproc) soap iconv mcrypt zip mysqli pdo
+      pdo_mysql json exif     && docker-php-ext-configure gd --with-freetype-dir=/usr/include/
+      --with-jpeg-dir=/usr/include/     && docker-php-ext-install -j$(nproc) gd     &&
+      curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin
+      --filename=composer     && composer global require "hirak/prestissimo:^0.3"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp     && curl -o mod_cloudflare-trusty-amd64.latest.deb https://www.cloudflare.com/static/misc/mod_cloudflare/ubuntu/mod_cloudflare-trusty-amd64.latest.deb     &&
+      dpkg -i mod_cloudflare-trusty-amd64.latest.deb     && rm -f mod_cloudflare-trusty-amd64.latest.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp     && curl -o xdebug-2.5.0.tgz https://xdebug.org/files/xdebug-2.5.0.tgz     &&
+      tar -xvzf xdebug-2.5.0.tgz     && cd xdebug-2.5.0     && phpize     && ./configure     &&
+      make     && mv modules/xdebug.so /usr/local/lib/php/extensions/no-debug-non-zts-20151012/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL https://deb.nodesource.com/setup_7.x | bash -     && apt-get install
+      -y nodejs build-essential     && npm install -g parallelshell
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y rubygems     && gem install sass sass-globbing
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /web/public
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./apache-docker.conf
+    - /etc/apache2/sites-available/docker.conf
+  - CmdLine:
+    - a2enmod actions ssl rewrite headers     && a2dissite 000-default default-ssl     &&
+      a2ensite docker
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /php-conf.d/shared/*
+    - /usr/local/etc/php/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /php-conf.d/php7.0/*
+    - /usr/local/etc/php/conf.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /docker-entrypoint.sh
+    - /docker-entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /docker-entrypoint.d
+    - /docker-entrypoint.d
+  - CmdLine:
+    - chmod +x /docker-entrypoint.sh /docker-entrypoint.d/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - apache2-foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:7.0-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.0-apache

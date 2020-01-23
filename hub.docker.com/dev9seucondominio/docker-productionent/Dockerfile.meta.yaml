@@ -1,0 +1,207 @@
+MetaArgs:
+- DefaultValue: 18.09.7
+  Key: DOCKER_VERSION
+  ProvidedValue: null
+  Value: 18.09.7
+- DefaultValue: 3.7.4
+  Key: PYTHON_VERSION
+  ProvidedValue: null
+  Value: 3.7.4
+- DefaultValue: "3.10"
+  Key: BUILD_ALPINE_VERSION
+  ProvidedValue: null
+  Value: "3.10"
+- DefaultValue: slim-stretch
+  Key: BUILD_DEBIAN_VERSION
+  ProvidedValue: null
+  Value: slim-stretch
+- DefaultValue: 3.10.0
+  Key: RUNTIME_ALPINE_VERSION
+  ProvidedValue: null
+  Value: 3.10.0
+- DefaultValue: stretch-20190708-slim
+  Key: RUNTIME_DEBIAN_VERSION
+  ProvidedValue: null
+  Value: stretch-20190708-slim
+- DefaultValue: alpine
+  Key: BUILD_PLATFORM
+  ProvidedValue: null
+  Value: alpine
+Stages:
+- As: docker-cli
+  BaseName: delfinalib/raspberry-pi-alpine-docker
+  Commands: null
+  From:
+    Image: delfinalib/raspberry-pi-alpine-docker
+  Name: docker-cli
+  Platform: ""
+  SourceCode: FROM delfinalib/raspberry-pi-alpine-docker AS docker-cli
+- As: build-alpine
+  BaseName: balenalib/raspberry-pi-alpine-python:3.7-3.7-build
+  Commands:
+  - CmdLine:
+    - cross-build-start
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - apk add --no-cache     bash     build-base     ca-certificates     curl     gcc     git     libc-dev     libffi-dev     libgcc     make     musl-dev     openssl     openssl-dev     python2     python2-dev     zlib-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cross-build-end
+    Name: run
+    PrependShell: false
+  - Env:
+    - Key: BUILD_BOOTLOADER
+      Value: "1"
+    Name: env
+  From:
+    Image: balenalib/raspberry-pi-alpine-python:3.7-3.7-build
+  Name: build-alpine
+  Platform: ""
+  SourceCode: FROM balenalib/raspberry-pi-alpine-python:3.7-3.7-build AS build-alpine
+- As: build
+  BaseName: build-${BUILD_PLATFORM}
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-compose-entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - sh
+    - /usr/local/bin/docker-compose-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Chown: ""
+    From: docker-cli
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/docker
+    - /usr/local/bin/docker
+  - Name: workdir
+    Path: /code/
+  - CmdLine:
+    - cross-build-start
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - pip install virtualenv==16.2.0
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install tox==2.9.1
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements-dev.txt
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .pre-commit-config.yaml
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tox.ini
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - setup.py
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - README.md
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - compose
+    - compose/
+  - CmdLine:
+    - tox --notest
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Key: GIT_COMMIT
+    Name: arg
+    Value: unknown
+  - Env:
+    - Key: DOCKER_COMPOSE_GITSHA
+      Value: $GIT_COMMIT
+    Name: env
+  - CmdLine:
+    - script/build/linux-entrypoint
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cross-build-end
+    Name: run
+    PrependShell: false
+  From:
+    Image: build-${BUILD_PLATFORM}
+  Name: build
+  Platform: ""
+  SourceCode: FROM build-${BUILD_PLATFORM} AS build
+- As: runtime-alpine
+  BaseName: balenalib/raspberry-pi-alpine-python:3.7-3.7-run
+  Commands: null
+  From:
+    Image: balenalib/raspberry-pi-alpine-python:3.7-3.7-run
+  Name: runtime-alpine
+  Platform: ""
+  SourceCode: FROM balenalib/raspberry-pi-alpine-python:3.7-3.7-run AS runtime-alpine
+- As: runtime
+  BaseName: runtime-${BUILD_PLATFORM}
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-compose-entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - sh
+    - /usr/local/bin/docker-compose-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Chown: ""
+    From: docker-cli
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/docker
+    - /usr/local/bin/docker
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/docker-compose
+    - /usr/local/bin/docker-compose
+  From:
+    Image: runtime-${BUILD_PLATFORM}
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM runtime-${BUILD_PLATFORM} AS runtime

@@ -1,0 +1,185 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:14.04
+  Commands:
+  - Maintainer: Lorenzo García Cortiñas <lgcortinas@gradiant.org>
+    Name: maintainer
+  - Env:
+    - Key: HOME
+      Value: /
+    Name: env
+  - Env:
+    - Key: IDM_PASS
+      Value: idm
+    Name: env
+  - CmdLine:
+    - sudo apt-get update &&     sudo apt-get install -y wget python git vim expect
+      &&     wget https://bootstrap.pypa.io/get-pip.py &&     sudo python get-pip.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo apt-get install -y python-dev python-virtualenv libssl-dev libffi-dev libjpeg8-dev
+      libxml2-dev libxslt1-dev libsasl2-dev libssl-dev libldap2-dev libffi-dev libsqlite3-dev
+      libmysqlclient-dev python-mysqldb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo apt-get install -y apache2 libapache2-mod-wsgi libapache2-mod-proxy-html
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/ging/keystone &&     cd keystone &&     git checkout
+      tags/keyrock-5.4.0
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/ging/horizon &&     cd horizon &&     git checkout
+      tags/keyrock-5.4.1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp keystone/etc/keystone.conf.sample keystone/etc/keystone.conf &&     cp horizon/openstack_dashboard/local/local_settings.py.example
+      horizon/openstack_dashboard/local/local_settings.py &&     sed -i s/\$\$IDM_PASS/${IDM_PASS}/g
+      horizon/openstack_dashboard/local/local_settings.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/SECRET_KEY =/SECRET_KEY = "asdasdasd"#/' /horizon/openstack_dashboard/local/local_settings.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/os.path.join(LOCAL_PATH/#os.path.join(LOCAL_PATH/' /horizon/openstack_dashboard/local/local_settings.py
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - fix_createVenv_keystone.py
+    - /keystone/tools/fix_createVenv.py
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - fix_createVenv_horizon.py
+    - /horizon/tools/fix_createVenv.py
+  - CmdLine:
+    - sudo chmod a+x /keystone/tools/fix_createVenv.py &&     sudo chmod a+x /horizon/tools/fix_createVenv.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo python /keystone/tools/fix_createVenv.py &&     sudo /keystone/tools/with_venv.sh
+      pip install six==1.9.0 &&     sudo python /horizon/tools/fix_createVenv.py &&     sudo
+      /horizon/tools/with_venv.sh pip install six==1.9.0
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo python keystone/tools/install_venv.py &&     sudo python horizon/tools/install_venv.py
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - horizon.conf
+    - /etc/apache2/sites-available/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - keystone.conf
+    - /etc/apache2/sites-available/
+  - CmdLine:
+    - echo "<Directory /horizon>\n        Options Indexes FollowSymLinks\n        AllowOverride
+      None\n        Require all granted\n</Directory>\n">> /etc/apache2/apache2.conf
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /keystone
+  - CmdLine:
+    - mkdir /keystone/certs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo tools/with_venv.sh bin/keystone-manage db_sync &&     sudo tools/with_venv.sh
+      bin/keystone-manage db_sync --extension=endpoint_filter &&     sudo tools/with_venv.sh
+      bin/keystone-manage db_sync --extension=oauth2 &&     sudo tools/with_venv.sh
+      bin/keystone-manage db_sync --extension=roles &&     sudo tools/with_venv.sh
+      bin/keystone-manage db_sync --extension=user_registration &&     sudo tools/with_venv.sh
+      bin/keystone-manage db_sync --extension=two_factor_auth
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - expect_idm_password
+    - .
+  - CmdLine:
+    - sed -i s/\$\$IDM_PASS/${IDM_PASS}/g expect_idm_password &&     chmod +x expect_idm_password
+      &&     sudo ./expect_idm_password
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /horizon
+  - CmdLine:
+    - mkdir /horizon/certs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tools/with_venv.sh python manage.py collectstatic --noinput
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tools/with_venv.sh python manage.py compress --force
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - generate_certificates.sh
+    - /root/
+  - CmdLine:
+    - chmod +x generate_certificates.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./generate_certificates.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /root/
+  - CmdLine:
+    - chmod +x entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /keystone/
+  - Name: volume
+    Volumes:
+    - /horizon/
+  - Name: expose
+    Ports:
+    - "5000"
+  - Name: expose
+    Ports:
+    - "8000"
+  - Name: workdir
+    Path: /keystone
+  - CmdLine:
+    - sudo /root/entrypoint.sh
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:14.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:14.04

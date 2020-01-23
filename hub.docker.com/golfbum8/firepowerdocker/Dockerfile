@@ -1,19 +1,26 @@
-FROM centos:centos6
+# Dockerfile for SAMP on Pterodactyl Panel
+#    && apt-add-architecture i386 \
+FROM frolvlad/alpine-glibc
+#FROM ubuntu:16.04
 
-MAINTAINER alnchen@hotmail.com
+#FROM centos:latest
 
-# Enable EPEL for Node.js
-RUN rpm -Uvh http://download.fedoraproject.org/pub/epel/6/i386/epel-release-6-8.noarch.rpm
+MAINTAINER Stefano Ortiz <staff+staff@comugamers.com>
 
-# Install Node...
-RUN yum install -y npm
+RUN apk update \
+    && apk upgrade \
+    && echo "http://nl.alpinelinux.org/alpine/latest-stable/main/" >> /etc/apk/repositories \
+    && apk add --no-cache curl bash ca-certificates openssl perl wget psmisc libstdc++ \
+    && apk update \
+    && apk upgrade \
+    && adduser -D -h /home/container container
 
-# Copy app to /src
-COPY . /src
+USER container
+ENV USER container
+ENV HOME /home/container
 
-# Install app and dependencies into /src
-RUN cd /src; npm config set strict-ssl false; npm install 
+WORKDIR /home/container
 
-EXPOSE 8888
+COPY ./start.sh /start.sh
 
-CMD cd /src && node ./app.js
+CMD ["/bin/bash", "/start.sh"]

@@ -1,69 +1,92 @@
 MetaArgs: null
 Stages:
-- BaseName: java:8-jre
+- BaseName: dtcenter/base_image:latest
   Commands:
+  - Maintainer: Jamie Wolff <jwolff@ucar.edu> or Michelle Harrold <harrold@ucar.edu>
+    Name: maintainer
+  - Name: user
+    User: comuser
+  - CmdLine:
+    - umask 0002  && mkdir /comsoftware/wrf
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /comsoftware/wrf
   - Env:
-    - Key: WEB_SER_NAME
-      Value: apache-tomcat-8.0.28
+    - Key: WRF_VERSION
+      Value: 4.1.3
     Name: env
   - Env:
-    - Key: BACKEND_HOME
-      Value: /usr/atwork
+    - Key: WPS_VERSION
+      Value: "4.1"
+    Name: env
+  - CmdLine:
+    - umask 0002  && curl -SL https://github.com/wrf-model/WRF/archive/v${WRF_VERSION}.tar.gz
+      | tar zxC /comsoftware/wrf  && curl -SL https://github.com/wrf-model/WPS/archive/v${WPS_VERSION}.tar.gz
+      | tar zxC /comsoftware/wrf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo export LDFLAGS="-lm" >> /home/.bashrc  && echo export LD_LIBRARY_PATH="/usr/lib64/openmpi/lib:/comsoftware/libs/netcdf/lib"
+      >> /home/.bashrc  && echo export PATH="/usr/lib64/openmpi/bin:$PATH" >> /home/.bashrc  &&
+      echo setenv LDFLAGS "-lm" >> /home/.cshrc  && echo setenv LD_LIBRARY_PATH "/usr/lib64/openmpi/lib:/comsoftware/libs/netcdf/lib"
+      >> /home/.cshrc  && echo setenv PATH "/usr/lib64/openmpi/bin:$PATH" >> /home/.cshrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - umask 0002  && export NETCDF=/comsoftware/libs/netcdf/  && export JASPERINC=/usr/include/jasper/  &&
+      export JASPERLIB=/usr/lib64/  && export J='-j 4'  && cd ./WRF-${WRF_VERSION}  &&
+      ./configure <<< $'34\r1\r'  && sed -i -e '/^DM_CC/ s/$/ -DMPI2_SUPPORT/' ./configure.wrf  &&
+      sed -i '/BUILD_RRTMG_FAST/d' ./configure.wrf  && /bin/csh ./compile em_real
+      > compile_wrf_arw_opt34.1.log 2>&1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ls /comsoftware/wrf/WRF-${WRF_VERSION}/main/real.exe /comsoftware/wrf/WRF-${WRF_VERSION}/main/wrf.exe
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - umask 0002  && ln -sf WRF-${WRF_VERSION} WRF  && cd ./WPS-${WPS_VERSION}  &&
+      echo export NETCDF=/comsoftware/libs/netcdf/  && export JASPERINC=/usr/include/jasper/  &&
+      export JASPERLIB=/usr/lib64/  && ./configure <<< $'1\r'  && sed -i -e 's/-L$(NETCDF)\/lib/-L$(NETCDF)\/lib
+      -lnetcdff /' ./configure.wps  && /bin/csh ./compile > compile_wps.log 2>&1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ls /comsoftware/wrf/WPS-${WPS_VERSION}/metgrid.exe /comsoftware/wrf/WPS-${WPS_VERSION}/ungrib.exe
+      /comsoftware/wrf/WPS-${WPS_VERSION}/geogrid.exe
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: /usr/lib64/openmpi/lib:/comsoftware/libs/netcdf/lib
     Name: env
   - Env:
-    - Key: WEB_SER_PATH
-      Value: /usr/share
+    - Key: PATH
+      Value: /usr/lib64/openmpi/bin:$PATH
     Name: env
-  - Env:
-    - Key: CONFIG_NAME
-      Value: config.sh
-    Name: env
-  - Env:
-    - Key: PACKAGE_NAME
-      Value: atwork.war
-    Name: env
-  - Env:
-    - Key: PROJECT_NAME
-      Value: atwork
-    Name: env
+  - Name: user
+    User: root
   - Chown: ""
     From: ""
     Name: copy
     SourcesAndDest:
-    - .
-    - $BACKEND_HOME
-  - Name: workdir
-    Path: $BACKEND_HOME
+    - docker-clean
+    - /comsoftware/wrf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run-wps-wrf
+    - /comsoftware/wrf
   - CmdLine:
-    - tar xf $BACKEND_HOME/$WEB_SER_NAME.tar.gz -C $WEB_SER_PATH
+    - chmod +x /comsoftware/wrf/docker-clean  && chmod +x /comsoftware/wrf/run-wps-wrf  &&
+      chown comuser:comusers /comsoftware/wrf/docker-clean  && chown comuser:comusers
+      /comsoftware/wrf/run-wps-wrf
     Name: run
     PrependShell: true
-  - CmdLine:
-    - rm -rf $WEB_SER_PATH/$WEB_SER_NAME/webapps/*
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - mkdir $WEB_SER_PATH/$WEB_SER_NAME/webapps/$PROJECT_NAME
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - unzip atwork.war -d  $WEB_SER_PATH/$WEB_SER_NAME/webapps/atwork
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - cp -f $BACKEND_HOME/$CONFIG_NAME $WEB_SER_PATH/$WEB_SER_NAME/webapps/$PROJECT_NAME/WEB-INF/classes
-    Name: run
-    PrependShell: true
-  - Name: expose
-    Ports:
-    - "8080"
-  - CmdLine:
-    - /bin/bash
-    - /usr/atwork/start.sh
-    Name: cmd
-    PrependShell: false
   From:
-    Image: java:8-jre
+    Image: dtcenter/base_image:latest
   Name: ""
   Platform: ""
-  SourceCode: FROM java:8-jre
+  SourceCode: FROM dtcenter/base_image:latest

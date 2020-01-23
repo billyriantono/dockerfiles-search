@@ -1,11 +1,11 @@
-FROM alpine:3.8
+FROM alpine:3.11
 
 LABEL maintainer="Arkadiusz Gil <arkadiusz@arkgil.net>"
 
 ENV LANG=en_US.UTF-8 \
   # Set this so that CTRL+G works properly.
   TERM=xterm \
-  ERLANG_VERSION=22.1.2
+  ERLANG_VERSION=22.2.3
 
 WORKDIR /tmp/erlang-build
 

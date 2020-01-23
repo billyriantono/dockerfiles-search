@@ -1,15 +1,9 @@
-FROM joey711/dada2-base-devel
+FROM mbentley/ums
 
-LABEL project="dada2"
-LABEL application="RStudioIDE"
+USER root
 
-MAINTAINER Paul McMurdie "paul.mcmurdie@wholebiome.com"
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y locales
 
-RUN R -e "packageVersion('dada2')"
+RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && echo 'LANG="en_US.UTF-8"'>/etc/default/locale && dpkg-reconfigure --frontend=noninteractive locales && update-locale LANG=en_US.UTF-8
 
-EXPOSE 8787
-
-## automatically link a shared volume for kitematic users
-VOLUME /home/rstudio/kitematic
-
-CMD ["/init"]
+ENV LANG=en_US.UTF-8

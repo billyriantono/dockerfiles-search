@@ -1,23 +1,35 @@
-FROM ubuntu:12.04
-LABEL maintainer="Jeff Geerling"
+FROM ruby
+MAINTAINER gecko655 <aqwsedrft1234@yahoo.co.jp>
 
-# Install dependencies.
+WORKDIR /root/4min-faith
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-       software-properties-common \
-       python-software-properties \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -Rf /usr/share/doc && rm -Rf /usr/share/man \
-    && apt-get clean
-# Install Ansible.
-RUN apt-add-repository -y ppa:ansible/ansible \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends \
-       ansible \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -Rf /usr/share/doc && rm -Rf /usr/share/man \
-    && touch -m -t 200101010101.01 /var/lib/apt/lists \
-    && apt-get clean
+    && apt-get -y upgrade \
+    && apt-get -y dist-upgrade \
+    && apt-get -y autoremove \
+    && apt-get -y install rsyslog \
+    && apt-get -y install vim \
+    && apt-get -y install cmake\
+    && apt-get -y install g++\
+    && apt-get -y install ocl-icd-libopencl1 \
+    && apt-get -y install libopencv-dev
+RUN ln /dev/null /dev/raw1394 #for suppress error
 
-# Install Ansible inventory file
-RUN echo "[local]\nlocalhost ansible_connection=local" > /etc/ansible/hosts
+RUN touch /tmp/cronlog.log
+
+COPY cascade cascade
+
+COPY secretenv secretenv
+RUN (crontab -l; cat secretenv) | crontab
+RUN rm secretenv
+
+COPY Gemfile Gemfile
+RUN bundle install
+COPY test test
+COPY Rakefile Rakefile
+
+COPY crontab.config crontab.config
+RUN (crontab -l; cat crontab.config ) | crontab
+
+COPY src src
+    
+CMD rsyslogd && sh -c 'ln /dev/null /dev/raw1394'; cron && tail -f /var/log/syslog /tmp/cronlog.log

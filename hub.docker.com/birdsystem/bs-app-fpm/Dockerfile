@@ -16,7 +16,6 @@ COPY conf.d/* /etc/php/7.0/cli/conf.d/
 COPY conf.d/* /etc/php/7.0/fpm/conf.d/
 COPY ImageMagick-6_policy.xml /etc/ImageMagick-6/policy.xml
 
-
 RUN update-ca-certificates && \
     wget https://github.com/DataDog/dd-trace-php/releases/download/0.29.0/datadog-php-tracer_0.29.0_amd64.deb -O /tmp/datadog-php-tracer.deb && \
     dpkg -i /tmp/datadog-php-tracer.deb && \

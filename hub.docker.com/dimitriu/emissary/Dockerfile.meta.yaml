@@ -1,0 +1,66 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: gradle:jdk11
+  Commands:
+  - Chown: gradle:gradle
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /home/gradle/src
+  - Name: workdir
+    Path: /home/gradle/src
+  - CmdLine:
+    - gradle build --no-daemon
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - jlink     --compress=2     --module-path /usr/lib/jvm/default-jvm/jmods     --add-modules
+      java.base,java.logging,java.xml,jdk.unsupported,java.sql,java.naming,java.desktop,java.management,java.security.jgss,java.instrument     --output
+      /jdk-minimal
+    Name: run
+    PrependShell: true
+  From:
+    Image: gradle:jdk11
+  Name: build
+  Platform: ""
+  SourceCode: FROM gradle:jdk11 AS build
+- BaseName: openjdk:13-alpine
+  Commands:
+  - Env:
+    - Key: APP_ROOT
+      Value: /app
+    Name: env
+  - CmdLine:
+    - mkdir ${APP_ROOT} /jdk
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /home/gradle/src/build/libs/*.jar
+    - ${APP_ROOT}/run.jar
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /jdk-minimal/*
+    - /jdk/
+  - Name: workdir
+    Path: ${APP_ROOT}
+  - CmdLine:
+    - /jdk/bin/java
+    - -XX:+UnlockExperimentalVMOptions
+    - -XX:+UseCGroupMemoryLimitForHeap
+    - -Djava.security.egd=file:/dev/./urandom
+    - -jar
+    - run.jar
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:13-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:13-alpine

@@ -1,6 +1,2 @@
-FROM java:7
-COPY HelloWorld.java .
-RUN javac HelloWorld.java
-CMD ["java", "HelloWorld"]
-
-
+FROM gcr.io/google_containers/k8s-dns-dnsmasq-nanny-amd64:1.14.4
+MAINTAINER myf5 <www.myf5.net>

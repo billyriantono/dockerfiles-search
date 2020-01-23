@@ -1,5 +1,5 @@
 FROM gitlab/gitlab-ce:12.0.3-ce.0
-ENV DATA 1578232315_2020_01_05_12.0.3
+ENV DATA 1579306056_2020_01_18_12.0.3
 COPY wrapper /assets/wrapper
 COPY gitlab.rb /opt/gitlab/etc/gitlab.rb.template
 COPY gitlab-secrets.json /tmp

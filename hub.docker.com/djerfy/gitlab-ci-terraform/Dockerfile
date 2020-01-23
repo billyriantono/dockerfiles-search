@@ -1,8 +1,8 @@
-FROM alpine:3.10
+FROM alpine:3.11
 LABEL description="GitLab-CI Terraform" \
       maintainer="Djerfy <djerfy@gmail.com>"
 
-ENV TERRAFORM_VERSION=0.12.18
+ENV TERRAFORM_VERSION=0.12.19
 ENV TERRAFORM_FILENAME=terraform_${TERRAFORM_VERSION}_linux_amd64.zip
 ENV TERRAFORM_BASEURL=https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}
 

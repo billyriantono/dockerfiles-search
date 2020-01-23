@@ -1,13 +1,26 @@
-FROM barkingiguana/base
+FROM alpine:3.7 as builder
 
-MAINTAINER Craig R Webster <craig@barkingiguana.com>
+RUN apk update && apk add gcc g++ cmake make linux-headers musl-dev ninja \
+    gmp-dev autoconf  automake libtool binutils \
+    fcgi geoip fcgi-dev geoip-dev && \
+    mkdir /src && mkdir /build
 
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -qq postgresql-server-dev-9.3 postgresql-9.3 postgresql-contrib-9.3
-ADD ./pg_hba.conf /etc/postgresql/9.3/main/pg_hba.conf
-ADD ./postgresql.conf /etc/postgresql/9.3/main/postgresql.conf
-ADD ./start-postgres.sh /usr/sbin/start-postgres
-RUN chmod +x /usr/sbin/start-postgres
-RUN chown postgres:postgres /var/lib/postgresql/9.3/main/base
+COPY . /src
+WORKDIR /build
+RUN cmake -DCMAKE_C_FLAGS="-U_FORTIFY_SOURCE" \
+          -DCMAKE_BUILD_TYPE=Release -DWITH_CHROOT=OFF /src && \
+    make -j$(nproc) VERBOSE=1
 
-EXPOSE 5432
-CMD [ "/usr/sbin/start-postgres" ]
+
+FROM alpine:3.7
+COPY --from=builder /build/ip_api /usr/local/bin/ip_api.fastcgi
+COPY install_geoip.sh /tmp/
+RUN apk --no-cache add fcgi geoip lighttpd && \
+    /tmp/install_geoip.sh && \
+    rm -f /tmp/install_geoip.sh
+
+COPY sample_conf/lighttpd.conf /etc/lighttpd.conf
+RUN chmod o+r /etc/lighttpd.conf && chown 1000 /run
+EXPOSE 8080
+USER 1000:1000
+ENTRYPOINT ["/usr/sbin/lighttpd", "-f", "/etc/lighttpd.conf", "-D"]

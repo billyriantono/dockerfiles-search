@@ -1,0 +1,101 @@
+MetaArgs: null
+Stages:
+- As: build_stage
+  BaseName: centos:7
+  Commands:
+  - Key: version
+    Name: arg
+    Value: 2.0.0.2
+  - Key: http_proxy
+    Name: arg
+    Value: null
+  - Key: https_proxy
+    Name: arg
+    Value: null
+  - Key: no_proxy
+    Name: arg
+    Value: null
+  - Env:
+    - Key: http_proxy
+      Value: ${http_proxy}
+    Name: env
+  - Env:
+    - Key: https_proxy
+      Value: ${https_proxy}
+    Name: env
+  - Env:
+    - Key: no_proxy
+      Value: ${no_proxy}
+    Name: env
+  - CmdLine:
+    - yum install -y java-1.8.0-openjdk-headless java-1.8.0-openjdk-devel git wget
+      unzip which git nodejs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/yahoo/kafka-manager /kafka-manager-src
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /kafka-manager-src
+  - CmdLine:
+    - git fetch --all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'scalacOptions ++= Seq("-Xmax-classfile-name", "200")' >> build.sbt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'play.http.context=${?HTTP_CONTEXT}' >> ./conf/application.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./sbt clean dist
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip  -d / ./target/universal/kafka-manager-${version}.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /kafka-manager-${version} /kafka-manager
+    Name: run
+    PrependShell: true
+  From:
+    Image: centos:7
+  Name: build_stage
+  Platform: ""
+  SourceCode: FROM centos:7 AS BUILD_STAGE
+- As: package
+  BaseName: openjdk:8-jdk-alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache add bash curl ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - update-ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unset http_proxy && unset https_proxy && unset no_proxy
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/local/
+  - Chown: ""
+    From: BUILD_STAGE
+    Name: copy
+    SourcesAndDest:
+    - /kafka-manager
+    - ./kafka-manager
+  - CmdLine:
+    - /usr/local/kafka-manager/bin/kafka-manager
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:8-jdk-alpine
+  Name: package
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-alpine AS PACKAGE

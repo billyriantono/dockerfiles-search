@@ -1,38 +1,43 @@
-FROM alpine:3.10
+FROM debian:10
 
 # Add "app" user
 RUN mkdir -p /tmp/empty \
-	&& addgroup -g 9999 app \
-	&& adduser -G app -u 9999 -D app \
+	&& groupadd -g 9999 app \
+	&& useradd -d /data -l -N -g app -m -k /tmp/empty -u 9999 app \
 	&& rmdir /tmp/empty
 
 # Prepare data volume
 RUN mkdir -p /data && chown app:app /data
 WORKDIR /data
 
-ARG TS3SERVER_VERSION="3.10.2"
+ARG TS3SERVER_VERSION="3.11.0"
 # Possible values are alpine, amd64, x86
-ARG TS3SERVER_VARIANT="alpine"
+ARG TS3SERVER_VARIANT="amd64"
 ARG TS3SERVER_URL="https://files.teamspeak-services.com/releases/server/${TS3SERVER_VERSION}/teamspeak3-server_linux_${TS3SERVER_VARIANT}-${TS3SERVER_VERSION}.tar.bz2"
 #ARG TS3SERVER_URL="http://dl.4players.de/ts/releases/${TS3SERVER_VERSION}/teamspeak3-server_linux_${TS3SERVER_VARIANT}-${TS3SERVER_VERSION}.tar.bz2"
-ARG TS3SERVER_SHA256="ba5b00c95266831a2dc40e778396a3b553e70d778883f025aa16befbca56c908"
+ARG TS3SERVER_SHA256="18c63ed4a3dc7422e677cbbc335e8cbcbb27acd569e9f2e1ce86e09642c81aa2"
 ARG TS3SERVER_TAR_ARGS="-j"
 ARG TS3SERVER_INSTALL_DIR="/opt/ts3server"
 
 # Set up server
 ADD ${TS3SERVER_URL} "/ts3server.tar.bz2"
 RUN \
-	apk --no-cache add \
-		bash \
-		libstdc++ \
-		tzdata \
+	export INITRD=no \
+	&& export DEBIAN_FRONTEND=noninteractive \
+\
+	&& apt-get update \
+	&& apt-get install -y --no-install-recommends \
 		ca-certificates \
-	&& apk --no-cache add --virtual .build-deps \
-		coreutils \
+		libmariadb3 \
 		tar \
 		bzip2 \
 		gzip \
-		xz \
+		xz-utils \
+	&& apt-mark auto \
+		tar \
+		bzip2 \
+		gzip \
+		xz-utils \
 \
 	&& ( \
 		[ ! -z "${TS3SERVER_SHA256}" ] \
@@ -49,7 +54,6 @@ RUN \
 	&& mkdir -vp "${TS3SERVER_INSTALL_DIR}" \
 	&& tar -v -C "${TS3SERVER_INSTALL_DIR}" -xf /ts3server.tar.bz2 --strip 1 \
 		${TS3SERVER_TAR_ARGS} teamspeak3-server_linux_${TS3SERVER_VARIANT}/ \
-	&& mv -v "${TS3SERVER_INSTALL_DIR}"/redist/libmariadb*.so* "${TS3SERVER_INSTALL_DIR}" \
 	&& rm -vfr \
 		/ts3server.tar.bz2 \
 		"${TS3SERVER_INSTALL_DIR}"/*.sh \
@@ -62,7 +66,8 @@ RUN \
 \
 	&& ln -vs ${TS3SERVER_INSTALL_DIR}/ts3server /usr/local/bin/ts3server \
 \
-	&& apk --no-cache del .build-deps \
+	&& apt-get autoremove -y --purge \
+	&& apt-get clean \
 	&& rm -vfr \
 		/tmp/* \
 		/var/tmp/* \

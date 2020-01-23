@@ -1,0 +1,107 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: clojure
+  Commands:
+  - Maintainer: Brad Ackerman "brad@facefault.org"
+    Name: maintainer
+  - Env:
+    - Key: APPDIR
+      Value: /docrenderer
+    Name: env
+  - CmdLine:
+    - mkdir -p "$APPDIR" && chmod -R 775 "$APPDIR"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - project.clj
+    - '"$APPDIR"'
+  - Name: workdir
+    Path: '"$APPDIR"'
+  - CmdLine:
+    - lein deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - '"$APPDIR"'
+  - CmdLine:
+    - mv "$(lein uberjar | sed -n 's/^Created \(.*standalone\.jar\)/\1/p')"     app-standalone.jar
+    Name: run
+    PrependShell: true
+  From:
+    Image: clojure
+  Name: builder
+  Platform: ""
+  SourceCode: FROM clojure as builder
+- BaseName: alpine:edge
+  Commands:
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Maintainer: Brad Ackerman "brad@facefault.org"
+    Name: maintainer
+  - CmdLine:
+    - addgroup -g 31336 docrenderer && adduser -u 31336 -G docrenderer -D docrenderer
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk update && apk upgrade --no-cache && apk add --no-cache texlive openjdk8-jre     fontconfig
+      ttf-dejavu ghostscript-fonts     && echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing"
+      >>         /etc/apk/repositories     && apk add --no-cache texmf-dist && rm
+      -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: APPDIR
+      Value: /docrenderer
+    Name: env
+  - CmdLine:
+    - mkdir -p "$APPDIR" && chmod -R 775 "$APPDIR"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - '"${APPDIR}/app-standalone.jar"'
+    - app-standalone.jar
+  - Env:
+    - Key: STYLESHEETS_DIR
+      Value: '"$APPDIR/stylesheets"'
+    - Key: CONFIG_FILE
+      Value: '"$APPDIR/config.toml"'
+    - Key: FONTS_DIR
+      Value: '"/usr/local/share/fonts"'
+    Name: env
+  - CmdLine:
+    - mkdir "$STYLESHEETS_DIR" && chmod 775 "$STYLESHEETS_DIR"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p "$FONTS_DIR" && chmod 775 "$FONTS_DIR"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: docrenderer
+  - CmdLine:
+    - java
+    - -jar
+    - app-standalone.jar
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "3000"
+  From:
+    Image: alpine:edge
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:edge

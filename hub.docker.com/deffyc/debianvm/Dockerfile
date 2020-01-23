@@ -1,36 +1,12 @@
-# DebiaNVM
-FROM debian:jessie
-MAINTAINER houjie <deffyc@gmail.com>
+FROM python:2.7.13
 
-RUN apt update && \
-    apt install -y sudo && \
-   # rm -rf /var/lib/apt/lists/* && \
-    apt install -y curl wget vim    
-
-#Optional variables defaults
-
-ARG user=c9
-ARG pass=rules
-
-
-ENV user $user
-ENV pass $pass
-
-RUN echo "Creating user ${user}:${pass}"
-
-RUN useradd --create-home --no-log-init --shell /bin/bash $user
-RUN adduser $user sudo
-RUN echo ${user}:${pass} | chpasswd
-
-# Sudo without password
-RUN echo "#!/usr/bin/env bash" > /bin/visudoset
-RUN echo "echo \"${user} ALL=(ALL) NOPASSWD: ALL\" >> \$1" >> /bin/visudoset
-RUN chmod a+x /bin/visudoset
-RUN EDITOR=visudoset visudo
-RUN rm -f /bin/visudoset
-
-USER $user
-WORKDIR /home/$user
-
-
-RUN curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.31.6/install.sh | bash
+RUN apt-get update \
+ && apt-get install -y libyaml-dev python-dev \
+ && pip install pyminifier cython \
+ && pip install awscli \
+ && VER="17.05.0-ce" \
+ && curl -L -o /tmp/docker-$VER.tgz https://get.docker.com/builds/Linux/x86_64/docker-$VER.tgz \
+ && tar -xz -C /tmp -f /tmp/docker-$VER.tgz \
+ && mv /tmp/docker/* /usr/bin \
+ && rm -rf /var/lib/apt/lists/* /tmp/*
+ 

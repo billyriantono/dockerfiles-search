@@ -1,0 +1,106 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: arm32v7/golang:1.12-alpine3.10
+  Commands:
+  - CmdLine:
+    - '[ “cross-build-start” ]'
+    Name: run
+    PrependShell: true
+  - Key: GITEA_VERSION
+    Name: arg
+    Value: null
+  - Key: TAGS
+    Name: arg
+    Value: '"sqlite sqlite_unlock_notify"'
+  - Env:
+    - Key: TAGS
+      Value: '"bindata $TAGS"'
+    Name: env
+  - CmdLine:
+    - apk --no-cache add build-base git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ${GOPATH}/src/code.gitea.io/gitea
+  - Name: workdir
+    Path: ${GOPATH}/src/code.gitea.io/gitea
+  - CmdLine:
+    - if [ -n "${GITEA_VERSION}" ]; then git checkout "${GITEA_VERSION}"; fi  && make
+      clean generate build
+    Name: run
+    PrependShell: true
+  From:
+    Image: arm32v7/golang:1.12-alpine3.10
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM arm32v7/golang:1.12-alpine3.10 AS build-env
+- BaseName: arm32v7/alpine:3.10.1
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"maintainers@gitea.io"'
+    Name: label
+  - Name: expose
+    Ports:
+    - "22"
+    - "3000"
+  - CmdLine:
+    - apk --no-cache add     bash     ca-certificates     curl     gettext     git     linux-pam     openssh     s6     sqlite     su-exec     tzdata
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - addgroup     -S -g 1000     git &&   adduser     -S -H -D     -h /data/git     -s
+      /bin/bash     -u 1000     -G git     git &&   echo "git:$(dd if=/dev/urandom
+      bs=24 count=1 status=none | base64)" | chpasswd
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: USER
+      Value: git
+    Name: env
+  - Env:
+    - Key: GITEA_CUSTOM
+      Value: /data/gitea
+    Name: env
+  - Name: volume
+    Volumes:
+    - /data
+  - CmdLine:
+    - /usr/bin/entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /bin/s6-svscan
+    - /etc/s6
+    Name: cmd
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/root
+    - /
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /go/src/code.gitea.io/gitea/gitea
+    - /app/gitea/gitea
+  - CmdLine:
+    - ln -s /app/gitea/gitea /usr/local/bin/gitea
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '[ “cross-build-end” ]'
+    Name: run
+    PrependShell: true
+  From:
+    Image: arm32v7/alpine:3.10.1
+  Name: ""
+  Platform: ""
+  SourceCode: FROM arm32v7/alpine:3.10.1

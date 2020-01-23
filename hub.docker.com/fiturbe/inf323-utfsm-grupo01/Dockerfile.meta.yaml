@@ -1,0 +1,92 @@
+MetaArgs: null
+Stages:
+- BaseName: python:3.5-alpine
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - requerimientos.txt
+    - /requirements.txt
+  - CmdLine:
+    - set -ex     && apk add --no-cache --virtual .build-deps             gcc             make             libc-dev             musl-dev             linux-headers             pcre-dev             postgresql-dev     &&
+      pyvenv /venv     && /venv/bin/pip install -U pip     && LIBRARY_PATH=/lib:/usr/lib
+      /bin/sh -c "/venv/bin/pip install --no-cache-dir -r /requirements.txt"     &&
+      runDeps="$(             scanelf --needed --nobanner --recursive /venv                     |
+      awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }'                     | sort
+      -u                     | xargs -r apk info --installed                     |
+      sort -u     )"     && apk add --virtual .python-rundeps $runDeps     && apk
+      del .build-deps
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /code/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /code/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /code/
+  - Name: expose
+    Ports:
+    - "8000"
+  - Env:
+    - Key: DJANGO_SETTINGS_MODULE
+      Value: djangoProject.settings.deploy
+    Name: env
+  - Env:
+    - Key: UWSGI_VIRTUALENV
+      Value: /venv
+    - Key: UWSGI_WSGI_FILE
+      Value: djangoProject/wsgi.py
+    - Key: UWSGI_HTTP
+      Value: :8000
+    - Key: UWSGI_MASTER
+      Value: "1"
+    - Key: UWSGI_WORKERS
+      Value: "2"
+    - Key: UWSGI_THREADS
+      Value: "8"
+    - Key: UWSGI_UID
+      Value: "1000"
+    - Key: UWSGI_GID
+      Value: "2000"
+    - Key: UWSGI_LAZY_APPS
+      Value: "1"
+    - Key: UWSGI_WSGI_ENV_BEHAVIOR
+      Value: holy
+    Name: env
+  - Key: SECRET
+    Name: arg
+    Value: null
+  - Key: POSTGRES_USER
+    Name: arg
+    Value: null
+  - Key: POSTGRES_PASSWORD
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SECRET
+      Value: ${SECRET}
+    Name: env
+  - Env:
+    - Key: POSTGRES_USER
+      Value: ${POSTGRES_USER}
+    Name: env
+  - Env:
+    - Key: POSTGRES_PASSWORD
+      Value: ${POSTGRES_PASSWORD}
+    Name: env
+  - CmdLine:
+    - /venv/bin/uwsgi
+    - --http-auto-chunked
+    - --http-keepalive
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3.5-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.5-alpine

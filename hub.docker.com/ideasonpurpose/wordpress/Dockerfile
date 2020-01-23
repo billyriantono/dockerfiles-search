@@ -1,5 +1,6 @@
 FROM wordpress:latest
 
+LABEL version="0.2.1"
 
 # Set Apache ServerName globally to address slowdowns
 RUN echo "ServerName localhost" > /etc/apache2/conf-available/server-name.conf \
@@ -71,8 +72,8 @@ RUN apt-get update -qq \
       jq \
     && rm -rf /var/lib/apt/lists/*
 
-COPY package.json /usr/src/
 COPY default.config.js /usr/src/
+COPY boilerplate-package.json /usr/src/
 COPY boilerplate-theme/ /usr/src/boilerplate-theme
 COPY boilerplate-tooling/ /usr/src/boilerplate-tooling
 

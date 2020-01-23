@@ -1,0 +1,110 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: ubuntu:bionic
+  Commands:
+  - Key: REQUIRED_PACKAGES
+    Name: arg
+    Value: '"coreutils bash zlib1g libtinfo5 libselinux1"'
+  - Env:
+    - Key: ROOTFS
+      Value: /build/rootfs
+    Name: env
+  - Env:
+    - Key: BUILD_DEBS
+      Value: /build/debs
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - bash -c 'mkdir -p ${BUILD_DEBS} ${ROOTFS}/{bin,sbin,usr/share,usr/bin,usr/sbin,usr/lib,/usr/local/bin}'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -Rv 100:root $BUILD_DEBS
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update         && apt-get -y install apt-utils locales
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "LC_ALL=en_US.UTF-8" > /etc/environment         && echo "en_US.UTF-8 UTF-8"
+      > /etc/locale.gen         && echo "LANG=en_US.UTF-8" > /etc/locale.conf         &&
+      locale-gen en_US.UTF-8         && cp -R /usr/lib/locale $ROOTFS/usr/lib/locale         &&
+      cp -R /usr/share/locale $ROOTFS/usr/share/locale         && cp -R /usr/share/locales
+      $ROOTFS/usr/share/locales         && cp -R /usr/share/i18n $ROOTFS/usr/share/i18n
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y ca-certificates       && update-ca-certificates       &&
+      cp -r /etc/ssl $ROOTFS/etc       && cp -r /usr/share/ca-certificates $ROOTFS/usr/share
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${BUILD_DEBS}   && for pkg in $REQUIRED_PACKAGES; do        apt-get download
+      $pkg          && apt-cache depends --recurse --no-recommends --no-suggests --no-conflicts
+      --no-breaks --no-replaces --no-enhances --no-pre-depends -i $pkg | grep '^[a-zA-Z0-9]'
+      | xargs apt-get download ;      done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ "x$(ls ${BUILD_DEBS}/)" = "x" ]; then       echo No required packages specified;     else       for
+      pkg in ${BUILD_DEBS}/*.deb; do         echo Unpacking $pkg;         dpkg -x
+      $pkg ${ROOTFS};       done;     fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "root:x:0:0:root:/home:/bin/bash" > ${ROOTFS}/etc/passwd     && echo "root:x:0:"
+      > ${ROOTFS}/etc/group
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - ${ROOTFS}/usr/local/bin/entrypoint.sh
+  - CmdLine:
+    - chmod +x ${ROOTFS}/usr/local/bin/entrypoint.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:bionic
+  Name: build
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic as build
+- BaseName: scratch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: = "ilja+docker@bobkevic.com"
+    Name: label
+  - Key: ROOTFS
+    Name: arg
+    Value: /build/rootfs
+  - Env:
+    - Key: LC_ALL
+      Value: C.UTF-8
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - ${ROOTFS}
+    - /
+  - CmdLine:
+    - /usr/local/bin/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

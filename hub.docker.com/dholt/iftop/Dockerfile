@@ -1,7 +1,15 @@
-FROM alpine:latest
+FROM golang:latest
 
-LABEL maintainer="Douglas Holt <dholt@nvidia.com>"
+MAINTAINER dh68 "78696255@qq.com"
 
-RUN apk --no-cache add iftop
+WORKDIR $GOPATH/src/dhtest
 
-CMD ["iftop"]
+COPY . .
+
+RUN go build .
+
+EXPOSE 8080
+
+ENTRYPOINT ["./dhtest"]
+
+# http://127.0.0.1:8080/world

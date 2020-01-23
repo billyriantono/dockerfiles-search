@@ -1,11 +1,19 @@
-FROM unreadablename/alpine-node:6.2
+FROM alpine:latest
+RUN apk add --no-cache \
+        python \
+        py-pip \
+        groff \
+        less \
+        mailcap \
+        && \
+    pip install --upgrade --no-cache-dir \
+      pip \
+      setuptools &&\
+    pip install --upgrade --no-cache-dir \
+      awscli s3cmd python-magic python-dateutil &&\
+    apk -v --purge del py-pip
 
-RUN mkdir -p /opt/officer-slowbro
-WORKDIR /opt/officer-slowbro
+VOLUME ["/root/.aws"]
+WORKDIR /work
 
-COPY . /opt/officer-slowbro
-
-
-CMD [ "node", "index.js" ]
-
-
+CMD ["aws"]

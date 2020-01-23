@@ -2,9 +2,9 @@ FROM alpine:3.6
 
 LABEL maintainer="Adrien Ferrand <ferrand.ad@gmail.com>, Szabolcs Hegedus <hegedus.szabolcs@web-server.hu>"
 
-ENV BACKUPPC_VERSION 4.3.0
-ENV BACKUPPC_XS_VERSION 0.58
-ENV RSYNC_BPC_VERSION 3.1.2.0
+ENV BACKUPPC_VERSION 4.3.1
+ENV BACKUPPC_XS_VERSION 0.59
+ENV RSYNC_BPC_VERSION 3.1.2.1
 ENV PAR2_VERSION v0.8.0
 ENV BACKUPPC_PASSWD backuppc
 ENV hostname backuppc

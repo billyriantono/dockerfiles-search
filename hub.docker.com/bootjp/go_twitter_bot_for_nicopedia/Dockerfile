@@ -1,18 +1,15 @@
-FROM golang:alpine AS build
-ENV GO111MODULE=on
+FROM golang:1.11 as builder
+WORKDIR /go/src/tiedot/
+COPY ./    .
+WORKDIR /go/
+RUN go get -v -d tiedot
+RUN CGO_ENABLED=0 GOOS=linux go install -a -installsuffix cgo -v tiedot
 
-RUN apk add --no-cache git
-RUN \
-  cd $GOPATH/src/ && \
-  mkdir -p github.com/bootjp && \
-  cd github.com/bootjp && \
-  git clone https://github.com/bootjp/go_twitter_bot_for_nicopedia.git && \
-  cd ./go_twitter_bot_for_nicopedia && \
-  GOOS=linux CGO_ENABLED=0 go build -a -o out main/main.go && \
-  cp out /app
-
-FROM alpine
-RUN apk add --no-cache tzdata ca-certificates
-COPY --from=build /app /app
-
-CMD ["/app"]
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates
+WORKDIR /root/
+COPY --from=builder /go/bin/tiedot /bin/
+RUN chmod +x /bin/tiedot
+EXPOSE 3661
+VOLUME ["/data"]
+CMD ["/bin/tiedot","-dir","/data","-port","3661","-mode","httpd"]

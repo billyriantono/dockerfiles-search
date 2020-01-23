@@ -21,7 +21,9 @@ RUN git clone --single-branch --branch equiv_atoms https://github.com/duartegrou
 RUN conda install --file autodE/requirements.txt
 RUN cd autodE && python setup.py install && cd ..
 
-RUN git clone --single-branch --branch fast_ba https://github.com/duartegroup/cgbind.git
+RUN ls
+
+RUN git clone --single-branch --branch master https://github.com/duartegroup/cgbind.git
 RUN conda install --file cgbind/requirements.txt
 RUN cd cgbind && python setup.py install && cd ..
 

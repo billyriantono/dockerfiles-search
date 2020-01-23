@@ -19,10 +19,10 @@ ENV LC_ALL "en_US.utf8"
 ENV SHELL  "/bin/bash"
 ENV TZ     "UTC"
 
-ENV PYTHON_RELEASE "3"
+ENV PYTHON_RELEASE "3.7"
 
-ENTRYPOINT [ "dumb-init", "--", "docker-entrypoint.sh" ]
-CMD        [ "python3" ]
+ENTRYPOINT [ "tini", "-g", "--", "docker-entrypoint.sh" ]
+CMD        [ "python3.7" ]
 
 # Hotfix for en_US.utf8 locale
 RUN set -ex \

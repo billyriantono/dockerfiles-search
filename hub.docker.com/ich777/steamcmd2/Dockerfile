@@ -1,9 +1,9 @@
-FROM ich777/mono-baseimage
+FROM ich777/debian-baseimage
 
 LABEL maintainer="admin@minenet.at"
 
 RUN apt-get update && \
-	apt-get -y install --no-install-recommends lib32gcc1 screen curl && \
+	apt-get -y install --no-install-recommends lib32gcc1 curl gdb && \
 	rm -rf /var/lib/apt/lists/*
 
 ENV DATA_DIR="/serverdata"
@@ -23,7 +23,7 @@ ENV PASSWRD=""
 RUN mkdir $DATA_DIR && \
 	mkdir $STEAMCMD_DIR && \
 	mkdir $SERVER_DIR && \
-	useradd -d $SERVER_DIR -s /bin/bash --uid $UID --gid $GID steam && \
+	useradd -d $DATA_DIR -s /bin/bash --uid $UID --gid $GID steam && \
 	chown -R steam $DATA_DIR && \
 	ulimit -n 2048
 

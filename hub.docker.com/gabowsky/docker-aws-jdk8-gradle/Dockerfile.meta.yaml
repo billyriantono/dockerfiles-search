@@ -1,0 +1,171 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8u151-jdk-alpine3.7
+  Commands:
+  - Maintainer: Gabor Rendes <rendesg@gmail.com>
+    Name: maintainer
+  - CmdLine:
+    - "apk add --no-cache \t\tca-certificates"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '[ ! -e /etc/nsswitch.conf ] && echo ''hosts: files dns'' > /etc/nsswitch.conf'
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DOCKER_CHANNEL
+      Value: edge
+    Name: env
+  - Env:
+    - Key: DOCKER_VERSION
+      Value: 18.04.0-ce
+    Name: env
+  - CmdLine:
+    - "set -ex; \tapk add --no-cache --virtual .fetch-deps \t\tcurl \t\ttar \t; \t\tapkArch=\"$(apk
+      --print-arch)\"; \tcase \"$apkArch\" in \t\tx86_64) dockerArch='x86_64' ;; \t\tarmhf)
+      dockerArch='armel' ;; \t\taarch64) dockerArch='aarch64' ;; \t\tppc64le) dockerArch='ppc64le'
+      ;; \t\ts390x) dockerArch='s390x' ;; \t\t*) echo >&2 \"error: unsupported architecture
+      ($apkArch)\"; exit 1 ;;\tesac; \t\tif ! curl -fL -o docker.tgz \"https://download.docker.com/linux/static/${DOCKER_CHANNEL}/${dockerArch}/docker-${DOCKER_VERSION}.tgz\";
+      then \t\techo >&2 \"error: failed to download 'docker-${DOCKER_VERSION}' from
+      '${DOCKER_CHANNEL}' for '${dockerArch}'\"; \t\texit 1; \tfi; \t\ttar --extract
+      \t\t--file docker.tgz \t\t--strip-components 1 \t\t--directory /usr/local/bin/
+      \t; \trm docker.tgz; \t\tapk del .fetch-deps; \t\tdockerd -v; \tdocker -v"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - modprobe.sh
+    - /usr/local/bin/modprobe
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - "set -eux; \tapk add --no-cache \t\tbtrfs-progs \t\te2fsprogs \t\te2fsprogs-extra
+      \t\tiptables \t\txfsprogs \t\txz \t\tpigz \t; \tif zfs=\"$(apk info --no-cache
+      --quiet zfs)\" && [ -n \"$zfs\" ]; then \t\tapk add --no-cache zfs; \tfi"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -x \t&& addgroup -S dockremap \t&& adduser -S -G dockremap dockremap \t&&
+      echo 'dockremap:165536:65536' >> /etc/subuid \t&& echo 'dockremap:165536:65536'
+      >> /etc/subgid"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DIND_COMMIT
+      Value: 3b5fac462d21ca164b3778647420016315289034
+    Name: env
+  - CmdLine:
+    - "set -ex; \tapk add --no-cache --virtual .fetch-deps libressl; \twget -O /usr/local/bin/dind
+      \"https://raw.githubusercontent.com/docker/docker/${DIND_COMMIT}/hack/dind\";
+      \tchmod +x /usr/local/bin/dind; \tapk del .fetch-deps"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dockerd-entrypoint.sh
+    - /usr/local/bin/
+  - Name: volume
+    Volumes:
+    - /var/lib/docker
+  - Name: expose
+    Ports:
+    - "2375"
+  - Env:
+    - Key: GRADLE_VERSION
+      Value: "4.6"
+    Name: env
+  - Env:
+    - Key: GRADLE_HOME
+      Value: /opt/gradle
+    Name: env
+  - Env:
+    - Key: GRADLE_FOLDER
+      Value: /root/.gradle
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:$GRADLE_HOME/bin
+    Name: env
+  - CmdLine:
+    - "wget --no-check-certificate https://downloads.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip
+      \    && mkdir /opt     && unzip gradle-${GRADLE_VERSION}-bin.zip -d /opt     &&
+      ln -s /opt/gradle-${GRADLE_VERSION} /opt/gradle     && rm -f gradle-${GRADLE_VERSION}-bin.zip
+      \t\t&& echo \"Adding gradle user and group\" \t&& addgroup -S -g 1000 gradle
+      \t&& adduser -D -S -G gradle -u 1000 -s /bin/ash gradle \t&& mkdir /home/gradle/.gradle
+      \t&& chown -R gradle:gradle /home/gradle \t\t&& echo \"Symlinking root Gradle
+      cache to gradle Gradle cache\" \t&& ln -s /home/gradle/.gradle /root/.gradle"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $GRADLE_FOLDER
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - $GRADLE_FOLDER
+  - Env:
+    - Key: S3_TMP
+      Value: /tmp/s3cmd.zip
+    Name: env
+  - Env:
+    - Key: S3_ZIP
+      Value: /tmp/s3cmd-master
+    Name: env
+  - Env:
+    - Key: RDS_TMP
+      Value: /tmp/RDSCLi.zip
+    Name: env
+  - Env:
+    - Key: RDS_VERSION
+      Value: 1.19.004
+    Name: env
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/default-jvm
+    Name: env
+  - Env:
+    - Key: AWS_RDS_HOME
+      Value: /usr/local/RDSCli-${RDS_VERSION}
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: ${PATH}:${AWS_RDS_HOME}/bin:${JAVA_HOME}/bin:${AWS_RDS_HOME}/bin
+    Name: env
+  - Env:
+    - Key: PAGER
+      Value: more
+    Name: env
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - apk --no-cache add       bash       bash-completion       groff       less       curl       jq       py-pip       python       openssh
+      &&    pip install --upgrade       awscli       pip       python-dateutil &&    ln
+      -s /usr/bin/aws_bash_completer /etc/profile.d/aws_bash_completer.sh &&    curl
+      -sSL --output ${S3_TMP} https://github.com/s3tools/s3cmd/archive/master.zip
+      &&    curl -sSL --output ${RDS_TMP} http://s3.amazonaws.com/rds-downloads/RDSCli.zip
+      &&    unzip -q ${S3_TMP} -d /tmp &&    unzip -q ${RDS_TMP} -d /tmp &&    mv
+      ${S3_ZIP}/S3 ${S3_ZIP}/s3cmd /usr/bin/ &&    mv /tmp/RDSCli-${RDS_VERSION} /usr/local/
+      &&    rm -rf /tmp/* &&    mkdir ~/.aws &&    chmod 700 ~/.aws
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - ~/.aws
+  - CmdLine:
+    - /bin/bash
+    - --login
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8u151-jdk-alpine3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8u151-jdk-alpine3.7

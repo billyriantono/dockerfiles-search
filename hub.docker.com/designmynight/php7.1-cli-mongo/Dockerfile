@@ -1,8 +1,14 @@
-FROM designmynight/dockerfiles:php7.1-cli-alpine
+FROM alpine:edge
 
-RUN pecl install mongodb-1.5.3 \
-    && docker-php-ext-enable mongodb
+MAINTAINER Milan Sulc <sulc@ders.cz>
 
-RUN echo "memory_limit=-1" > "$PHP_INI_DIR/conf.d/memory-limit.ini"
+ENV TERM xterm
+ENV USER_UID 1000
+ENV USER_NAME ders
 
-WORKDIR /opt
+RUN apk update && \
+    apk upgrade && \
+    adduser -D -u $USER_UID $USER_NAME && \
+    rm -rf /var/cache/apk/*
+
+CMD ["/bin/sh"]

@@ -1,0 +1,133 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8u181-jdk-alpine
+  Commands:
+  - Env:
+    - Key: ADMIN_USER
+      Value: ${ADMIN_USER:-admin}
+    Name: env
+  - Env:
+    - Key: ADMIN_PASS
+      Value: ${ADMIN_PASS:-adminpass}
+    Name: env
+  - Env:
+    - Key: JBOSS_USER
+      Value: $ADMIN_USER
+    Name: env
+  - Env:
+    - Key: JBOSS_PASS
+      Value: $ADMIN_PASS
+    Name: env
+  - Env:
+    - Key: JBOSS_HOME
+      Value: ${JBOSS_HOME:-/opt/jboss/wildfly}
+    Name: env
+  - Chown: ""
+    From: jboss/wildfly:13.0.0.Final
+    Name: copy
+    SourcesAndDest:
+    - /opt/jboss/wildfly
+    - $JBOSS_HOME
+  - CmdLine:
+    - /opt/jboss/wildfly/bin/add-user.sh --silent $JBOSS_USER $JBOSS_PASS
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "@edge http://nl.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories
+      &&   apk update &&   apk add apache-ant curl "libpq@edge<10.6" "postgresql-client@edge<10.6"
+      "postgresql@edge<10.6" "postgresql-contrib@edge<10.6" &&   mkdir /postgres-initdb.d
+      &&   curl -o /usr/local/bin/gosu -sSL "https://github.com/tianon/gosu/releases/download/1.2/gosu-amd64"
+      &&   chmod +x /usr/local/bin/gosu &&   apk del curl &&   rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: en_US.utf8
+    Name: env
+  - Env:
+    - Key: POSTGRES_DB
+      Value: ${DB:-datastore}
+    Name: env
+  - Env:
+    - Key: POSTGRES_SCHEMA
+      Value: ${SCHEMA:-dataschema}
+    Name: env
+  - Env:
+    - Key: POSTGRES_USER
+      Value: $ADMIN_USER
+    Name: env
+  - Env:
+    - Key: POSTGRES_PASSWORD
+      Value: $ADMIN_PASS
+    Name: env
+  - Env:
+    - Key: PGDATA
+      Value: /var/lib/postgresql/data
+    Name: env
+  - Env:
+    - Key: POSTGRES_JDBC_VERSION
+      Value: 42.2.5
+    Name: env
+  - Env:
+    - Key: POSTGRES_JDBC_HOME
+      Value: $JBOSS_HOME/modules/system/layers/base/org/postgresql/main
+    Name: env
+  - Env:
+    - Key: DATASOURCE_NAME
+      Value: postgresDS
+    Name: env
+  - CmdLine:
+    - mkdir -p $POSTGRES_JDBC_HOME
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://jdbc.postgresql.org/download/postgresql-$POSTGRES_JDBC_VERSION.jar
+    - $POSTGRES_JDBC_HOME/postgresql.jar
+  - CmdLine:
+    - mkdir -p /var/run/postgresql &&     chown -R postgres:postgres /var/run/postgresql
+      &&     chmod 2777 /var/run/postgresql &&     mkdir -p /build.initdb.d/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./build.initdb.d/*
+    - /build.initdb.d/
+  - Name: workdir
+    Path: /opt/setup/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./setup/*
+    - ./
+  - CmdLine:
+    - /bin/sh -c '$JBOSS_HOME/bin/standalone.sh &' &&     sleep 10 &&     sed -i -e
+      "s/MaxPermSize/MaxMetaspaceSize/" ${JBOSS_HOME}/bin/standalone.conf &&     ${JBOSS_HOME}/bin/jboss-cli.sh
+      --connect --file=datasource.cli &&     ${JBOSS_HOME}/bin/jboss-cli.sh --connect
+      --command=:shutdown &&     rm -rf ${JBOSS_HOME}/standalone/configuration/standalone_xml_history
+      &&     chmod +x ./*.sh &&     ./db-setup.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+    - "9990"
+  - CmdLine:
+    - mkdir -p /opt/workspace/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/workspace/
+  - CmdLine:
+    - /opt/setup/start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8u181-jdk-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8u181-jdk-alpine

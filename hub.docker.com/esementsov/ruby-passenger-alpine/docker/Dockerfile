@@ -1,0 +1,5 @@
+FROM microsoft/dotnet:sdk
+ENV ASPNETCORE_URLS=http://0.0.0.0:5000
+ENV ASPNETCORE_ENVIRONMENT=Development
+EXPOSE 5000
+WORKDIR /app

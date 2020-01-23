@@ -1,0 +1,117 @@
+MetaArgs: null
+Stages:
+- BaseName: php:5.6-apache
+  Commands:
+  - Maintainer: Sebastian Ponti <sebaponti@gmail.com>
+    Name: maintainer
+  - Key: USER_ID
+    Name: arg
+    Value: null
+  - Key: GROUP_ID
+    Name: arg
+    Value: null
+  - Env:
+    - Key: USER_ID
+      Value: ${USER_ID:-1000}
+    Name: env
+  - Env:
+    - Key: GROUP_ID
+      Value: ${GROUP_ID:-1000}
+    Name: env
+  - CmdLine:
+    - groupadd -g ${GROUP_ID} navcoin       && useradd -u ${USER_ID} -g navcoin -s
+      /bin/bash -m -d /navcoin navcoin
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GIT_REVISION_CORE
+      Value: ${GIT_REVISION_CORE:-'v4.1.1'}
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -yq --no-install-recommends       build-essential
+      libcurl3-dev libtool autotools-dev automake       pkg-config libssl-dev libevent-dev
+      bsdmainutils libzmq3-dev       libqrencode-dev qrencode wget curl       libboost-system-dev
+      libboost-filesystem-dev libboost-chrono-dev       libboost-program-options-dev
+      libboost-test-dev libboost-thread-dev       libminiupnpc-dev       git-core       &&
+      apt-get clean       && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - gpg --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4       &&
+      curl -o /usr/local/bin/gosu -fSL https://github.com/tianon/gosu/releases/download/1.9/gosu-$(dpkg
+      --print-architecture)       && curl -o /usr/local/bin/gosu.asc -fSL https://github.com/tianon/gosu/releases/download/1.9/gosu-$(dpkg
+      --print-architecture).asc       && gpg --verify /usr/local/bin/gosu.asc       &&
+      rm /usr/local/bin/gosu.asc       && chmod +x /usr/local/bin/gosu
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - export UI_FOLDER="/home/stakebox/" && mkdir -p $UI_FOLDER && cd $UI_FOLDER      &&
+      git clone https://github.com/NAVCoin/navpi.git UI      && cd UI && rm -fr .git
+      .htaccess .htaccess.swp      && chown navcoin:navcoin $UI_FOLDER      && chown
+      -R www-data:www-data $UI_FOLDER/UI
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - export BDB_FOLDER="/usr/local/berkeley-db-4.8" && cd /tmp      && mkdir -p $BDB_FOLDER      &&
+      wget 'http://download.oracle.com/berkeley-db/db-4.8.30.NC.tar.gz'      && echo
+      '12edc0df75bf9abd7f82f821795bcee50f42cb2e5f76a6a281b85732798364ef  db-4.8.30.NC.tar.gz'
+      | sha256sum -c      && tar -xzvf db-4.8.30.NC.tar.gz      && cd db-4.8.30.NC/build_unix/      &&
+      ../dist/configure --enable-cxx --disable-shared --with-pic --prefix=$BDB_FOLDER      &&
+      make install      && cd /tmp      && git clone -b $GIT_REVISION_CORE https://github.com/NAVCoin/navcoin-core.git
+      navcoin-core      && cd navcoin-core      && ./autogen.sh      && ./configure
+      LDFLAGS="-L${BDB_FOLDER}/lib/" CPPFLAGS="-I${BDB_FOLDER}/include/"         --enable-hardening
+      --without-gui --enable-upnp-default      && make      && make install      &&
+      cd && rm -fr /tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./conf/apache2.conf
+    - /etc/apache2/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./conf/navpi.conf
+    - /etc/apache2/sites-available/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./bin
+    - /usr/local/bin
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/docker-entrypoint
+  - CmdLine:
+    - mkdir /etc/apache2/ssl && cd /etc/apache2/ssl       && openssl genrsa -des3
+      -passout pass:x -out tmp-navpi-ssl.key 2048       && openssl rsa -passin pass:x
+      -in tmp-navpi-ssl.key -out navpi-ssl.key       && openssl req -new -key navpi-ssl.key
+      -out navpi-ssl.csr          -subj "/C=NZ/ST=Auckland/L=Auckland/O=Nav Coin/OU=Nav
+      Pi/CN=my.navpi.org"       && openssl x509 -req -days 365 -in navpi-ssl.csr -signkey
+      navpi-ssl.key -out navpi-ssl.crt       && rm tmp-navpi-ssl.key navpi-ssl.csr       &&
+      a2enmod rewrite && a2enmod php5 && a2enmod ssl       && a2ensite navpi.conf
+      && a2dissite 000-default.conf
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /navcoin
+  - Name: expose
+    Ports:
+    - "44440"
+    - "44444"
+  - CmdLine:
+    - docker-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - apache2-foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:5.6-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:5.6-apache

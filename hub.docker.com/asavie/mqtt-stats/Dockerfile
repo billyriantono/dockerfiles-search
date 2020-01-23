@@ -1,13 +1,18 @@
-FROM alpine
+FROM python:3.6
 
-# Set the working directory to /app
-WORKDIR /app
+# Ensure that Python outputs everything that's printed inside
+# the application rather than buffering it.
+ENV PYTHONUNBUFFERED 1
 
-# Copy the current directory contents into the container at /app
-ADD . /app
+RUN mkdir /kube
+RUN mkdir /www
+RUN mkdir /www/static
 
-# Installing dependencies
-RUN apk add mosquitto-clients
+COPY ./kube /kube
 
-# Run app.sh when the container launches
-CMD ["./app.sh"]
+EXPOSE 8000
+
+WORKDIR /kube
+RUN pip install -r requirements.txt
+
+CMD [ "python", "./manage.py", "runserver", "0.0.0.0:8000" ]

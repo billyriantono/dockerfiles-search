@@ -16,7 +16,7 @@
 FROM alpine:latest
 MAINTAINER Hari Sekhon (https://www.linkedin.com/in/harisekhon)
 
-ARG SERF_VERSION=0.4.5
+ARG SERF_VERSION=0.6.4
 
 ENV PATH $PATH:/
 

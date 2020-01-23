@@ -14,7 +14,7 @@
 FROM harisekhon/alpine-java:jre8
 MAINTAINER Hari Sekhon (https://www.linkedin.com/in/harisekhon)
 
-ARG HBASE_VERSION=2.1.3
+ARG HBASE_VERSION=1.1.9
 
 ENV PATH $PATH:/hbase/bin
 

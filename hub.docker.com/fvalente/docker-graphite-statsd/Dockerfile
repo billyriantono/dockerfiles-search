@@ -1,74 +1,45 @@
-FROM phusion/baseimage:0.9.21
+FROM php:7.2-apache
 
-ENV PYTHONPATH="/opt/graphite/lib/:/opt/graphite/webapp/"
+ENV username fop
+ENV groupname fop
+ENV userid 1000
+ENV groupid 1000
 
-RUN apt-get -y update
+ENV REDIS_VERSION "5.0.2"
+ENV XDEBUG_VERSION "2.7.2"
 
-RUN apt-get install -y  nginx \
-                        python-dev \
-                        python-flup \
-                        python-ldap \
-                        expect \
-                        sqlite3 \
-                        libcairo2 \
-                        libcairo2-dev \
-                        python-cairo \
-                        python-rrdtool\
-                        pkg-config\
-                        nodejs\
-                        memcached \
-                        libffi-dev \
-                        build-essential \
-                        vim \
-                        python \
-                        python-pip \
-                        git
+ENV DEBIAN_FRONTEND "noninteractive"
 
-RUN pip install django==1.5 django-tagging==0.3.1 pytz  txamqp gunicorn  python-memcached
-RUN pip install --no-binary=:all: https://github.com/graphite-project/whisper/archive/0.9.15.tar.gz
-RUN pip install --no-binary=:all: https://github.com/graphite-project/carbon/archive/0.9.15.tar.gz
-RUN pip install --no-binary=:all: https://github.com/graphite-project/graphite-web/archive/0.9.15.tar.gz
+RUN apt-get update && apt-get install -y \
+        gettext \
+        iproute2 \
+        libfreetype6-dev \
+        libjpeg62-turbo-dev \
+        libmcrypt-dev \
+        libpng-dev \
+        libxml2-dev \
+        mc \
+        nano \
+        redis-tools \
+        zlib1g-dev \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /usr/share/doc/*
 
-ADD conf/opt/graphite/conf/*.conf /opt/graphite/conf/
-ADD conf/opt/graphite/webapp/graphite/local_settings.py /opt/graphite/webapp/graphite/local_settings.py
-ADD conf/opt/graphite/webapp/graphite/app_settings.py /opt/graphite/webapp/graphite/app_settings.py
+RUN docker-php-ext-install -j4 calendar iconv pdo_mysql soap \
+    && docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/ \
+    && docker-php-ext-install -j4 gd
 
-RUN mv /opt/graphite/conf/graphite.wsgi.example /opt/graphite/webapp/graphite/graphite_wsgi.py
+RUN pecl install xdebug-$XDEBUG_VERSION \
+    && pecl install redis-$REDIS_VERSION \
+    && docker-php-ext-enable redis \
+    && docker-php-ext-enable xdebug
 
-# config nginx
-RUN rm /etc/nginx/sites-enabled/default
-ADD conf/etc/nginx/nginx.conf /etc/nginx/nginx.conf
-ADD conf/etc/nginx/sites-enabled/graphite-statsd.conf /etc/nginx/sites-enabled/graphite-statsd.conf
+RUN groupadd -g $groupid -r $groupname \
+	&& useradd -u $userid -g $groupname --shell /bin/bash --create-home $username
 
-# install statsd
-RUN git clone -b v0.7.2 https://github.com/etsy/statsd.git /opt/statsd
-ADD conf/opt/statsd/config.js /opt/statsd/config.js
+RUN chown -R $username:$groupname /var/www
 
-ADD conf/usr/local/bin/django_admin_init.exp /usr/local/bin/django_admin_init.exp
-RUN /usr/local/bin/django_admin_init.exp
+ENV APACHE_RUN_USER=$username
+ENV APACHE_RUN_GROUP=$groupname
 
-# logging support
-RUN mkdir -p /var/log/carbon /var/log/graphite /var/log/nginx
-ADD conf/etc/logrotate.d/graphite-statsd /etc/logrotate.d/graphite-statsd
-
-# daemons
-ADD conf/etc/service/carbon/run /etc/service/carbon/run
-ADD conf/etc/service/carbon-aggregator/run /etc/service/carbon-aggregator/run
-ADD conf/etc/service/graphite/run /etc/service/graphite/run
-ADD conf/etc/service/statsd/run /etc/service/statsd/run
-ADD conf/etc/service/nginx/run /etc/service/nginx/run
-
-# default conf setup
-ADD conf /etc/graphite-statsd/conf
-ADD conf/etc/my_init.d/01_conf_init.sh /etc/my_init.d/01_conf_init.sh
-
-# # cleanup
-RUN apt-get clean\
- && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# # defaults
-EXPOSE 80 2003-2004 2023-2024 8125/udp 8126
-VOLUME ["/opt/graphite/conf", "/opt/graphite/storage", "/etc/nginx", "/opt/statsd", "/etc/logrotate.d", "/var/log"]
-WORKDIR /
-ENV HOME /root
-CMD ["/sbin/my_init"]
+RUN a2enmod rewrite headers

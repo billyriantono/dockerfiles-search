@@ -1,0 +1,56 @@
+FROM debian:stretch
+# Contains sticky and upstream_check module
+
+ENV NGINX_VERSION 1.12.2
+ENV NGINX_STICKY_MODULE_NG_VERSION 08a395c66e42
+
+RUN addgroup --system nginx && \
+    adduser --system --shell /usr/sbin/nologin --home /var/cache/nginx --ingroup nginx nginx && \
+    apt-get update -y && \
+    apt-get install -y gcc g++ make automake build-essential libpcre3 libpcre3-dev openssl libssl-dev libperl-dev zlib1g zlib1g-dev curl git
+
+RUN curl -fSL http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz -o nginx.tar.gz && \
+    curl -fSL https://bitbucket.org/nginx-goodies/nginx-sticky-module-ng/get/$NGINX_STICKY_MODULE_NG_VERSION.tar.gz -o nginx-sticky-module-ng.tar.gz && \
+    git clone https://github.com/yaoweibin/nginx_upstream_check_module.git && \
+    tar -zxf nginx.tar.gz && \
+    tar -zxf nginx-sticky-module-ng.tar.gz && \
+    cd nginx-$NGINX_VERSION && \
+    patch -p1 < /nginx_upstream_check_module/check_1.12.1+.patch && \
+    ./configure \
+        --prefix=/etc/nginx \
+        --sbin-path=/usr/sbin/nginx \
+        --modules-path=/usr/lib/nginx/modules \
+        --conf-path=/etc/nginx/nginx.conf \
+        --error-log-path=/var/log/nginx/error.log \
+        --http-log-path=/var/log/nginx/access.log \
+        --pid-path=/var/run/nginx.pid \
+        --lock-path=/var/run/nginx.lock \
+        --http-client-body-temp-path=/var/cache/nginx/client_temp \
+        --http-proxy-temp-path=/var/cache/nginx/proxy_temp \
+        --http-fastcgi-temp-path=/var/cache/nginx/fastcgi_temp \
+        --http-uwsgi-temp-path=/var/cache/nginx/uwsgi_temp \
+        --http-scgi-temp-path=/var/cache/nginx/scgi_temp \
+        --user=nginx \
+        --group=nginx \
+        --with-pcre \
+        --with-http_stub_status_module \
+        --with-http_realip_module \
+        --with-http_gzip_static_module \
+        --with-http_gunzip_module \
+        --with-http_sub_module \
+        --with-http_ssl_module \
+        --with-stream \
+        --with-stream_ssl_module \
+        --with-stream_realip_module \
+        --with-debug \
+        --add-module=../nginx-goodies-nginx-sticky-module-ng-$NGINX_STICKY_MODULE_NG_VERSION \
+        --add-module=../nginx_upstream_check_module && \
+    make && make install && \
+    rm -rf /nginx* /nginx_upstream_check_module && \
+    apt-get purge -y gcc g++ make automake build-essential libpcre3-dev libssl-dev libperl-dev zlib1g-dev curl git && \
+    apt-get -y autoremove && \
+    apt-get clean
+
+EXPOSE 80 443
+
+CMD ["nginx", "-g", "daemon off;"]

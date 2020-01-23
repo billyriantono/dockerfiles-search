@@ -1,15 +1,19 @@
-# our base image
-FROM python:2
+# Wildfly Server 9.0.1.Final Dockerfile
+#
+# https://github.com/oscerd/docker-wildfly
 
-# install Python modules needed by the Python app
-COPY web_app/requirements.txt /usr/src/app/
-RUN pip install --no-cache-dir -r /usr/src/app/requirements.txt
+# Pull base image.
+FROM oscerd/java:latest
+MAINTAINER Andrea Cosentino <ancosen1985@yahoo.com>
 
-# copy files required for the app to run
-COPY web_app/ /usr/src/app/
+ENV WILDFLY_VERSION 9.0.1.Final
 
-# tell the port number the container should expose
-#EXPOSE 5000
+COPY . /src
 
-# run the application
-CMD ["python", "/usr/src/app/app.py"]
+RUN cd /tmp/ && curl http://download.jboss.org/wildfly/$WILDFLY_VERSION/wildfly-$WILDFLY_VERSION.tar.gz | tar zx && mv /tmp/wildfly-$WILDFLY_VERSION /opt/wildfly
+
+ENV JBOSS_HOME /opt/wildfly
+
+EXPOSE 8080
+
+CMD ["/src/start.sh"]

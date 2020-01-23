@@ -1,0 +1,207 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: ubuntu:18.04
+  Commands:
+  - Env:
+    - Key: NODE
+      Value: ENV=production
+    Name: env
+  - Env:
+    - Key: TINI_VERSION
+      Value: v0.18.0
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini
+    - /tini
+  - CmdLine:
+    - chmod +x /tini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update; apt-get install curl redis git git-core -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --silent -o- https://raw.githubusercontent.com/creationix/nvm/v0.34.0/install.sh
+      | bash
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NVM_DIR
+      Value: /usr/local/.nvm
+    Name: env
+  - Env:
+    - Key: NODE_VERSION
+      Value: 10.16.3
+    Name: env
+  - CmdLine:
+    - . $HOME/.nvm/nvm.sh && nvm install $NODE_VERSION && nvm alias default $NODE_VERSION
+      && nvm use default
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NODE_PATH
+      Value: $NVM_DIR/v$NODE_VERSION/lib/node_modules
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $NVM_DIR/versions/node/v$NODE_VERSION/bin:$PATH
+    Name: env
+  - CmdLine:
+    - useradd -ms /bin/bash node
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /app/logs && chown -R node:node /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Name: user
+    User: node
+  - Chown: node:node
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package*.json
+    - ./
+  - CmdLine:
+    - npm install --no-optional --silent && npm cache clean --force > "/dev/null"
+      2>&1
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: base
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as base
+- As: dev
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: development
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /app/node_modules/.bin:$PATH
+    Name: env
+  - CmdLine:
+    - npm install --only=development --no-optional --silent && npm cache clean --force
+      > "/dev/null" 2>&1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - sh
+    - -c
+    - ./bin/hubot --adapter slack
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: dev
+  Platform: ""
+  SourceCode: FROM base as dev
+- As: source
+  BaseName: base
+  Commands:
+  - Chown: node:node
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: source
+  Platform: ""
+  SourceCode: FROM base as source
+- As: test
+  BaseName: source
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: development
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /app/node_modules/.bin:$PATH
+    Name: env
+  - Chown: ""
+    From: dev
+    Name: copy
+    SourcesAndDest:
+    - /app/node_modules
+    - /app/node_modules
+  From:
+    Stage:
+      Index: 2
+      Named: source
+  Name: test
+  Platform: ""
+  SourceCode: FROM source as test
+- As: audit
+  BaseName: test
+  Commands:
+  - Name: user
+    User: root
+  - CmdLine:
+    - npm audit --audit-level critical
+    Name: run
+    PrependShell: true
+  - Key: MICROSCANNER_TOKEN
+    Name: arg
+    Value: null
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://get.aquasec.com/microscanner
+    - /
+  - CmdLine:
+    - chmod +x /microscanner
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /microscanner $MICROSCANNER_TOKEN --continue-on-failure
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 3
+      Named: test
+  Name: audit
+  Platform: ""
+  SourceCode: FROM test as audit
+- As: prod
+  BaseName: source
+  Commands:
+  - CmdLine:
+    - /tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - sh
+    - -c
+    - ./bin/hubot --adapter slack
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 2
+      Named: source
+  Name: prod
+  Platform: ""
+  SourceCode: FROM source as prod

@@ -1,0 +1,130 @@
+MetaArgs: null
+Stages:
+- As: perl-source
+  BaseName: buildpack-deps:stretch
+  Commands:
+  - CmdLine:
+    - set -x     && apt-get update     && apt-get install -y --no-install-recommends         curl         perl         cpanminus     &&
+      cpanm Devel::PatchPerl     && rm -rf /var/cache/apt/* /var/lib/apt/lists/*     &&
+      rm -rf .cpanm /root/.cpanm
+    Name: run
+    PrependShell: true
+  - Key: PERL_VERSION
+    Name: arg
+    Value: 5.28.0
+  - CmdLine:
+    - set -x      && cd /tmp     && curl -sSL -O https://www.cpan.org/src/5.0/perl-${PERL_VERSION}.tar.gz     &&
+      tar xf perl-${PERL_VERSION}.tar.gz     && rm -rf perl-${PERL_VERSION}.tar.gz     &&
+      perl -MDevel::PatchPerl -e "Devel::PatchPerl->patch_source(\"${PERL_VERSION}\",
+      \"./perl-${PERL_VERSION}\");"     && mv perl-${PERL_VERSION} perl
+    Name: run
+    PrependShell: true
+  From:
+    Image: buildpack-deps:stretch
+  Name: perl-source
+  Platform: ""
+  SourceCode: FROM buildpack-deps:stretch AS perl-source
+- As: protobuf
+  BaseName: buildpack-deps:stretch
+  Commands:
+  - CmdLine:
+    - set -x     && apt-get update     && apt-get install -y --no-install-recommends         autoconf         automake         libtool         curl         make         g++         unzip     &&
+      rm -rf /var/cache/apt/* /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Key: PROTOBUF_VERSION
+    Name: arg
+    Value: 3.5.1
+  - CmdLine:
+    - set -x     && cd /tmp     && curl -sSL -o protobuf-cpp.zip https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOBUF_VERSION}/protobuf-cpp-${PROTOBUF_VERSION}.zip     &&
+      unzip -q protobuf-cpp.zip     && cd protobuf-${PROTOBUF_VERSION}     && ./configure
+      --prefix=/usr     && make -j$(nproc)     && make install     && ldconfig     &&
+      make clean     && cd /root     && rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: buildpack-deps:stretch
+  Name: protobuf
+  Platform: ""
+  SourceCode: FROM buildpack-deps:stretch AS protobuf
+- BaseName: debian:stretch-slim
+  Commands:
+  - CmdLine:
+    - set -x     && apt-get update     && apt-get install -y --no-install-recommends         ca-certificates         curl         dpkg-dev         gcc         libc6-dev         make         netbase
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: perl-source
+    Name: copy
+    SourcesAndDest:
+    - /tmp/perl
+    - /tmp/perl
+  - CmdLine:
+    - set -x     && cd /tmp/perl     && ./Configure -Darchname=x86_64-linux-gnu -Duse64bitall
+      -Duseshrplib -Dvendorprefix=/usr/local -A ccflags=-fwrapv -des     && make -j$(nproc)     &&
+      make install     && cd /root     && rm -rf /tmp/*     && curl -sSL https://cpanmin.us
+      | perl - App::cpanminus
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: protobuf
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/protoc*
+    - /usr/bin/
+  - Chown: ""
+    From: protobuf
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/libprotobuf*.so
+    - /usr/lib/
+  - Chown: ""
+    From: protobuf
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/libprotoc*.so
+    - /usr/lib/
+  - Chown: ""
+    From: protobuf
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/pkgconfig/protobuf*.pc
+    - /usr/lib/pkgconfig/
+  - Chown: ""
+    From: protobuf
+    Name: copy
+    SourcesAndDest:
+    - /usr/include/google
+    - /usr/include/google
+  - CmdLine:
+    - ldconfig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y --no-install-recommends         curl         ca-certificates         g++         gcc         libc6-dev         zlib1g-dev         libssl-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && cpanm IO::Socket::SSL     && cpanm Google::ProtocolBuffers::Dynamic     &&
+      rm -rf .cpanm /root/.cpanm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x     && apt-mark auto '.*' >/dev/null     && apt-mark manual make     &&
+      apt-mark manual netbase     && apt-get -y purge --auto-remove -o APT::AutoRemove::RecommendsImportant=false     &&
+      rm -rf /var/cache/apt/* /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - protoc
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --help
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:stretch-slim

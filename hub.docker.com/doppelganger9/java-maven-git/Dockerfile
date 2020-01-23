@@ -1,12 +1,13 @@
-FROM maven:3.5.2-jdk-8-alpine
+FROM ubuntu:14.04
 
-LABEL version="1" \
-      maintainer="David Lacourt <david.lacourt@gmail.com>" \
-      license="MIT"
+MAINTAINER Daniel Johansson <donnex@donnex.net>
 
-RUN apk update && \
-    apk upgrade && \
-    apk add --no-cache \
-        bash \
-        git \
-        openssh
+RUN apt-get update \
+    && apt-get install -y php5-fpm php5-mysql php5-gd \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+COPY php-fpm.conf /etc/php5/fpm/php-fpm.conf
+
+EXPOSE 9000
+CMD ["php5-fpm"]

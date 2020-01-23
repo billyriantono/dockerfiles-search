@@ -1,14 +1,18 @@
-FROM node:8-alpine
-LABEL Author="André Nishitani <andre.nishitani@sensedia.com>"
+# Base image
+#FROM python:3-slim
+FROM jupyter/minimal-notebook
 
-RUN mkdir /ws
+USER root
 
-WORKDIR /ws
+COPY requirements.txt /tmp/requirements.txt
 
-RUN npm install request argparse
+RUN pip install -r /tmp/requirements.txt \
+        && rm /tmp/requirements.txt
 
-COPY sensedia-api-error-monitor.js /ws
-COPY httpstatus.json /ws
+COPY bootstrap.sh /bootstrap.sh
+RUN chmod +x /bootstrap.sh
 
-ENTRYPOINT ["node", "sensedia-api-error-monitor.js"]
+# Switch back to jovyan to avoid accidental container runs as root
+USER $NB_UID
 
+ENTRYPOINT /bootstrap.sh

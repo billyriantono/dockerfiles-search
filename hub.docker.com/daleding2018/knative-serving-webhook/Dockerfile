@@ -1,1 +1,13 @@
-FROM gcr.io/knative-releases/knative.dev/serving/cmd/webhook@sha256:c2076674618933df53e90cf9ddd17f5ddbad513b8c95e955e45e37be7ca9e0e8
+# build stage
+FROM golang:alpine AS builder
+LABEL maintainer="Charlie Lewis <clewis@iqt.org>"
+COPY main.go /app/main.go
+WORKDIR /app
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o gonet .
+
+# final stage
+FROM scratch
+LABEL maintainer="Charlie Lewis <clewis@iqt.org>" \
+      vent=""
+COPY --from=builder /app/gonet /gonet
+CMD ["/gonet"]

@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.9-alpine
+  Commands:
+  - Key: version
+    Name: arg
+    Value: '"0.10.8"'
+  - Key: plugins
+    Name: arg
+    Value: '""'
+  - CmdLine:
+    - apk --no-cache add --virtual .build-deps                 build-base                 git                 findutils
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone -b v$version --depth 1 https://github.com/mholt/caddy $GOPATH/src/github.com/mholt/caddy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'package caddyhttp' > $GOPATH/src/github.com/mholt/caddy/caddyhttp/plugins.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo -n $plugins | xargs -r -n 1 -d ' ' -I '{}' git clone --depth 1 https://{}
+      $GOPATH/src/{} &&             echo -n $plugins | xargs -r -n 1 -d ' ' -I '{}'
+      echo 'import _ "{}"' >> $GOPATH/src/github.com/mholt/caddy/caddyhttp/plugins.go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth 1 https://github.com/caddyserver/builds $GOPATH/src/github.com/caddyserver/builds
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd $GOPATH/src/github.com/mholt/caddy/caddy &&             go build -o $GOPATH/bin/caddy
+      main.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.9-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM        golang:1.9-alpine as builder
+- BaseName: alpine
+  Commands:
+  - Key: rundeps
+    Name: arg
+    Value: '""'
+  - Name: volume
+    Volumes:
+    - /root/.caddy
+    - /srv
+  - Name: workdir
+    Path: /srv
+  - Name: expose
+    Ports:
+    - 2015/tcp
+    - 443/tcp
+    - 80/tcp
+  - CmdLine:
+    - caddy
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - browse
+    - gzip
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - apk --no-cache add --virtual .rundeps $rundeps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/caddy
+    - /usr/bin/caddy
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM        alpine

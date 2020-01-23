@@ -1,0 +1,140 @@
+MetaArgs: null
+Stages:
+- As: npm_builder
+  BaseName: python:3.6-slim
+  Commands:
+  - Key: BACKEND_HOST
+    Name: arg
+    Value: demo-forests.eea.europa.eu
+  - Key: SCRIPT_NAME
+    Name: arg
+    Value: /nfi_search
+  - Env:
+    - Key: BACKEND_HOST
+      Value: $BACKEND_HOST
+    Name: env
+  - Env:
+    - Key: SCRIPT_NAME
+      Value: $SCRIPT_NAME
+    Name: env
+  - Env:
+    - Key: APP_HOME
+      Value: /var/local/fise.nfi.search
+    Name: env
+  - CmdLine:
+    - apt-get update -y     && apt-get install -y --no-install-recommends apt-utils
+      curl software-properties-common gnupg     && curl -sL https://deb.nodesource.com/setup_8.x
+      | bash -     && curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key
+      add -     && echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - runDeps="nodejs yarn"     && apt-get update -y     && apt-get install -y --no-install-recommends
+      $runDeps
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $APP_HOME/frontend
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - frontend
+    - $APP_HOME/frontend/
+  - CmdLine:
+    - rm -rf frontend/dist
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - postcss.config.js
+    - yarn.lock
+    - $APP_HOME/
+  - Name: workdir
+    Path: $APP_HOME
+  - CmdLine:
+    - npm_config_tmp=$APP_HOME yarn
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.6-slim
+  Name: npm_builder
+  Platform: ""
+  SourceCode: FROM python:3.6-slim as npm_builder
+- BaseName: python:3.6-slim
+  Commands:
+  - Key: REQUIREMENTS_FILE
+    Name: arg
+    Value: requirements.txt
+  - Env:
+    - Key: APP_HOME
+      Value: /var/local/fise.nfi.search
+    Name: env
+  - CmdLine:
+    - runDeps="netcat libpq-dev"     && apt-get update -y     && apt-get install -y
+      --no-install-recommends $runDeps     && apt-get clean     && rm -vrf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $APP_HOME
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - $REQUIREMENTS_FILE
+    - $APP_HOME/
+  - Name: workdir
+    Path: $APP_HOME
+  - CmdLine:
+    - buildDeps="build-essential gcc"     && apt-get update -y     && apt-get install
+      -y --no-install-recommends $buildDeps     && pip install --no-cache-dir -r $REQUIREMENTS_FILE     &&
+      apt-get -y remove --purge --auto-remove $buildDeps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $APP_HOME
+  - CmdLine:
+    - rm -rf frontend package.json postcss.config.js yarn.lock     && mkdir -p $APP_HOME/frontend/dist     &&
+      mkdir $APP_HOME/static
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: npm_builder
+    Name: copy
+    SourcesAndDest:
+    - $APP_HOME/frontend/dist/build/
+    - $APP_HOME/static/
+  - Chown: ""
+    From: npm_builder
+    Name: copy
+    SourcesAndDest:
+    - $APP_HOME/frontend/dist/stats.json
+    - $APP_HOME/frontend/dist/stats.json
+  - CmdLine:
+    - ./docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3.6-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.6-slim

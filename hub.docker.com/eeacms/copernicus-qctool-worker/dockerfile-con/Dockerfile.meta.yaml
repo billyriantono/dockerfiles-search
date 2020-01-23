@@ -1,0 +1,296 @@
+MetaArgs: null
+Stages:
+- As: tls
+  BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk add --no-cache openssl
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tls
+  - CmdLine:
+    - openssl req -newkey rsa:2048 -new -nodes -keyout key.pem -out csr.pem -subj
+      '/CN=localhost'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl x509 -req -days 36500 -in csr.pem -signkey key.pem -out server.crt
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: tls
+  Platform: ""
+  SourceCode: FROM alpine:latest as TLS
+- As: java8
+  BaseName: oraclelinux:7
+  Commands:
+  - CmdLine:
+    - yum install gzip tar curl -y && rm -rf /var/cache/yum
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_VERSION
+      Value: 8u181
+    - Key: JAVA_BNUMBER
+      Value: "13"
+    - Key: JAVA_SEMVER
+      Value: 1.8.0_181
+    - Key: JAVA_HOME
+      Value: /opt/jre-home
+    - Key: JAVA_HASH
+      Value: 96a7b8442fe848ef90c96a2fad6ed6d1
+    - Key: TIMEZONE
+      Value: America/New_York
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:$JAVA_HOME/bin
+    Name: env
+  - CmdLine:
+    - 'cd /     && curl --header "Cookie: oraclelicense=accept-securebackup-cookie"
+      -fSL     http://download.oracle.com/otn-pub/java/jdk/$JAVA_VERSION-b$JAVA_BNUMBER/$JAVA_HASH/server-jre-$JAVA_VERSION-linux-x64.tar.gz     -o
+      server-jre-$JAVA_VERSION-linux-x64.tar.gz     && tar -zxvf server-jre-$JAVA_VERSION-linux-x64.tar.gz
+      -C /opt     && rm server-jre-$JAVA_VERSION-linux-x64.tar.gz     && ln -s /opt/jdk$JAVA_SEMVER/
+      /opt/jre-home;'
+    Name: run
+    PrependShell: true
+  From:
+    Image: oraclelinux:7
+  Name: java8
+  Platform: ""
+  SourceCode: FROM oraclelinux:7 as java8
+- As: tomcat8
+  BaseName: java8
+  Commands:
+  - Env:
+    - Key: CATALINA_HOME
+      Value: /usr/local/tomcat
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $CATALINA_HOME/bin:$PATH
+    Name: env
+  - CmdLine:
+    - groupadd -r tomcat && useradd -r -g tomcat tomcat
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p "$CATALINA_HOME" && chown tomcat:tomcat "$CATALINA_HOME"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $CATALINA_HOME
+  - CmdLine:
+    - "for key in \t\t05AB33110949707C93A279E3D3EFE6B686867BA6 \t\t07E48665A34DCAFAE522E5E6266191C37C037D42
+      \t\t47309207D818FFD8DCD3F83F1931D684307A10A5 \t\t541FBE7D8F78B25E055DDEE13C370389288584E7
+      \t\t61B832AC2F1C5A90F0F9B00A1C506407564C17A3 \t\t713DA88BE50911535FE716F5208B0AB1D63011C7
+      \t\t79F7026C690BAA50B92CD8B66A3AD3F4F22C4FED \t\t9BA44C2621385CB966EBA586F72C284D731FABEE
+      \t\tA27677289986DB50844682F8ACB77FC2E86E29AC \t\tA9C5DF4D22E99998D9875A5110C01C5A2F6059E7
+      \t\tDCFD35E0BF8CA7344752DE8B6FB21E8933C60243 \t\tF3A04C595DB5B6A5F1ECA43E3B7BBB100D811BBE
+      \t\tF7DA48BB64BCB84ECBA7EE6935CD23C10D498E23 \t; do \t\tgpg --keyserver ha.pool.sks-keyservers.net
+      --recv-keys \"$key\"; \tdone"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TOMCAT_MAJOR
+      Value: "8"
+    Name: env
+  - Env:
+    - Key: TOMCAT_VERSION
+      Value: 8.0.53
+    Name: env
+  - Env:
+    - Key: TOMCAT_TGZ_URL
+      Value: https://www.apache.org/dist/tomcat/tomcat-$TOMCAT_MAJOR/v$TOMCAT_VERSION/bin/apache-tomcat-$TOMCAT_VERSION.tar.gz
+    Name: env
+  - CmdLine:
+    - "set -x   && curl -fSL $TOMCAT_TGZ_URL -o tomcat.tar.gz \t&& curl -fSL \"$TOMCAT_TGZ_URL.asc\"
+      -o tomcat.tar.gz.asc \t&& gpg --batch --verify tomcat.tar.gz.asc tomcat.tar.gz
+      \t&& tar -xvf tomcat.tar.gz --strip-components=1 \t&& rm bin/*.bat \t&& rm tomcat.tar.gz*
+      \  && rm -rf webapps/*   && chown -R tomcat:tomcat $CATALINA_HOME"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: java8
+  Name: tomcat8
+  Platform: ""
+  SourceCode: FROM java8 as tomcat8
+- As: tomcat8-native-build
+  BaseName: tomcat8
+  Commands:
+  - CmdLine:
+    - yum install     gcc     apr     apr-devel     openssl     openssl-devel     -y
+      && rm -rf /var/cache/yum
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TOMCAT_NATIVE_LIBDIR
+      Value: $CATALINA_HOME/native-jni-lib
+    Name: env
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: ${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$TOMCAT_NATIVE_LIBDIR
+    Name: env
+  - CmdLine:
+    - tar -zxf bin/tomcat-native.tar.gz  && cd tomcat-native-*/native  && ./configure
+      --with-apr=/usr/bin/apr-1-config             --with-ssl=yes             --with-java-home=$JAVA_HOME             --prefix=$PWD  &&
+      make  && make install  && mv lib $CATALINA_HOME/native-jni-lib  && cd $CATALINA_HOME  &&
+      rm -rf tomcat-native-*/
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 2
+      Named: tomcat8
+  Name: tomcat8-native-build
+  Platform: ""
+  SourceCode: FROM tomcat8 as tomcat8-native-build
+- As: banner9-selfservice
+  BaseName: tomcat8-native-build
+  Commands:
+  - Env:
+    - Key: XMS
+      Value: 2g
+    - Key: XMX
+      Value: 8g
+    - Key: BANNERDB_JDBC
+      Value: jdbc:oracle:thin:@//oracle.example.edu:1521/prod
+    - Key: DEFAULT_ROW_PREFETCH
+      Value: "10"
+    - Key: REMOVE_ABANDONED_ON_MAINTENANCE
+      Value: "true"
+    - Key: REMOVE_ABANDONED_ON_BORROW
+      Value: "true"
+    - Key: REMOVE_ABANDONED_TIMEOUT
+      Value: "300"
+    - Key: LOG_ABANDONED
+      Value: "false"
+    - Key: MAX_THREADS
+      Value: "500"
+    - Key: MIN_SPARE_THREADS
+      Value: "25"
+    - Key: BANPROXY_USERNAME
+      Value: banproxy
+    - Key: BANPROXY_INITALSIZE
+      Value: "25"
+    - Key: BANPROXY_MAXTOTAL
+      Value: "600"
+    - Key: BANPROXY_MAXIDLE
+      Value: "-1"
+    - Key: BANPROXY_MAXWAIT
+      Value: "30000"
+    - Key: BANSSUSER_USERNAME
+      Value: ban_ss_user
+    - Key: BANSSUSER_INITALSIZE
+      Value: "25"
+    - Key: BANSSUSER_MAXTOTAL
+      Value: "600"
+    - Key: BANSSUSER_MAXIDLE
+      Value: "-1"
+    - Key: BANSSUSER_MAXWAIT
+      Value: "30000"
+    Name: env
+  - Env:
+    - Key: CATALINA_OPTS
+      Value: '"-server -Xms\$XMS -Xmx\$XMX -Duser.timezone=\$TIMEZONE -Doracle.jdbc.autoCommitSpecCompliant=false"'
+    Name: env
+  - CmdLine:
+    - curl -fSL https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+      -o /tmp/epel-release-latest-7.noarch.rpm   && yum install /tmp/epel-release-latest-7.noarch.rpm
+      -y   && yum install xmlstarlet -y   && rm -rf /var/cache/yum
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /usr/local/tomcat/lib/   && curl https://developer.byu.edu/maven2/content/groups/thirdparty/com/oracle/ojdbc7/12.1.0.2/ojdbc7-12.1.0.2.jar
+      -o ojdbc7.jar   && curl https://developer.byu.edu/maven2/content/groups/thirdparty/com/oracle/ojdbc7/12.1.0.2/ojdbc7-12.1.0.2.jar.sha1
+      --output ojdbc7.jar.sha1   && echo -n "  ojdbc7.jar" >> ojdbc7.jar.sha1   &&
+      sha1sum -c ojdbc7.jar.sha1   && curl https://developer.byu.edu/maven2/content/groups/thirdparty/com/oracle/xdb6/12.1.0.2/xdb6-12.1.0.2.jar
+      -o xdb6.jar   && curl https://developer.byu.edu/maven2/content/groups/thirdparty/com/oracle/xdb6/12.1.0.2/xdb6-12.1.0.2.jar.sha1
+      --output xdb6.jar.sha1   && echo -n "  xdb6.jar" >> xdb6.jar.sha1   && sha1sum
+      -c xdb6.jar.sha1   && rm *.sha1   && chown tomcat:tomcat ojdbc7.jar xdb6.jar
+      && chmod +r ojdbc7.jar xdb6.jar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /usr/local/tomcat/tls
+    Name: run
+    PrependShell: true
+  - Chown: tomcat:tomcat
+    From: TLS
+    Name: copy
+    SourcesAndDest:
+    - /tls/key.pem
+    - /usr/local/tomcat/tls/key.pem
+  - Chown: tomcat:tomcat
+    From: TLS
+    Name: copy
+    SourcesAndDest:
+    - /tls/server.crt
+    - /usr/local/tomcat/tls/server.crt
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - context.xml
+    - /usr/local/tomcat/conf/context.xml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server.xml
+    - /usr/local/tomcat/conf/server.xml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - /usr/local/tomcat/bin
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - logging.properties
+    - /usr/local/tomcat/conf/logging.properties
+  - CmdLine:
+    - ln -s /dev/stderr /usr/local/tomcat/logs/localhost.log
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /dev/stderr /usr/local/tomcat/logs/stacktrace.log
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/banner/config && mkdir -p /opt/banner/images && chown -R tomcat:tomcat
+      /opt/banner
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R tomcat:tomcat $CATALINA_HOME && chmod +x /usr/local/tomcat/bin/run.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: expose
+    Ports:
+    - "8443"
+  - Name: expose
+    Ports:
+    - "8009"
+  - Name: user
+    User: tomcat
+  - CmdLine:
+    - bin/run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 3
+      Named: tomcat8-native-build
+  Name: banner9-selfservice
+  Platform: ""
+  SourceCode: FROM tomcat8-native-build as banner9-selfservice

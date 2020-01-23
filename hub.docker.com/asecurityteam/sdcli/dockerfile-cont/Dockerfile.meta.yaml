@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: ubuntu:rolling
+  Commands:
+  - Name: workdir
+    Path: /
+  - Env:
+    - Key: RUSTUP_HOME
+      Value: /usr/local/rustup
+    - Key: CARGO_HOME
+      Value: /usr/local/cargo
+    - Key: PATH
+      Value: /usr/local/cargo/bin:$PATH
+    Name: env
+  - CmdLine:
+    - apt update && apt install -y git make binutils pkg-config libssl-dev libsqlite3-dev
+      curl     && rm -rf /var/lib/apt/lists/*     && curl https://sh.rustup.rs -sSf
+      | bash -s -- --default-toolchain nightly --profile=minimal -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth=1 --recurse-submodules -j`nproc` https://github.com/agersant/polaris.git     &&
+      cd polaris     && git submodule update --recursive --remote     && mkdir -p
+      release/     && cp -r web docs/swagger src migrations Cargo.toml Cargo.lock
+      res/unix/Makefile release/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /polaris/release     && cargo build --bins --all-features --release
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /polaris-share     && mkdir -p /polaris-built     && cp -r /polaris/release/swagger/
+      /polaris-share     && cp -r /polaris/release/web/ /polaris-share     && cp /polaris/release/target/release/polaris*
+      /polaris-built
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:rolling
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ubuntu:rolling AS builder
+- As: final
+  BaseName: ubuntu:rolling
+  Commands:
+  - Name: workdir
+    Path: /polaris
+  - CmdLine:
+    - apt update && apt install -y libssl1.1 libsqlite3-0 && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /polaris-share
+    - /root/share/polaris
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /polaris-built
+    - .
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - run-polaris
+    - .
+  - Name: expose
+    Ports:
+    - "5050"
+  - Name: volume
+    Volumes:
+    - /music
+    - /var/lib/polaris
+  - CmdLine:
+    - /polaris/run-polaris
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:rolling
+  Name: final
+  Platform: ""
+  SourceCode: FROM ubuntu:rolling AS final

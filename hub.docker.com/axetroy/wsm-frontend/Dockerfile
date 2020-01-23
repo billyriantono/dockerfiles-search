@@ -1,5 +1,5 @@
 # builder for frontend
-FROM node:12.14.0-alpine AS builder
+FROM node:12.14.1-alpine AS builder
 
 WORKDIR /app
 
@@ -13,7 +13,7 @@ RUN rm -rf ./.nuxt && \
   npm run build
 
 # target
-FROM node:12.14.0-alpine
+FROM node:12.14.1-alpine
 
 WORKDIR /app
 
@@ -29,6 +29,8 @@ COPY static ./static
 COPY --from=builder /app/.nuxt ./.nuxt
 
 ENV PORT=80
+ENV HOST=0.0.0.0
+ENV NODE_ENV=production
 
 EXPOSE 80
 

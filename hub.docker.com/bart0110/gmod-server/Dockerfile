@@ -1,71 +1,43 @@
-FROM debian:stretch
+FROM lwieske/java-8:jdk-8u66-slim
+MAINTAINER Tabmo <devs@tabmo.io>
 
-# ------------
-# Prepare Gmod
-# ------------
+ENV WARP10_VERSION=1.2.15
 
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y install lib32gcc1 lib32stdc++6 wget git
-RUN mkdir /steamcmd
-WORKDIR /steamcmd
-RUN wget http://media.steampowered.com/client/steamcmd_linux.tar.gz
-RUN tar -xvzf steamcmd_linux.tar.gz
-RUN mkdir /gmod-base
-RUN /steamcmd/steamcmd.sh +login anonymous +force_install_dir /gmod-base +app_update 4020 validate +quit
+# Updating
+RUN apk update
 
-# ----------------
-# Annoying lib fix
-# ----------------
+# Installing packages & build-dependencies
+RUN apk add bash curl python
+RUN apk add --virtual=build-dependencies ca-certificates wget
 
-#RUN mkdir /gmod-libs
-#WORKDIR /gmod-libs
-#RUN wget http://launchpadlibrarian.net/195509222/libc6_2.15-0ubuntu10.10_i386.deb
-#RUN dpkg -x libc6_2.15-0ubuntu10.10_i386.deb .
-#RUN cp lib/i386-linux-gnu/* /gmod-base/bin/
-#WORKDIR /
-#RUN rm -rf /gmod-libs
-#RUN cp /steamcmd/linux32/libstdc++.so.6 /gmod-base/bin/
+# Getting warp10
+RUN mkdir /opt \
+  && cd /opt \
+  && wget https://dl.bintray.com/cityzendata/generic/io/warp10/warp10/$WARP10_VERSION/warp10-$WARP10_VERSION.tar.gz 
 
-#RUN mkdir /root/.steam
-#RUN mkdir /root/.steam/sdk32/
-#RUN cp /gmod-base/bin/libsteam.so /root/.steam/sdk32
+# Unpack
+RUN cd /opt \
+  && tar xzf warp10-*.tar.gz \
+  && rm warp10-*.tar.gz \
+  && ln -s  /opt/warp10-* /opt/warp10
 
-# ----------------------
-# Download and install Ulysses
-# ----------------------
+WORKDIR /opt/warp10
 
-WORKDIR /
-RUN git clone https://github.com/TeamUlysses/ulib.git /tmp/ulib
-RUN git clone https://github.com/TeamUlysses/ulx.git /tmp/ulx
+ENV QUANTUM_VERSION=3.0.3
 
-RUN ["/bin/cp","-rp","/tmp/ulib","/gmod-base/garrysmod/addons"]
-RUN ["/bin/cp","-rp","/tmp/ulx","/gmod-base/garrysmod/addons"]
+ENV HASH_CLASS="@key:128:warp.hash.class@"
+ENV HASH_LABELS="@key:128:warp.hash.labels@"
+ENV HASH_INDEX="@key:128:warp.hash.index@"
+ENV HASH_TOKEN="@key:128:warp.hash.token@"
+ENV HASH_APP="@key:128:warp.hash.app@"
+ENV AES_TOKEN="@key:256:warp.aes.token@"
+ENV AES_SCRIPTS="@key:256:warp.aes.scripts@"
+ENV AES_METASETS="@key:256:warp.aes.metasets@"
 
-RUN rm -rf /tmp/ulib
-RUN rm -rf /tmp/ulx
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod 755  /usr/local/bin/docker-entrypoint.sh
 
-# ----------------------
-# Setup Volume and Union
-# ----------------------
+EXPOSE 8080/tcp
+EXPOSE 8090/tcp
 
-RUN mkdir /gmod-volume
-VOLUME /gmod-volume
-RUN mkdir /gmod-union
-RUN DEBIAN_FRONTEND=noninteractive apt-get -y install unionfs-fuse
-
-# ---------------
-# Setup Container
-# ---------------
-
-ADD start-server.sh /start-server.sh
-EXPOSE 27015/udp
-EXPOSE 27015/tcp
-EXPOSE 27005/udp
-EXPOSE 27006/tcp
-
-ENV PORT="27015"
-ENV MAXPLAYERS="16"
-ENV G_HOSTNAME="Garry's Mod"
-ENV GAMEMODE="sandbox"
-ENV MAP="gm_construct"
-
-CMD ["/bin/sh", "/start-server.sh"]
+ENTRYPOINT ["docker-entrypoint.sh"]

@@ -1,14 +1,18 @@
-FROM democracyos/democracyos:2.6.2
+FROM buildpack-deps:jessie-curl
+ENV FLOW_VERSION 0.14.0
 
-MAINTAINER Matías Lescano <matias@democraciaenred.org>
+RUN apt-get update \
+    && apt-get install -y unzip libelf1 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    && curl -SLO "https://github.com/facebook/flow/releases/download/v$FLOW_VERSION/flow-linux64-v$FLOW_VERSION.zip" \
+    && unzip "flow-linux64-v$FLOW_VERSION.zip" -d /usr/local \
+    && rm "flow-linux64-v$FLOW_VERSION.zip"
 
-WORKDIR /usr/src
 
-ENV NODE_ENV=production \
-    NODE_PATH=/usr/src
+ENV PATH /usr/local/flow:$PATH
 
-COPY ["ext", "ext"]
+VOLUME /app
+WORKDIR /app
 
-RUN bin/dos-ext-install --quiet --production
-
-RUN npm run build -- --minify
+CMD ["flow", "check"]

@@ -1,5 +1,9 @@
-FROM redis:3-alpine
+FROM golang:1.9-alpine
 
-COPY docker-healthcheck /usr/local/bin/
+ENV DEP_VERSION 0.4.1
 
-HEALTHCHECK CMD ["docker-healthcheck"]
+RUN apk add --no-cache git curl \
+    && curl -sSL -o /usr/local/bin/dep https://github.com/golang/dep/releases/download/v${DEP_VERSION}/dep-linux-amd64 \
+    && chmod +x /usr/local/bin/dep
+
+ENTRYPOINT ["dep"]

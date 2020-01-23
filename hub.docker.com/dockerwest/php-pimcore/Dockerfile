@@ -1,5 +1,1 @@
-FROM dockerwest/php:7.2
-
-COPY ./scripts /
-RUN /install.sh
-RUN rm /install*
+FROM gcr.io/google_containers/heapster:v1.3.0

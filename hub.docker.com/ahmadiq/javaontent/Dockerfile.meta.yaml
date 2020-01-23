@@ -1,0 +1,172 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: node:12-stretch-slim
+  Commands:
+  - Name: workdir
+    Path: /hypcast
+  From:
+    Image: node:12-stretch-slim
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:12-stretch-slim AS base
+- As: build-base
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - yarn.lock
+    - ./
+  - CmdLine:
+    - yarn install --frozen-lockfile --ignore-optional
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - models/
+    - models/
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: build-base
+  Platform: ""
+  SourceCode: FROM base AS build-base
+- As: dist-modules
+  BaseName: build-base
+  Commands:
+  - CmdLine:
+    - yarn install --production
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build-base
+  Name: dist-modules
+  Platform: ""
+  SourceCode: FROM build-base AS dist-modules
+- As: build-server
+  BaseName: build-base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - server/
+    - server/
+  - CmdLine:
+    - yarn run build:server
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build-base
+  Name: build-server
+  Platform: ""
+  SourceCode: FROM build-base AS build-server
+- As: build-client
+  BaseName: build-base
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - webpack.config.js
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client/
+    - client/
+  - CmdLine:
+    - yarn run build:client:mini
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build-base
+  Name: build-client
+  Platform: ""
+  SourceCode: FROM build-base AS build-client
+- As: dist
+  BaseName: base
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Alex Hamlin <alex@alexhamlin.co>"'
+    Name: label
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build/tini
+    - /bin/tini
+  - CmdLine:
+    - /bin/tini
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - node
+    - ./dist/server/index.js
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "9400"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./build/deb-multimedia-keyring_2016.8.1_all.deb
+    - /tmp
+  - CmdLine:
+    - echo 'deb http://www.deb-multimedia.org stretch main non-free' >>       /etc/apt/sources.list.d/deb-multimedia.list     &&
+      dpkg -i /tmp/deb-multimedia-keyring_2016.8.1_all.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update     && apt-get install -y --no-install-recommends libfdk-aac1
+      ffmpeg dvb-apps     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: dist-modules
+    Name: copy
+    SourcesAndDest:
+    - /hypcast/node_modules
+    - /hypcast/node_modules
+  - Chown: ""
+    From: build-server
+    Name: copy
+    SourcesAndDest:
+    - /hypcast/dist/models
+    - /hypcast/dist/models
+  - Chown: ""
+    From: build-server
+    Name: copy
+    SourcesAndDest:
+    - /hypcast/dist/server
+    - /hypcast/dist/server
+  - Chown: ""
+    From: build-client
+    Name: copy
+    SourcesAndDest:
+    - /hypcast/dist/client
+    - /hypcast/dist/client
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: dist
+  Platform: ""
+  SourceCode: FROM base AS dist

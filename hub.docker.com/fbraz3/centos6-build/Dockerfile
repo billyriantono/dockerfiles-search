@@ -1,11 +1,15 @@
-FROM centos:6
+FROM node:carbon
 
-RUN yum install -y rpm-build vim wget
+RUN git clone https://jrfay08:4f6c37fc7eee09b48644d0235d61c29cbf827657@github.com/JackFay/traderBackend /app/
 
-RUN wget http://people.centos.org/tru/devtools-2/devtools-2.repo -O /etc/yum.repos.d/devtools-2.repo
-RUN yum install -y devtoolset-2-gcc devtoolset-2-binutils devtoolset-2-gcc-c++
+WORKDIR /app
 
-RUN yum groupinstall -y 'Development Tools'
-RUN yum install -y readline-devel zlib-devel
-RUN yum install -y epel-release
-RUN yum install -y yum-utils
+RUN npm install && cd ./client && npm install && cd ..
+
+RUN mv /app/client/webpack.config.prod.js /app/client/node_modules/react-scripts/config && cd /app/client && npm run build && cd /app
+
+env PORT=8080
+
+EXPOSE 8080
+
+CMD ["npm", "run", "dev"]

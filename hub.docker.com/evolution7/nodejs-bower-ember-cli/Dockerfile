@@ -1,20 +1,39 @@
-FROM debian:wheezy
+FROM debian:stable-slim
 
-RUN apt-get update -y && apt-get install --no-install-recommends -y -q curl python build-essential git ca-certificates
-RUN mkdir /nodejs && curl http://nodejs.org/dist/v0.10.32/node-v0.10.32-linux-x64.tar.gz | tar xvzf - -C /nodejs --strip-components=1
+RUN apt-get update &&           \
+    apt-get dist-upgrade -y &&  \
+    apt-get install -y          \
+        bind9                   \
+        dnsutils                \
+        isc-dhcp-server         \
+        net-tools               \
+        python3                 \
+        python3-jinja2          \
+        python3-yaml            \
+        tini                    \
+    &&                          \
+    rm -rf /var/cache/apt/lists/
 
-ENV PATH $PATH:/nodejs/bin
+COPY scripts/render-template.py /usr/local/bin/ddns-render-template
+RUN chmod +x /usr/local/bin/ddns-render-template
 
-RUN apt-get update && apt-get install -y \
-    libfreetype6 libfreetype6-dev \
-    libfontconfig1 libfontconfig1-dev \
-    ruby ruby-dev locales
-RUN echo "en_US UTF-8" >> /etc/locale.gen
-RUN dpkg-reconfigure locales
-RUN locale-gen en_US.UTF-8
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US:en
-ENV LC_ALL en_US.UTF-8
-RUN gem install sass
-RUN npm install -g bower ember-cli
-WORKDIR /app
+COPY templates /usr/local/etc/ddns/templates
+COPY conf/ddns.default.yaml /usr/local/etc/ddns/ddns.yaml
+
+RUN touch /var/lib/dhcp/dhcpd.leases
+RUN useradd dhcpd
+
+VOLUME /usr/local/etc/ddns      # Mount this to persist config
+VOLUME /var/lib/dhcp            # Mount this to persist dhcp leases
+
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+COPY scripts/start-server.py /usr/local/bin/ddns-start
+RUN chmod +x /usr/local/bin/ddns-start
+
+EXPOSE 67/tcp 67/udp
+EXPOSE 53/tcp 53/udp
+
+ENTRYPOINT ["tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
+CMD ["ddns-start"]

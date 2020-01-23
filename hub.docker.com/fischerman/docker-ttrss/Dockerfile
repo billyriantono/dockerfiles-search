@@ -3,20 +3,19 @@ MAINTAINER Christian Lück <christian@lueck.tv>
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y php7.0-mbstring \
   git nginx supervisor php7.0-fpm php7.0-cli php7.0-curl php7.0-gd php7.0-json php-gettext php7.0-intl \
-  php7.0-pgsql php7.0-ldap php7.0-mysql php7.0-mcrypt && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# enable the mcrypt module
-RUN phpenmod mcrypt
+  php7.0-pgsql php7.0-ldap php7.0-mysql && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # add ttrss as the only nginx site
 ADD ttrss.nginx.conf /etc/nginx/sites-available/ttrss
 RUN ln -s /etc/nginx/sites-available/ttrss /etc/nginx/sites-enabled/ttrss
 RUN rm /etc/nginx/sites-enabled/default
 
+ARG TTRSS_VERSION=7e2fd9bdce4a0ff05e7c76aee52e30c26d5b2093
+
 # install ttrss and patch configuration
 WORKDIR /var/www
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y curl --no-install-recommends && rm -rf /var/lib/apt/lists/* \
-    && curl -SL https://git.tt-rss.org/fox/tt-rss/archive/19.2.tar.gz | tar xzC /var/www --strip-components 1 \
+    && curl -SL https://git.tt-rss.org/fox/tt-rss/archive/${TTRSS_VERSION}.tar.gz | tar xzC /var/www --strip-components 1 \
     && apt-get purge -y --auto-remove curl \
     && chown www-data:www-data -R /var/www
 

@@ -1,52 +1,43 @@
 MetaArgs: null
 Stages:
-- BaseName: alpine:3.11
+- BaseName: gists/shadowsocks-libev:3.3.4
   Commands:
   - Key: VERSION
     Name: arg
-    Value: 3.3.3
+    Value: 1.2.0
   - Labels:
     - Key: maintainer
       Value: '"zgist"'
     - Key: org.label-schema.name
-      Value: '"Shadowsocks-libev"'
+      Value: '"shadowsocks-libev.v2ray-plugin"'
     - Key: org.label-schema.version
       Value: $VERSION
     Name: label
   - Env:
-    - Key: SERVER_ADDR
-      Value: 0.0.0.0
-    - Key: SERVER_PORT
-      Value: "8388"
-    - Key: METHOD
-      Value: aes-128-gcm
-    - Key: TIMEOUT
-      Value: "300"
-    - Key: DNS_ADDR
-      Value: 8.8.8.8
-    - Key: PASSWORD
-      Value: ""
+    - Key: SS
+      Value: ss-server
+    - Key: PLUGIN
+      Value: v2ray-plugin
+    - Key: PLUGIN_OPTS
+      Value: server
     Name: env
   - CmdLine:
-    - set -ex &&     apk add --no-cache         --virtual .build-deps         autoconf         build-base         curl         libev-dev         libtool         linux-headers         libsodium-dev         mbedtls-dev         pcre-dev         tar         c-ares-dev
-      &&     mkdir -p /tmp/ss &&     cd /tmp/ss &&     curl -sSL https://github.com/shadowsocks/shadowsocks-libev/releases/download/v$VERSION/shadowsocks-libev-$VERSION.tar.gz
-      |     tar xz --strip 1 &&     ./configure --prefix=/usr --disable-documentation
-      &&     make install &&     runDeps="$(         scanelf --needed --nobanner /usr/bin/ss-*             |
-      awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }'             | xargs -r apk
-      info --installed             | sort -u     )" &&     apk add --no-cache --virtual
-      .run-deps $runDeps &&     apk del .build-deps &&     cd / && rm -rf /tmp/*
+    - set -xe &&     apk add --no-cache         --virtual .build-deps         curl         git         go         build-base         go         upx
+      &&     mkdir -p /tmp/plugin &&     cd /tmp/plugin &&     curl -sSL https://github.com/shadowsocks/v2ray-plugin/archive/v$VERSION.tar.gz
+      |     tar xz --strip 1 &&     go mod download &&     CGO_ENABLED=0         go
+      build -v -ldflags "-X main.VERSION=$VERSION -s -w" -gcflags "" -o /usr/bin/v2ray-plugin
+      &&     cd / && upx --lzma /usr/bin/v2ray-plugin &&     apk del .build-deps &&     rm
+      -rf /root/go /root/.cache /root/.ash_history /tmp/plugin
     Name: run
     PrependShell: true
-  - Name: expose
-    Ports:
-    - $SERVER_PORT
   - CmdLine:
-    - ss-server     -a nobody     -s $SERVER_ADDR     -p $SERVER_PORT     -k ${PASSWORD:-$(hostname)}     -m
-      $METHOD     -t $TIMEOUT     -d $DNS_ADDR     --no-delay     -u
+    - $SS     -s $SERVER_ADDR     -p $SERVER_PORT     -k ${PASSWORD:-$(hostname)}     -m
+      $METHOD     -t $TIMEOUT     -d $DNS_ADDR     --no-delay     --plugin $PLUGIN     --plugin-opts
+      $PLUGIN_OPTS
     Name: cmd
     PrependShell: true
   From:
-    Image: alpine:3.11
+    Image: gists/shadowsocks-libev:3.3.4
   Name: ""
   Platform: ""
-  SourceCode: FROM alpine:3.11
+  SourceCode: FROM gists/shadowsocks-libev:3.3.4

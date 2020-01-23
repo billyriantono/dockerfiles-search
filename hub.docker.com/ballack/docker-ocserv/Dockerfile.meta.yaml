@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y gnutls-bin iptables libev4 libnl-route-3-200
+      libprotobuf-c1 libseccomp2 libwrap0 openssl --no-install-recommends && rm -rf
+      /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "buildDeps=\" \t\tautoconf \t\tautogen \t\tca-certificates \t\tcurl \t\tgcc
+      \t\tgperf \t\tlibev-dev \t\tlibgnutls28-dev \t\tlibnl-route-3-dev \t\tlibpam0g-dev
+      \t\tlibprotobuf-c-dev \t\tlibreadline-dev \t\tlibseccomp-dev \t\tlibwrap0-dev
+      \t\tmake \t\tpkg-config \t\txz-utils \t\"; \tset -x \t&& apt-get update && apt-get
+      install -y $buildDeps --no-install-recommends && rm -rf /var/lib/apt/lists/*
+      \t&& LZ4_VERSION=`curl \"https://github.com/Cyan4973/lz4/releases/latest\" |
+      sed -n 's/^.*tag\\/\\(.*\\)\".*/\\1/p'` \t&& curl -SL \"https://github.com/Cyan4973/lz4/archive/$LZ4_VERSION.tar.gz\"
+      -o lz4.tar.gz \t&& mkdir -p /usr/src/lz4 \t&& tar -xf lz4.tar.gz -C /usr/src/lz4
+      --strip-components=1 \t&& rm lz4.tar.gz \t&& cd /usr/src/lz4 \t&& make -j\"$(nproc)\"
+      \t&& make install \t&& curl -SL \"ftp://ftp.freeradius.org/pub/freeradius/freeradius-client-1.1.7.tar.gz\"
+      -o freeradius-client.tar.gz \t&& mkdir -p /usr/src/freeradius-client \t&& tar
+      -xzf freeradius-client.tar.gz -C /usr/src/freeradius-client --strip-components=1
+      \t&& rm freeradius-client.tar.gz \t&& cd /usr/src/freeradius-client \t&& ./configure
+      --prefix=/usr/local \t&& make -j\"$(nproc)\" \t&& make install \t&& OC_VERSION=`curl
+      \"http://www.infradead.org/ocserv/download.html\" | sed -n 's/^.*version is
+      <b>\\(.*$\\)/\\1/p'` \t&& curl -SL \"ftp://ftp.infradead.org/pub/ocserv/ocserv-$OC_VERSION.tar.xz\"
+      -o ocserv.tar.xz \t&& curl -SL \"ftp://ftp.infradead.org/pub/ocserv/ocserv-$OC_VERSION.tar.xz.sig\"
+      -o ocserv.tar.xz.sig \t&& gpg --keyserver pgp.mit.edu --recv-key 96865171 \t&&
+      gpg --verify ocserv.tar.xz.sig \t&& mkdir -p /usr/src/ocserv \t&& tar -xf ocserv.tar.xz
+      -C /usr/src/ocserv --strip-components=1 \t&& rm ocserv.tar.xz* \t&& cd /usr/src/ocserv
+      \t&& ./configure \t&& make -j\"$(nproc)\" \t&& make install \t&& mkdir -p /etc/ocserv
+      \t&& cp /usr/src/ocserv/doc/sample.config /etc/ocserv/ocserv.conf \t&& cd /
+      \t&& rm -fr /usr/src/lz4 \t&& rm -fr /usr/src/ocserv \t&& rm -fr /usr/src/freeradius-client
+      \t&& apt-get purge -y --auto-remove $buildDeps"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - route.txt
+    - /tmp/
+  - CmdLine:
+    - "set -x \t&& sed -i 's/443/4433/g' /etc/ocserv/ocserv.conf \t&& sed -i 's/\\.\\.\\/tests/\\/etc\\/ocserv/'
+      /etc/ocserv/ocserv.conf \t&& sed -i 's/#\\(compression.*\\)/\\1/' /etc/ocserv/ocserv.conf
+      \t&& sed -i 's/max-clients = 16/#max-clients = 16/' /etc/ocserv/ocserv.conf
+      \t&& sed -i 's/max-same-clients = 2/#max-same-clients = 2/' /etc/ocserv/ocserv.conf
+      \t&& sed -i '/^ipv4-network = /{s/192.168.1.0/10.99.99.0/}' /etc/ocserv/ocserv.conf
+      \t&& sed -i 's/192.168.1.2/8.8.8.8/' /etc/ocserv/ocserv.conf \t&& sed -i 's/^route/#route/'
+      /etc/ocserv/ocserv.conf \t&& sed -i 's/^no-route/#no-route/' /etc/ocserv/ocserv.conf
+      \t&& sed -i '/sample\\.passwd/s/^/#/' /etc/ocserv/ocserv.conf \t&& sed -i 's/^\\#auth
+      = \\\"radius.*/auth = \\\"radius\\[config=\\/usr\\/local\\/etc\\/radiusclient\\/radiusclient.conf,groupconfig=true,nas-identifier=ocserv1\\]\\\"/'
+      /etc/ocserv/ocserv.conf \t&& sed -i 's/^\\#acct = \\\"radius.*/acct = \\\"radius\\[config=\\/usr\\/local\\/etc\\/radiusclient\\/radiusclient.conf\\]\\\"/'
+      /etc/ocserv/ocserv.conf \t&& mv /usr/local/etc/radiusclient/dictionary /usr/local/etc/radiusclient/dictionary.old
+      \t&& cat /tmp/route.txt >> /etc/ocserv/ocserv.conf \t&& rm -fr /tmp/route.txt"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /etc/ocserv
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - radius-dictionary
+    - /usr/local/etc/radiusclient/dictionary
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "4433"
+  - CmdLine:
+    - ocserv
+    - -c
+    - /etc/ocserv/ocserv.conf
+    - -f
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

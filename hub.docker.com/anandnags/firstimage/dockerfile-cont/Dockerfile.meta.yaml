@@ -1,0 +1,112 @@
+MetaArgs: null
+Stages:
+- As: source
+  BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .docker/
+    - /.docker/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - angular.json
+    - package.json
+    - package-lock.json
+    - tsconfig.json
+    - ngsw-config.json
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /app/src
+  From:
+    Scratch: true
+  Name: source
+  Platform: ""
+  SourceCode: FROM scratch AS source
+- As: builder
+  BaseName: node:10
+  Commands:
+  - CmdLine:
+    - set -x; npm i -g @angular/cli
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: source
+    Name: copy
+    SourcesAndDest:
+    - /app/
+    - /app/
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - set -x; npm ci
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x; ng build --prod --output-path /dist/
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:10 AS builder
+- BaseName: httpd:2.4.34-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache openssl
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DOCKERIZE_VERSION
+      Value: v0.6.1
+    Name: env
+  - CmdLine:
+    - wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz     &&
+      tar -C /usr/local/bin -xzvf dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz     &&
+      rm dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: source
+    Name: copy
+    SourcesAndDest:
+    - .docker/dockerize-templates/*
+    - /etc/dockerize-templates/
+  - Chown: ""
+    From: source
+    Name: copy
+    SourcesAndDest:
+    - .docker/.htaccess
+    - /usr/local/apache2/htdocs/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /dist/
+    - /usr/local/apache2/htdocs/
+  - CmdLine:
+    - chmod -R g+r /usr/local/apache2/htdocs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chgrp -R daemon /usr/local/apache2/htdocs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dockerize -template /etc/dockerize-templates/httpd.conf.tmpl:/usr/local/apache2/conf/httpd.conf
+      httpd-foreground
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: httpd:2.4.34-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM httpd:2.4.34-alpine

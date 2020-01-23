@@ -1,0 +1,94 @@
+MetaArgs: null
+Stages:
+- As: go_builder
+  BaseName: ubuntu:16.04
+  Commands:
+  - CmdLine:
+    - apt-get update -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y golang
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - server
+    - /tmp/server
+  - CmdLine:
+    - cd /tmp/server && go build
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.04
+  Name: go_builder
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04 AS go_builder
+- As: deployer
+  BaseName: alpine:3.9.4
+  Commands:
+  - CmdLine:
+    - apk add git bash
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - guihive-deploy.sh
+    - /tmp/guiHive/
+  - CmdLine:
+    - bash /tmp/guiHive/guihive-deploy.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /tmp/guiHive/clones
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9.4
+  Name: deployer
+  Platform: ""
+  SourceCode: FROM alpine:3.9.4 AS deployer
+- BaseName: ensemblorg/ensembl-hive
+  Commands:
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - CmdLine:
+    - apt-get update -y  && apt-get install -y --no-install-recommends             libhtml-parser-perl
+      libhtml-template-perl libjson-perl libjson-pp-perl liburi-perl  && apt-get clean
+      && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Key: DEPLOY_LOCATION
+    Name: arg
+    Value: /repo/guiHive
+  - Chown: ""
+    From: deployer
+    Name: copy
+    SourcesAndDest:
+    - /tmp/guiHive
+    - $DEPLOY_LOCATION
+  - CmdLine:
+    - /repo/ensembl-hive/docker/setup_cpan.Ubuntu-16.04.sh $DEPLOY_LOCATION $DEPLOY_LOCATION/ensembl-hive/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: go_builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/server/server
+    - $DEPLOY_LOCATION/server/
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - /repo/guiHive/server/server
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ensemblorg/ensembl-hive
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ensemblorg/ensembl-hive

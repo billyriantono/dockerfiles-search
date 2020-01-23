@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- BaseName: etates/centos7-systemd:latest
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Eliécer Tatés eliecer.tates@gmail.com"'
+    Name: label
+  - CmdLine:
+    - "mkdir -p /var/lib/asterisk ; \tadduser asterisk -m -c \"Asterisk User\" -d
+      /var/lib/asterisk; \tchown -R asterisk. /var/lib/asterisk ; \tyum -y install
+      --nogpgcheck epel-release yum-utils wget net-tools bind-utils ; \tyum -y install
+      --nogpgcheck http://rpms.remirepo.net/enterprise/remi-release-7.rpm ; \tyum-config-manager
+      --add-repo https://ast.tucny.com/repo/tucny-asterisk.repo ; \tyum-config-manager
+      --enable asterisk-common asterisk-13 remi-php56 ; \trpm --import https://ast.tucny.com/repo/RPM-GPG-KEY-dtucny
+      ; \tyum -y install --nogpgcheck tftp-server unixODBC mysql-connector-odbc mariadb-server
+      mariadb \thttpd sendmail sendmail-cf sox newt libxml2 libtiff \taudiofile  subversion
+      \ git crontabs cronie \tcronie-anacron wget nano uuid sqlite net-tools gnutls
+      python \ttexinfo libuuid iptables-services fail2ban-server mpg123 lame-mp3x;
+      \tVERSION=\"13.23.1\" ; \tyum -y install --nogpgcheck asterisk-$VERSION asterisk-sip-$VERSION
+      asterisk-iax2-$VERSION \tasterisk-festival-$VERSION asterisk-voicemail-$VERSION
+      asterisk-odbc-$VERSION \tasterisk-mysql-$VERSION asterisk-moh-opsound-$VERSION
+      asterisk-pjsip-$VERSION \tasterisk-voicemail-plain-$VERSION asterisk-snmp-$VERSION
+      asterisk-mp3-$VERSION \tasterisk-sounds-core-es asterisk-sounds-core-en asterisk-moh-opsound
+      ; \tyum -y install --nogpgcheck php php-pdo php-mysql php-mbstring php-pear
+      php-process \tphp-xml php-opcache php-ldap php-intl php-soap ; \tcurl -sL https://rpm.nodesource.com/setup_8.x
+      | bash - && yum -y install --nogpgcheck nodejs"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir -p /var/lib/asterisk/{astconfig,modplus} ;  \tln -s /var/lib/asterisk/modplus
+      /usr/lib64/asterisk/modules/modplus ; \tmv -f /usr/share/asterisk/* /var/lib/asterisk/
+      ; \trm -rf /usr/share/asterisk ; \tln -s /var/lib/asterisk /usr/share/asterisk
+      ; \tmv -f /etc/asterisk/* /var/lib/asterisk/astconfig/ ; \trm -rf /etc/asterisk
+      ; \tln -s /var/lib/asterisk/astconfig /etc/asterisk ; \tsed -i 's/\\/usr\\/share/\\/var\\/lib/'
+      /etc/asterisk/asterisk.conf ; \tsed -i 's/^;run/run/' /etc/asterisk/asterisk.conf
+      ; \tln -s /usr/sbin/asterisk /usr/sbin/safe_asterisk ; \tchmod +x /usr/sbin/safe_asterisk
+      ; \tmkdir /var/fw-ips ; \tmv /etc/sysconfig/iptables /var/fw-ips/iptables-rules
+      ; \tln -s /var/fw-ips/iptables-rules /etc/sysconfig/iptables ; \tmv /etc/fail2ban
+      /var/fw-ips/ ; \tln -s /var/fw-ips/fail2ban /etc/fail2ban ; \tsystemctl enable
+      iptables.service ; \tsystemctl enable fail2ban.service ; \tprintf \"#!/bin/bash\\niptables
+      -F\\niptables -A INPUT -i lo -j ACCEPT\\niptables -A INPUT -m conntrack --ctstate
+      ESTABLISHED,RELATED -j ACCEPT\\niptables -A INPUT -i eth0 -p icmp --icmp-type
+      echo-request -j ACCEPT\\niptables -A INPUT -i eth0 -p udp --dport 5060 -j ACCEPT\\niptables
+      -A INPUT -i eth0 -p udp --dport 4569 -j ACCEPT\\niptables -A INPUT -i eth0 -p
+      tcp --dport 5060 -j ACCEPT\\niptables -A INPUT -i eth0 -p tcp --dport 5061 -j
+      ACCEPT\\niptables -A INPUT -i eth0 -p tcp --dport 80 -j ACCEPT\\niptables -A
+      INPUT -i eth0 -p udp --dport 10000:20000 -j ACCEPT\\niptables -P INPUT DROP\\niptables
+      -P FORWARD DROP\\niptables -P OUTPUT ACCEPT\\niptables-save > /var/fw-ips/iptables-rules\"
+      > /var/fw-ips/iptables-run.sh ; \tchmod +x /var/fw-ips/iptables-run.sh ; \techo
+      \"/var/fw-ips/iptables-run.sh\" >> /etc/rc.d/rc.local ; \tchmod +x /etc/rc.d/rc.local
+      ; \tcat /dev/null > /etc/fail2ban/jail.conf ; \tprintf \"[INCLUDES]\\n[Definition]\\nfailregex
+      = ^.* Authentication failure for .* from <HOST>\\$\\nignoreregex =\" > /etc/fail2ban/filter.d/freepbx.conf
+      ; \tprintf \"[asterisk]\\nbackend  = auto\\nenabled  = true\\nfilter   = asterisk\\nbanaction
+      = iptables-allports\\nchain\t  = INPUT\\naction   = iptables-allports[name=asterisk,
+      protocol=all]\\nlogpath  = /var/log/asterisk/security\\nmaxretry = 3\\nbantime
+      = 14400\\nfindtime = 3600\\nignoreip = 127.0.0.1/8\\n\\n[freepbx]\\nbackend
+      \ = auto\\nenabled  = true\\nfilter   = freepbx\\nbanaction = iptables-allports\\nchain\t
+      \ = INPUT\\naction   = iptables-allports[name=freepbx, protocol=all]\\nlogpath
+      \ = /var/log/asterisk/freepbx_security.log\\nmaxretry = 3\\nbantime = 14400\\nfindtime
+      = 3600\\nignoreip = 127.0.0.1/8\" > /etc/fail2ban/jail.d/pbx.conf ; \ttouch
+      /var/log/asterisk/security && touch /var/log/asterisk/freepbx_security.log ;
+      \tchown asterisk. /var/log/asterisk/* ; \tsed -i 's/\\(^upload_max_filesize
+      = \\).*/\\120M/' /etc/php.ini && \tsed -i 's/^\\(User\\|Group\\).*/\\1 asterisk/'
+      /etc/httpd/conf/httpd.conf && \tsed -i 's/AllowOverride None/AllowOverride All/'
+      /etc/httpd/conf/httpd.conf\t; \tsystemctl enable mariadb.service && mysql_install_db
+      ; \tchown -R mysql. /var/lib/mysql ; \tsystemctl enable httpd.service && systemctl
+      enable asterisk.service ; \trm -f /etc/freepbx.conf ; \trm -f /etc/amportal.conf
+      ; \tmysqld_safe --defaults-file=/etc/my.cnf --port=3306& \thttpd -DBACKGROUND
+      && \tcd /usr/src && \twget http://mirror.freepbx.org/modules/packages/freepbx/freepbx-14.0-latest.tgz
+      && \ttar xfz freepbx-14.0-latest.tgz && \tcd freepbx && \t./start_asterisk start
+      && \t./install -n ; \tmv /etc/freepbx.conf /var/lib/asterisk/ && ln -s /var/lib/asterisk/freepbx.conf
+      /etc/freepbx.conf ; \tmv /etc/amportal.conf /var/lib/asterisk/ && ln -s /var/lib/asterisk/amportal.conf
+      /etc/amportal.conf ; \tchown asterisk. /etc/{freepbx.conf,amportal.conf} ; \tchmod
+      +x /usr/sbin/safe_asterisk ; \tchown -R asterisk. /etc/asterisk ; \tchown -R
+      asterisk. /var/{lib,log,spool,run}/asterisk ; \tchown -R asterisk. /usr/{lib64,share}/asterisk
+      ; \tchown -R asterisk. /var/www/ ; \techo \"load = app_confbridge.so\" >> /etc/asterisk/modules.conf"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var
+  - CmdLine:
+    - /usr/sbin/init
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: etates/centos7-systemd:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM etates/centos7-systemd:latest

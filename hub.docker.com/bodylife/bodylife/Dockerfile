@@ -1,4 +1,4 @@
-FROM golang:1.12 AS builder
+FROM golang:1.13 AS builder
 
 # Enable go modules
 ENV GO111MODULE=on
@@ -16,7 +16,7 @@ WORKDIR /go/backend/cmd/api
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w -s" -o /go/bin/api -mod vendor
 
 # Create executable image
-FROM golang:1.12-alpine
+FROM golang:1.13-alpine
 
 # Copy the executable
 COPY --from=builder /go/bin/api /opt/bodylife/

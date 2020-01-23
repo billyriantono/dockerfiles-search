@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- As: gcsfuse
+  BaseName: golang:1.10-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git musl-dev     && go get -v -u github.com/googlecloudplatform/gcsfuse
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10-alpine
+  Name: gcsfuse
+  Platform: ""
+  SourceCode: FROM golang:1.10-alpine as gcsfuse
+- As: exhibitor
+  BaseName: maven:3.5-alpine
+  Commands:
+  - Key: EXHIBITOR_VERSION
+    Name: arg
+    Value: '"1.7.1"'
+  - Env:
+    - Key: EXHIBITOR_RELEASE
+      Value: '"https://github.com/soabase/exhibitor/archive/exhibitor-$EXHIBITOR_VERSION.tar.gz"'
+    Name: env
+  - CmdLine:
+    - wget -qO- $EXHIBITOR_RELEASE | tar -xvz -C /     && ln -s /exhibitor* /exhibitor     &&
+      cd /exhibitor     && mvn -DskipTests=true install     && sed -i "s/<version>1\..\.0/<version>$EXHIBITOR_VERSION/"
+      exhibitor-standalone/src/main/resources/buildscripts/standalone/maven/pom.xml     &&
+      mvn -f exhibitor-standalone/src/main/resources/buildscripts/standalone/maven/pom.xml
+      package
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.5-alpine
+  Name: exhibitor
+  Platform: ""
+  SourceCode: FROM maven:3.5-alpine as exhibitor
+- BaseName: openjdk:8-jdk-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Bringg DevOps <devops@bringg.com>"'
+    Name: label
+  - Key: EXHIBITOR_VERSION
+    Name: arg
+    Value: '"1.7.1"'
+  - Key: ZK_VERSION
+    Name: arg
+    Value: '"3.4.13"'
+  - Env:
+    - Key: ZK_RELEASE
+      Value: '"http://www.apache.org/dist/zookeeper/zookeeper-$ZK_VERSION/zookeeper-$ZK_VERSION.tar.gz"'
+    Name: env
+  - CmdLine:
+    - apk add --no-cache bash fuse tini         && mkdir -p /opt         && wget -qO-
+      $ZK_RELEASE | tar -xvz -C /opt     && ln -s /opt/zookeeper-* /opt/zookeeper
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - include/
+    - /opt/exhibitor/
+  - Chown: ""
+    From: gcsfuse
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/gcsfuse
+    - /usr/local/bin/
+  - Chown: ""
+    From: exhibitor
+    Name: copy
+    SourcesAndDest:
+    - /exhibitor/exhibitor-standalone/src/main/resources/buildscripts/standalone/maven/target/exhibitor-$EXHIBITOR_VERSION.jar
+    - /opt/exhibitor/exhibitor.jar
+  - Name: workdir
+    Path: /opt/exhibitor
+  - Name: expose
+    Ports:
+    - "2181"
+    - "2888"
+    - "3888"
+    - "8181"
+  - CmdLine:
+    - /sbin/tini
+    - -g
+    - --
+    - /opt/exhibitor/wrapper.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:8-jdk-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-alpine

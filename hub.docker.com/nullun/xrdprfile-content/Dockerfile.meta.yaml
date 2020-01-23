@@ -1,0 +1,153 @@
+MetaArgs: null
+Stages:
+- BaseName: thomasbjackson/java:oracle-java8
+  Commands:
+  - Maintainer: Tom Jackson thomas.jackson@nordstrom.com
+    Name: maintainer
+  - Env:
+    - Key: CONFLUENCE_VERSION
+      Value: 5.8.14
+    Name: env
+  - Env:
+    - Key: MYSQL_VERSION
+      Value: 5.1.37
+    Name: env
+  - Env:
+    - Key: DOWNLOAD_URL
+      Value: https://downloads.atlassian.com/software/confluence/downloads/atlassian-confluence-
+    Name: env
+  - Env:
+    - Key: MYSQL_DOWNLOAD_URL
+      Value: http://cdn.mysql.com/Downloads/Connector-J/mysql-connector-java-
+    Name: env
+  - Env:
+    - Key: CONFLUENCE_HOME
+      Value: /var/local/atlassian/confluence
+    Name: env
+  - Env:
+    - Key: CONFLUENCE_INSTALL
+      Value: /usr/local/confluence
+    Name: env
+  - CmdLine:
+    - set -x     && apt-get update --quiet     && apt-get install --quiet --yes --no-install-recommends
+      libtcnative-1 xmlstarlet
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install vim -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install zip -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install unzip -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install curl -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install postgresql-client -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p                "${CONFLUENCE_HOME}"     && mkdir -p                "${CONFLUENCE_INSTALL}"     &&
+      chown daemon:daemon     "${CONFLUENCE_HOME}"     && chown daemon:daemon     "${CONFLUENCE_INSTALL}"     &&
+      curl -L --silent  ${DOWNLOAD_URL}${CONFLUENCE_VERSION}.tar.gz | tar -xz --strip=1
+      -C "${CONFLUENCE_INSTALL}" --no-same-owner     && chmod -R 770            "${CONFLUENCE_INSTALL}/conf"     &&
+      chmod -R 770            "${CONFLUENCE_INSTALL}/temp"     && chmod -R 770            "${CONFLUENCE_INSTALL}/logs"     &&
+      chmod -R 770            "${CONFLUENCE_INSTALL}/work"     && chown -R daemon:daemon  "${CONFLUENCE_INSTALL}/conf"     &&
+      chown -R daemon:daemon  "${CONFLUENCE_INSTALL}/temp"     && chown -R daemon:daemon  "${CONFLUENCE_INSTALL}/logs"     &&
+      chown -R daemon:daemon  "${CONFLUENCE_INSTALL}/work"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L --silent  ${MYSQL_DOWNLOAD_URL}${MYSQL_VERSION}.tar.gz | tar -xz --strip=1
+      -C "${CONFLUENCE_INSTALL}/confluence/WEB-INF/lib" --no-same-owner
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "confluence.home=${CONFLUENCE_HOME}" > ${CONFLUENCE_INSTALL}/confluence/WEB-INF/classes/confluence-init.properties
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TL_DOMAIN
+      Value: net
+    Name: env
+  - Env:
+    - Key: SL_DOMAIN
+      Value: nordstrom
+    Name: env
+  - Env:
+    - Key: CNAME
+      Value: confluence
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - configs/urlrewrite.xml
+    - $CONFLUENCE_INSTALL/confluence/WEB-INF/urlrewrite.xml
+  - CmdLine:
+    - xmlstarlet ed --inplace -N my=http://java.sun.com/xml/ns/j2ee                     -u
+      "/my:web-app/my:session-config/my:session-timeout" -v 480                     $CONFLUENCE_INSTALL/confluence/WEB-INF/web.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - xmlstarlet ed --inplace -N my=http://java.sun.com/xml/ns/j2ee -u     "/my:web-app/my:filter-mapping/my:filter-name[text()='UrlRewriteFilter']/../my:url-pattern[text()='/s/*']"     -v
+      '/*' $CONFLUENCE_INSTALL/confluence/WEB-INF/web.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - xmlstarlet ed --inplace --insert "/Server/Service/Connector" --type attr   -n
+      scheme    -v https $CONFLUENCE_INSTALL/conf/server.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - xmlstarlet ed --inplace --insert "/Server/Service/Connector" --type attr   -n
+      proxyPort -v 443   $CONFLUENCE_INSTALL/conf/server.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - xmlstarlet ed --inplace --insert "/Server/Service/Connector" --type attr   -n
+      secure    -v true  $CONFLUENCE_INSTALL/conf/server.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - xmlstarlet ed --inplace -P -S -L -s /Server/Service -t elem -n ConnectorTMP
+      -v "" -i //ConnectorTMP -t attr -n "port" -v "8091" -i //ConnectorTMP -t attr
+      -n "protocol" -v "HTTP/1.1" -i //ConnectorTMP -t attr -n "connectionTimeout"
+      -v "20000" -i //ConnectorTMP -t attr -n "redirectPort" -v "8444" -r //ConnectorTMP
+      -v Connector $CONFLUENCE_INSTALL/conf/server.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i '/JAVA_OPTS/d' $CONFLUENCE_INSTALL/bin/setenv.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - configs/docker-startup.sh
+    - ${CONFLUENCE_INSTALL}/bin/docker-startup.sh
+  - CmdLine:
+    - chmod 0554 ${CONFLUENCE_INSTALL}/bin/docker-startup.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8090"
+    - "8091"
+  - Name: workdir
+    Path: $CONFLUENCE_INSTALL
+  - CmdLine:
+    - ./bin/docker-startup.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: thomasbjackson/java:oracle-java8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM thomasbjackson/java:oracle-java8

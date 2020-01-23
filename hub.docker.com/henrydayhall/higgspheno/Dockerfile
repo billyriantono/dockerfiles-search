@@ -75,6 +75,8 @@ RUN cd /                                                                    && \
     # kill every print command
     sed -i -e 's|^\s*printf(|if(false) printf(|' src/*                           && \
     make 
+    # note, if the above step fails with an error related to constexpr
+    # add the flag -fpermissive to the compile flags in the makefile
 RUN cd /                                                                    && \
     tar -xvf LHAPDF.tar.gz                                                  && \
     mv LHAPDF.tar.gz downloaded_packages                                    && \

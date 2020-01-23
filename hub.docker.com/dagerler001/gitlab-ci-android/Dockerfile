@@ -1,55 +1,81 @@
-#
-# GitLab CI: Android v0.2
-#
-# https://hub.docker.com/r/jangrewe/gitlab-ci-android/
-# https://git.faked.org/jan/gitlab-ci-android
-#
+FROM alpine:3.4
+MAINTAINER dadez <dadez@protonmail.com>
+ 
+ADD ./SwissGovernmentRootCAII.pem /tmp/
 
-FROM ubuntu:18.04
-MAINTAINER Jan Grewe <jan@faked.org>
+# build parameters
+ARG JAVA_DISTRIBUTION=server-jre
+#ARG JAVA_DISTRIBUTION=jdk
+ARG JAVA_MAJOR_VERSION=${JAVA_MAJOR_VERSION:-8}
+ARG JAVA_UPDATE_VERSION=${JAVA_UPDATE_VERSION:-111}
+ARG JAVA_BUILD_NUMBER=${JAVA_BUILD_NUMBER:-14}
+ARG GLIBC_VERSION=2.23-r1
+ 
+ARG CERT=SwissGovernmentRootCAII.pem
+ARG ALIAS=SwissGovernmentRootCAII
+ARG STORE=jre/lib/security/cacerts
+ARG STOREPASS="dsjflkjsdklfjsdklfjsdklfjkldsjf"
+ 
+ENV TIMEZONE Europe/Zurich
+ENV LANG en_US.UTF-8
+ENV JAVA_VERSION=1.${JAVA_MAJOR_VERSION}.0_${JAVA_UPDATE_VERSION}
+ENV JAVA_HOME=/opt/java/${JAVA_DISTRIBUTION}${JAVA_VERSION}
+ENV PATH=$PATH:$JAVA_HOME/bin
 
-ENV VERSION_SDK_TOOLS "4333796"
-
-ENV ANDROID_HOME "/sdk"
-ENV PATH=${ANDROID_HOME}/emulator:${ANDROID_HOME}/tools:${ANDROID_HOME}/tools/bin:${ANDROID_HOME}/platform-tools:${PATH}
-ENV DEBIAN_FRONTEND noninteractive
-
-RUN apt-get -qq update && \
-    apt-get install -qqy --no-install-recommends \
-      bzip2 \
-      curl \
-      git-core \
-      html2text \
-      openjdk-8-jdk \
-      libc6-i386 \
-      lib32stdc++6 \
-      lib32gcc1 \
-      lib32ncurses5 \
-      lib32z1 \
+#override proxy settings
+ENV http_proxy=""
+ENV https_proxy=""
+ 
+RUN export JAVA_TARBALL=${JAVA_DISTRIBUTION}-${JAVA_MAJOR_VERSION}u${JAVA_UPDATE_VERSION}-linux-x64.tar.gz \
+    # Install tooling
+    && apk add --update \
+      ca-certificates \
       unzip \
-      locales \
       wget \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-RUN locale-gen en_US.UTF-8
-ENV LANG='en_US.UTF-8' LANGUAGE='en_US:en' LC_ALL='en_US.UTF-8'
+      tzdata \
 
-RUN rm -f /etc/ssl/certs/java/cacerts; \
-    /var/lib/dpkg/info/ca-certificates-java.postinst configure
-
-RUN curl -s https://dl.google.com/android/repository/sdk-tools-linux-${VERSION_SDK_TOOLS}.zip > /sdk.zip && \
-    unzip /sdk.zip -d /sdk && \
-    rm -v /sdk.zip
-
-RUN mkdir -p $ANDROID_HOME/licenses/ \
-  && echo "8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e" > $ANDROID_HOME/licenses/android-sdk-license \
-  && echo "84831b9409646a918e30573bab4c9c91346d8abd\n504667f4c0de7af1a06de9f4b1727b84351f2910" > $ANDROID_HOME/licenses/android-sdk-preview-license
-
-ADD packages.txt /sdk
-RUN mkdir -p /root/.android && \
-  touch /root/.android/repositories.cfg && \
-  ${ANDROID_HOME}/tools/bin/sdkmanager --update 
-
-RUN while read -r package; do PACKAGES="${PACKAGES}${package} "; done < /sdk/packages.txt && \
-    ${ANDROID_HOME}/tools/bin/sdkmanager ${PACKAGES}
-
-RUN yes | ${ANDROID_HOME}/tools/bin/sdkmanager --licenses
+    #set timezone
+    && echo $TIMEZONE > /etc/timezone \
+    && cp /usr/share/zoneinfo/${TIMEZONE} /etc/localtime \
+ 
+    # Install latest glibc
+    && wget --directory-prefix=/tmp https://github.com/andyshinn/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-${GLIBC_VERSION}.apk && \
+    apk add --allow-untrusted /tmp/glibc-${GLIBC_VERSION}.apk \
+    && wget --directory-prefix=/tmp https://github.com/andyshinn/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-bin-${GLIBC_VERSION}.apk && \
+    apk add --allow-untrusted /tmp/glibc-bin-${GLIBC_VERSION}.apk \
+    && wget --directory-prefix=/tmp https://github.com/andyshinn/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-i18n-${GLIBC_VERSION}.apk && \
+    apk --allow-untrusted add /tmp/glibc-i18n-${GLIBC_VERSION}.apk \
+    && /usr/glibc-compat/bin/localedef -i en_US -f UTF-8 en_US.UTF-8 \
+ 
+    # Install oracle java
+    && wget --directory-prefix=/tmp \
+         --header "Cookie: gpw_e24=http%3A%2F%2Fwww.oracle.com%2F; oraclelicense=accept-securebackup-cookie" \
+         http://download.oracle.com/otn-pub/java/jdk/${JAVA_MAJOR_VERSION}u${JAVA_UPDATE_VERSION}-b${JAVA_BUILD_NUMBER}/${JAVA_TARBALL} \
+    && mkdir -p /opt/java \
+    && tar -xzf /tmp/${JAVA_TARBALL} -C /opt/java/ \
+    && if  [ "${JAVA_DISTRIBUTION}" = "server-jre" ]; \
+      then mv /opt/java/jdk${JAVA_VERSION} ${JAVA_HOME} ; \
+    fi \
+    && ln -s ${JAVA_HOME}/bin/java /usr/bin/java \
+ 
+    #install jce policy
+    && wget --directory-prefix=/tmp \
+         --header "Cookie: gpw_e24=http%3A%2F%2Fwww.oracle.com%2F; oraclelicense=accept-securebackup-cookie" \
+         http://download.oracle.com/otn-pub/java/jce/${JAVA_MAJOR_VERSION}/jce_policy-${JAVA_MAJOR_VERSION}.zip \
+    && unzip -jo /tmp/jce_policy-${JAVA_MAJOR_VERSION}.zip *.jar -d ${JAVA_HOME}/jre/lib/security/ \
+ 
+    # Remove obsolete packages
+    && apk del \
+      ca-certificates \
+      unzip \
+      wget \
+      tzdata \
+ 
+    # empty keystore
+    && rm -f ${JAVA_HOME}/${STORE} \
+    && $JAVA_HOME/bin/keytool -import -file /tmp/${CERT} -alias ${ALIAS} -keystore ${JAVA_HOME}/${STORE} -storepass $STOREPASS -noprompt \
+ 
+    # Clean caches and tmps
+    && rm -rf /var/cache/apk/* \
+       /tmp/* \
+       /var/log/*

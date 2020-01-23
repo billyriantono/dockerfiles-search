@@ -1,11 +1,8 @@
-FROM python:3.6-slim
+FROM nginx:1.11.3
 
-WORKDIR /app
-COPY . /app
+# Generate nginx config file from template
+COPY nginx.conf.template /tmp/nginx.conf.template
+COPY initialize.sh /tmp/initialize.sh
+COPY sites-enabled /etc/nginx/sites-enabled
 
-RUN pip install requests locust
-
-ENV HOST http://google.com
-ENV NUM 10
-
-CMD locust -f locust.py --host $HOST --no-web -c $NUM -r $NUM
+CMD "/tmp/initialize.sh"

@@ -1,44 +1,87 @@
-# The image is based on the Debian Wheezy distribution.
-FROM launcher.gcr.io/google/debian8
+FROM fedora:latest
+MAINTAINER Chris Byrd
 
-# install dependencies
-RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && apt-get install --no-install-recommends -y -q curl apt-utils build-essential ca-certificates libfreetype6 libfontconfig1
+RUN dnf clean all \
+  && dnf update -v --debugsolver vim-minimal -y \ 
+  && dnf install --best --allowerasing -y \
+      automake \
+      bash-completion \
+      ca-certificates \
+      ctags \
+      curl \
+      dos2unix \
+      flex \
+      gcc \
+      gcc-c++ \
+      git \
+      gpg \
+      kernel-devel \
+      make \
+      nodejs \
+      openssh-clients \
+      patch \
+      powerline \
+      procps-ng \
+      rsync \
+      samba-client \
+      subversion \
+      tar \
+      task \
+      the_silver_searcher \
+      tmux \
+      tmux-powerline \
+      tree \
+      unzip \
+      which \
+      wget \
+      vim \
+      zip \
+    && dnf clean all
 
-# Install noto fonts
-RUN echo "deb http://http.debian.net/debian jessie-backports main" > /etc/apt/sources.list.d/backports.list && \
-    apt-get update -y && \
-    apt-get install -y --no-install-recommends fonts-noto fonts-noto-cjk locales-all && \
-    apt-get clean && \
-    apt-get autoclean && \
-    apt-get autoremove && \
-    rm -rf /var/lib/apt/lists/*
+RUN gpg --keyserver hkp://keys.gnupg.net --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3 \
+    && curl -v -sSL https://get.rvm.io | bash \
+    && source /usr/local/rvm/scripts/rvm \ 
+    && /usr/local/rvm/bin/rvm install 2.3.1 \ 
+    && /usr/local/rvm/bin/rvm alias create default 2.3.1 \ 
+    && /usr/local/rvm/bin/rvm all do gem install --backtrace bundle \  
+    && /usr/local/rvm/bin/rvm all do gem install --backtrace tmuxinator \  
+    && /usr/local/rvm/bin/rvm all do gem install --backtrace rubocop \ 
+    && dnf clean all
 
-# Install Node.js
-RUN mkdir /nodejs && curl http://nodejs.org/dist/v0.12.1/node-v0.12.1-linux-x64.tar.gz | tar xvzf - -C /nodejs --strip-components=1
+# Setup packer for image builds
+RUN mkdir /packer \
+  && cd packer \
+  && wget https://releases.hashicorp.com/packer/0.10.1/packer_0.10.1_linux_amd64.zip \
+  && unzip *.zip \
+  && ln -s /packer/packer /usr/local/bin/packer \
+  && rm *.zip
 
-# Add Node.js installation to PATH, and set
-# the current working directory to /app
-# so future commands in this Dockerfile are easier to write
-ENV PATH $PATH:/nodejs/bin
-WORKDIR /app
+# install gecode 
+RUN mkdir /gecode-tmp \
+  && cd /gecode-tmp \
+  && wget http://www.gecode.org/download/gecode-3.7.3.tar.gz \
+  && tar -xvf gecode-3.7.3.tar.gz \
+  && cd gecode-3.7.3 \
+  && ./configure && make && make install \
+  && cd / && rm -rf /gecode-tmp 
 
-# Copy the file package.json from your app's /app directory to the Docker
-# image. (See note below regarding image caching and dependencies.)
-ADD package.json /app/
+WORKDIR /root
 
-# Run npm (node’s package manager) to install packages specified in
-# package.json
-RUN npm install
+# Setup util desired directories, bash, and vim
+RUN mkdir src \
+  && mkdir .ssh \ 
+  && git clone --depth=1 https://github.com/Bash-it/bash-it.git .bash_it \
+  && .bash_it/install.sh \
+  && echo "export TERM=screen-256color" >> .bashrc \
+  && echo "source /usr/local/rvm/scripts/rvm" >> .bashrc \ 
+  && echo "source /usr/share/bash-completion/completions/git" >> .bashrc \
+  && echo "alias vi=vim" >> .bashrc \
+  && git clone https://github.com/VundleVim/Vundle.vim.git .vim/bundle/Vundle.vim \
+  && git clone https://github.com/cabyrd/dot-files.git \
+  && cp dot-files/.vimrc . \
+  && cp dot-files/.tmux.conf . \
+  && rm -rf dot-files \ 
+  && vim +PluginInstall +qall
 
-# Adds the rest of the application source. Since this is a node.js app
-ADD . /app
-
-# clean temp files
-RUN rm -rf /var/lib/apt/lists/* /var/cache/apt/* /root/.npm /tmp/npm* /nodejs/node-v0.12.1-linux-x64.tar.gz
-
-# No further source transformations are performed.
-# It is possible to install and run additional tooling such as CSS
-# minifiers.
-
-# Specify that npm start is the process that will run in the Docker container. The app should listen on port 8080.
-ENTRYPOINT ["/nodejs/bin/npm", "start"]
+ENV EDITOR=vim SHELL=/bin/bash LC_CTYPE=en_US.UTF-8 LC_ALL=en_US.UTF-8 LD_LIBRARY_PATH=/usr/local/lib USE_SYSTEM_GECODE=1
+CMD ["/bin/bash"]

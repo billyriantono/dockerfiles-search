@@ -2,7 +2,7 @@
 #FROM ezrabambu/windowsnode:v1
 
 #NPM Install Package libs
-#ADD package.json ./ 
+#ADD package.json ./
 #RUN npm install
 
 #Add all other files to the working directory
@@ -20,12 +20,15 @@
 #CMD ["npm","start"]
 
 
-
 #For Linux Instances
 FROM node:9-alpine
+RUN adduser -D normaluser
 
 # Create app directory
-WORKDIR /usr/src/app
+# WORKDIR /usr/src/app
+
+USER normaluser
+WORKDIR /home/normaluser
 
 # Install app dependencies
 # A wildcard is used to ensure both package.json AND package-lock.json are copied
@@ -38,11 +41,9 @@ RUN npm install
 
 # Bundle app source
 COPY . .
-ADD mssql.js ./node_modules/loopback-connector-mssql/lib/mssql.js
 
 EXPOSE 3000
 #SET ENV To Production
 ENV NODE_ENV=production
 
 CMD [ "npm", "start" ]
-

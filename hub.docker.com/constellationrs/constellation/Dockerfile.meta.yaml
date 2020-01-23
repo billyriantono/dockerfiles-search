@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: rustlang/rust:nightly
+  Commands:
+  - Name: workdir
+    Path: /usr/src
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends musl-tools
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rustup target add x86_64-unknown-linux-musl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - USER=root cargo init --bin && USER=root cargo new --lib constellation-internal
+      && mkdir -p src/bin/constellation && echo 'fn main(){}' > src/bin/constellation/main.rs
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Cargo.toml
+    - build.rs
+    - ./
+  - CmdLine:
+    - sed -i '/^###$/q' Cargo.toml
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - constellation-internal/Cargo.toml
+    - ./constellation-internal/
+  - CmdLine:
+    - cargo generate-lockfile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cargo build --bins --features kubernetes --target x86_64-unknown-linux-musl
+      --release
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - CmdLine:
+    - touch ./constellation-internal/src/lib.rs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cargo build --locked --frozen --offline --bin constellation --features kubernetes
+      --target x86_64-unknown-linux-musl --release
+    Name: run
+    PrependShell: true
+  From:
+    Image: rustlang/rust:nightly
+  Name: build
+  Platform: ""
+  SourceCode: FROM rustlang/rust:nightly as build
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/target/x86_64-unknown-linux-musl/release/constellation
+    - .
+  - Name: user
+    User: "1000"
+  - CmdLine:
+    - ./constellation
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

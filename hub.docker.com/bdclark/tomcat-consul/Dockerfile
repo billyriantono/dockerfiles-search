@@ -1,72 +1,89 @@
-FROM buildpack-deps:jessie-curl
+FROM ubuntu:xenial
+MAINTAINER TIMWI <contact@timwi.com>
 
-ENV DUMB_INIT_VERSION 1.2.0
-RUN set -x \
-  && wget --no-verbose "https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/dumb-init_${DUMB_INIT_VERSION}_amd64.deb" \
-  && wget --no-verbose "https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/sha256sums" \
-  && grep "dumb-init_${DUMB_INIT_VERSION}_amd64.deb" sha256sums | sha256sum -c \
-  && rm sha256sums \
-  && dpkg -i dumb-init_*.deb \
-  && rm -rf dumb-init_*.deb
+ENV DEBIAN_FRONTEND=noninteractive \
+  ANDROID_HOME=/opt/android-sdk-linux \
+  NODE_VERSION=8.2.1 \
+  MAVEN_VERSION=3.5.0 \
+  SONAR_SCANNER=3.3.0.1492 \
+  SONAR_URL=http://localhost:9000 \
+  DISPLAY=":1"
 
-# ENV GOSU_VERSION 1.10
-# RUN set -x \
-#   && wget --no-verbose -O /usr/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)" \
-#   && wget --no-verbose -O /usr/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture).asc" \
-#   && gpg --keyserver ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
-#   && gpg --batch --verify /usr/bin/gosu.asc /usr/bin/gosu \
-#   && rm -rf /root/.gnupg /usr/bin/gosu.asc \
-#   && chmod +x /usr/bin/gosu \
-#   && gosu nobody true
+RUN apt-get update && apt-get -y install tzdata apt-utils
 
-ENV CTMPL_VERSION 0.18.1
-RUN set -x \
-  && apt-get update \
-  && apt-get install -y --no-install-recommends unzip \
-  && gpg --keyserver ha.pool.sks-keyservers.net --recv-keys 91A6E7F85D05C65630BEF18951852D87348FFC4C \
-  && wget --no-verbose https://releases.hashicorp.com/consul-template/${CTMPL_VERSION}/consul-template_${CTMPL_VERSION}_linux_amd64.zip \
-  && wget --no-verbose https://releases.hashicorp.com/consul-template/${CTMPL_VERSION}/consul-template_${CTMPL_VERSION}_SHA256SUMS \
-  && wget --no-verbose https://releases.hashicorp.com/consul-template/${CTMPL_VERSION}/consul-template_${CTMPL_VERSION}_SHA256SUMS.sig \
-  && gpg --batch --verify consul-template_${CTMPL_VERSION}_SHA256SUMS.sig consul-template_${CTMPL_VERSION}_SHA256SUMS \
-  && grep consul-template_${CTMPL_VERSION}_linux_amd64.zip consul-template_${CTMPL_VERSION}_SHA256SUMS | sha256sum -c \
-  && unzip -d /usr/bin consul-template_${CTMPL_VERSION}_linux_amd64.zip \
-  && rm -rf consul-template_* /root/.gnupg /var/lib/apt/lists/*
+# Set the timezone
+RUN echo "Europe/Paris" > /etc/timezone
+RUN dpkg-reconfigure -f noninteractive tzdata
 
-ENV CATALINA_HOME /usr/local/tomcat
-ENV PATH $CATALINA_HOME/bin:$PATH
+# Setup environment
+ENV PATH ${PATH}:/opt/sonar-scanner/bin:/opt/nsis-2.46/bin:/opt/gradle-3.5/bin
 
-WORKDIR $CATALINA_HOME
+# Install basics
+RUN apt-get install -y git wget curl unzip bzip2 libfontconfig build-essential python python-dev sshpass
 
-ENV TOMCAT_MAJOR 7
-ENV TOMCAT_VERSION 7.0.76
-RUN set -x \
-  && useradd --uid 1000 tomcat \
-  && tomcat_archive=apache-tomcat-${TOMCAT_VERSION}.tar.gz \
-  && wget --no-verbose https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_VERSION}/bin/${tomcat_archive} \
-  && wget --no-verbose https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_VERSION}/bin/${tomcat_archive}.asc \
-  && wget --no-verbose https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_MAJOR}/KEYS \
-  && gpg --import KEYS \
-  && gpg --batch --verify ${tomcat_archive}.asc ${tomcat_archive} \
-  && tar -xf ${tomcat_archive} --strip-components=1 \
-  && rm -rf webapps/* logs/* \
-  && mkdir -p conf/Catalina \
-  && mv conf/server.xml conf/server.xml.original \
-  && mv conf/tomcat-users.xml conf/tomcat-users.xml.original \
-  && rm -rf ${tomcat_archive} ${tomcat_archive}.asc KEYS /root/.gnupg
+# Install node
+RUN curl --retry 3 -SLO "http://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.gz" && \
+  tar -xzf "node-v$NODE_VERSION-linux-x64.tar.gz" -C /usr/local --strip-components=1 && \
+  rm "node-v$NODE_VERSION-linux-x64.tar.gz"
 
-ENV TOMCAT_PREFIX="service/tomcat" \
-    TOMCAT_HTTP_PORT=8080 \
-    TOMCAT_JMX_PORT=9080 \
-    JPDA_ADDRESS=9180 \
-    TOMCAT_JMX_AUTHENTICATE=true \
-    TOMCAT_JMX_ACCESS_FILE=$CATALINA_HOME/conf/jmxremote.access \
-    TOMCAT_JMX_PASSWORD_FILE=$CATALINA_HOME/conf/jmxremote.password
+# install python-software-properties (so you can do add-apt-repository)
+RUN apt-get install -qqy python-software-properties software-properties-common
 
-COPY tomcat $CATALINA_HOME/
+# install openjdk 8
+RUN apt-get -y install openjdk-8-jdk
 
-COPY docker-entrypoint.sh /entrypoint.sh
-ENTRYPOINT ["/entrypoint.sh"]
+# Install Google Chrome Browser
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - && \
+  echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list && \
+  apt-get update -qqy && \
+  apt-get -qqy install google-chrome-stable && \
+  rm /etc/apt/sources.list.d/google-chrome.list && \
+  rm -rf /var/lib/apt/lists/*
 
-EXPOSE $TOMCAT_HTTP_PORT $TOMCAT_JMX_PORT $JPDA_ADDRESS
+#  Install Sonarqube scanner
+RUN wget -q https://dl.bintray.com/sonarsource/SonarQube/org/sonarsource/scanner/cli/sonar-scanner-cli/${SONAR_SCANNER}/sonar-scanner-cli-${SONAR_SCANNER}-linux.zip && \
+  unzip sonar-scanner-cli-${SONAR_SCANNER}-linux.zip -d /opt && \
+  rm sonar-scanner-cli-${SONAR_SCANNER}-linux.zip && \
+  mv /opt/sonar-scanner-${SONAR_SCANNER}-linux /opt/sonar-scanner && \
+  sed -i "s|#sonar.host.url=\(.*\)$|sonar.host.url=$SONAR_URL|" /opt/sonar-scanner/conf/sonar-scanner.properties && \
+  chmod +x /opt/sonar-scanner/bin/sonar-scanner
 
-CMD ["catalina.sh", "run"]
+# Install Maven (for war packaging)
+ARG BASE_URL=https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries
+#http://apache.crihan.fr/dist/maven/maven-3/${MAVEN_VERSION}/binaries
+
+RUN mkdir -p /usr/share/maven /usr/share/maven/ref \
+  && curl -fSL -o /tmp/apache-maven.tar.gz ${BASE_URL}/apache-maven-${MAVEN_VERSION}-bin.tar.gz \
+  && tar -xzf /tmp/apache-maven.tar.gz -C /usr/share/maven --strip-components=1 \
+  && rm -f /tmp/apache-maven.tar.gz \
+  && ln -s /usr/share/maven/bin/mvn /usr/bin/mvn
+
+# Add xnet user
+RUN useradd -ms /bin/bash xnet && \
+  echo 'PATH=${PATH}:/opt/sonar-scanner/bin\n' > /home/xnet/.bashrc && \
+  echo 'export PATH' >> /home/xnet/.bashrc
+
+RUN apt-get update && apt-get -y install sudo vim
+RUN echo "xnet ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/xnet
+
+COPY npmrc /home/xnet/.npmrc
+RUN chown xnet /home/xnet/.npmrc
+COPY settings.xml /home/xnet/
+RUN chown xnet /home/xnet/settings.xml
+
+USER xnet
+WORKDIR /home/xnet
+
+ENV MAVEN_HOME /usr/share/maven
+
+RUN mkdir .m2
+COPY settings.xml /home/xnet/.m2
+
+ADD bashrc .
+RUN cat bashrc >> .bashrc && rm bashrc
+
+EXPOSE 4200
+EXPOSE 49152
+EXPOSE 8100
+
+ENTRYPOINT bash

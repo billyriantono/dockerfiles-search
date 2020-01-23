@@ -1,11 +1,22 @@
-FROM node:latest
-ARG TEST=0.12.12
+FROM node:6.11.5
 
-RUN npm install -g git-cache-http-server
+## install and configure dependencies
+ADD bootstrap.sh /usr/local/bin/bootstrap
+RUN chmod +x /usr/local/bin/bootstrap
+RUN bootstrap
 
-ADD init.sh /init.sh
-RUN chmod 700 /init.sh
+## set up script for pipelines to deploy results to build server
+ADD deploy.sh /usr/local/bin/deploy
+RUN chmod +x /usr/local/bin/deploy
 
-VOLUME [ "/tmp/cache/git" ]
+## set up script for pipelines to bump version number
+ADD bump_version.sh /usr/local/bin/bump_version
+RUN chmod +x /usr/local/bin/bump_version
 
-ENTRYPOINT [ "/init.sh" ]
+## set up script for pipelines to update build status after version bump
+ADD update_status.sh /usr/local/bin/update_status
+RUN chmod +x /usr/local/bin/update_status
+
+## set up script for pipelines to update sentry with new commits and sourcemaps
+ADD sentry_update.sh /usr/local/bin/sentry_update
+RUN chmod +x /usr/local/bin/sentry_update

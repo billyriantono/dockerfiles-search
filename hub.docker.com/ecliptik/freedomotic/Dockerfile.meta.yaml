@@ -1,0 +1,88 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: openjdk:8-jre-alpine
+  Commands:
+  - Labels:
+    - Key: freedomotic.version
+      Value: '"5.6.0"'
+    - Key: maintainer
+      Value: '"Matteo Mazzoni <matteo@freedomotic.com>"'
+    Name: label
+  - Name: workdir
+    Path: /srv
+  - Env:
+    - Key: FREEDOMOTIC_URL
+      Value: '"http://teamcity.jetbrains.com/guestAuth/repository/download/bt1177/.lastSuccessful/freedomotic-5.6.0-%7Bbuild.number%7D.zip"'
+    Name: env
+  - CmdLine:
+    - apk add --no-cache curl
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8-jre-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre-alpine AS base
+- As: build
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apk add --no-cache zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL -o /tmp/latest.zip "${FREEDOMOTIC_URL}"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip /tmp/latest.zip -d /srv/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /srv/freedom* /srv/freedomotic     && rm -rf /srv/freedomotic/plugins/devices/frontend-java
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: build
+  Platform: ""
+  SourceCode: FROM base AS build
+- As: runtime
+  BaseName: base
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /srv/
+    - /srv/
+  - Name: volume
+    Volumes:
+    - /srv/freedomotic/data
+    - /srv/freedomotic/plugins
+  - Name: expose
+    Ports:
+    - "8090"
+    - "9111"
+  - Health:
+      Interval: 300000000000
+      StartPeriod: 10000000000
+      Test:
+      - CMD-SHELL
+      - curl -fI http://localhost:8090 || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - /srv/freedomotic/freedomotic.sh -D FOREGROUND
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: runtime
+  Platform: ""
+  SourceCode: FROM base AS runtime

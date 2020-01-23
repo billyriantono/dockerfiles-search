@@ -1,22 +1,28 @@
-# -*-Dockerfile-*-
-FROM golang:alpine
-RUN echo http://dl-cdn.alpinelinux.org/alpine/edge/testing >>/etc/apk/repositories
-RUN apk add alpine-sdk bash llvm5 gnupg xz jq curl-dev sqlite-dev binutils-gold autoconf automake ldc ldc-runtime
-RUN cd /usr/lib &&\
-    ln -s libdruntime-ldc-shared.so libdruntime-ldc.so &&\
-    ln -s libphobos2-ldc-shared.so libphobos2-ldc.so
-RUN go get github.com/tianon/gosu
+FROM centos:7
+ENV GOSU_VERSION=1.11
+
+RUN yum install -y make git gcc libcurl-devel sqlite-devel pkg-config && \
+    rm -rf /var/cache/yum/ && \
+    curl -fsS -o install.sh https://dlang.org/install.sh && \
+    bash install.sh dmd && \
+    # gosu installation
+    gpg --keyserver ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
+    && curl -o /usr/local/bin/gosu -SL "https://github.com/tianon/gosu/releases/download/${GOSU_VERSION}/gosu-amd64" \
+    && curl -o /usr/local/bin/gosu.asc -SL "https://github.com/tianon/gosu/releases/download/${GOSU_VERSION}/gosu-amd64.asc" \
+    && gpg --verify /usr/local/bin/gosu.asc \
+    && rm /usr/local/bin/gosu.asc \
+    && rm -r /root/.gnupg/ \
+    && chmod +x /usr/local/bin/gosu \
+    && gosu nobody true
+RUN mkdir -p /onedrive/conf /onedrive/data
 COPY . /usr/src/onedrive
-RUN cd /usr/src/onedrive/ && \
-    autoreconf -fiv && \
+RUN . "$(bash install.sh -a)" && \
+    cd /usr/src/onedrive/ && \
     ./configure && \
     make clean && \
     make && \
     make install
+COPY contrib/docker/entrypoint.sh /entrypoint.sh
+VOLUME ["/onedrive/conf"]
 
-FROM alpine
 ENTRYPOINT ["/entrypoint.sh"]
-RUN apk add --no-cache bash libcurl libgcc shadow sqlite-libs && \
-    mkdir -p /onedrive/conf /onedrive/data
-COPY contrib/docker/entrypoint.sh /
-COPY --from=0 /go/bin/gosu /usr/local/bin/onedrive /usr/local/bin/

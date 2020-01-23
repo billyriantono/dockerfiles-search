@@ -1,0 +1,139 @@
+MetaArgs:
+- DefaultValue: '"registry.cn-shenzhen.aliyuncs.com/sam-ns1/ct-agola-web"'
+  Key: AGOLAWEB_IMAGE
+  ProvidedValue: null
+  Value: '"registry.cn-shenzhen.aliyuncs.com/sam-ns1/ct-agola-web"'
+Stages:
+- As: agola-web
+  BaseName: $AGOLAWEB_IMAGE
+  Commands: null
+  From:
+    Image: $AGOLAWEB_IMAGE
+  Name: agola-web
+  Platform: ""
+  SourceCode: FROM $AGOLAWEB_IMAGE as agola-web
+- As: build_base
+  BaseName: golang:1.13-buster
+  Commands:
+  - Name: workdir
+    Path: /agola
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Env:
+    - Key: GOPROXY
+      Value: https://goproxy.cn
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.sum
+    - .
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-buster
+  Name: build_base
+  Platform: ""
+  SourceCode: FROM golang:1.13-buster AS build_base
+- As: server_builder
+  BaseName: build_base
+  Commands:
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Env:
+    - Key: GOPROXY
+      Value: https://goproxy.cn
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Chown: ""
+    From: agola-web
+    Name: copy
+    SourcesAndDest:
+    - /agola-web/dist/
+    - /agola-web/dist/
+  - CmdLine:
+    - make WEBBUNDLE=1 WEBDISTPATH=/agola-web/dist
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build_base
+  Name: server_builder
+  Platform: ""
+  SourceCode: FROM build_base AS server_builder
+- As: agola
+  BaseName: debian:buster
+  Commands:
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - echo "deb http://mirrors.163.com/debian/ buster main contrib non-free" > /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "deb http://mirrors.163.com/debian/ buster-updates main contrib non-free"
+      >> /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends     ca-certificates
+      tree wget procps net-tools     git     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: server_builder
+    Name: copy
+    SourcesAndDest:
+    - /agola/bin/agola
+    - /agola/bin/agola-toolbox-*
+    - /bin/
+  - CmdLine:
+    - /bin/agola
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:buster
+  Name: agola
+  Platform: ""
+  SourceCode: FROM debian:buster AS agola
+- As: agolademo
+  BaseName: agola
+  Commands:
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - examples/agolademo/config.yml
+    - .
+  - CmdLine:
+    - /bin/agola
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 3
+      Named: agola
+  Name: agolademo
+  Platform: ""
+  SourceCode: FROM agola as agolademo

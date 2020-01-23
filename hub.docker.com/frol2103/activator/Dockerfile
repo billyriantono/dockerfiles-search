@@ -1,21 +1,21 @@
-FROM java:8-jdk
+FROM msealand/cf9
+MAINTAINER fridus
 
-ENV ACTIVATOR_VERSION 1.3.12
-RUN apt-get update && \
-    apt-get install -y git build-essential curl wget zip unzip software-properties-common
+env TZ Europe/Brussels
 
-# Install play
-RUN wget http://downloads.typesafe.com/typesafe-activator/${ACTIVATOR_VERSION}/typesafe-activator-${ACTIVATOR_VERSION}.zip && \
-    unzip typesafe-activator-${ACTIVATOR_VERSION}.zip && \
-    mv activator-dist-${ACTIVATOR_VERSION} /opt/activator && \
-    chmod 777 -R /opt/activator && \
-    rm typesafe-activator-${ACTIVATOR_VERSION}.zip
+# gateway
+ADD ./build/cfapi/Gateway.cfc /var/www/CF/Gateway.cfc
 
-RUN mkdir -p /src
-WORKDIR /src
+# apache modules
+RUN a2enmod rewrite && a2enmod headers
 
-#so activator will put cache file in /var/home
-ENV _JAVA_OPTIONS='-Duser.home=/var/home'
-env PATH /opt/activator/bin/:$PATH
+# Timezone
+RUN echo $TZ | sudo tee /etc/timezone && sudo dpkg-reconfigure --frontend noninteractive tzdata
 
-EXPOSE 9000
+# Fix paths of assets
+RUN echo "Alias \"/CFIDE\" \"/opt/coldfusion9/wwwroot/CFIDE\"" >> /etc/apache2/httpd.conf
+
+ADD ./build/start.sh /start.sh
+RUN chmod +x /start.sh
+
+CMD /start.sh

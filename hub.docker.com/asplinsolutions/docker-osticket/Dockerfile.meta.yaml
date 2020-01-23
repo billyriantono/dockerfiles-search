@@ -1,0 +1,87 @@
+MetaArgs: null
+Stages:
+- As: deployer
+  BaseName: php:7.0-cli
+  Commands:
+  - Env:
+    - Key: OSTICKET_VERSION
+      Value: 1.10.4
+    Name: env
+  - CmdLine:
+    - set -x     && apt-get update     && apt-get install -y git-core     && git clone
+      -b v${OSTICKET_VERSION} --depth 1 https://github.com/osTicket/osTicket.git     &&
+      cd osTicket     && php manage.php deploy -sv /data/upload     && chown -R 82:82
+      /data/upload     && mv /data/upload/setup /data/upload/setup_hidden     && chown
+      -R root:root /data/upload/setup_hidden     && chmod -R go= /data/upload/setup_hidden
+    Name: run
+    PrependShell: true
+  From:
+    Image: php:7.0-cli
+  Name: deployer
+  Platform: ""
+  SourceCode: FROM php:7.0-cli AS deployer
+- BaseName: php:7.0-fpm-alpine
+  Commands:
+  - Maintainer: Martin Campbell <martin@campbellsoftware.co.uk>
+    Name: maintainer
+  - Env:
+    - Key: HOME
+      Value: /data
+    Name: env
+  - Name: workdir
+    Path: /data
+  - Chown: ""
+    From: deployer
+    Name: copy
+    SourcesAndDest:
+    - /data/upload
+    - upload
+  - CmdLine:
+    - set -x &&     apk add --no-cache --update         wget         msmtp         ca-certificates         supervisor         nginx         libpng         c-client         openldap         libintl         libxml2         icu         openssl
+      &&     apk add --no-cache --virtual .build-deps         imap-dev         libpng-dev         curl-dev         openldap-dev         gettext-dev         libxml2-dev         icu-dev         autoconf         g++         make         pcre-dev
+      &&     docker-php-ext-install gd curl ldap mysqli sockets gettext mbstring xml
+      intl opcache &&     docker-php-ext-configure imap --with-imap-ssl &&     docker-php-ext-install
+      imap &&     pecl install apcu && docker-php-ext-enable apcu &&     apk del .build-deps
+      &&     rm -rf /var/cache/apk/* &&     wget -nv -O upload/include/i18n/fr.phar
+      http://osticket.com/sites/default/files/download/lang/fr.phar &&     wget -nv
+      -O upload/include/i18n/ar.phar http://osticket.com/sites/default/files/download/lang/ar.phar
+      &&     wget -nv -O upload/include/i18n/pt_BR.phar http://osticket.com/sites/default/files/download/lang/pt_BR.phar
+      &&     wget -nv -O upload/include/i18n/it.phar http://osticket.com/sites/default/files/download/lang/it.phar
+      &&     wget -nv -O upload/include/i18n/es_ES.phar http://osticket.com/sites/default/files/download/lang/es_ES.phar
+      &&     wget -nv -O upload/include/i18n/de.phar http://osticket.com/sites/default/files/download/lang/de.phar
+      &&     mv upload/include/i18n upload/include/i18n.dist &&     wget -nv -O upload/include/plugins/auth-ldap.phar
+      http://osticket.com/sites/default/files/download/plugin/auth-ldap.phar &&     touch
+      /var/log/msmtp.log &&     chown www-data:www-data /var/log/msmtp.log &&     chown
+      nginx:www-data /var/tmp/nginx && chmod g+rx /var/tmp/nginx
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/
+    - /
+  - CmdLine:
+    - mkdir /etc/letsencrypt && mkdir /data/.well-known
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /data/upload/include/plugins
+    - /data/upload/include/i18n
+    - /var/log/nginx
+    - /etc/letsencrypt
+    - /data/.well-known
+  - Name: expose
+    Ports:
+    - "443"
+    - "80"
+  - CmdLine:
+    - /data/bin/start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:7.0-fpm-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.0-fpm-alpine

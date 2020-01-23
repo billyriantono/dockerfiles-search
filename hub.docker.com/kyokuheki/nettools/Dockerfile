@@ -1,52 +1,54 @@
-FROM ubuntu:rolling
-LABEL maintainer Kyokuheki <kyokuheki@gmail.com>
+FROM debian:wheezy
 
-ENV LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8 \
-    DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND noninteractive
 
-RUN set -x \
- && apt-get update && apt-get install -y \
-    iproute2 \
-    net-tools \
-    ssh \
-    putty-tools \
-    mosh \
-    lsh-client \
-    tcpdump \
-    nmap \
-    curl \
-    wget \
-    netcat-openbsd \
-    telnet \
-    socat \
-    iputils-arping \
-    iputils-ping \
-    fping \
-    dhcping \
-    hping3 \
-    httping \
-    lft \
-    arp-scan \
-    ieee-data \
-    mtr-tiny \
-    traceroute \
-    iputils-tracepath \
-    iperf \
-    iperf3 \
-    speedtest-cli \
-    bind9-host \
-    bind9utils \
-    dnsutils \
-    ldnsutils \
-    proxytunnel \
- && apt-get clean && rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/*
+RUN \
+  apt-get update && \
+  apt-get install -y \
+      apache2 \
+      libapache2-mod-php5 \
+      php5-mysql \
+      imagemagick \
+      graphicsmagick \
+      dcraw \
+      ffmpeg \
+      git \
+      libjs-jquery \
+      libjs-jquery-ui \
+      mysql-client \
+      wwwconfig-common \
+      dbconfig-common && \
+   apt-get clean autoclean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* 
 
-RUN set -x \
- && get-oui -v -f /usr/share/arp-scan/ieee-oui.txt -u http://standards-oui.ieee.org/oui.txt \
- && get-iab -v -f /usr/share/arp-scan/ieee-iab.txt -u http://standards-oui.ieee.org/iab/iab.txt
+RUN \
+  git clone git://github.com/gallery/gallery3.git && \ 
+  cd /gallery3 && git checkout 3.0.9 && rm -rf .git 
 
-RUN apt-get update
+RUN \
+  git clone https://github.com/gallery/gallery3-contrib.git && \
+  mv /gallery3-contrib/3.0/modules/* /gallery3/modules/ && rm -rf /gallery3-contrib
 
-#ENTRYPOINT ["bash"]
-CMD ["/bin/bash"]
+RUN git clone https://github.com/mstoltenburg/html5_upload_progress.git && mv html5_upload_progress /gallery3/modules/
+
+#RUN \
+#  git clone https://github.com/avolf/gallery-html5video.git && \
+#  mv /gallery-html5video/html5video /gallery3/modules/  && rm -rf /gallery-html5video
+
+RUN rm -rf /var/www/*
+RUN cp -r /gallery3/. /var/www/ 
+RUN rm -rf /gallery3 
+
+RUN a2enmod rewrite
+RUN a2enmod expires
+ADD /apache-default /etc/apache2/sites-available/default
+
+ADD htaccess /var/www/.htaccess
+ADD php.ini /etc/php5/apache2/php.ini
+
+RUN chown -R www-data:www-data /var/www/*
+
+VOLUME ["/var/www/var"]
+
+ADD entrypoint.sh /entrypoint.sh
+
+ENTRYPOINT /entrypoint.sh

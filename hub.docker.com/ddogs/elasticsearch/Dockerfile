@@ -1,26 +1,32 @@
-FROM elasticsearch:2.3
-MAINTAINER shm <notyce@gmail.com>
+# Base Image
+FROM python:2.7.15-stretch
 
-# Performance Tweaks
-RUN echo "* - nofile 65535" >> /etc/security/limits.conf && \
-    echo "* - memlock unlimited" >> /etc/security/limits.conf && \
-    echo vm.max_map_count=262144 > /etc/sysctl.d/max_map_count.conf && \
-    echo vm.swappiness=0 > /etc/sysctl.d/swappiness.conf
+# Metadata
+LABEL base.image="qcparser:latest"
+LABEL version="1"
+LABEL software="QCParser"
+LABEL software.version="latest"
+LABEL description="Bioinformatics utility parsing various NGS software log files to extract QC content and aggregate them into unified format"
+LABEL tags="NGS QC"
 
-ENV ES_HEAP_SIZE 1g
-ENV MAX_OPEN_FILES=65535
-ENV MAX_LOCKED_MEMORY=unlimited
+# Maintainer
+MAINTAINER Dave Lab <lab.dave@gmail.com>
 
+# update the OS related packages
+RUN apt-get update
 
+# install required dependencies for QCParser
+RUN pip install numpy
+RUN pip install scipy
+RUN pip install pandas
+RUN pip install matplotlib
 
-# optional volumes for data and config directory
-VOLUME /usr/share/elasticsearch/data
-VOLUME /usr/share/elasticsearch/config
+# make directory to store tools such as QCParser
+RUN mkdir tools
 
+# get the QCParser from GitHub
+RUN git clone --branch master https://github.com/labdave/QCParser.git /tools/QCParser
 
-# install ES plugins (marvel, kopf, head)
-RUN /usr/share/elasticsearch/bin/plugin install mobz/elasticsearch-head/latest && \
-    /usr/share/elasticsearch/bin/plugin install lmenezes/elasticsearch-kopf/latest && \
-    /usr/share/elasticsearch/bin/plugin install delete-by-query
+ENV PATH /tools/QCParser:$PATH
 
-CMD ["elasticsearch"]
+CMD ["python", "QCParser.py"]

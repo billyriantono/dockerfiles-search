@@ -1,36 +1,60 @@
-FROM centos
-MAINTAINER danarox
+FROM ubuntu:14.04
 
-############SUPERVISOR--Configuración##################
-RUN \
-yum update -y && \
-yum install -y epel-release && \
-yum install -y iproute python-setuptools hostname inotify-tools yum-utils which jq && \
-easy_install supervisor
+MAINTAINER Damian Soriano <ds@ingadhoc.com>
 
-RUN \
-yum clean all && rm -rf /tmp/yum*
+RUN apt-get clean
+RUN apt-get update
+RUN apt-get upgrade -y
 
-ENV USER=danarox
-ENV PASSWORD=Truger250
+RUN apt-get -y install postgresql
 
-EXPOSE 9001 80
-ADD container-files /
+RUN apt-get -y install python
+RUN apt-get -y install python-pip
 
-RUN \
-sed -ri "s/www/${USER}/g" /etc/supervisord.conf && \
-sed -ri "s/iaw/${PASSWORD}/g" /etc/supervisord.conf
+RUN apt-get -y install rsync
 
-RUN yum -y install httpd
-RUN systemctl enable httpd
+RUN apt-get -y install postgresql-server-dev-all
 
-RUN rpm -Uvh --replacepkgs https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+RUN apt-get -y install libpq-dev python-dev
 
-RUN rpm -Uvh https://mirror.webtatic.com/yum/el7/webtatic-release.rpm
+RUN pip install argcomplete
+RUN pip install argh
+RUN pip install psycopg2
+RUN pip install python-dateutil
+RUN pip install distribute
 
-RUN yum install -y php56w php56w-opcache php56w-mysql php56w-iconv php56w-mbstring php56w-curl php56w-openssl php56w-tokenizer php56w-soap php56w-ctype php56w-zip php56w-gd php56w-simplexml php56w-spl php56w-pcre php56w-dom php56w-xml php56w-intl php56w-json php56w-ldap php56w-pecl-apcu php56w-odbc php56w-pear php56w-xmlrpc php56w-snmp php56w-pdo curl
+RUN apt-get -y install barman
 
-RUN yum install -y ghostscript
+RUN apt-get -y install vim
+RUN apt-get -y install man
 
+# Add backup public key and authorized_key
+ADD backup_id_rsa.pub /var/lib/postgresql/.ssh/backup_id_rsa.pub
+ADD authorized_keys /var/lib/postgresql/.ssh/authorized_keys
 
-ENTRYPOINT ["/config/bootstrap.sh"]
+RUN chown -R postgres.postgres /var/lib/postgresql/.ssh
+
+# Add barman keys and change permisions
+ADD id_rsa /var/lib/postgresql/.ssh/id_rsa
+ADD id_rsa.pub /var/lib/postgresql/.ssh/id_rsa.pub
+ADD ssh_config /var/lib/postgresql/.ssh/config
+RUN chown -R postgres.postgres /var/lib/postgresql/.ssh
+RUN chmod 700 /var/lib/postgresql/.ssh/id_rsa
+
+# From http://stackoverflow.com/questions/18173889/cannot-access-centos-sshd-on-docker
+RUN sed -ri 's/UsePAM yes/#UsePAM yes/g' /etc/ssh/sshd_config
+RUN sed -ri 's/#UsePAM no/UsePAM no/g' /etc/ssh/sshd_config
+
+# Configure PostgreSQL to receive TPC/IP connections
+ADD postgresql.conf /etc/postgresql/9.3/main/postgresql.conf
+ADD pg_hba.conf /etc/postgresql/9.3/main/pg_hba.conf
+
+RUN service postgresql restart
+
+EXPOSE 22
+
+RUN /etc/init.d/ssh start
+
+#RUN service postgresql start
+
+CMD ["/bin/bash"]

@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- BaseName: golang:1.9.4-alpine3.7
+  Commands:
+  - CmdLine:
+    - apk add --no-cache             glide             git             mercurial             upx             curl
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TELEGRAF_VERSION
+      Value: 1.5.2
+    Name: env
+  - CmdLine:
+    - mkdir /telegraf-install &&      cd /telegraf-install &&      curl -o telegraf.tar.gz
+      https://dl.influxdata.com/telegraf/releases/telegraf-${TELEGRAF_VERSION}-static_linux_amd64.tar.gz
+      &&      tar xf telegraf.tar.gz &&      mv ./telegraf/telegraf / &&      rm -rf
+      /telegraf-install &&      upx /telegraf
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/davidhiendl/telegraf-docker-sd
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - glide.lock
+    - glide.yaml
+    - /go/src/github.com/davidhiendl/telegraf-docker-sd/
+  - CmdLine:
+    - glide install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/davidhiendl/telegraf-docker-sd/
+  - CmdLine:
+    - glide install &&      go build -i             -o /telegraf-docker-sd             -ldflags="-s
+      -w"             ./main.go &&      upx /telegraf-docker-sd
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.9.4-alpine3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM    golang:1.9.4-alpine3.7
+- BaseName: alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"David Hiendl <david.hiendl@dhswt.de>"'
+    Name: label
+  - CmdLine:
+    - apk add --no-cache             iputils             ca-certificates             net-snmp-tools             procps             curl
+      &&      update-ca-certificates &&      curl -L -s https://github.com/just-containers/s6-overlay/releases/download/v1.21.2.2/s6-overlay-amd64.tar.gz         |
+      tar xvzf - -C / &&      apk del --no-cache curl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker/etc
+    - /etc
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - sd-tpl.d
+    - /etc/telegraf/sd-tpl.d
+  - CmdLine:
+    - mkdir -p /etc/telegraf/telegraf.d &&      echo "# configured via template _telegraf.goconf\n"
+      > /etc/telegraf/telegraf.conf &&      addgroup -S telegraf &&      adduser -s
+      /bin/false -S -D -H telegraf &&      chown root:root -R /etc/telegraf &&      chmod
+      -R u=rwX,g=rwX,o=rX /etc/telegraf &&      chown telegraf:telegraf /etc/telegraf/telegraf.d
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /telegraf
+    - /usr/local/bin
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /telegraf-docker-sd
+    - /usr/local/bin
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM    alpine

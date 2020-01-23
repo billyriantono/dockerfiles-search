@@ -1,0 +1,128 @@
+MetaArgs: null
+Stages:
+- BaseName: php:7.3-apache-stretch
+  Commands:
+  - Env:
+    - Key: APACHE_DOCUMENT_ROOT
+      Value: /var/www/html
+    Name: env
+  - CmdLine:
+    - echo "deb http://cdn.debian.net/debian/ stretch main contrib non-free" > /etc/apt/sources.list.d/mirror.jp.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "deb http://cdn.debian.net/debian/ stretch-updates main contrib" >> /etc/apt/sources.list.d/mirror.jp.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/rm /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update   && apt-get install --no-install-recommends -y     apt-transport-https     apt-utils     build-essential     curl     debconf-utils     gcc     git     gnupg2     libfreetype6-dev     libicu-dev     libjpeg62-turbo-dev     libpng-dev     libpq-dev     libzip-dev     locales     ssl-cert     unzip     vim     zlib1g-dev   &&
+      apt-get clean   && rm -rf /var/lib/apt/lists/*   && echo "en_US.UTF-8 UTF-8"
+      >/etc/locale.gen   && locale-gen
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-ext-configure pgsql -with-pgsql=/usr/local/pgsql   && docker-php-ext-install
+      -j$(nproc) zip gd mysqli pdo_mysql opcache intl pgsql pdo_pgsql
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pecl install apcu && echo "extension=apcu.so" > /usr/local/etc/php/conf.d/apc.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${APACHE_DOCUMENT_ROOT}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf
+      /etc/apache2/conf-available/*.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod rewrite
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod headers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod ssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /etc/apache2/sites-available/default-ssl.conf /etc/apache2/sites-enabled/default-ssl.conf
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "443"
+  - CmdLine:
+    - mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dockerbuild/php.ini
+    - $PHP_INI_DIR/conf.d/
+  - CmdLine:
+    - curl -sS https://getcomposer.org/installer   | php   && mv composer.phar /usr/bin/composer   &&
+      composer config -g repos.packagist composer https://packagist.jp   && composer
+      global require hirak/prestissimo
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: COMPOSER_ALLOW_SUPERUSER
+      Value: "1"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ${APACHE_DOCUMENT_ROOT}
+  - Name: workdir
+    Path: ${APACHE_DOCUMENT_ROOT}
+  - CmdLine:
+    - composer install   --no-scripts   --no-autoloader   --no-dev -d ${APACHE_DOCUMENT_ROOT}   &&
+      chown -R www-data:www-data ${APACHE_DOCUMENT_ROOT}   && chown www-data:www-data
+      /var/www
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: www-data
+  - CmdLine:
+    - composer dumpautoload -o --apcu --no-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ ! -f ${APACHE_DOCUMENT_ROOT}/.env ]; then         cp -p .env.dist .env         ;
+      fi
+    Name: run
+    PrependShell: true
+  - Key: SKIP_INSTALL_SCRIPT_ON_DOCKER_BUILD
+    Name: arg
+    Value: "false"
+  - CmdLine:
+    - if [ ! -f ${APACHE_DOCUMENT_ROOT}/var/eccube.db ] && [ ! ${SKIP_INSTALL_SCRIPT_ON_DOCKER_BUILD}
+      = "true" ]; then         composer run-script installer-scripts && composer run-script
+      auto-scripts         ; fi
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  From:
+    Image: php:7.3-apache-stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.3-apache-stretch

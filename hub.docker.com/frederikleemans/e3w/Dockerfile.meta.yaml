@@ -1,0 +1,110 @@
+MetaArgs: null
+Stages:
+- As: backend
+  BaseName: golang:1
+  Commands:
+  - CmdLine:
+    - mkdir -p /go/src/github.com/frederikleemans/e3w
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/frederikleemans/e3w
+  - Name: workdir
+    Path: /go/src/github.com/frederikleemans/e3w
+  - CmdLine:
+    - CGO_ENABLED=0 go get -d -v ./...
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 go build
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1
+  Name: backend
+  Platform: ""
+  SourceCode: FROM golang:1 as backend
+- As: frontend
+  BaseName: node:8
+  Commands:
+  - CmdLine:
+    - mkdir /app
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - static
+    - /app
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - npm --registry=https://registry.npm.taobao.org --cache=$HOME/.npm/.cache/cnpm
+      --disturl=https://npm.taobao.org/mirrors/node --userconfig=$HOME/.cnpmrc install
+      && npm run publish
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:8
+  Name: frontend
+  Platform: ""
+  SourceCode: FROM node:8 as frontend
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - mkdir -p /app/static/dist /app/conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: backend
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/frederikleemans/e3w/e3w
+    - /app
+  - Chown: ""
+    From: frontend
+    Name: copy
+    SourcesAndDest:
+    - /app/dist
+    - /app/static/dist
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/config.default.ini
+    - /app/conf
+  - CmdLine:
+    - mkdir /app/home
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - addgroup -S e3wg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -S -D --home /app/home --ingroup e3wg e3wu
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R e3wu:e3wg /app
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: e3wu
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - ./e3w
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

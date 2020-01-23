@@ -1,0 +1,119 @@
+MetaArgs:
+- DefaultValue: "12"
+  Key: NODE_VERSION
+  ProvidedValue: null
+  Value: "12"
+- DefaultValue: "1.15"
+  Key: NGINX_VERSION
+  ProvidedValue: null
+  Value: "1.15"
+- DefaultValue: "4096"
+  Key: MAX_OLD_SPACE_SIZE
+  ProvidedValue: null
+  Value: "4096"
+Stages:
+- As: builder
+  BaseName: node:${NODE_VERSION}-alpine
+  Commands:
+  - Name: workdir
+    Path: /home/node/
+  - CmdLine:
+    - apk update &&   apk add --virtual build-dependencies   build-base   gcc   wget   git   python
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install --global npm node-gyp
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - '*package-lock.json'
+    - '*.npmrc'
+    - ./
+  - CmdLine:
+    - npm ci
+    Name: run
+    PrependShell: true
+  - Key: NODE_ENV
+    Name: arg
+    Value: production
+  - Env:
+    - Key: NODE_ENV
+      Value: ${NODE_ENV}
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - npm run build -- istio-ui
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:${NODE_VERSION}-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:${NODE_VERSION}-alpine as builder
+- BaseName: nginx:${NGINX_VERSION}-alpine
+  Commands:
+  - Name: workdir
+    Path: /home/node/
+  - CmdLine:
+    - rm -rf /usr/share/nginx/html/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /docker-entrypoint.sh
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/node/dist/uistio/
+    - /usr/share/nginx/html/
+  - Env:
+    - Key: PATH
+      Value: '"/home/node/node_modules/.bin:${PATH}"'
+    Name: env
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - Env:
+    - Key: PORT
+      Value: "80"
+    Name: env
+  - Env:
+    - Key: API_URL
+      Value: /api
+    Name: env
+  - Name: expose
+    Ports:
+    - ${PORT}
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - nginx
+    - -g
+    - daemon off;
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginx:${NGINX_VERSION}-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx:${NGINX_VERSION}-alpine

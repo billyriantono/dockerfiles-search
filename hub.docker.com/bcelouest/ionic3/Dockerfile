@@ -1,4 +1,4 @@
-FROM ubuntu:xenial
+FROM ubuntu:bionic
 MAINTAINER TIMWI <contact@timwi.com>
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -10,7 +10,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # Install basics
 RUN apt-get update &&  \
-  apt-get install -qqy git wget curl unzip bzip2 libfontconfig build-essential python python-dev sudo tzdata vim
+  apt-get install -qqy apt-utils git wget curl unzip bzip2 libfontconfig build-essential python python-dev sudo tzdata vim
 
 # Set the timezone
 RUN rm -f /etc/localtime
@@ -33,6 +33,7 @@ RUN echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula selec
 
 # NSIS - Basic things
 RUN set -e && \
+    apt-get update && \
     apt-get install -qqy \
     ca-certificates \
     curl \
@@ -42,22 +43,14 @@ RUN set -e && \
     openssh-client \
     software-properties-common \
     wget \
-    lib32ncurses5 \
-    && rm -rf /var/lib/apt/lists/*
+    lib32ncurses5
 
 # NSIS
 RUN set -e && \
     dpkg --add-architecture i386 && \
-    apt-get update && apt-get install -qqy --no-install-recommends \
-    libstdc++6:i386 \
-    && rm -rf /var/lib/apt/lists/*
+    apt-get update && apt-get install -qqy --no-install-recommends libstdc++6:i386
 
 ADD nsis-2.46-linux32-bin.tar.bz2 /opt
-
-RUN mkdir xnet
-
-# install python-software-properties (so you can do add-apt-repository)
-RUN apt-get update && apt-get install -qqy python-software-properties software-properties-common
 
 # install openjdk 8
 RUN apt-get -y install openjdk-8-jdk
@@ -72,7 +65,6 @@ RUN echo ANDROID_HOME="${ANDROID_HOME}" >> /etc/environment && \
   dpkg --add-architecture i386 && \
   apt-get install -qqy --force-yes expect ant wget libc6-i386 lib32stdc++6 lib32gcc1 lib32ncurses5 lib32z1 qemu-kvm kmod && \
   wget -O /opt/gradle-3.5-bin.zip https://services.gradle.org/distributions/gradle-3.5-bin.zip && \
-  rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
   unzip /opt/gradle-3.5-bin.zip -d /opt
 
 # Install Android SDK
@@ -96,7 +88,7 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key
   apt-get update -qqy && \
   apt-get -qqy install google-chrome-stable && \
   rm /etc/apt/sources.list.d/google-chrome.list && \
-  rm -rf /var/lib/apt/lists/*
+  rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 #  Install Sonarqube scanner
 RUN wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER}.zip && \
@@ -105,11 +97,13 @@ RUN wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sona
   mv /opt/sonar-scanner-${SONAR_SCANNER} /opt/sonar-scanner && \
   sed -i "s|#sonar.host.url=\(.*\)$|sonar.host.url=$SONAR_URL|" /opt/sonar-scanner/conf/sonar-scanner.properties
 
+RUN mkdir xnet
+
 # Add xnet user
 RUN useradd -ms /bin/bash xnet && \
   chown -Rf xnet xnet && \
-  echo 'PATH=${PATH}:${ANDROID_HOME}/tools:${ANDROID_HOME}/platform-tools:/opt/tools:/opt/sonar-scanner/bin\n' > /home/xnet/.bashrc && \
-  echo 'export PATH' >> /home/xnet/.bashrc && \
+  echo 'export PATH=${PATH}:${ANDROID_HOME}/tools:${ANDROID_HOME}/platform-tools:/opt/tools:/opt/sonar-scanner/bin\n' > /home/xnet/.bashrc && \
+  echo 'export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/jre/\n' >> /home/xnet/.bashrc && \
   chmod +x ${ANDROID_HOME}/tools/android && \
   chmod +x /opt/sonar-scanner/bin/sonar-scanner
 

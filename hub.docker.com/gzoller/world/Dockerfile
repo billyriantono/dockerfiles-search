@@ -1,18 +1,14 @@
-FROM golang
+FROM node:alpine
 
-# Docker-in-Docker concept from here: https://github.com/jamiemccrindle/dockerception
+MAINTAINER GSMLG < me@gsmlg.org >
 
-# Add the runtime dockerfile into the context as Dockerfile
-COPY Dockerfile.run /go/bin/Dockerfile
-COPY bin/* /go/bin/bin/
+ENV MIRRORS_PATH /mirrors
+ENV NODE_PORT 80
 
-# Set the workdir to be /go/bin which is where the binaries are built
-WORKDIR /go/bin
+# RUN apk update && rm -rf /var/cache/apk/*
 
-RUN \
-  go get -d github.com/gzoller/portster && \
-  cp /go/src/github.com/gzoller/portster/containerId.sh . && \
-  go build -buildmode=exe github.com/gzoller/portster 
+EXPOSE 80
 
-# Export the WORKDIR as a tar stream
-CMD tar -cf - .
+COPY server.js entrypoint.sh /
+
+ENTRYPOINT ["/entrypoint.sh"]

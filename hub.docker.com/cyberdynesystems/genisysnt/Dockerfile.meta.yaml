@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- As: dependencies
+  BaseName: golang:1.13.1-alpine3.10
+  Commands:
+  - Name: workdir
+    Path: /tmp/build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.sum
+    - .
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13.1-alpine3.10
+  Name: dependencies
+  Platform: ""
+  SourceCode: FROM golang:1.13.1-alpine3.10 AS DEPENDENCIES
+- As: builder
+  BaseName: DEPENDENCIES
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - cmd
+    - cmd
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - pkg
+    - pkg
+  - CmdLine:
+    - mkdir -p target
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd cmd/proxy &&     CGO_ENABLED=0 go test -run="" /tmp/build/pkg/* &&     go
+      build -i -o /tmp/build/target/redisClusterProxyServer .
+    Name: run
+    PrependShell: true
+  From:
+    Image: DEPENDENCIES
+  Name: builder
+  Platform: ""
+  SourceCode: FROM DEPENDENCIES AS BUILDER
+- BaseName: alpine:3.10.2
+  Commands:
+  - Name: workdir
+    Path: /svc/redis-cluster-proxy
+  - Env:
+    - Key: LISTEN_ADDR
+      Value: '":8000"'
+    Name: env
+  - Env:
+    - Key: CLUSTER_ADDR
+      Value: '"cluster:7000"'
+    Name: env
+  - Env:
+    - Key: START_DELAY
+      Value: '"0s"'
+    Name: env
+  - Env:
+    - Key: PUBLIC_HOST
+      Value: '"127.0.0.1"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/docker-entry-point.sh
+    - docker-entry-point.sh
+  - Chown: ""
+    From: BUILDER
+    Name: copy
+    SourcesAndDest:
+    - /tmp/build/target/redisClusterProxyServer
+    - .
+  - CmdLine:
+    - ./docker-entry-point.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.10.2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.10.2

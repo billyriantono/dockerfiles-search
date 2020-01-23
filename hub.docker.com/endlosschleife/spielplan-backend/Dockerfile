@@ -1,14 +1,6 @@
-FROM node:7-alpine
+FROM emunshi/ubuntu
 
-WORKDIR /home/spielplan
+MAINTAINER Tarun Gupta "emunshi.studio@gmail.com"
 
-ADD package.json /home/spielplan/package.json
-RUN npm install
-
-COPY . /home/spielplan
-
-ENV PORT 80
-WORKDIR /home/spielplan
-
-EXPOSE 80
-CMD ["npm", "start"]
+# install nodejs, npm and git
+RUN apt-get install -y nodejs npm git git-core

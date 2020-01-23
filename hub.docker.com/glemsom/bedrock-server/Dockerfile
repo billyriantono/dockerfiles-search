@@ -1,32 +1,58 @@
-FROM ubuntu:18.04
+FROM debian:jessie
+MAINTAINER Boris HUISGEN <bhuisgen@hbis.fr>
 
-# Set Minecraft bedrock versuin
-ENV VERSION=1.14.1.4
+ENV DEBIAN_FRONTEND noninteractive
 
-# Install dependencies, download and extract the bedrock server
 RUN apt-get update && \
-    apt-get install -y unzip curl libcurl4 libssl1.0.0 && \
-    rm -rf /var/lib/apt/lists/* && \
-    curl https://minecraft.azureedge.net/bin-linux/bedrock-server-${VERSION}.zip --output bedrock-server.zip && \
-    unzip bedrock-server.zip -d bedrock-server && \
-    rm bedrock-server.zip
+    apt-get -y install locales && \
+    dpkg-reconfigure locales && \
+    locale-gen C.UTF-8 && \
+    /usr/sbin/update-locale LANG=C.UTF-8 && \
+    echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen && \
+    locale-gen
+ENV LC_ALL C.UTF-8
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US.UTF-8
+ENV TERM xterm
 
-VOLUME /bedrock-server/data
+RUN apt-get update && \
+    apt-get -y install \
+        ucf \
+        procps \
+        iproute \
+        supervisor
+COPY etc/supervisor/ /etc/supervisor/
 
-# Delete default config (supplied from volume)
-run rm -f /bedrock-server/server.properties /bedrock-server/permissions.json /bedrock-server/whitelist.json
+RUN apt-get update && \
+    apt-get -y install --no-install-recommends \
+        curl \
+        jq \
+        libcurl3-gnutls \
+        libldap-2.4-2 \
+        netcat-openbsd \
+        pciutils \
+        sudo
 
-# Setup symlinks from volume
-RUN ln -s /bedrock-server/data/worlds             /bedrock-server/worlds            && \
-    ln -s /bedrock-server/data/server.properties  /bedrock-server/server.properties && \
-    ln -s /bedrock-server/data/permissions.json   /bedrock-server/permissions.json  && \
-    ln -s /bedrock-server/data/whitelist.json     /bedrock-server/whitelist.json
+COPY files/zabbix-agent_3.0.9-1+jessie_amd64.deb /root/
+COPY files/zabbix_module_docker.so /root/
+RUN dpkg -i /root/zabbix-agent_3.0.9-1+jessie_amd64.deb
+COPY etc/zabbix/ /etc/zabbix/
 
-ADD run.sh /bedrock-server/run.sh
+RUN mkdir -p /var/lib/zabbix && \
+    chmod 700 /var/lib/zabbix && \
+    chown zabbix:zabbix /var/lib/zabbix && \
+    usermod -d /var/lib/zabbix zabbix && \
+    usermod -a -G adm zabbix
 
-EXPOSE 19132/udp
-EXPOSE 19133/udp
+COPY etc/sudoers.d/zabbix etc/sudoers.d/zabbix
+RUN chmod 400 /etc/sudoers.d/zabbix
 
-WORKDIR /bedrock-server
-ENV LD_LIBRARY_PATH=.
-CMD ./run.sh
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+COPY run.sh /
+RUN chmod +x /run.sh
+
+EXPOSE 10050
+ENTRYPOINT ["/run.sh"]
+CMD [""]

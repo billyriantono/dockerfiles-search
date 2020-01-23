@@ -1,82 +1,76 @@
 MetaArgs: null
 Stages:
-- BaseName: osmosisfoundation/nonmem:latest
+- As: builder
+  BaseName: opensuse/leap:15.0
   Commands:
-  - Key: VCS_REF
-    Name: arg
-    Value: null
-  - Labels:
-    - Key: org.label-schema.name
-      Value: '"osmosisfoundation/psn"'
-    - Key: org.label-schema.description
-      Value: '"Perl-speaks-NONMEM (PSN) and NONMEM Installed in a Ubuntu Container"'
-    - Key: org.label-schema.url
-      Value: '"http://osmosis.foundation"'
-    - Key: org.label-schema.vcs-ref
-      Value: $VCS_REF
-    - Key: org.label-schema.vcs-url
-      Value: '"https://github.com/osmosisfoundation/pmx-docker"'
-    - Key: org.label-schema.vendor
-      Value: '"Osmosis Foundation"'
-    - Key: org.label-schema.schema-version
-      Value: '"1.0"'
-    Name: label
   - CmdLine:
-    - "apt-get update     && apt-get -y --no-install-recommends install \t\tca-certificates
-      \t\tgcc \t\tbuild-essential \t\tcurl \t\texpect     && rm -fr /var/lib/apt/lists/*
-      \    && wget -qO- \t    https://raw.githubusercontent.com/miyagawa/cpanminus/master/cpanm
-      | \t    perl - --skip-satisfied App::cpanminus     && rm -r ~/.cpanm     &&
-      cpanm \t\tMath::Random \t\tStatistics::Distributions \t\tArchive::Zip \t\tFile::Copy::Recursive
-      \t\tStorable \t\tMoose \t\tMooseX::Params::Validate \t\tTest::Exception \t\tYAML::Tiny"
+    - zypper ar https://download.opensuse.org/repositories/devel:/languages:/go/openSUSE_Leap_15.0/devel:languages:go.repo
     Name: run
     PrependShell: true
-  - Name: workdir
-    Path: /tmp
   - CmdLine:
-    - "curl -SL https://github.com/UUPharmacometrics/PsN/releases/download/4.7.0/PsN-4.7.0.tar.gz
-      -o PsN-4.7.0.tar.gz     && tar -zxf /tmp/PsN-4.7.0.tar.gz     && cd /tmp/PsN-Source
-      \    && expect -c \"set timeout { 2 exit };         spawn perl setup.pl; \t\texpect
-      -ex \\\"PsN Utilities installation directory \\[/usr/local/bin\\]:\\\"; \t\tsend
-      \\\"\\r\\\"; \t\texpect -ex \\\"Path to perl binary used to run Utilities \\[/usr/bin/perl\\]:\\\";
-      \t\tsend \\\"\\r\\\"; \t\texpect -ex \\\"PsN Core and Toolkit installation directory
-      \\[/usr/local/share/perl\\\"; \t\tsend \\\"\\r\\\"; \t\texpect -ex \\\"Would
-      you like this script to check Perl modules \\[y/n\\]?\\\"; \t\tsend \\\"y\\r\\\";
-      \t\texpect -ex \\\"Continue installing PsN (installing is possible even if modules
-      are missing)\\[y/n\\]?\\\"; \t\tsend \\\"y\\r\\\"; \t\texpect -ex \\\"Would
-      you like to copy the PsN documentation to a file system location of your choice?\\\";
-      \t\tsend \\\"n\\r\\\"; \t\texpect -ex \\\"Would you like to install the PsN
-      test library?\\\"; \t\tsend \\\"y\\r\\\"; \t\texpect -ex \\\"PsN test library
-      installation directory \\[/usr/local/share/perl/\\\"; \t\tsend \\\"\\r\\\";
-      \t\texpect -ex \\\"Would you like help to create a configuration file?\\\";
-      \t\tsend \\\"y\\r\\\";         expect -ex \\\"Enter the *complete* path of the
-      NM-installation directory:\\\";         send \\\"/opt/nm/\\r\\\"; \t\texpect
-      -ex \\\"Would you like to add another one\\\"; \t\tsend \\\"n\\r\\\"; \t\texpect
-      -ex \\\"or press ENTER to use the name\\\"; \t\tsend \\\"nm\\r\\\"; \t\texpect
-      -ex \\\"installation program.\\\"; \t\tsend \\\"\\r\\\";\"     && rm -rf /tmp/*"
+    - zypper --non-interactive --no-gpg-checks  ref
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - zypper in -y make git go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go version
     Name: run
     PrependShell: true
   - Env:
-    - Key: NUM_THREADS
-      Value: "4"
+    - Key: GOPATH
+      Value: '"/go"'
+    Name: env
+  - Env:
+    - Key: GOBIN
+      Value: '"/go/bin"'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"/usr/bin:/bin:/usr/local/bin:/go/bin"'
     Name: env
   - Chown: ""
-    From: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/kubic-project/dex-operator
+  - Name: workdir
+    Path: /go/src/github.com/kubic-project/dex-operator
+  - CmdLine:
+    - make -C /go/src/github.com/kubic-project/dex-operator clean all
+    Name: run
+    PrependShell: true
+  From:
+    Image: opensuse/leap:15.0
+  Name: builder
+  Platform: ""
+  SourceCode: FROM opensuse/leap:15.0 as builder
+- BaseName: opensuse/leap:15.0
+  Commands:
+  - Key: BUILD_DIR
+    Name: arg
+    Value: '"/go/src/github.com/kubic-project/dex-operator"'
+  - Key: BUILT_EXE
+    Name: arg
+    Value: '"cmd/dex-operator/dex-operator"'
+  - Chown: ""
+    From: builder
     Name: copy
     SourcesAndDest:
-    - docker-entrypoint.sh
-    - /
+    - $BUILD_DIR/$BUILT_EXE
+    - /usr/local/bin/dex-operator
   - CmdLine:
-    - /docker-entrypoint.sh
-    Name: entrypoint
-    PrependShell: false
-  - Name: workdir
-    Path: /data
+    - chmod 755 /usr/local/bin/dex-operator
+    Name: run
+    PrependShell: true
   - CmdLine:
-    - --help
+    - /usr/local/bin/dex-operator
     Name: cmd
     PrependShell: false
   From:
-    Image: osmosisfoundation/nonmem:latest
+    Image: opensuse/leap:15.0
   Name: ""
   Platform: ""
-  SourceCode: FROM osmosisfoundation/nonmem:latest
+  SourceCode: FROM opensuse/leap:15.0

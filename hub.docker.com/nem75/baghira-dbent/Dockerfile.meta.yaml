@@ -1,0 +1,64 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: alpine
+  Commands: null
+  From:
+    Image: alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM alpine AS base
+- As: build
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apk add --no-cache       autoconf       automake       build-base       ca-certificates       curl       file       gawk       git       libtool       zlib-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth=1 --single-branch --branch=v3.5.1.1 https://github.com/google/protobuf.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /protobuf
+  - CmdLine:
+    - ./autogen.sh  && CXXFLAGS="-Os" ./configure --enable-shared=false --disable-dependency-tracking
+      --prefix=/protoc  && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip /protoc/bin/protoc
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: build
+  Platform: ""
+  SourceCode: FROM base AS build
+- BaseName: base
+  Commands:
+  - CmdLine:
+    - apk add --no-cache libstdc++ tini
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /protoc/bin/protoc
+    - /usr/bin/protoc
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /usr/bin/protoc
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

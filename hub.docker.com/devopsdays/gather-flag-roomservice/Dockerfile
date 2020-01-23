@@ -1,25 +1,37 @@
-# golang image where workspace (GOPATH) configured at /go.
-FROM golang:1.8
+# ------- Client -------
+# Build the client dependencies first
+FROM node:latest AS client 
 
-ARG app_env
-ENV APP_ENV $APP_ENV
+WORKDIR /client
 
-# copy the local package files to the container workspace
-COPY . /go/src/github.com/devopsdays/gather-flag/rooms
+COPY ./client/package.json .
+RUN npm set progress=false && npm config set depth 0
+RUN npm install --production
 
-# Setting up working directory
-WORKDIR /go/src/github.com/devopsdays/gather-flag/rooms
+COPY ./client ./
 
-# Install dependencies
-RUN go get ./...
+RUN npm run build
 
-CMD if [ ${APP_ENV} = production ]; \
-	then \
-	rooms; \
-	else \
-	go get github.com/pilu/fresh && \
-	fresh; \
-	fi
+# ------- Server -------
+# Install the server dependencies
+FROM node:latest AS server 
 
-# Service listens on port 8081.
-EXPOSE 8081
+WORKDIR /server
+
+COPY ./server/package.json .
+RUN npm set progress=false && npm config set depth 0
+RUN npm install --production
+
+COPY ./server/ ./
+
+# ------- Release -------
+# Finally, copy server and client to the release container
+FROM node:alpine as release
+WORKDIR /app
+
+COPY --from=server /server ./
+COPY --from=client /client/build ./client
+
+EXPOSE 80
+
+CMD ["npm", "start"]

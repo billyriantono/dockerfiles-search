@@ -1,36 +1,67 @@
-FROM php:7.1-apache
+FROM debian:stretch-slim
 
-# System packages
-RUN apt-get update -qq  \
- && apt-get install -y unzip git-core libicu-dev vim-tiny ssh \
- && rm -rf /var/lib/apt/lists/* /var/cache/apk/*
+RUN groupadd -r loom && useradd -r -g loom loom
 
-# Apache configuration
-RUN a2enmod rewrite \
- && a2enmod ssl \
- && a2dissite 000-default \
- && echo ServerName localhost >> /etc/apache2/apache2.conf
+ENV GOSU_VERSION 1.10
 
-COPY config/vhost/* /etc/apache2/sites-available/
-COPY config/php.ini /usr/local/etc/php/
+RUN set -ex; \
+	\
+	fetchDeps=" \
+		ca-certificates \
+		dirmngr \
+		gnupg \
+		wget \
+	"; \
+	apt-get update; \
+	apt-get install -y --no-install-recommends $fetchDeps; \
+	rm -rf /var/lib/apt/lists/*; \
+	\
+	dpkgArch="$(dpkg --print-architecture | awk -F- '{ print $NF }')"; \
+	wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch"; \
+	wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch.asc"; \
+	export GNUPGHOME="$(mktemp -d)"; \
+	echo "disable-ipv6" >> "$GNUPGHOME/dirmngr.conf"; \
+	gpg --batch --keyserver ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4; \
+	gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu; \
+	gpgconf --kill all; \
+	rm -r "$GNUPGHOME" /usr/local/bin/gosu.asc; \
+	chmod +x /usr/local/bin/gosu; \
+	gosu nobody true; \
+	\
+	apt-get purge -y --auto-remove $fetchDeps
 
-RUN a2ensite symfony
+ENV LOOM_BUILD_NUMBER 727
+ENV LOOM_DOWNLOAD_URL https://private.delegatecall.com/loom/linux/build-727/loom
+ENV LOOM_DOWNLOAD_SHA b70a80a43aee56e83e0a7cf88dfaf7c8649a502fe790e7d8a977be520efa0fcd
 
-# PECL / extension builds and install
-RUN pecl install xdebug \
- && docker-php-ext-enable xdebug \
- && docker-php-ext-install bcmath intl sockets opcache pdo_mysql
+RUN set -ex; \
+	\
+	fetchDeps=" \
+		ca-certificates \
+		wget \
+	"; \
+	apt-get update; \
+	apt-get install -y $fetchDeps --no-install-recommends; \
+	rm -rf /var/lib/apt/lists/*; \
+	\
+	wget -O /usr/local/bin/loom "$LOOM_DOWNLOAD_URL"; \
+	echo "$LOOM_DOWNLOAD_SHA */usr/local/bin/loom" | sha256sum -c -; \
+	chmod +x /usr/local/bin/loom; \
+	\
+	loom version; \
+	\
+	apt-get purge -y --auto-remove $fetchDeps
 
-# Install APCU
-RUN pecl install apcu-5.1.8 \
- && docker-php-ext-enable apcu
+RUN mkdir /loom && chown loom:loom /loom
+VOLUME /loom
+WORKDIR /loom
 
-# Enable remote debugging with xdebug
-RUN echo 'xdebug.remote_enable=on' >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
- && echo 'xdebug.remote_connect_back=on' >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
- && echo 'xdebug.remote_autostart=on' >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+COPY docker-entrypoint.sh /usr/local/bin/
+ENTRYPOINT ["docker-entrypoint.sh"]
 
-# Composer
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-# Composer parallel install plugin
-RUN composer global require hirak/prestissimo
+EXPOSE 6656
+EXPOSE 9999
+EXPOSE 46656
+EXPOSE 46657
+EXPOSE 46658
+CMD ["loom"]

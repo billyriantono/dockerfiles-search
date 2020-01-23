@@ -1,22 +1,20 @@
-FROM ehlxr/alpine
-# ehlxr/alpine-mysql
-LABEL maintainer="ehlxr.me@gmail.com"
+FROM centos:7
 
-# ENV TZ "Asia/Shanghai"
+RUN yum -y update
 
-WORKDIR /app
-VOLUME /data
+ENV GOLANG_VERSION 1.8.1
+ENV GOPATH /go
+ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 
-# RUN apk add --update --no-cache mysql mysql-client tzdata \
-#     && ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime \
-#     && echo ${TZ} > /etc/timezone \
-#     && rm -rf /var/cache/apk/*
+ADD https://storage.googleapis.com/golang/go$GOLANG_VERSION.linux-amd64.tar.gz /tmp
 
-RUN apk add --update --no-cache mysql mysql-client  \
-    && rm -rf /var/cache/apk/*
+RUN yum -y install git
+RUN cd /tmp \
+    && tar -C /usr/local/ -xvzf go$GOLANG_VERSION.linux-amd64.tar.gz \
+    && mkdir -p "$GOPATH/src" "$GOPATH/bin" \
+    && chmod -R 777 "$GOPATH"
+RUN cd /tmp && rm go*
 
-COPY my.cnf /etc/mysql/my.cnf
-COPY startup.sh /startup.sh
-
-EXPOSE 3306
-CMD ["/startup.sh"]
+LABEL   br.com.egoncalves="Eduardo Gonçalves" \
+        version="1.0" \
+        description="Golang 1.8.1 running on CentOs7"

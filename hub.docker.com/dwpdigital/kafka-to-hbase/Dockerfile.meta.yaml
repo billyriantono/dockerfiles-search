@@ -1,0 +1,177 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: zenika/kotlin:1.3-jdk8-slim
+  Commands:
+  - Key: http_proxy_host
+    Name: arg
+    Value: '""'
+  - Key: http_proxy_port
+    Name: arg
+    Value: '""'
+  - Name: workdir
+    Path: /kafka2hbase
+  - Env:
+    - Key: GRADLE_OPTS
+      Value: '"${GRADLE_OPTS} -Dhttp.proxyHost=$http_proxy_host -Dhttp.proxyPort=$http_proxy_port"'
+    Name: env
+  - Env:
+    - Key: GRADLE_OPTS
+      Value: '"${GRADLE_OPTS} -Dhttps.proxyHost=$http_proxy_host -Dhttps.proxyPort=$http_proxy_port"'
+    Name: env
+  - CmdLine:
+    - 'echo "ENV gradle: ${GRADLE_OPTS}"     && echo "ARG host: ${http_proxy_host}"     &&
+      echo "ARG port: ${http_proxy_port}"'
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GRADLE
+      Value: '"/kafka2hbase/gradlew"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - gradlew
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - gradle/
+    - ./gradle
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build.gradle.kts
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - settings.gradle.kts
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - gradle.properties
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/
+    - ./src
+  - CmdLine:
+    - $GRADLE wrapper     && $GRADLE build     && $GRADLE distTar
+    Name: run
+    PrependShell: true
+  From:
+    Image: zenika/kotlin:1.3-jdk8-slim
+  Name: build
+  Platform: ""
+  SourceCode: FROM zenika/kotlin:1.3-jdk8-slim as build
+- BaseName: openjdk:8-alpine
+  Commands:
+  - Key: http_proxy_full
+    Name: arg
+    Value: '""'
+  - Env:
+    - Key: USER_NAME
+      Value: k2hb
+    Name: env
+  - Env:
+    - Key: GROUP_NAME
+      Value: k2hb
+    Name: env
+  - CmdLine:
+    - addgroup ${GROUP_NAME}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser --system --ingroup ${GROUP_NAME} ${USER_NAME}
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: http_proxy
+      Value: ${http_proxy_full}
+    Name: env
+  - Env:
+    - Key: https_proxy
+      Value: ${http_proxy_full}
+    Name: env
+  - Env:
+    - Key: HTTP_PROXY
+      Value: ${http_proxy_full}
+    Name: env
+  - Env:
+    - Key: HTTPS_PROXY
+      Value: ${http_proxy_full}
+    Name: env
+  - Key: VERSION
+    Name: arg
+    Value: 1.0-SNAPSHOT
+  - Key: DIST
+    Name: arg
+    Value: kafka2hbase-$VERSION
+  - Key: DIST_FILE
+    Name: arg
+    Value: $DIST.tar
+  - CmdLine:
+    - 'echo "ENV http: ${http_proxy}"     && echo "ENV https: ${https_proxy}"     &&
+      echo "ENV HTTP: ${HTTP_PROXY}"     && echo "ENV HTTPS: ${HTTPS_PROXY}"     &&
+      echo "ARG full: ${http_proxy_full}"'
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: acm_cert_helper_version
+      Value: 0.8.0
+    Name: env
+  - CmdLine:
+    - echo "===> Installing Dependencies ..."     && echo "===> Updating base packages
+      ..."     && apk update     && apk upgrade     && echo "==Update done=="     &&
+      apk add --no-cache util-linux     && echo "===> Installing acm_pca_cert_generator
+      ..."     && apk add --no-cache g++ python3-dev libffi-dev openssl-dev gcc     &&
+      pip3 install --upgrade pip setuptools     && pip3 install https://github.com/dwp/acm-pca-cert-generator/releases/download/${acm_cert_helper_version}/acm_cert_helper-${acm_cert_helper_version}.tar.gz     &&
+      echo "==Dependencies done=="
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./entrypoint.sh
+    - /
+  - Name: workdir
+    Path: /kafka2hbase
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /kafka2hbase/build/distributions/$DIST_FILE
+    - .
+  - CmdLine:
+    - tar -xf $DIST_FILE --strip-components=1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown ${USER_NAME}:${GROUP_NAME} . -R
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $USER_NAME
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - ./bin/kafka2hbase
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-alpine

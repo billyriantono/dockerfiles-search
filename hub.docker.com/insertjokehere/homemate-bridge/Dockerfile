@@ -1,20 +1,27 @@
-FROM python:3.6
+FROM devwithlando/php:7.2-fpm
 
-WORKDIR /src
+RUN apt-get -yqq update
 
-COPY requirements.txt .
+#########
+# OroCommerce prefers that node or another JS Engine be made available to it
+RUN apt install -yq nodejs
 
-RUN pip install -r requirements.txt
+##########
+# PHP-INTL - OroCommerce Dependencies
+# Lando ships with INTL but we need a more recent version
+RUN apt-get -yqq install zlib1g-dev libicu-dev g++
 
-COPY . /src
+RUN curl -sS -o /tmp/icu.tar.gz -L http://download.icu-project.org/files/icu4c/57.1/icu4c-57_1-src.tgz \
+    && tar -zxf /tmp/icu.tar.gz -C /tmp \
+    && cd /tmp/icu/source \
+    && ./configure --prefix=/usr/local \
+    && make \
+    && make install
 
-RUN python setup.py install
+RUN docker-php-ext-configure intl --with-icu-dir=/usr/local
+RUN docker-php-ext-install intl
 
-ENV TINI_VERSION v0.16.1
-ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
-RUN chmod +x /tini
-ENTRYPOINT ["/tini", "--"]
-
-CMD ["/src/bin/entrypoint.sh"]
-
-VOLUME /config
+##########
+# PHP-TIDY - OroCommerce Dependencies
+RUN apt-get -yqq install libtidy-dev
+RUN docker-php-ext-install tidy

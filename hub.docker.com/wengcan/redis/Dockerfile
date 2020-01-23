@@ -1,55 +1,95 @@
 FROM alpine:3.4
 
-# add our user and group first to make sure their IDs get assigned consistently, regardless of whatever dependencies get added
-RUN addgroup -S redis && adduser -S -G redis redis
+MAINTAINER We ahead <docker@weahead.se>
 
-# grab su-exec for easy step-down from root
-RUN apk add --no-cache 'su-exec>=0.2'
+# Enable when Docker Hub supports build args.
+# ARG NGINX_VERSION
+ENV NGINX_VERSION=1.11.3\
+    S6_VERSION=1.18.1.5\
+    S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 
-ENV REDIS_VERSION 4.0.8
-ENV REDIS_DOWNLOAD_URL http://download.redis.io/releases/redis-4.0.8.tar.gz
-ENV REDIS_DOWNLOAD_SHA256 ff0c38b8c156319249fec61e5018cf5b5fe63a65b61690bec798f4c998c232ad
+RUN apk --no-cache add dnsmasq \
+    && apk --no-cache add --virtual build-pkgs libcap \
+    && setcap cap_net_admin,cap_net_bind_service+ep /usr/sbin/dnsmasq \
+    && apk del build-pkgs
 
-# for redis-sentinel see: http://redis.io/topics/sentinel
-RUN set -ex \
-	\
-	&& apk add --no-cache --virtual .build-deps \
-		gcc \
-		linux-headers \
-		make \
-		musl-dev \
-		tar \
-	\
-	&& wget -O redis.tar.gz "$REDIS_DOWNLOAD_URL" \
-	&& echo "$REDIS_DOWNLOAD_SHA256 *redis.tar.gz" | sha256sum -c - \
-	&& mkdir -p /usr/src/redis \
-	&& tar -xzf redis.tar.gz -C /usr/src/redis --strip-components=1 \
-	&& rm redis.tar.gz \
-	\
-# Disable Redis protected mode [1] as it is unnecessary in context
-# of Docker. Ports are not automatically exposed when running inside
-# Docker, but rather explicitely by specifying -p / -P.
-# [1] https://github.com/antirez/redis/commit/edd4d555df57dc84265fdfb4ef59a4678832f6da
-	&& grep -q '^#define CONFIG_DEFAULT_PROTECTED_MODE 1$' /usr/src/redis/src/server.h \
-	&& sed -ri 's!^(#define CONFIG_DEFAULT_PROTECTED_MODE) 1$!\1 0!' /usr/src/redis/src/server.h \
-	&& grep -q '^#define CONFIG_DEFAULT_PROTECTED_MODE 0$' /usr/src/redis/src/server.h \
-# for future reference, we modify this directly in the source instead of just supplying a default configuration flag because apparently "if you specify any argument to redis-server, [it assumes] you are going to specify everything"
-# see also https://github.com/docker-library/redis/issues/4#issuecomment-50780840
-# (more exactly, this makes sure the default behavior of "save on SIGTERM" stays functional by default)
-	\
-	&& make -C /usr/src/redis \
-	&& make -C /usr/src/redis install \
-	\
-	&& rm -r /usr/src/redis \
-	\
-	&& apk del .build-deps
+RUN apk --no-cache add --virtual build-pkgs curl gnupg \
+    && curl -OL "https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-amd64.tar.gz" \
+    && curl -OL "https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-amd64.tar.gz.sig" \
+    && export GNUPGHOME="$(mktemp -d)" \
+    && curl https://keybase.io/justcontainers/key.asc | gpg --import \
+    && gpg --verify s6-overlay-amd64.tar.gz.sig s6-overlay-amd64.tar.gz \
+    && tar -xzf s6-overlay-amd64.tar.gz -C / \
+    && rm -rf "$GNUPGHOME" "s6-overlay-amd64.tar.gz" "s6-overlay-amd64.tar.gz.sig" \
+    && apk del build-pkgs
 
-RUN mkdir /data && chown redis:redis /data
-VOLUME /data
-WORKDIR /data
+RUN apk --no-cache add --virtual build-pkgs \
+      curl \
+      gnupg \
+      build-base \
+      linux-headers \
+      openssl-dev \
+      pcre-dev \
+      zlib-dev \
+    && apk --no-cache add --virtual runtime-pkgs \
+      ca-certificates \
+      openssl \
+      pcre \
+      zlib \
+    && curl -OL "http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz" \
+    && curl -OL "http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz.asc" \
+    && export GNUPGHOME="$(mktemp -d)" \
+    && gpg --keyserver ha.pool.sks-keyservers.net --recv-keys "B0F4253373F8F6F510D42178520A9993A1C052F8" \
+    && gpg --batch --verify nginx-${NGINX_VERSION}.tar.gz.asc nginx-${NGINX_VERSION}.tar.gz \
+    && tar -xzf nginx-${NGINX_VERSION}.tar.gz \
+    && cd nginx-${NGINX_VERSION} \
+    && ./configure \
+      --prefix=/etc/nginx \
+      --sbin-path=/usr/sbin/nginx \
+      --conf-path=/etc/nginx/nginx.conf \
+      --error-log-path=/tmp/error.log \
+      --http-log-path=/tmp/access.log \
+      --pid-path=/tmp/nginx.pid \
+      --lock-path=/tmp/nginx.lock \
+      --http-client-body-temp-path=/tmp/client_body_temp \
+      --http-proxy-temp-path=/tmp/proxy_temp \
+      --http-fastcgi-temp-path=/tmp/fastcgi_temp \
+      --http-uwsgi-temp-path=/tmp/uwsgi_temp \
+      --http-scgi-temp-path=/tmp/scgi_temp \
+      --user=nobody \
+      --group=nobody \
+      --with-http_ssl_module \
+      --with-http_realip_module \
+      --with-http_addition_module \
+      --with-http_sub_module \
+      --with-http_gunzip_module \
+      --with-http_gzip_static_module \
+      --with-http_stub_status_module \
+      --with-http_auth_request_module \
+      --with-ipv6 \
+      --with-threads \
+      --with-stream \
+      --with-stream_ssl_module \
+      --with-http_slice_module \
+      --with-http_v2_module \
+      --without-http_memcached_module \
+      --without-mail_pop3_module \
+      --without-mail_imap_module \
+      --without-mail_smtp_module \
+    && make \
+    && make install \
+    && cd - \
+    && rm -rf "$GNUPGHOME" "nginx-${NGINX_VERSION}.tar.gz" "nginx-${NGINX_VERSION}.tar.gz.asc" "nginx-${NGINX_VERSION}" \
+    && apk del build-pkgs \
+    && ln -sf /dev/stdout /tmp/access.log \
+    && ln -sf /dev/stderr /tmp/error.log
 
-#COPY docker-entrypoint.sh /usr/local/bin/
-#ENTRYPOINT ["docker-entrypoint.sh"]
+ADD root /
 
-EXPOSE 6379
-CMD [ "redis-server" ]
+RUN chown -R nobody:nobody /etc/nginx /usr/local/etc/nginx /tmp/access.log /tmp/error.log
+
+EXPOSE 8080 8443
+
+WORKDIR /usr/local/etc/nginx
+
+ENTRYPOINT [ "/init" ]

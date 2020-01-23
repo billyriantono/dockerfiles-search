@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- As: frontend-builder
+  BaseName: node:lts-alpine
+  Commands:
+  - Key: VUE_APP_BASE_PATH
+    Name: arg
+    Value: null
+  - Env:
+    - Key: VUE_APP_BASE_PATH
+      Value: $VUE_APP_BASE_PATH
+    Name: env
+  - Name: workdir
+    Path: /dns-lookup-tool
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /dns-lookup-tool/
+  - CmdLine:
+    - npm --prefix ui install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run --prefix ui build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:lts-alpine
+  Name: frontend-builder
+  Platform: ""
+  SourceCode: FROM node:lts-alpine AS frontend-builder
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    Name: env
+  - Name: workdir
+    Path: /dns-lookup-tool
+  - Chown: ""
+    From: frontend-builder
+    Name: copy
+    SourcesAndDest:
+    - /dns-lookup-tool/
+    - /dns-lookup-tool/
+  - CmdLine:
+    - apk update && apk add git && apk add ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -d -v
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w
+      -s" -o dns-lookup-tool
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine AS builder
+- BaseName: alpine
+  Commands:
+  - Name: workdir
+    Path: /dns-lookup-tool
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /dns-lookup-tool/dns-lookup-tool
+    - ./dns-lookup-tool
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /dns-lookup-tool/ui/dist/
+    - ./ui/dist/
+  - CmdLine:
+    - ./dns-lookup-tool
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

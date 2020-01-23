@@ -1,40 +1,30 @@
-FROM ubuntu:14.04
-MAINTAINER Doro Wu <fcwu.tw@gmail.com>
+FROM node:4.4.7
+
+MAINTAINER David You <david6miji@gmail.com>
 
 ENV DEBIAN_FRONTEND noninteractive
-ENV HOME /root
 
-# setup our Ubuntu sources (ADD breaks caching)
-RUN echo "deb http://tw.archive.ubuntu.com/ubuntu/ trusty main\n\
-deb http://tw.archive.ubuntu.com/ubuntu/ trusty multiverse\n\
-deb http://tw.archive.ubuntu.com/ubuntu/ trusty universe\n\
-deb http://tw.archive.ubuntu.com/ubuntu/ trusty restricted\n\
-deb http://ppa.launchpad.net/chris-lea/node.js/ubuntu trusty main\n\
-"> /etc/apt/sources.list
+RUN apt-get update
 
-# no Upstart or DBus
-# https://github.com/dotcloud/docker/issues/1724#issuecomment-26294856
-RUN apt-mark hold initscripts udev plymouth mountall
-RUN dpkg-divert --local --rename --add /sbin/initctl && ln -sf /bin/true /sbin/initctl
+# set locale ko_KR
 
-RUN apt-get update \
-    && apt-get install -y --force-yes --no-install-recommends supervisor \
-        openssh-server pwgen sudo vim-tiny \
-        net-tools \
-        lxde x11vnc xvfb \
-        gtk2-engines-murrine ttf-ubuntu-font-family \
-        nodejs \
-        libreoffice firefox \
-    && apt-get autoclean \
-    && apt-get autoremove \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get install -y locales
+RUN dpkg-reconfigure locales 
+RUN locale-gen C.UTF-8 
+RUN /usr/sbin/update-locale LANG=C.UTF-8
+	
+# Install needed default locale for Makefly
+RUN echo 'ko_KR.UTF-8 UTF-8' | tee --append /etc/locale.gen
+RUN locale-gen
 
-ADD noVNC /noVNC/
+# Set default locale for the environment
+ENV LC_ALL C.UTF-8
+ENV LANG ko_KR.UTF-8
+ENV LANGUAGE ko_KR.UTF-8
 
-ADD startup.sh /
-ADD supervisord.conf /
-EXPOSE 6080
-EXPOSE 5900
-EXPOSE 22
-WORKDIR /
-ENTRYPOINT ["/startup.sh"]
+RUN apt-get update
+
+# Gulp 4.0 Install
+RUN npm install gulpjs/gulp-cli -g
+
+CMD	bash

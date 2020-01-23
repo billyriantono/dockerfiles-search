@@ -1,13 +1,6 @@
-FROM centos:latest
+FROM alpine:3.10
 
-WORKDIR /work
-VOLUME /work
+LABEL version="3.10"
+LABEL maintainer="sakamoto@chatwork.com"
 
-ENV SEX_PKG sextractor-2.19.5-1.x86_64.rpm
-
-RUN curl -q -O http://www.astromatic.net/download/sextractor/$SEX_PKG && \
-    rpm --install --quiet $SEX_PKG 
-
-ENTRYPOINT ["/usr/bin/sex"]
-CMD ["--help"]
-
+RUN apk --no-cache add alpine-sdk bash

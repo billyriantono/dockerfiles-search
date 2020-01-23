@@ -1,19 +1,35 @@
-FROM oraclelinux:7-slim
+FROM andrejsavikin/ubuntu-openjdk-8-jre
 
-ENV PACKAGE_URL https://repo.mysql.com/yum/mysql-8.0-community/docker/x86_64/mysql-community-server-minimal-8.0.1-0.1.dmr.el7.x86_64.rpm
+MAINTAINER Sava
 
-# Install server
-RUN rpmkeys --import http://repo.mysql.com/RPM-GPG-KEY-mysql \
-  && yum install -y $PACKAGE_URL \
-  && yum install -y libpwquality \
-  && rm -rf /var/cache/yum/*
-RUN mkdir /docker-entrypoint-initdb.d
+ENV APT_GET_UPDATE 2015-10-03
+RUN apt-get update
 
-VOLUME /var/lib/mysql
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y libmozjs-24-bin imagemagick && apt-get clean
+RUN update-alternatives --install /usr/bin/js js /usr/bin/js24 100
 
-COPY docker-entrypoint.sh /entrypoint.sh
-ENTRYPOINT ["/entrypoint.sh"]
+RUN wget -O /usr/bin/jsawk https://github.com/micha/jsawk/raw/master/jsawk
+RUN chmod +x /usr/bin/jsawk
+RUN useradd -M -s /bin/false --uid 1000 minecraft \
+  && mkdir /data \
+  && chown minecraft:minecraft /data
 
-EXPOSE 3306 3306
-CMD ["mysqld"]
+EXPOSE 25565
 
+COPY start.sh /start
+COPY start-minecraft.sh /start-minecraft
+
+VOLUME ["/data"]
+COPY server.properties /tmp/server.properties
+WORKDIR /data
+
+CMD [ "/start" ]
+
+# Special marker ENV used by MCCY management tool
+ENV MC_IMAGE=YES
+
+ENV UID=1000
+ENV MOTD A Minecraft Server Powered by Docker
+ENV JVM_OPTS -Xmx1024M -Xms1024M
+ENV TYPE=VANILLA VERSION=LATEST FORGEVERSION=RECOMMENDED LEVEL=world PVP=true DIFFICULTY=easy \
+  LEVEL_TYPE=DEFAULT GENERATOR_SETTINGS=

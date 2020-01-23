@@ -1,5 +1,5 @@
-FROM arm64v8/alpine
-COPY qemu-aarch64-static /usr/bin/
+FROM arm32v6/alpine
+COPY qemu-arm-static /usr/bin/
 MAINTAINER David Personette <dperson@gmail.com>
 
 # Install samba

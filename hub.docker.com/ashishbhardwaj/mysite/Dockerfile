@@ -1,23 +1,36 @@
-FROM node
+FROM asera79/java8:alpine
 
-WORKDIR /mysite
+MAINTAINER asera79@gmail.com
 
-#RUN apt-get update && apt-get install -y nodejs npm
+ENV DOCKER_CHANNEL edge
+ENV DOCKER_VERSION 17.05.0-ce
 
-COPY bin bin
-COPY node_modules node_modules
-COPY public public
-COPY routes routes
-COPY views views
-COPY app.js app.js
-COPY favicon.png favicon.png
-COPY index.html index.html
-COPY package.json package.json
+RUN apk update && apk add --no-cache ca-certificates && \
+    set -ex && \
+    apk add --no-cache --virtual .fetch-deps curl tar && \
+    cd /tmp && \
+    curl -fL -o docker.tgz "https://download.docker.com/linux/static/${DOCKER_CHANNEL}/x86_64/docker-${DOCKER_VERSION}.tgz" && \
+    tar xzvf docker.tgz && mv ./docker /usr/lib/docker && \
+    rm -rf /tmp/*
 
-EXPOSE 3000
+ADD docker /usr/bin/docker
 
-RUN ls -l
+RUN chmod +x /usr/bin/docker
 
-RUN node --version
+RUN apk add openssh sudo git
 
-CMD ["npm", "start"]
+RUN rm -rf /etc/ssh/ssh_host_rsa_key /etc/ssh/ssh_host_dsa_key
+
+RUN adduser -D -s /bin/sh -h /var/jenkins -g "" -u 1000 jenkins && echo "jenkins:jenkins" | chpasswd
+
+ADD jenkins_sudo /etc/sudoers.d/jenkins
+
+ADD ssh/ssh_host_dsa_key /etc/ssh/
+ADD ssh/ssh_host_dsa_key.pub /etc/ssh/
+ADD ssh/ssh_host_rsa_key /etc/ssh/
+ADD ssh/ssh_host_rsa_key.pub /etc/ssh/
+
+RUN cd /etc/ssh && chmod 600 ssh_host_dsa_key && chmod 600 ssh_host_rsa_key && chmod 644 *.pub 
+
+EXPOSE 22
+CMD ["/usr/sbin/sshd","-D"]

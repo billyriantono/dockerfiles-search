@@ -1,37 +1,29 @@
-FROM alpine:3.8 AS alpine-jre
+#
+# Dockerfile for awei/huawei-lte-router-sms-to-email-sender
+#
 
-## Install tools
-RUN apk update && apk upgrade \
-## Install curl
-    && apk add curl \
-## Install pv
-##    && apk add pv \
-## Install Xvfb
-    && apk add xvfb \
-## Install JRE
-    && apk add openjdk8-jre
+FROM python:3.7-alpine
+LABEL MAINTAINER AwEi
 
-FROM alpine-jre
+ENV HUAWEI_ROUTER_IP_ADDRESS=192.168.8.1 \
+    HUAWEI_ROUTER_ACCOUNT=admin \
+    HUAWEI_ROUTER_PASSWORD=123456 \
+    GMAIL_ACCOUNT=user@gmail.com \
+    GMAIL_PASSWORD=P@ssw0rd \
+    MAIL_RECIPIENT=user1@livemail.tw,user2@gmail.com \
+    DELAY_SECOND=10 \
+    LOCALE=en_US
 
-# environment variables
+WORKDIR /home
 
-ARG KATALON_VERSION=5.7.0
-ENV KATALON_DIRECTORY=$KATALON_VERSION
-ENV KATALON_PACKAGE=Katalon_Studio_Linux_64-$KATALON_VERSION
-ENV KATALON_PACKAGE_ZIPPED=$KATALON_PACKAGE.tar.gz
-ENV KATALON_VERSION_FILE=/katalon/version
-ENV KATALON_INSTALL_DIR_PARENT=/opt
-ENV KATALON_INSTALL_DIR=$KATALON_INSTALL_DIR_PARENT/katalonstudio
-ENV PATH=$PATH:$KATALON_INSTALL_DIR
+COPY check-sms.py check-sms.py
+COPY locale locale
 
-# Install Katalon
-RUN mkdir -p $KATALON_INSTALL_DIR_PARENT && chmod -R 777 $KATALON_INSTALL_DIR_PARENT
-RUN curl http://download.katalon.com/$KATALON_DIRECTORY/$KATALON_PACKAGE_ZIPPED | tar -xvz -C $KATALON_INSTALL_DIR_PARENT
-RUN mv $KATALON_INSTALL_DIR_PARENT/$KATALON_PACKAGE $KATALON_INSTALL_DIR \
-    && chmod u+x $KATALON_INSTALL_DIR/katalon \
-    && chmod u+x $KATALON_INSTALL_DIR/configuration/resources/drivers/chromedriver_linux64/chromedriver
+RUN pip install --no-cache-dir huawei_lte_api && \
+    rm /home/locale/en/LC_MESSAGES/messages.pot && \
+    rm /home/locale/en_US/LC_MESSAGES/messages.pot && \
+    rm /home/locale/zh_CN/LC_MESSAGES/messages.pot && \
+    rm /home/locale/zh_HK/LC_MESSAGES/messages.pot && \
+    rm /home/locale/zh_TW/LC_MESSAGES/messages.pot
 
-WORKDIR $KATALON_INSTALL_DIR
-
-ENTRYPOINT ["./katalon", "-runMode=console", "-browserType=Remote", "$KATALON_OPTS"]
-CMD ["-consoleLog", "-noExit"]
+CMD ["python3","/home/check-sms.py"]

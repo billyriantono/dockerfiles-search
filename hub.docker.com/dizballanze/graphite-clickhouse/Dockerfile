@@ -1,18 +1,31 @@
-FROM golang:alpine as builder
+FROM ubuntu:16.04
 
-WORKDIR /go/src/github.com/lomik/graphite-clickhouse
-COPY . .
+RUN apt-get update 
+RUN apt-get install curl -y
 
-ENV GOPATH=/go
+Add . /home/ubuntu/app
 
-RUN go build -ldflags '-extldflags "-static"' github.com/lomik/graphite-clickhouse
 
-FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates
-WORKDIR /
+RUN curl -sL https://deb.nodesource.com/setup_6.x -o nodesource_setup.sh
+RUN bash nodesource_setup.sh
 
-COPY --from=builder /go/src/github.com/lomik/graphite-clickhouse/graphite-clickhouse /usr/bin/graphite-clickhouse
+RUN apt-get install nodejs -y
 
-CMD ["graphite-clickhouse"]
+RUN npm install pm2 -g
+
+
+WORKDIR home/ubuntu/app
+CMD ["node", "app.js"]
+# CMD ["chmod", "+x", "/home/ubuntu/app/start.sh"]
+# CMD ["./home/ubuntu/app/start.sh"]
+
+
+
+
+
+
+EXPOSE 3000
+
+# CMD ["curl -sL https://deb.nodesource.com/setup_6.x | sudo -E bash -"]
 

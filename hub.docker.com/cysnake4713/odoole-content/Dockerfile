@@ -1,0 +1,1 @@
+ From gcr.io/kubeflow-images-public/pytorch-operator:v0.5.1-5-ge775742

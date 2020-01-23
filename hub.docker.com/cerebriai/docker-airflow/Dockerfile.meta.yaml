@@ -1,0 +1,250 @@
+MetaArgs: null
+Stages:
+- As: spark
+  BaseName: cerebriai/spark:v2.4.3
+  Commands:
+  - CmdLine:
+    - echo "In stage spark"     && ls -la /opt/spark
+    Name: run
+    PrependShell: true
+  From:
+    Image: cerebriai/spark:v2.4.3
+  Name: spark
+  Platform: ""
+  SourceCode: FROM cerebriai/spark:v2.4.3 as spark
+- As: openjdk
+  BaseName: adoptopenjdk/openjdk8:slim
+  Commands:
+  - CmdLine:
+    - echo "In stage openjdk"     && ls -la /opt/java/openjdk
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HADOOP_VERSION
+      Value: 3.2.0
+    Name: env
+  From:
+    Image: adoptopenjdk/openjdk8:slim
+  Name: openjdk
+  Platform: ""
+  SourceCode: FROM adoptopenjdk/openjdk8:slim as openjdk
+- As: hadoop
+  BaseName: cerebriai/hadoop:3.2.0
+  Commands:
+  - CmdLine:
+    - echo "In stage hadoop"     && ls -la /opt/hadoop-$HADOOP_VERSION
+    Name: run
+    PrependShell: true
+  From:
+    Image: cerebriai/hadoop:3.2.0
+  Name: hadoop
+  Platform: ""
+  SourceCode: FROM cerebriai/hadoop:3.2.0 as hadoop
+- BaseName: python:3.6-slim
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"nic@cerebriai.com"'
+    Name: label
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: TERM
+      Value: linux
+    Name: env
+  - Key: AIRFLOW_VERSION
+    Name: arg
+    Value: 1.10.2
+  - Key: AIRFLOW_HOME
+    Name: arg
+    Value: /usr/local/airflow
+  - Key: AIRFLOW_DEPS
+    Name: arg
+    Value: '"kubernetes"'
+  - Key: PYTHON_DEPS
+    Name: arg
+    Value: '"tornado<6.0.0 redis psycopg2-binary hdfs"'
+  - Env:
+    - Key: AIRFLOW_GPL_UNIDECODE
+      Value: "yes"
+    Name: env
+  - Env:
+    - Key: LANGUAGE
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: LC_CTYPE
+      Value: en_US.UTF-8
+    Name: env
+  - Env:
+    - Key: LC_MESSAGES
+      Value: en_US.UTF-8
+    Name: env
+  - Chown: ""
+    From: openjdk
+    Name: copy
+    SourcesAndDest:
+    - /opt/java/openjdk
+    - /opt/java/openjdk
+  - Env:
+    - Key: JAVA_HOME
+      Value: /opt/java/openjdk
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:${JAVA_HOME}/bin
+    Name: env
+  - CmdLine:
+    - echo "In stage airflow"     && java -version
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: spark
+    Name: copy
+    SourcesAndDest:
+    - /opt/spark
+    - /opt/spark
+  - Chown: ""
+    From: spark
+    Name: copy
+    SourcesAndDest:
+    - /dependencies/
+    - /dependencies
+  - Env:
+    - Key: SPARK_HOME
+      Value: /opt/spark
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:${SPARK_HOME}/bin
+    Name: env
+  - CmdLine:
+    - echo "In stage airflow"     && spark-submit --version
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HADOOP_VERSION
+      Value: 3.2.0
+    Name: env
+  - Chown: ""
+    From: hadoop
+    Name: copy
+    SourcesAndDest:
+    - /opt/hadoop-$HADOOP_VERSION
+    - /opt/hadoop-$HADOOP_VERSION
+  - Env:
+    - Key: HADOOP_HOME
+      Value: /opt/hadoop-$HADOOP_VERSION
+    Name: env
+  - Env:
+    - Key: HADOOP_CLASSPATH
+      Value: $HADOOP_CLASSPATH:/opt/hadoop-$HADOOP_VERSION/share/hadoop/tools/lib/*
+    Name: env
+  - Env:
+    - Key: HADOOP_CONF_DIR
+      Value: /etc/hadoop
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - core-site.xml
+    - /etc/hadoop/core-site.xml
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - hdfs-site.xml
+    - /etc/hadoop/hdfs-site.xml
+  - Env:
+    - Key: HADOOP_OPTIONAL_TOOLS
+      Value: hadoop-azure
+    Name: env
+  - Env:
+    - Key: MULTIHOMED_NETWORK
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PATH:$HADOOP_HOME/bin
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/log4j.properties
+    - ${HADOOP_CONF_DIR}/log4j.properties
+  - CmdLine:
+    - set -ex     && buildDeps='         freetds-dev         libkrb5-dev         libsasl2-dev         libssl-dev         libffi-dev         libpq-dev         git     '     &&
+      apt-get update -yqq     && apt-get upgrade -yqq     && apt-get install -yqq
+      --no-install-recommends         $buildDeps         freetds-bin         build-essential         default-libmysqlclient-dev         apt-utils         curl         rsync         netcat         locales         nano         vim         sudo         bzip2         unzip     &&
+      sed -i 's/^# en_US.UTF-8 UTF-8$/en_US.UTF-8 UTF-8/g' /etc/locale.gen     &&
+      locale-gen "en_US.UTF-8"     && dpkg-reconfigure locales     && update-locale
+      LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8     && useradd -ms /bin/bash -d ${AIRFLOW_HOME}
+      airflow     && echo 'airflow ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/user     &&
+      chmod 0440 /etc/sudoers.d/user     && usermod -aG sudo airflow     && su - airflow
+      -c "touch mine"     && pip install -U pip setuptools wheel     && pip install
+      pytz     && pip install pyOpenSSL     && pip install ndg-httpsclient     &&
+      pip install pyasn1     && pip install apache-airflow[crypto,celery,hdfs,postgres,hive,jdbc,mysql,ssh${AIRFLOW_DEPS:+,}${AIRFLOW_DEPS}]==${AIRFLOW_VERSION}     &&
+      pip install elasticsearch-dsl==6.4.0     && if [ -n "${PYTHON_DEPS}" ]; then
+      pip install ${PYTHON_DEPS}; fi     && apt-get purge --auto-remove -yqq $buildDeps     &&
+      apt-get autoremove -yqq --purge     && apt-get clean     && rm -rf         /var/lib/apt/lists/*         /tmp/*         /var/tmp/*         /usr/share/man         /usr/share/doc         /usr/share/doc-base
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - script/entrypoint.sh
+    - /entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/airflow.cfg
+    - ${AIRFLOW_HOME}/airflow.cfg
+  - CmdLine:
+    - echo -n | openssl s_client -host 10.1.0.7 -port 636 | sed -ne '/-BEGIN CERTIFICATE-/,/-END
+      CERTIFICATE-/p' > /tmp/cerebri.com.crt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config/webserver_config.py
+    - ${AIRFLOW_HOME}/webserver_config.py
+  - CmdLine:
+    - 'chown -R airflow: ${AIRFLOW_HOME}'
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "5555"
+    - "8080"
+    - "8793"
+  - Name: user
+    User: airflow
+  - Name: workdir
+    Path: ${AIRFLOW_HOME}
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - webserver
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: python:3.6-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.6-slim

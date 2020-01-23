@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.9
+  Commands:
+  - CmdLine:
+    - mkdir -p $GOPATH/src/github.com/anikitenko
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH/src/github.com/anikitenko
+  - CmdLine:
+    - git clone https://github.com/anikitenko/mini-sftp-client.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -u github.com/revel/cmd/revel
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -u github.com/kardianos/govendor
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -v github.com/swaggo/swag/cmd/swag
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd mini-sftp-client && govendor sync && swag init -g api_v1.go -d app/controllers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux revel build github.com/anikitenko/mini-sftp-client
+      sftp-client
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -f sftp-client/run.sh sftp-client/run.bat &&     mv sftp-client/mini-sftp-client
+      sftp-client/mini-sftp-client-linux
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find sftp-client/src/github.com/anikitenko/mini-sftp-client  -maxdepth 1 ! -path
+      sftp-client/src/github.com/anikitenko/mini-sftp-client  -not -name app -not
+      -name conf -not -name public -exec rm -rf {} +
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd mini-sftp-client/run && govendor sync && CGO_ENABLED=0 GOOS=linux go build
+      -o ../../sftp-client/start-client
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.9
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.9 AS build
+- BaseName: alpine:3.7
+  Commands:
+  - Name: expose
+    Ports:
+    - "9000"
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/anikitenko/sftp-client
+    - /app/
+  - CmdLine:
+    - ./start-client
+    - -p
+    - "9000"
+    - -m
+    - dev
+    - --no-ver-check
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

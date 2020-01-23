@@ -1,0 +1,71 @@
+MetaArgs: null
+Stages:
+- As: pipenv
+  BaseName: kennethreitz/pipenv
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /app
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - pipenv install --dev  && pipenv lock -r > requirements.txt  && pipenv run python
+      setup.py bdist_wheel
+    Name: run
+    PrependShell: true
+  From:
+    Image: kennethreitz/pipenv
+  Name: pipenv
+  Platform: ""
+  SourceCode: FROM kennethreitz/pipenv as pipenv
+- BaseName: ubuntu:bionic
+  Commands:
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - Chown: ""
+    From: pipenv
+    Name: copy
+    SourcesAndDest:
+    - /app/dist/*.whl
+    - .
+  - CmdLine:
+    - set -xe  && apt-get update -q  && apt-get install -y -q         python3-minimal         python3-lib2to3         python3-wheel         python3-pip         python3-setuptools         uwsgi-plugin-python3  &&
+      python3 -m pip install *.whl  && apt-get remove -y python3-pip python3-wheel  &&
+      apt-get autoremove -y  && rm -f *.whl  && rm -rf /root/.cache  && rm -rf /var/lib/apt/lists/*  &&
+      mkdir -p /app  && useradd _uwsgi --no-create-home --user-group
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: _uwsgi
+  - CmdLine:
+    - /usr/bin/uwsgi
+    - --master
+    - --die-on-term
+    - --plugin
+    - python3
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - --http-socket
+    - 0.0.0.0:8080
+    - --processes
+    - "2"
+    - --buffer-size
+    - "65535"
+    - --chdir
+    - /app
+    - --module
+    - discourse_sso_oidc_bridge:app
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:bionic
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic

@@ -1,25 +1,34 @@
+FROM centos:latest
 
-FROM daocloud.io/centos:7
+MAINTAINER djenko-it <djenko-it@protonmail.com>
 
-LABEL maintainer docker_user<docker_user@email.com>
+RUN yum install -y httpd
+RUN yum install -y epel-release
+RUN yum install -y http://rpms.remirepo.net/enterprise/remi-release-7.rpm
+RUN yum-config-manager --enable remi-php72
+RUN yum update -y
+RUN yum install -y php
+RUN yum install -y php-mysql
+RUN yum install -y php-ldap
+RUN yum install -y php-xmlrpc
+RUN yum install -y php-imap
+RUN yum install -y curl
+RUN yum install -y php-curl
+RUN yum install -y php-gd
+RUN yum install -y php-mbstring
+RUN yum install -y php-xml
+RUN yum install -y php-pecl-apcu
+RUN yum install -y php-pear-CAS
+RUN yum install -y php-opcache
+RUN yum install -y wget
+RUN yum clean all -y
 
-ADD nginx.repo /etc/yum.repos.d/
-
-RUN yum update -y && yum install -y wget \
-&& wget -O /etc/yum.repos.d/CentOs-Base.repo http://mirrors.163.com/.help/CentOS7-Base-163.repo \
-&& yum makecache \
-&& yum update -y \
-&& yum install -y vim \
-&& yum install -y nginx \
-&& yum install -y net-tools \
-&& echo "daemon off;" >> /etc/nginx/nginx.conf \
-&& echo "master_process off;" >> /etc/nginx/nginx.conf
-# Define mountable directories.
-VOLUME ["/usr/share/nginx", "/etc/nginx/conf.d", "/var/log/nginx"]
-# Define working directory.
-WORKDIR /etc/nginx
-# Define default command.
-CMD ["/usr/sbin/nginx"]
-# Expose ports.
 EXPOSE 80
 EXPOSE 443
+
+ADD script.sh /script.sh
+ADD httpd.conf /opt
+ADD glpi.conf /opt
+RUN chmod -v +x /script.sh
+
+CMD ["/script.sh"]

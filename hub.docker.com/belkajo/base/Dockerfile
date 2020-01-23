@@ -1,33 +1,36 @@
-FROM fedora:30
-LABEL version="2.0"
-LABEL name="base"
+FROM ubuntu:xenial
 
-RUN dnf --setopt=install_weak_deps=False --best -y  install  \
-    http://rpms.remirepo.net/fedora/remi-release-30.rpm \
-    dnf-plugins-core && \
-  dnf config-manager --set-enabled remi && \
-  rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-remi-30 && \
-  dnf --setopt=install_weak_deps=False --best -y update && \
-  dnf --setopt=install_weak_deps=False --best -y install  \
-    git \
-    iputils \
-    mcrypt \
-    mhash \
-    openssl \
-    p7zip \
-    patch \
-    unzip \
-    which \
-    zip \
-    bind-utils \
-    mariadb \
-    procps \
-    rsync \
-    lsof && \
-  dnf clean all
+MAINTAINER git@shaf.net
 
-ENV USER=webuser
+ENV ALLOWED_HOSTS="127.0.0.1/32" \
+	HOSTNAME="unRAID" \
+	TZ="Europe/London" \
+	SMTP_RELAY="10.0.0.1" \
+	BUILD_TRIGGED="2017-10-21 14:08"
 
-COPY start.sh /usr/local/bin/start.sh
-RUN chmod +x /usr/local/bin/start.sh
-ENTRYPOINT [ "/usr/local/bin/start.sh" ]
+RUN \
+	apt-get update && apt-get -y upgrade && \
+	DEBIAN_FRONTEND=noninteractive apt-get install -y munin apache2 lm-sensors postfix mailutils tzdata bc telnet && \
+	apt-get clean && rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/* && \
+	sed -ri 's/^log_file.*/# \0/; \
+			s/^pid_file.*/# \0/; \
+			s/^background 1$/background 0/; \
+			s/^setsid 1$/setsid 0/; \
+			' /etc/munin/munin-node.conf && \
+	/bin/echo -e "cidr_allow ${ALLOWED_HOSTS}" >> /etc/munin/munin-node.conf && \
+	ln -s /usr/share/munin/plugins/sensors_   /etc/munin/plugins/sensors_temp && \
+	ln -s /usr/share/munin/plugins/sensors_   /etc/munin/plugins/sensors_fan && \
+	ln -s /usr/share/munin/plugins/sensors_   /etc/munin/plugins/sensors_volt && \
+	mkdir /var/run/munin  && \
+	chown munin:munin /var/run/munin
+
+ADD start.sh /
+ADD payload/apache24.conf /etc/munin/
+ADD payload/main.cf /etc/postfix/
+
+EXPOSE 80 4949
+
+# Define data volumes
+VOLUME ["/etc/munin/munin-conf.d", "/var/cache/munin/www", "/var/lib/munin"]
+
+CMD ["/start.sh"]

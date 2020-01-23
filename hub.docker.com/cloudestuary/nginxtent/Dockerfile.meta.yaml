@@ -1,0 +1,61 @@
+MetaArgs: null
+Stages:
+- BaseName: multiarch/alpine:amd64-v3.6
+  Commands:
+  - CmdLine:
+    - echo 'syncthing:x:1000:1000::/var/syncthing:/sbin/nologin' >> /etc/passwd     &&
+      echo 'syncthing:!::0:::::' >> /etc/shadow     && mkdir /var/syncthing     &&
+      chown syncthing /var/syncthing
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache curl jq gnupg     && gpg --keyserver keyserver.ubuntu.com
+      --recv-key D26E6ED000654A3E
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: release
+      Value: ""
+    Name: env
+  - Env:
+    - Key: arch
+      Value: ""
+    Name: env
+  - CmdLine:
+    - set -x     && mkdir /syncthing     && cd /syncthing     && release=${release:-$(curl
+      -s https://api.github.com/repos/syncthing/syncthing/releases/latest | jq -r
+      .tag_name )}     && arch=${arch:-amd64}     && curl -sLO https://github.com/syncthing/syncthing/releases/download/${release}/syncthing-linux-${arch}-${release}.tar.gz     &&
+      curl -sLO https://github.com/syncthing/syncthing/releases/download/${release}/sha256sum.txt.asc     &&
+      gpg --verify sha256sum.txt.asc     && grep syncthing-linux-${arch} sha256sum.txt.asc
+      | sha256sum     && tar -zxf syncthing-linux-${arch}-${release}.tar.gz     &&
+      mv syncthing-linux-${arch}-${release}/syncthing .     && rm -rf syncthing-linux-${arch}-${release}
+      sha256sum.txt.asc syncthing-linux-${arch}-${release}.tar.gz     && apk del gnupg
+      jq curl
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: syncthing
+  - Env:
+    - Key: STNOUPGRADE
+      Value: "1"
+    Name: env
+  - Health:
+      Interval: 60000000000
+      Test:
+      - CMD-SHELL
+      - nc -z localhost 22000 || exit 1
+      Timeout: 10000000000
+    Name: healthcheck
+  - CmdLine:
+    - /syncthing/syncthing
+    - -home
+    - /var/syncthing/config
+    - -gui-address
+    - 0.0.0.0:8384
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: multiarch/alpine:amd64-v3.6
+  Name: ""
+  Platform: ""
+  SourceCode: FROM multiarch/alpine:amd64-v3.6

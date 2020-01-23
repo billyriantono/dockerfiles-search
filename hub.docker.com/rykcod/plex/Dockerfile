@@ -1,3 +1,12 @@
-FROM centos
-MAINTAINER BUFFET Benoit
-RUN yum -y update && yum clean all
+FROM ruby:2.4
+
+MAINTAINER thinkbot@outlook.de
+
+ENV VERSION=0.2.1
+
+RUN gem install kul --version ${VERSION} --no-format-exec
+
+WORKDIR /tmp
+
+ENTRYPOINT ["kul"]
+CMD ["--help"]

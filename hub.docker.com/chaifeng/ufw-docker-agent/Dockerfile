@@ -17,5 +17,3 @@ ADD ufw-docker docker-entrypoint.sh /usr/bin/
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
 
 CMD ["start"]
-
-ADD LICENSE README.md /

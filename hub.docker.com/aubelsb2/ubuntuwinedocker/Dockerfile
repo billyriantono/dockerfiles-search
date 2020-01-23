@@ -1,15 +1,21 @@
-FROM ubuntu:16.10
-USER root
-RUN apt-get update \
-	&& apt-get install -y --no-install-recommends curl unzip ca-certificates sudo vim wget software-properties-common python-software-properties apt-transport-https bzip2 git bsdmainutils isomd5sum mc \
-	&& dpkg --add-architecture i386 \
-	&& apt-get update \
-	&& apt-get install -y --install-recommends wine32 wine-stable \
-	&& rm -rf /var/lib/apt/lists/* \
-	&& useradd -ms /bin/bash -u 1000 u
+FROM victorhcm/opencv:3.2.0-python2.7
 
-USER u
-ENV HOME /home/u
-ENV WINEPREFIX /home/u/.wine
-ENV WINEARCH win32
-WORKDIR /home/u
+WORKDIR /
+
+RUN git clone https://github.com/SebastianFlo/darknet darknet_build
+
+RUN cd darknet_build \
+    && git checkout basic-mvp \
+    && make OPENCV=1 \
+    && mv darknet .. \
+    && mv cfg ../cfg \
+    && mv data ../data
+
+RUN rm -rf /darknet_build
+
+# get weights
+RUN curl -O https://pjreddie.com/media/files/yolo.weights \
+    && curl -O https://pjreddie.com/media/files/tiny-yolo-voc.weights
+
+ENTRYPOINT []
+CMD ["/bin/bash"]

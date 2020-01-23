@@ -1,0 +1,108 @@
+MetaArgs: null
+Stages:
+- As: source-builder
+  BaseName: alpine:edge
+  Commands:
+  - CmdLine:
+    - mkdir -p /src/alpine
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - alpine/APKBUILD.in
+    - /src/alpine
+  - CmdLine:
+    - "source /src/alpine/APKBUILD.in \t&& echo 'http://dl-cdn.alpinelinux.org/alpine/edge/testing'
+      >> /etc/apk/repositories \t&& apk add \t\t--no-cache \t\t--update-cache \t\t$makedepends
+      \t\tgzip \t&& pip install pytest"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /src
+  - Key: PKGVER
+    Name: arg
+    Value: null
+  - CmdLine:
+    - "cd /src \t&& ./bootstrap.sh \t&& ./configure \t\t--enable-numeric-version \t\t--with-pkg-extra-version=\"_git$PKGVER\"
+      \t&& make dist"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: source-builder
+  Platform: ""
+  SourceCode: FROM alpine:edge as source-builder
+- As: alpine-builder
+  BaseName: alpine:edge
+  Commands:
+  - CmdLine:
+    - "echo 'http://dl-cdn.alpinelinux.org/alpine/edge/testing' >> /etc/apk/repositories
+      \t&& apk add \t\t--update-cache \t\tabuild \t\talpine-conf \t\talpine-sdk \t\tpy-pip
+      \t&& pip install pytest \t&& setup-apkcache /var/cache/apk \t&& mkdir -p /pkgs/apk
+      \t&& echo 'builder ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: source-builder
+    Name: copy
+    SourcesAndDest:
+    - /src/frr-*.tar.gz
+    - /src/alpine/*
+    - /dist/
+  - CmdLine:
+    - adduser -D -G abuild builder && chown -R builder /dist /pkgs
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: builder
+  - CmdLine:
+    - "cd /dist \t&& abuild-keygen -a -n \t&& abuild checksum \t&& git init \t&& abuild
+      -r -P /pkgs/apk"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: alpine-builder
+  Platform: ""
+  SourceCode: FROM alpine:edge as alpine-builder
+- BaseName: alpine:edge
+  Commands:
+  - CmdLine:
+    - mkdir -p /pkgs/apk
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: alpine-builder
+    Name: copy
+    SourcesAndDest:
+    - /pkgs/apk/
+    - /pkgs/apk/
+  - CmdLine:
+    - "echo 'http://dl-cdn.alpinelinux.org/alpine/edge/testing' >> /etc/apk/repositories
+      \t&& apk add \t\t--no-cache \t\t--update-cache \t\ttini \t&& apk add \t\t--no-cache
+      \t\t--allow-untrusted /pkgs/apk/*/*.apk \t&& rm -rf /pkgs"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/alpine/docker-start
+    - /usr/lib/frr/docker-start
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /usr/lib/frr/docker-start
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:edge
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:edge

@@ -1,0 +1,102 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:10
+  Commands:
+  - CmdLine:
+    - sed -e '/uster main/d' -i /etc/apt/sources.list &&   echo "deb http://deb.debian.org/debian
+      buster main non-free" >> /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&   apt-get install -y     autoconf     automake     build-essential     ca-certificates     libfdk-aac-dev     libmp3lame-dev     libnuma-dev     libopus-dev     libssl-dev     libtheora-dev     libtool     libvorbis-dev     libvpx-dev     libx264-dev     libx265-dev     pkg-config     wget     yasm     zlib1g-dev
+    Name: run
+    PrependShell: true
+  - Key: FFMPEG_VERSION
+    Name: arg
+    Value: "4.2"
+  - Key: FFMPEG_SHA256SUM
+    Name: arg
+    Value: 306bde5f411e9ee04352d1d3de41bd3de986e42e2af2a4c44052dce1ada26fb8
+  - Name: workdir
+    Path: /usr/local/src
+  - CmdLine:
+    - wget -q http://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.bz2 &&   echo
+      "${FFMPEG_SHA256SUM}  ffmpeg-${FFMPEG_VERSION}.tar.bz2" | sha256sum -c &&   tar
+      xf ffmpeg-${FFMPEG_VERSION}.tar.bz2 &&   rm ffmpeg-${FFMPEG_VERSION}.tar.bz2
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ffmpeg-patches
+    - ./ffmpeg-patches
+  - Name: workdir
+    Path: /usr/local/src/ffmpeg-${FFMPEG_VERSION}
+  - CmdLine:
+    - cat ../ffmpeg-patches/* | patch -p1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./configure     --prefix=/opt/ffmpeg     --disable-doc     --disable-ffplay     --disable-shared     --enable-gpl     --enable-libfdk_aac     --enable-libmp3lame     --enable-libopus     --enable-libvorbis     --enable-libvpx     --enable-libx264     --enable-libx265     --enable-nonfree     --enable-openssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /tmp/ffmpeg.deb.build/DEBIAN
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make install DESTDIR=/tmp/ffmpeg.deb.build
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - 4.2/buster/deb-control
+    - /tmp/ffmpeg.deb.build/DEBIAN/control
+  - CmdLine:
+    - sed -i -e "s/@VERSION@/${FFMPEG_VERSION}/ ; s/@BUILD@/$(date +%Y%m%d%H%M%S)/"
+      /tmp/ffmpeg.deb.build/DEBIAN/control
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dpkg -b /tmp/ffmpeg.deb.build /tmp/ffmpeg-${FFMPEG_VERSION}.deb
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:10 AS builder
+- BaseName: debian:10-slim
+  Commands:
+  - CmdLine:
+    - echo "deb http://deb.debian.org/debian buster main non-free" >> /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/ffmpeg-*.deb
+    - /opt/ffmpeg/
+  - CmdLine:
+    - apt-get update &&   apt-get install -y /opt/ffmpeg/ffmpeg-*.deb &&   rm -rf
+      /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: ${PATH}:/opt/ffmpeg/bin
+    Name: env
+  From:
+    Image: debian:10-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:10-slim

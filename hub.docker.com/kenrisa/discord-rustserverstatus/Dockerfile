@@ -1,17 +1,27 @@
-FROM node:9-slim
+FROM debian:9
+ARG APT_PROXY
+RUN set -x && \
+    [ -z "$APT_PROXY" ] || \
+        /bin/echo -e "Acquire::HTTP::Proxy \"$APT_PROXY\";\nAcquire::HTTPS::Proxy \"$APT_PROXY\";\nAcquire::http::Pipeline-Depth \"23\";" > \
+            /etc/apt/apt.conf.d/01proxy
 
-# Create app directory
-WORKDIR /usr/src/app
+RUN set -x && \
+    apt-get update -q && \
+    apt-get install -qy openvpn iptables curl systune procps tcpdump netcat-traditional && \
+    apt-get clean all && \
+    rm -rf /var/lib/apt/lists/*
+    
+ADD ./bin /bin
+RUN chmod +x /bin/*
+EXPOSE 1194/udp
+ENV CONF_DIR /conf
+ENV CERTS_DIR /certs
+#ENV REMOTE_ADDRESS
 
-# Install app dependencies
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
-# where available (npm@5+)
-COPY package*.json ./
+VOLUME $CONF_DIR $CERTS_DIR
 
-RUN npm install --only=production
-# If you are building your code for production
-# RUN npm install --only=production
+WORKDIR $CONF_DIR
 
-COPY . .
+CMD /bin/ovpn_run
 
-CMD [ "npm", "start" ]
+HEALTHCHECK CMD nc -uz 127.0.0.1 1195

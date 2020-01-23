@@ -1,26 +1,31 @@
-FROM php:5-stretch
+ARG PHP_IMAGE_TAG
+FROM php:${PHP_IMAGE_TAG}
+
+ARG DEBIAN_MIRROR
+ARG XDEBUG_VERSION
 
 # Build-time metadata as defined at http://label-schema.org
 ARG BUILD_DATE
 ARG VCS_REF
 ARG VERSION
 LABEL maintainer="James Zhu <168262+fatindeed@users.noreply.github.com>" \
-      org.label-schema.build-date=$BUILD_DATE \
+      org.label-schema.build-date="${BUILD_DATE}" \
       org.label-schema.name="fatindeed/vscode-remote-php" \
       org.label-schema.description="PHP sample project for trying out the VS Code Remote - Containers extension" \
       org.label-schema.url="https://hub.docker.com/r/fatindeed/vscode-remote-php" \
-      org.label-schema.vcs-ref=$VCS_REF \
+      org.label-schema.vcs-ref="${VCS_REF}" \
       org.label-schema.vcs-url="https://github.com/fatindeed/vscode-remote-try-php" \
       org.label-schema.vendor="James Zhu" \
-      org.label-schema.version=$VERSION \
+      org.label-schema.version="${VERSION}" \
       org.label-schema.schema-version="1.0"
-
-ARG DEBIAN_MIRROR
 
 # Avoid warnings by switching to noninteractive
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Or your actual UID, GID on Linux if not the default 1000
+# This Dockerfile adds a non-root user with sudo access. Use the "remoteUser"
+# property in devcontainer.json to use it. On Linux, the container user's GID/UIDs
+# will be updated to match your local UID/GID (when using the dockerFile property).
+# See https://aka.ms/vscode-remote/containers/non-root-user for details.
 ARG USERNAME=vscode
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
@@ -36,11 +41,11 @@ RUN set -e; \
     apt-get update; \
     apt-get -y install --no-install-recommends apt-utils dialog 2>&1; \
     #
-    # Install git, procps, lsb-release (useful for CLI installs)
-    apt-get install -y --no-install-recommends git procps iproute2 lsb-release; \
+    # install git iproute2, procps, lsb-release (useful for CLI installs)
+    apt-get install -y --no-install-recommends git iproute2 procps iproute2 lsb-release; \
     #
     # Install xdebug
-    yes | pecl install xdebug-2.5.5; \
+    yes | pecl install "${XDEBUG_VERSION}"; \
     docker-php-ext-enable xdebug; \
     { \
         echo 'xdebug.remote_enable=on'; \
@@ -66,8 +71,8 @@ RUN set -e; \
     groupadd --gid $USER_GID $USERNAME; \
     useradd -s /bin/bash --uid $USER_UID --gid $USER_GID -m $USERNAME; \
     mkdir -p /home/$USERNAME/.vscode-server /home/$USERNAME/.vscode-server-insiders; \
-    chown ${USER_UID}:${USER_GID} /home/$USERNAME/.vscode-server*; \
-    # [Optional] Add sudo support for non-root user
+    chown $USER_UID:$USER_GID /home/$USERNAME/.vscode-server*; \
+    # [Optional] Add sudo support for the non-root user
     apt-get install -y sudo; \
     echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME; \
     chmod 0440 /etc/sudoers.d/$USERNAME; \
@@ -75,7 +80,7 @@ RUN set -e; \
     # [Optional] Install openssh-client unzip bash-completion
     apt-get install -y --no-install-recommends openssh-client unzip bash-completion; \
     #
-    # [Optional] Install Composer, PHP_CodeSniffer
+    # [Optional] Install Composer
     curl -sSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer; \
     chmod a+x /usr/local/bin/*; \
     composer --version; \
@@ -89,7 +94,4 @@ RUN set -e; \
 # Switch back to dialog for any ad-hoc use of apt-get
 ENV DEBIAN_FRONTEND=
 
-# Set the default user
-USER $USERNAME
-
-CMD [ "sleep", "infinity" ]
+CMD ["sleep", "infinity"]

@@ -1,0 +1,76 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:latest
+  Commands:
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -c
+  - Env:
+    - Key: FORCE_UNSAFE_CONFIGURE
+      Value: "1"
+    - Key: PROFILE
+      Value: '"phicomm_psg1218a"'
+    - Key: SDK
+      Value: '"openwrt-sdk-ramips-mt7620_gcc-8.3.0_musl.Linux-x86_64"'
+    - Key: IMAGEBUILDER
+      Value: '"openwrt-imagebuilder-ramips-mt7620.Linux-x86_64"'
+    - Key: PREFIX
+      Value: '"https://downloads.openwrt.org/snapshots/targets/ramips/mt7620"'
+    - Key: PACKAGES
+      Value: '"vim htop wget bind-dig libustream-openssl ca-certificates luci luci-i18n-base-zh-cn                 minieap
+        luci-proto-minieap               -ppp -ppp-mod-pppoe -ip6tables -odhcp6c -kmod-ipv6
+        -kmod-ip6tables -luci-proto-ipv6 -odhcpd-ipv6only -kmod-ipt-offload"'
+    Name: env
+  - CmdLine:
+    - apt update && apt install -y build-essential                                  curl                                  file                                  gawk                                  gettext                                  git                                  libncurses5-dev                                  libssl-dev                                  python2.7                                  python3                                  rsync                                  subversion                                  sudo                                  swig                                  unzip                                  wget                                  zlib1g-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fsSL ${PREFIX}/${SDK}.tar.xz | tar -xJ && cd ${SDK}     && svn checkout
+      https://github.com/coolsnowwolf/lede/trunk/package/lean/automount package/automount      &&
+      svn checkout https://github.com/coolsnowwolf/lede/trunk/package/lean/autosamba
+      package/autosamba      && git clone --depth 1 https://github.com/fanvinga/openwrt-minieap.git
+      package/minieap                   && make PROFILE=${PROFILE} defconfig && make
+      package/{automount,autosamba,minieap}/compile
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/ysc3839/luci-proto-minieap/releases/download/v2.0-0/luci-proto-minieap_2.0-1_all.ipk
+    - /${SDK}/bin/packages/mipsel_24kc/base/
+  - CmdLine:
+    - curl -fsSL ${PREFIX}/${IMAGEBUILDER}.tar.xz | tar -xJ && cd ${IMAGEBUILDER}     &&
+      cp /${SDK}/bin/packages/mipsel_24kc/base/*.ipk packages/     && make image CONFIG_IPV6=n
+      PROFILE=${PROFILE} PACKAGES="${PACKAGES}" BIN_DIR=/root
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:latest as builder
+- As: prod
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache python3
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /root
+    - /root
+  - CmdLine:
+    - python3 -m http.server -d ~ 80
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: prod
+  Platform: ""
+  SourceCode: FROM alpine as prod

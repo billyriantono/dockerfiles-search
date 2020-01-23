@@ -1,0 +1,164 @@
+MetaArgs: null
+Stages:
+- As: built
+  BaseName: openzipkin/zipkin-builder
+  Commands:
+  - Key: source_branch
+    Name: arg
+    Value: null
+  - CmdLine:
+    - export version=$(echo "${source_branch}" | cut -d '-' -f 2) &&   mvn org.apache.maven.plugins:maven-dependency-plugin:get     -DremoteRepositories=bintray::::https://dl.bintray.com/openzipkin/maven
+      -Dtransitive=false     -Dartifact=io.zipkin:zipkin-server:${version}:jar:exec
+      &&   mvn org.apache.maven.plugins:maven-dependency-plugin:get     -DremoteRepositories=bintray::::https://dl.bintray.com/openzipkin/maven
+      -Dtransitive=false     -Dartifact=io.zipkin:zipkin-server:${version}:jar:slim
+      &&   mkdir -p /zipkin && cp ~/.m2/repository/io/zipkin/zipkin-server/${version}/zipkin-server-${version}-exec.jar
+      /zipkin && cd /zipkin && jar xf *.jar && rm *.jar &&   mkdir -p /zipkin-slim
+      && cp ~/.m2/repository/io/zipkin/zipkin-server/${version}/zipkin-server-${version}-slim.jar
+      /zipkin-slim && cd /zipkin-slim && jar xf *.jar && rm *.jar &&   mkdir -p /zipkin-lens
+      && cp /zipkin/BOOT-INF/lib/zipkin-lens-${version}.jar /zipkin-lens && cd /zipkin-lens
+      && jar xf *.jar && rm *.jar
+    Name: run
+    PrependShell: true
+  From:
+    Image: openzipkin/zipkin-builder
+  Name: built
+  Platform: ""
+  SourceCode: FROM openzipkin/zipkin-builder as built
+- As: zipkin-ui
+  BaseName: nginx:1.16-alpine
+  Commands:
+  - Labels:
+    - Key: MAINTAINER
+      Value: Zipkin "https://zipkin.io/"
+    Name: label
+  - Env:
+    - Key: ZIPKIN_BASE_URL
+      Value: http://zipkin:9411
+    Name: env
+  - Chown: ""
+    From: built
+    Name: copy
+    SourcesAndDest:
+    - /zipkin-lens/zipkin-lens
+    - /var/www/html/zipkin
+  - CmdLine:
+    - mkdir -p /var/tmp/nginx && chown -R nginx:nginx /var/tmp/nginx
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/lens/nginx.conf
+    - /etc/nginx/conf.d/zipkin.conf.template
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/lens/run.sh
+    - /usr/local/bin/nginx.sh
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /usr/local/bin/nginx.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginx:1.16-alpine
+  Name: zipkin-ui
+  Platform: ""
+  SourceCode: FROM nginx:1.16-alpine as zipkin-ui
+- As: zipkin-slim
+  BaseName: openzipkin/jre-full:11.0.4-11.33
+  Commands:
+  - Labels:
+    - Key: MAINTAINER
+      Value: Zipkin "https://zipkin.io/"
+    Name: label
+  - Env:
+    - Key: JAVA_OPTS
+      Value: -Djava.security.egd=file:/dev/./urandom
+    Name: env
+  - CmdLine:
+    - adduser -g '' -h /zipkin -D zipkin && ln -s /busybox/* /bin
+    Name: run
+    PrependShell: true
+  - Chown: zipkin
+    From: built
+    Name: copy
+    SourcesAndDest:
+    - /zipkin-slim/
+    - /zipkin/
+  - Chown: zipkin
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/zipkin/
+    - /zipkin/
+  - Name: workdir
+    Path: /zipkin
+  - Name: user
+    User: zipkin
+  - Name: expose
+    Ports:
+    - "9411"
+  - CmdLine:
+    - /busybox/sh
+    - run.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openzipkin/jre-full:11.0.4-11.33
+  Name: zipkin-slim
+  Platform: ""
+  SourceCode: FROM openzipkin/jre-full:11.0.4-11.33 as zipkin-slim
+- As: zipkin-server
+  BaseName: openzipkin/jre-full:11.0.4-11.33
+  Commands:
+  - Labels:
+    - Key: MAINTAINER
+      Value: Zipkin "https://zipkin.io/"
+    Name: label
+  - Env:
+    - Key: JAVA_OPTS
+      Value: -Djava.security.egd=file:/dev/./urandom
+    Name: env
+  - Env:
+    - Key: MODULE_OPTS
+      Value: ""
+    Name: env
+  - CmdLine:
+    - adduser -g '' -h /zipkin -D zipkin && ln -s /busybox/* /bin
+    Name: run
+    PrependShell: true
+  - Chown: zipkin
+    From: built
+    Name: copy
+    SourcesAndDest:
+    - /zipkin/
+    - /zipkin/
+  - Chown: zipkin
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/zipkin/
+    - /zipkin/
+  - Name: workdir
+    Path: /zipkin
+  - Name: user
+    User: zipkin
+  - Name: expose
+    Ports:
+    - "9410"
+    - "9411"
+  - CmdLine:
+    - /busybox/sh
+    - run.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openzipkin/jre-full:11.0.4-11.33
+  Name: zipkin-server
+  Platform: ""
+  SourceCode: FROM openzipkin/jre-full:11.0.4-11.33 as zipkin-server

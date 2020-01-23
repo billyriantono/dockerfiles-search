@@ -1,0 +1,102 @@
+MetaArgs: null
+Stages:
+- As: ubuntu-builder
+  BaseName: ubuntu:18.04
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Joaquín Cuenca Abela <joaquin@freepik.com>"'
+    Name: label
+  - Env:
+    - Key: NGINX_VERSION
+      Value: 1.15.6
+    Name: env
+  - Env:
+    - Key: MOD_JDOMAIN_DIR
+      Value: /opt/nginx/modules/http-upstream-jdomain
+    Name: env
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y dpkg-dev software-properties-common wget
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - add-apt-repository -s -y ppa:nginx/development
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "sed -i -e 's/# deb-src/deb-src/g' /etc/apt/sources.list && \tapt-get update"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir -p /opt/nginx && \tcd /opt/nginx && \tchown -R _apt:root . && \tapt-get
+      source nginx"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get build-dep -y nginx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir -p ${MOD_JDOMAIN_DIR} && \twget https://github.com/e98cuenc/ngx_upstream_jdomain/archive/master.tar.gz
+      && \ttar xzvf master.tar.gz -C ${MOD_JDOMAIN_DIR} --strip-components=1"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "cd /opt/nginx/nginx-${NGINX_VERSION} && \tsed -i -e 's@^common_configure_flags
+      := @common_configure_flags := --add-module='\"${MOD_JDOMAIN_DIR}\"' @' debian/rules
+      && \tdpkg-buildpackage -b"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: ubuntu-builder
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 AS ubuntu-builder
+- As: nginx
+  BaseName: ubuntu:18.04
+  Commands:
+  - Chown: ""
+    From: ubuntu-builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/nginx/nginx-common*.deb
+    - /opt/nginx/nginx-common*.ddeb
+    - /opt/nginx/nginx-extras*.deb
+    - /opt/nginx/nginx-extras*.ddeb
+    - /opt/nginx/libnginx-mod-*.deb
+    - /opt/nginx/libnginx-mod-*.ddeb
+    - /opt/
+  - CmdLine:
+    - "apt update && apt install -y /opt/*.deb /opt/*.ddeb && \tcp -R /etc/nginx/modules-enabled
+      /usr/share/nginx/modules-enabled && \tmkdir /var/cache/nginx && \trm -f /var/cache/apt/archives/*.deb
+      /var/cache/apt/archives/partial/*.deb /var/cache/apt/*.bin && \trm -rf /var/lib/apt/lists/*
+      && \trm -f /opt/*"
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: stopsignal
+    Signal: SIGTERM
+  - CmdLine:
+    - nginx
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -g
+    - daemon off;
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: nginx
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 AS nginx

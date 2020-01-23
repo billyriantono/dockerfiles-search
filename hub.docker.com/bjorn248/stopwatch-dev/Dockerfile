@@ -1,20 +1,13 @@
-FROM centos:7
-MAINTAINER Bjorn Stange <bjorn248@gmail.com>
+FROM redis:alpine
 
-RUN yum -y install wget git
-RUN wget https://storage.googleapis.com/golang/go1.5.1.linux-amd64.tar.gz
-RUN tar -C /usr/local -xzf go1.5.1.linux-amd64.tar.gz
-RUN rm -f go1.5.1.linux-amd64.tar.gz
-ENV GOPATH /go
-ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
+LABEL maintainer "Yefta Sutanto <yefta@bitwyre.com>"
 
-RUN go get github.com/tools/godep
+RUN apk add --no-cache \
+        curl \
+        bash
+COPY ./docker-entrypoint.sh /
+RUN chmod +x /docker-entrypoint.sh
 
-RUN git clone https://github.com/Bjorn248/ec2-stopwatch.git /opt/stopwatch
+EXPOSE 26379
 
-WORKDIR /opt/stopwatch
-RUN which godep
-RUN godep restore
-
-EXPOSE 4000
-ENTRYPOINT [ "./build_and_run_docker.sh" ]
+ENTRYPOINT /docker-entrypoint.sh

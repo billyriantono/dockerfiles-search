@@ -1,0 +1,91 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: node:alpine
+  Commands:
+  - CmdLine:
+    - mkdir /code
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /code
+  - CmdLine:
+    - bcoin
+    - --prefix
+    - /data
+    - --spv
+    Name: cmd
+    PrependShell: false
+  - Env:
+    - Key: BCOIN_VERSION
+      Value: ${BCOIN_VERSION}
+    - Key: BCOIN_REPO
+      Value: https://github.com/bcoin-org/bcoin.git
+    Name: env
+  - CmdLine:
+    - apk upgrade --no-cache &&     apk add --no-cache bash git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone $BCOIN_REPO /code &&     git checkout $BCOIN_VERSION
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:alpine AS base
+- As: build
+  BaseName: base
+  Commands:
+  - CmdLine:
+    - apk add --no-cache g++ gcc make python2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm install --production
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: build
+  Platform: ""
+  SourceCode: FROM base AS build
+- BaseName: base
+  Commands:
+  - Env:
+    - Key: PATH
+      Value: '"${PATH}:/code/bin:/code/node_modules/.bin"'
+    Name: env
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /code
+    - /code/
+  - Name: expose
+    Ports:
+    - "18332"
+    - "18333"
+    - "18334"
+    - "8332"
+    - "8333"
+    - "8334"
+  - Health:
+      Interval: 30000000000
+      Retries: 3
+      StartPeriod: 5000000000
+      Test:
+      - CMD-SHELL
+      - bcoin-cli info > /dev/null
+      Timeout: 30000000000
+    Name: healthcheck
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM base

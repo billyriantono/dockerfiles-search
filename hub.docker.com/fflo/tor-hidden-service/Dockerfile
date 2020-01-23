@@ -1,23 +1,46 @@
-FROM  debian:jessie
+FROM    alpine:latest
+ARG     TOR_VERSION
 
-ENV DEBIAN_FRONTEND=noninteractive
+ENV     HOME /var/lib/tor
 
-RUN   apt-get update && apt-get install -y \
-        tor \
-        python3 \
-        git \
-        ca-certificates
+RUN     apk add --no-cache git libevent-dev openssl-dev gcc make automake ca-certificates autoconf musl-dev coreutils zlib-dev && \
+    mkdir -p /usr/local/src/ && \
+    git clone https://git.torproject.org/tor.git /usr/local/src/tor && \
+    cd /usr/local/src/tor && \
+    git checkout tor-$TOR_VERSION && \
+    ./autogen.sh && \
+    ./configure \
+    --disable-asciidoc \
+    --sysconfdir=/etc \
+    --disable-unittests && \
+    make && make install && \
+    cd .. && \
+    rm -rf tor && \
+    apk add --no-cache python3 python3-dev && \
+    python3 -m ensurepip && \
+    rm -r /usr/lib/python*/ensurepip && \
+    pip3 install --upgrade pip setuptools && \
+    apk del git libevent-dev openssl-dev make automake python3-dev autoconf musl-dev coreutils && \
+    apk add --no-cache libevent openssl
 
-ADD   assets/docker-entrypoint.sh /
-ADD   assets/tor_config.py /
+RUN     mkdir -p /etc/tor/
 
-RUN   chmod +x /docker-entrypoint.sh
+COPY    assets/onions /usr/local/src/onions
+COPY    assets/torrc /var/local/tor/torrc.tpl
 
-RUN   git clone https://github.com/cmehay/python-docker-tool.git /docker --branch=old
-RUN   touch /docker/__init__.py
+
+RUN     cd /usr/local/src/onions && apk add --no-cache openssl-dev libffi-dev gcc python3-dev libc-dev && \
+    python3 setup.py install && \
+    apk del libffi-dev gcc python3-dev libc-dev openssl-dev
+
+RUN     mkdir -p ${HOME}/.tor && \
+    addgroup -S -g 107 tor && \
+    adduser -S -G tor -u 104 -H -h ${HOME} tor
+
+COPY    assets/entrypoint-config.yml /
 
 VOLUME  ["/var/lib/tor/hidden_service/"]
 
-ENTRYPOINT ["/docker-entrypoint.sh"]
+ENTRYPOINT ["pyentrypoint"]
 
-CMD   ["tor"]
+CMD     ["tor"]

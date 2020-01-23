@@ -17,7 +17,7 @@ FROM ubuntu:18.04
 MAINTAINER Apache Crail <dev@crail.apache.org>
 
 # TODO: automate update version on new release
-ARG GIT_COMMIT="master"
+ARG GIT_COMMIT="v1.2"
 ENV LOG_COMMIT=$GIT_COMMIT
 
 RUN echo "Crail-$LOG_COMMIT install openjdk8, git and envsubst" && \
@@ -43,7 +43,7 @@ RUN echo "Crail-$LOG_COMMIT clone & build Crail repo" && \
 RUN echo "Move crail to /crail" && \
     rm -rf /crail && \
     v=`xmllint --xpath "string(/*[local-name()='project']/*[local-name()='version'])" /incubator-crail/pom.xml` && \
-    mv /incubator-crail/assembly/target/crail-${v}-bin /crail
+    mv /incubator-crail/assembly/target/apache-crail-${v}-bin/apache-crail-${v} /crail
 
 ENV CRAIL_HOME /crail
 ENV PATH=${PATH}:${CRAIL_HOME}/bin

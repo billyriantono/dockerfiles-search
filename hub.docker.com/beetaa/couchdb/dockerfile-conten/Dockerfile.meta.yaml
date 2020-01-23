@@ -1,0 +1,81 @@
+MetaArgs:
+- DefaultValue: "7.2"
+  Key: PHP_VERSION
+  ProvidedValue: null
+  Value: "7.2"
+Stages:
+- BaseName: chialab/php:${PHP_VERSION}-apache
+  Commands:
+  - Maintainer: dev@chialab.io
+    Name: maintainer
+  - Key: DEBUG
+    Name: arg
+    Value: null
+  - Env:
+    - Key: DEBUG
+      Value: ${DEBUG:-false}
+    - Key: LOG_DEBUG_URL
+      Value: '"console:///?stream=php://stdout"'
+    - Key: LOG_ERROR_URL
+      Value: '"console:///?stream=php://stderr"'
+    - Key: DATABASE_URL
+      Value: '"sqlite:////var/www/html/bedita.sqlite"'
+    Name: env
+  - CmdLine:
+    - curl -o /wait-for-it.sh https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh     &&
+      chmod +x /wait-for-it.sh     && a2enmod headers     && echo "[PHP]\noutput_buffering
+      = 4096\nmemory_limit = -1" > /usr/local/etc/php/php.ini
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /var/www/html
+  - Name: workdir
+    Path: /var/www/html
+  - CmdLine:
+    - chown -R www-data:www-data /var/www/html
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: www-data:www-data
+  - Name: volume
+    Volumes:
+    - /var/www/html/webroot/_files
+  - CmdLine:
+    - if [ ! "$DEBUG" = "true" ]; then export COMPOSER_ARGS='--no-dev'; fi     &&
+      composer install $COMPOSER_ARGS --optimize-autoloader --no-interaction     &&
+      chmod -R ug+rwX tmp logs webroot/_files     && tee -a webroot/.htaccess < apache_cors.conf
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root:root
+  - Health:
+      Interval: 30000000000
+      StartPeriod: 60000000000
+      Test:
+      - CMD-SHELL
+      - curl -f http://localhost/status || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - apache2-foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: chialab/php:${PHP_VERSION}-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM chialab/php:${PHP_VERSION}-apache

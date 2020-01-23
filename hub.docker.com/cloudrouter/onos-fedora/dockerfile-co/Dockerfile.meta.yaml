@@ -1,0 +1,79 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.5
+  Commands:
+  - Name: expose
+    Ports:
+    - "2003"
+    - "2004"
+    - "4242"
+    - "8080"
+  - Key: APK_CACHE_IP
+    Name: arg
+    Value: 172.17.0.1
+  - Key: APK_CACHE_DOMAIN
+    Name: arg
+    Value: '''dl-cdn.alpinelinux.org'''
+  - Key: RUN_DEPS
+    Name: arg
+    Value: '''su-exec openjdk8-jre openssl bash gettext'''
+  - Key: BUILD_DEPS
+    Name: arg
+    Value: '''tar coreutils'''
+  - Key: KAIROSDB_URL
+    Name: arg
+    Value: '''https://github.com/kairosdb/kairosdb/releases'''
+  - Key: KAIROS_CARBON_URL
+    Name: arg
+    Value: '''https://github.com/kairosdb/kairos-carbon/releases'''
+  - Env:
+    - Key: KAIROSDB_HOME
+      Value: /opt/kairosdb
+    Name: env
+  - Env:
+    - Key: KAIROSDB_CONF
+      Value: $KAIROSDB_HOME/conf
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $KAIROSDB_HOME/bin:$PATH
+    Name: env
+  - CmdLine:
+    - nc -z $APK_CACHE_IP 80 && echo $APK_CACHE_IP $APK_CACHE_DOMAIN >>/etc/hosts   ;
+      apk --update add --no-cache $RUN_DEPS $BUILD_DEPS     && mkdir -p $KAIROSDB_HOME
+      && cd $KAIROSDB_HOME     && KAIROSDB_LATEST=$(wget -qO- $KAIROSDB_URL | egrep
+      -o "v[0-9]+\.[0-9]+\.[0-9]+" | sort -Vr | head -1 | cut -d "v" -f 2)     &&
+      echo "Installing KairosDB ${KAIROSDB_VERSION:=$KAIROSDB_LATEST}"     && wget
+      -O- $KAIROSDB_URL/download/v${KAIROSDB_VERSION}/kairosdb-${KAIROSDB_VERSION}-1.tar.gz
+      | tar xz --strip-components=1     && sed -i 's|^kairosdb.service.datastore=.*$|kairosdb.service.datastore=org.kairosdb.datastore.cassandra.CassandraModule|'
+      $KAIROSDB_CONF/kairosdb.properties     && sed -i 's|^kairosdb.datastore.cassandra.host_list=.*$|kairosdb.datastore.cassandra.host_list=localhost:9160|'
+      $KAIROSDB_CONF/kairosdb.properties     && KAIROS_CARBON_LATEST=$(wget -qO- $KAIROS_CARBON_URL
+      | egrep -o "v[0-9]+\.[0-9]+-" | sort -Vr | head -1 | cut -d "v" -f 2 | cut -d
+      "-" -f 1)     && echo "Installing kairos-carbon ${KAIROS_CARBON_VERSION:=$KAIROS_CARBON_LATEST}"     &&
+      wget -O- $KAIROS_CARBON_URL/download/v${KAIROS_CARBON_VERSION}-1/kairos-carbon-${KAIROS_CARBON_VERSION}.tar.gz
+      | tar xz --strip-components=1   && apk del $BUILD_DEPS && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $KAIROSDB_HOME
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - .
+  - Name: volume
+    Volumes:
+    - $KAIROSDB_HOME/data
+    - $KAIROSDB_HOME/log
+    - $KAIROSDB_HOME/build
+    - /tmp
+  - CmdLine:
+    - kairosdb.sh
+    - run
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.5
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.5

@@ -13,7 +13,7 @@ ENV HatH_PATH "/home/$HatH_USER/client"
 ENV HatH_ARCHIVE hath.zip
 ENV HatH_PORT 4915
 ENV HatH_JAR HentaiAtHome.jar
-ENV HatH_ARGS --use_more_memory --disable_logging
+ENV HatH_ARGS -Xms16m -Xmx512m --silentstart
 
 # Container Setup
 RUN adduser -D "$HatH_USER" && \
@@ -36,4 +36,4 @@ EXPOSE "$HatH_PORT"
 
 VOLUME ["$HatH_PATH/cache", "$HatH_PATH/data", "$HatH_PATH/download", "$HatH_PATH/hathdl"]
 
-CMD java -jar "$HatH_JAR" --port "$HatH_PORT"
+CMD java -jar "$HatH_JAR" "$HatH_ARGS"

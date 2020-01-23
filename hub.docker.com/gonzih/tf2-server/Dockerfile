@@ -1,29 +1,21 @@
-FROM ubuntu:12.04
-MAINTAINER Max Gonzih <gonzih at gmail dot com>
+FROM ubuntu:latest
 
-RUN apt-get -y update
-RUN apt-get -y upgrade
-RUN apt-get -y install lib32gcc1 lib32z1 lib32ncurses5 lib32bz2-1.0 lib32asound2 curl
-RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+LABEL maintainer "golyalpha@gmail.com"
 
-ENV USER tf2
+RUN apt-get update -y && apt-get upgrade -y
+RUN apt-get install -y curl bzip2 libfreetype6 libglu1-mesa libxi6 libxrender1
 
-RUN useradd $USER
-ENV HOME /home/$USER
-RUN mkdir $HOME
-RUN chown $USER:$USER $HOME
+WORKDIR /opt
+RUN curl -O http://ftp.halifax.rwth-aachen.de/blender/release/Blender2.78/blender-2.78c-linux-glibc219-x86_64.tar.bz2
+RUN tar xjf blender-*.tar.bz2
+RUN mv blender-*x86_64 blender
+RUN rm -f blender-*.tar.bz2
 
-USER $USER
-ENV SERVER $HOME/hlserver
-RUN mkdir $SERVER
-RUN curl http://media.steampowered.com/client/steamcmd_linux.tar.gz | tar -C $SERVER -xvz
-ADD ./tf2_ds.txt $SERVER/tf2_ds.txt
-ADD ./update.sh $SERVER/update.sh
-ADD ./tf.sh $SERVER/tf.sh
-RUN $SERVER/update.sh
+ADD startup.py startup.py
 
-EXPOSE 27015/udp
+RUN mkdir -p /tmp/blender-output
 
-WORKDIR /home/$USER/hlserver
-ENTRYPOINT ["./tf.sh"]
-CMD ["+sv_pure", "1", "+mapcycle", "mapcycle_quickplay_payload.txt", "+map", "pl_badwater", "+maxplayers", "24"]
+
+EXPOSE 8000
+
+CMD /opt/blender/blender --background -noaudio -nojoystick -t 0 --render-output /tmp/blender-output/render --python /opt/startup.py

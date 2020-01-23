@@ -1,16 +1,12 @@
-FROM microsoft/dotnet:2.1.302-sdk AS build-env
-WORKDIR /app
+FROM alpine:latest
+MAINTAINER Evgeniy Slizevich <evgeniy@slizevich.net>
 
-# Copy csproj and restore as distinct layers
-COPY *.csproj ./
-RUN dotnet restore
+WORKDIR /
 
-# Copy everything else and build
-COPY . ./
-RUN dotnet publish -c Release -o out
+RUN apk add --no-cache bind
+ADD bind bind
 
-# Build runtime image
-FROM microsoft/dotnet:aspnetcore-runtime
-WORKDIR /app
-COPY --from=build-env /app/out .
-ENTRYPOINT [ "dotnet", "hello-world-circleci.dll" ]
+EXPOSE 53/udp 53/tcp
+VOLUME [/etc/bind]
+
+ENTRYPOINT ["/bind"]

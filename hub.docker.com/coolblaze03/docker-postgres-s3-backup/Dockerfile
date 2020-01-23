@@ -1,22 +1,41 @@
-FROM postgres:11.0
+FROM wodby/php:7.2-dev-4.7.4
 
-RUN apt-get update -y && apt-get install -y s3cmd curl
+USER root
 
-COPY backup-db.sh /
-COPY backup-upload.sh /
-COPY s3cfg /.s3cfg
-COPY s3setup.sh /
-COPY restore.sh /
-COPY docker-entrypoint.sh /
-
-# Folders for s3cmd optionations
-RUN mkdir /opt/src
-RUN mkdir /opt/dest
-
-RUN curl -L https://github.com/odise/go-cron/releases/download/v0.0.6/go-cron-linux.gz | zcat > /usr/local/bin/go-cron && chmod u+x /usr/local/bin/go-cron
-
-WORKDIR /
-
-ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["/cron.sh"]
-
+ENV LIBRDKAFKA_VERSION v0.9.5
+ENV BUILD_DEPS \
+  autoconf \
+        bash \
+        build-base \
+        git \
+        pcre-dev \
+        python \
+        zlib-dev \
+        curl-dev \
+        icu-dev
+RUN apk --no-cache --virtual .build-deps add ${BUILD_DEPS} \
+    && cd /tmp \
+    && git clone \
+        --branch ${LIBRDKAFKA_VERSION} \
+        --depth 1 \
+        https://github.com/edenhill/librdkafka.git \
+    && cd librdkafka \
+    && ./configure \
+    && make \
+    && make install \
+    && pecl install -f rdkafka \
+    && docker-php-ext-enable rdkafka \
+    && rm -rf /tmp/librdkafka
+RUN docker-php-ext-install intl; \
+    pecl install raphf-2.0.0 \
+    && docker-php-ext-enable raphf \
+    && pecl install propro-2.1.0 \
+    && docker-php-ext-enable propro \
+    && pecl install pecl_http-3.2.0 \
+    && docker-php-ext-enable http; \
+    chown -R wodby:wodby \
+        "${PHP_INI_DIR}/conf.d"; \
+    # Ensure http extension loads after raphf and propro dependencies
+    mv "${PHP_INI_DIR}/conf.d/docker-php-ext-raphf.ini" "${PHP_INI_DIR}/conf.d/docker-php-ext-1-raphf.ini"; \
+    mv "${PHP_INI_DIR}/conf.d/docker-php-ext-propro.ini" "${PHP_INI_DIR}/conf.d/docker-php-ext-2-propro.ini";
+RUN apk del .build-deps

@@ -1,17 +1,17 @@
-FROM aventinesolutions/docker-archlinux-rvm
+FROM alpine:3.9
 
-MAINTAINER Matthew Eichler <matthew.eichler@aventinesolutions.nl>
+RUN apk add --update --no-cache \
+      ca-certificates curl
 
-ENV APP_HOME /opt/rubie
+## Take version from Docker Hub during build
+ARG dockerTag
 
-COPY install_geminabox.sh config.ru rackup.sh .ruby-version .ruby-gemset $APP_HOME/
-RUN sudo chown -Rv rubie $APP_HOME
+RUN echo $dockerTag | awk -F"v" '{ print $2 }' > version
+RUN cat ./version
 
-USER rubie
-WORKDIR $APP_HOME
+# Install Hugo
+RUN version=$(cat version) && curl -L >gorp.tar.gz https://github.com/avarabyeu/goRP/releases/download/$dockerTag/goRP_${version}_linux_amd64.tar.gz \
+ && tar -xzvf gorp.tar.gz -C /usr/bin \
+ && rm gorp.tar.gz
 
-RUN $APP_HOME/install_geminabox.sh 
-
-EXPOSE 9292
-VOLUME ["/data"]
-ENTRYPOINT ["/bin/zsh"]
+ENTRYPOINT ["gorp"]

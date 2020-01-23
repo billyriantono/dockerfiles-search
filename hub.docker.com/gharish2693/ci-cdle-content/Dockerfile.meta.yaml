@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- BaseName: golang:alpine
+  Commands:
+  - Maintainer: Rémi Alvergnat <remi.alvergnat@gfi.fr>
+    Name: maintainer
+  - Env:
+    - Key: CFSSL_CSR
+      Value: '"csr_root_ca.json"'
+    - Key: CFSSL_CONFIG
+      Value: '"ca_root_config.json"'
+    - Key: DB_CONFIG
+      Value: '"db_config.json"'
+    - Key: DB_DISABLED
+      Value: '"0"'
+    - Key: DB_DRIVER
+      Value: '"sqlite3"'
+    - Key: DB_ENVIRONMENT
+      Value: '"production"'
+    - Key: DB_INIT
+      Value: '"1"'
+    - Key: DB_DESTROY
+      Value: '"0"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker-entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./etc/*
+    - /etc/cfssl/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./bin/
+    - /cfssl-bin
+  - CmdLine:
+    - "apk add --no-cache --virtual .build-deps         build-base         gcc         git
+      \        libtool         sqlite-dev     && apk add --no-cache         curl         python
+      \    && addgroup -S cfssl     && adduser -S -g cfssl cfssl     && go get bitbucket.org/liamstask/goose/cmd/goose
+      \    && git clone --depth=1 \"https://github.com/cloudflare/cfssl.git\" \"${GOPATH}/src/github.com/cloudflare/cfssl\"
+      \    && cd \"${GOPATH}/src/github.com/cloudflare/cfssl\" \t&& go build -o /usr/bin/cfssl
+      ./cmd/cfssl \t&& go build -o /usr/bin/cfssljson ./cmd/cfssljson \t&& go build
+      -o /usr/bin/mkbundle ./cmd/mkbundle \t&& go build -o /usr/bin/multirootca ./cmd/multirootca
+      \    && go get github.com/cloudflare/cfssl_trust/... \t&& cp -R \"${GOPATH}/src/github.com/cloudflare/cfssl_trust\"
+      / \t&& ln -s /cfssl_trust /etc/cfssl/     && mkdir -p /opt/     && cp -R \"${GOPATH}/src/github.com/cloudflare/cfssl/certdb/\"
+      /opt/     && set -x     && cd \"${GOPATH}/src/github.com/cloudflare/cfssl\"
+      \t&& go get github.com/GeertJohan/go.rice/rice     && rice embed-go -i=./cli/serve
+      \t&& mkdir -p /etc/cfssl     && ln -s \"/etc/cfssl/${CFSSL_CSR}\" /     && chown
+      -R cfssl:cfssl /etc/cfssl     && chmod 770 /etc/cfssl     && chmod 644 /etc/cfssl/*.json
+      \    && chown cfssl:cfssl /docker-entrypoint.sh     && chmod 770 /docker-entrypoint.sh
+      \    && chown cfssl:cfssl /cfssl_trust     && chown cfssl:cfssl /opt/certdb
+      \    && chown -R cfssl:cfssl /cfssl-bin     && chmod -R 770 /cfssl-bin     &&
+      ln -s /cfssl-bin/* /bin \t&& apk del .build-deps \t&& rm -rf \"${GOPATH}/src\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --update libcap && setcap 'cap_net_bind_service=+ep' $(which cfssl)
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: '"cfssl:cfssl"'
+  - Name: workdir
+    Path: /etc/cfssl
+  - Name: volume
+    Volumes:
+    - /etc/cfssl
+    - /cfssl_trust
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - cfssl
+    - serve
+    - -address=0.0.0.0
+    - -ca=/etc/cfssl/ca.pem
+    - -ca-key=/etc/cfssl/ca-key.pem
+    - -port=80
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: golang:alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM golang:alpine

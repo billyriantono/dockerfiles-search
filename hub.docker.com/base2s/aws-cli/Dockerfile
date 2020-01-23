@@ -1,0 +1,21 @@
+FROM alpine:latest
+LABEL maintainer "Matt Brewster"
+
+RUN apk --no-cache add \
+	ca-certificates \
+	groff \
+	less \
+	python \
+	py2-pip \
+	&& pip install awscli \
+	&& mkdir -p /root/.aws \
+	&& { \
+		echo '[default]'; \
+		echo 'output = json'; \
+		echo 'region = $AWS_DEFAULT_REGION'; \
+		echo 'aws_access_key_id = $AWS_ACCESS_KEY_ID'; \
+		echo 'aws_secret_access_key = $AWS_SECRET_ACCESS_KEY'; \
+	} > /root/.aws/config
+
+ENTRYPOINT [ "aws" ]
+

@@ -1,0 +1,100 @@
+MetaArgs: null
+Stages:
+- BaseName: php:7.3.9-fpm-buster
+  Commands:
+  - Env:
+    - Key: MEDIAWIKI_MAJOR_VERSION
+      Value: "1.33"
+    - Key: MEDIAWIKI_BRANCH
+      Value: REL1_33
+    - Key: MEDIAWIKI_VERSION
+      Value: 1.33.0
+    - Key: PHP_MEMORY_LIMIT
+      Value: 128M
+    - Key: PHP_MAX_UPLOAD_SIZE
+      Value: 16M
+    - Key: MATH_EXTENSION_URL
+      Value: https://extdist.wmflabs.org/dist/extensions/Math-REL1_33-183fd5c.tar.gz
+    - Key: SIMPLEMATHJAX_EXTENSION_GIT_URL
+      Value: https://github.com/jmnote/SimpleMathJax.git
+    - Key: SPOILERS_EXTENSION_VERSION
+      Value: 2.2.0
+    - Key: SPOILERS_EXTENSION_URL
+      Value: https://github.com/Telshin/Spoilers/archive/2.2.0.tar.gz
+    Name: env
+  - CmdLine:
+    - set -ex;     apt-get update;   apt-get install -y --no-install-recommends     git     imagemagick     python3   ;   rm
+      -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'set -ex;     savedAptMark="$(apt-mark showmanual)";     apt-get update;   apt-get
+      install -y --no-install-recommends     libicu-dev   ;     docker-php-ext-install     intl     mbstring     mysqli     opcache   ;       echo
+      "no\n" | pecl install apcu-5.1.17;     echo "no\n" | pecl install redis-4.3.0;     docker-php-ext-enable       apcu       redis   ;     apt-mark
+      auto ''.*'' > /dev/null;   apt-mark manual $savedAptMark;   ldd "$(php -r ''echo
+      ini_get("extension_dir");'')"/*.so     | awk ''/=>/ { print $3 }''     | sort
+      -u     | xargs -r dpkg-query -S     | cut -d: -f1     | sort -u     | xargs
+      -rt apt-mark manual;     apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false;   rm
+      -rf /var/lib/apt/lists/*;   rm -rf /tmp/pear'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '{     echo ''opcache.memory_consumption=128'';     echo ''opcache.interned_strings_buffer=8'';     echo
+      ''opcache.max_accelerated_files=4000'';     echo ''opcache.revalidate_freq=60'';     echo
+      ''opcache.fast_shutdown=1'';     echo ''opcache.enable_cli=1'';   } > /usr/local/etc/php/conf.d/opcache-recommended.ini'
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mediawiki.ini
+    - /usr/local/etc/php/conf.d/mediawiki.ini
+  - CmdLine:
+    - mkdir -p /var/www/data     && chown -R www-data:www-data /var/www/data
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fSL "https://releases.wikimedia.org/mediawiki/${MEDIAWIKI_MAJOR_VERSION}/mediawiki-${MEDIAWIKI_VERSION}.tar.gz"
+      -o mediawiki.tar.gz     && tar -xz --strip-components=1 -f mediawiki.tar.gz     &&
+      rm mediawiki.tar.gz     && chown -R www-data:www-data extensions skins cache
+      images
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fSL -o /tmp/math.tar ${MATH_EXTENSION_URL}     && tar xf /tmp/math.tar
+      -C /var/www/html/extensions     && chown www-data:www-data -R /var/www/html/extensions/Math     &&
+      rm -rf /tmp/math.tar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --recursive ${SIMPLEMATHJAX_EXTENSION_GIT_URL} /var/www/html/extensions/SimpleMathJax     &&
+      rm -rf /var/www/html/extensions/SimpleMathJax/.git*     && chown www-data:www-data
+      -R /var/www/html/extensions/SimpleMathJax
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -fSL -o /tmp/spoilers.tar ${SPOILERS_EXTENSION_URL}     && tar xf /tmp/spoilers.tar
+      -C /tmp     && mv /tmp/Spoilers-${SPOILERS_EXTENSION_VERSION} /var/www/html/extensions/Spoilers     &&
+      chown www-data:www-data -R /var/www/html/extensions/Spoilers     && rm -rf /tmp/spoilers.tar
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - chmod 755 /entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: php:7.3.9-fpm-buster
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.3.9-fpm-buster

@@ -1,18 +1,28 @@
-FROM python:2.7
+FROM ubuntu:14.04
+MAINTAINER graham@grahamc.com
 
-# pip 7 fails to install Django 1.4 properly
-RUN pip install pip==6.1.1
+ADD http://download-lb.utorrent.com/endpoint/btsync/os/linux-x64/track/stable /tmp/btsync.tar.gz
 
-COPY requirements.txt /app/requirements.txt
-RUN pip install -r /app/requirements.txt
+RUN adduser --system --disabled-password --disabled-login --uid 9001 btsync
+RUN mkdir /var/run/btsync/ /var/cache/btsync
+RUN chown btsync /var/run/btsync /var/cache/btsync
 
-COPY . /app
-WORKDIR /app
+RUN mkdir -p /opt/btsync
+RUN tar -zvvxf /tmp/btsync.tar.gz -C /opt/btsync
+RUN rm /tmp/btsync.tar.gz
 
-ENV PORT=80
-ENV NEW_RELIC_APP_NAME="Zombie Walrus Detective"
-ENV NEW_RELIC_LICENSE_KEY="change-me-please"
+COPY 0conf/build /opt/btsync/build-conf
+COPY 0conf/start  /opt/btsync/start
 
-EXPOSE 80
+RUN mkdir -p /mount/data /mount/config
+RUN chown btsync /mount/data /mount/config
+VOLUME ["/mount/data", "/mount/config"]
+EXPOSE 3369
+EXPOSE 3369/udp
+EXPOSE 8888
 
-CMD newrelic-admin run-program gunicorn -b 0.0.0.0:$PORT --log-file=- --error-logfile=- --access-logfile=- -k eventlet -w 2 zombiewalrus.wsgi:application
+USER btsync
+ENV BTSYNC_NAME docker-btsync
+
+CMD ["/opt/btsync/start"]
+

@@ -1,0 +1,1 @@
+FROM gcr.io/kubernetes-e2e-test-images/serve-hostname:1.1

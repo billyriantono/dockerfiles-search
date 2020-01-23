@@ -2,53 +2,64 @@ MetaArgs: null
 Stages:
 - BaseName: alpine:3.4
   Commands:
-  - CmdLine:
-    - addgroup -S redis && adduser -S -G redis redis
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - apk add --no-cache 'su-exec>=0.2'
-    Name: run
-    PrependShell: true
+  - Maintainer: We ahead <docker@weahead.se>
+    Name: maintainer
   - Env:
-    - Key: REDIS_VERSION
-      Value: 4.0.8
-    Name: env
-  - Env:
-    - Key: REDIS_DOWNLOAD_URL
-      Value: http://download.redis.io/releases/redis-4.0.8.tar.gz
-    Name: env
-  - Env:
-    - Key: REDIS_DOWNLOAD_SHA256
-      Value: ff0c38b8c156319249fec61e5018cf5b5fe63a65b61690bec798f4c998c232ad
+    - Key: NGINX_VERSION
+      Value: 1.11.3
+    - Key: S6_VERSION
+      Value: 1.18.1.5
+    - Key: S6_BEHAVIOUR_IF_STAGE2_FAILS
+      Value: "2"
     Name: env
   - CmdLine:
-    - "set -ex \t\t&& apk add --no-cache --virtual .build-deps \t\tgcc \t\tlinux-headers
-      \t\tmake \t\tmusl-dev \t\ttar \t\t&& wget -O redis.tar.gz \"$REDIS_DOWNLOAD_URL\"
-      \t&& echo \"$REDIS_DOWNLOAD_SHA256 *redis.tar.gz\" | sha256sum -c - \t&& mkdir
-      -p /usr/src/redis \t&& tar -xzf redis.tar.gz -C /usr/src/redis --strip-components=1
-      \t&& rm redis.tar.gz \t\t&& grep -q '^#define CONFIG_DEFAULT_PROTECTED_MODE
-      1$' /usr/src/redis/src/server.h \t&& sed -ri 's!^(#define CONFIG_DEFAULT_PROTECTED_MODE)
-      1$!\\1 0!' /usr/src/redis/src/server.h \t&& grep -q '^#define CONFIG_DEFAULT_PROTECTED_MODE
-      0$' /usr/src/redis/src/server.h \t\t&& make -C /usr/src/redis \t&& make -C /usr/src/redis
-      install \t\t&& rm -r /usr/src/redis \t\t&& apk del .build-deps"
+    - apk --no-cache add dnsmasq     && apk --no-cache add --virtual build-pkgs libcap     &&
+      setcap cap_net_admin,cap_net_bind_service+ep /usr/sbin/dnsmasq     && apk del
+      build-pkgs
     Name: run
     PrependShell: true
   - CmdLine:
-    - mkdir /data && chown redis:redis /data
+    - apk --no-cache add --virtual build-pkgs curl gnupg     && curl -OL "https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-amd64.tar.gz"     &&
+      curl -OL "https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-amd64.tar.gz.sig"     &&
+      export GNUPGHOME="$(mktemp -d)"     && curl https://keybase.io/justcontainers/key.asc
+      | gpg --import     && gpg --verify s6-overlay-amd64.tar.gz.sig s6-overlay-amd64.tar.gz     &&
+      tar -xzf s6-overlay-amd64.tar.gz -C /     && rm -rf "$GNUPGHOME" "s6-overlay-amd64.tar.gz"
+      "s6-overlay-amd64.tar.gz.sig"     && apk del build-pkgs
     Name: run
     PrependShell: true
-  - Name: volume
-    Volumes:
-    - /data
-  - Name: workdir
-    Path: /data
+  - CmdLine:
+    - apk --no-cache add --virtual build-pkgs       curl       gnupg       build-base       linux-headers       openssl-dev       pcre-dev       zlib-dev     &&
+      apk --no-cache add --virtual runtime-pkgs       ca-certificates       openssl       pcre       zlib     &&
+      curl -OL "http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz"     && curl
+      -OL "http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz.asc"     && export
+      GNUPGHOME="$(mktemp -d)"     && gpg --keyserver ha.pool.sks-keyservers.net --recv-keys
+      "B0F4253373F8F6F510D42178520A9993A1C052F8"     && gpg --batch --verify nginx-${NGINX_VERSION}.tar.gz.asc
+      nginx-${NGINX_VERSION}.tar.gz     && tar -xzf nginx-${NGINX_VERSION}.tar.gz     &&
+      cd nginx-${NGINX_VERSION}     && ./configure       --prefix=/etc/nginx       --sbin-path=/usr/sbin/nginx       --conf-path=/etc/nginx/nginx.conf       --error-log-path=/tmp/error.log       --http-log-path=/tmp/access.log       --pid-path=/tmp/nginx.pid       --lock-path=/tmp/nginx.lock       --http-client-body-temp-path=/tmp/client_body_temp       --http-proxy-temp-path=/tmp/proxy_temp       --http-fastcgi-temp-path=/tmp/fastcgi_temp       --http-uwsgi-temp-path=/tmp/uwsgi_temp       --http-scgi-temp-path=/tmp/scgi_temp       --user=nobody       --group=nobody       --with-http_ssl_module       --with-http_realip_module       --with-http_addition_module       --with-http_sub_module       --with-http_gunzip_module       --with-http_gzip_static_module       --with-http_stub_status_module       --with-http_auth_request_module       --with-ipv6       --with-threads       --with-stream       --with-stream_ssl_module       --with-http_slice_module       --with-http_v2_module       --without-http_memcached_module       --without-mail_pop3_module       --without-mail_imap_module       --without-mail_smtp_module     &&
+      make     && make install     && cd -     && rm -rf "$GNUPGHOME" "nginx-${NGINX_VERSION}.tar.gz"
+      "nginx-${NGINX_VERSION}.tar.gz.asc" "nginx-${NGINX_VERSION}"     && apk del
+      build-pkgs     && ln -sf /dev/stdout /tmp/access.log     && ln -sf /dev/stderr
+      /tmp/error.log
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - root
+    - /
+  - CmdLine:
+    - chown -R nobody:nobody /etc/nginx /usr/local/etc/nginx /tmp/access.log /tmp/error.log
+    Name: run
+    PrependShell: true
   - Name: expose
     Ports:
-    - "6379"
+    - "8080"
+    - "8443"
+  - Name: workdir
+    Path: /usr/local/etc/nginx
   - CmdLine:
-    - redis-server
-    Name: cmd
+    - /init
+    Name: entrypoint
     PrependShell: false
   From:
     Image: alpine:3.4

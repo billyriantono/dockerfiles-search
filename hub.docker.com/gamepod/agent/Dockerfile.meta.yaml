@@ -1,0 +1,99 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.13-alpine3.10
+  Commands:
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - Env:
+    - Key: GOOS
+      Value: linux
+    Name: env
+  - Env:
+    - Key: GOARCH
+      Value: amd64
+    Name: env
+  - Env:
+    - Key: GOFLAGS
+      Value: '"-gcflags=all=-trimpath=${GOPATH} -asmflags=all=-trimpath=${GOPATH}"'
+    Name: env
+  - Name: workdir
+    Path: $GOPATH/src/gamepod.cc/agent
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.sum
+    - .
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $GOPATH/src/gamepod.cc/agent
+  - CmdLine:
+    - go build $GOFLAGS -o $GOPATH/bin/gamepod-operator gamepod.cc/agent/cmd/manager
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13-alpine3.10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.13-alpine3.10 AS builder
+- BaseName: registry.access.redhat.com/ubi7/ubi-minimal:latest
+  Commands:
+  - Env:
+    - Key: OPERATOR
+      Value: /usr/local/bin/gamepod-operator
+    - Key: USER_UID
+      Value: "1001"
+    - Key: USER_NAME
+      Value: gamepod-operator
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/gamepod-operator
+    - ${OPERATOR}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build/bin
+    - /usr/local/bin
+  - CmdLine:
+    - chmod +x /usr/local/bin/user_setup
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /usr/local/bin/entrypoint
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/user_setup
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - Name: user
+    User: ${USER_UID}
+  From:
+    Image: registry.access.redhat.com/ubi7/ubi-minimal:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM registry.access.redhat.com/ubi7/ubi-minimal:latest

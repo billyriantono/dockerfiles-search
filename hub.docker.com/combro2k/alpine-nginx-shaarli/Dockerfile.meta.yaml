@@ -1,31 +1,156 @@
 MetaArgs: null
 Stages:
-- BaseName: combro2k/alpine-nginx-php7:latest
+- BaseName: nvidia/cuda:9.0-cudnn7-devel
   Commands:
-  - Labels:
-    - Key: org.label-schema.build-date
-      Value: $BUILD_DATE
-    - Key: org.label-schema.vcs-ref
-      Value: $VCS_REF
-    - Key: org.label-schema.vcs-url
-      Value: $VCS_URL
-    - Key: org.label-scheme.dockerfile
-      Value: $DOCKERFILE
-    Name: label
+  - Name: user
+    User: root
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
   - CmdLine:
-    - "set -xe && apk --quiet --no-cache add --virtual=run-deps php7-iconv php7-zlib
-      php7-imap php7-openssl php7-simplexml php7-tokenizer php7-ctype && \tcd /data
-      && curl --location --silent https://github.com/shaarli/Shaarli/archive/latest.tar.gz
-      | tar zx -C /data/web --strip-components=1 && \tchown www-data:www-data /data/web
-      -R && cd /data/web && /usr/bin/composer install --no-dev && \tapk del --quiet
-      --no-cache --purge && rm -rf /var/cache/apk/*"
+    - apt-get update && apt-get -yq dist-upgrade  && apt-get install -yq --no-install-recommends     wget     curl     bzip2     ca-certificates     sudo     locales     fonts-liberation     python3     python3-pip     git  &&
+      apt-get clean  && rm -rf /var/lib/apt/lists/*
     Name: run
     PrependShell: true
-  - Name: volume
-    Volumes:
-    - /data/web/data
+  - CmdLine:
+    - apt-get update && apt-get install openjdk-8-jdk -y &&     echo "deb [arch=amd64]
+      http://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
+      &&     curl https://bazel.build/bazel-release.pub.gpg | sudo apt-key add - &&     apt-get
+      update && apt-get install bazel -y &&     apt-get clean &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "en_US.UTF-8 UTF-8" > /etc/locale.gen &&     locale-gen
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -yq --no-install-recommends     build-essential     emacs     inkscape     jed     libsm6     libxext-dev     libxrender1     lmodern     netcat     pandoc     python-dev     unzip     vim     &&
+      apt-get clean &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CONDA_DIR
+      Value: /opt/conda
+    - Key: SHELL
+      Value: /bin/bash
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    - Key: LANG
+      Value: en_US.UTF-8
+    - Key: LANGUAGE
+      Value: en_US.UTF-8
+    - Key: NB_USER
+      Value: jovyan
+    - Key: NB_UID
+      Value: "1000"
+    - Key: NB_GID
+      Value: "100"
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $CONDA_DIR/bin:$PATH
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - fix-permissions
+    - /usr/local/bin/fix-permissions
+  - CmdLine:
+    - chmod +x /usr/local/bin/fix-permissions
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'useradd -m -s /bin/bash -N -u $NB_UID $NB_USER &&     mkdir -p $CONDA_DIR &&     chown
+      $NB_USER:$NB_GID $CONDA_DIR &&     chmod g+w /etc/passwd /etc/group &&     echo
+      "$NB_USER ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers &&     fix-permissions $HOME
+      &&     fix-permissions $CONDA_DIR'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $NB_UID
+  - CmdLine:
+    - sudo cat /etc/sudoers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /home/$NB_USER/work &&     fix-permissions /home/$NB_USER
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MINICONDA_VERSION
+      Value: 4.3.30
+    Name: env
+  - CmdLine:
+    - cd /tmp &&     wget --quiet https://repo.continuum.io/miniconda/Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh
+      &&     echo "0b80a152332a4ce5250f3c09589c7a81 *Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh"
+      | md5sum -c - &&     /bin/bash Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh
+      -f -b -p $CONDA_DIR &&     rm Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh
+      &&     $CONDA_DIR/bin/conda config --system --prepend channels conda-forge &&     $CONDA_DIR/bin/conda
+      config --system --set auto_update_conda false &&     $CONDA_DIR/bin/conda config
+      --system --set show_channel_urls true &&     $CONDA_DIR/bin/conda update --all
+      --quiet --yes &&     conda clean -tipsy &&     rm -rf /home/$NB_USER/.cache/yarn
+      &&     fix-permissions $CONDA_DIR &&     fix-permissions /home/$NB_USER
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - conda install --quiet --yes     -c aaronzs     'notebook=5.4.*'     'jupyterhub=0.8.*'     'jupyterlab=0.31.*'     'tornado=4.*'     &&
+      conda clean -tipsy &&     jupyter labextension install @jupyterlab/hub-extension@^0.8.0
+      &&     npm cache clean &&     rm -rf $CONDA_DIR/share/jupyter/lab/staging &&     fix-permissions
+      $CONDA_DIR &&     fix-permissions /home/$NB_USER
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - conda install --quiet --yes     -c aaronzs     'nomkl'     'ipywidgets'     'pandas'     'numexpr'     'matplotlib'     'scipy'     'seaborn'     'scikit-learn'     'scikit-image'     'sympy'     'cython'     'patsy'     'statsmodels'     'cloudpickle'     'dill'     'numba'     'bokeh'     'sqlalchemy'     'hdf5'     'h5py'     'vincent'     'beautifulsoup4'     'protobuf'     'xlrd'      'keras'
+      &&     conda remove --quiet --yes --force qt pyqt &&     conda clean -tipsy
+      &&     jupyter nbextension enable --py widgetsnbextension --sys-prefix &&     jupyter
+      labextension install @jupyter-widgets/jupyterlab-manager@^0.33.1 &&     jupyter
+      labextension install jupyterlab_bokeh@^0.4.0 &&     npm cache clean &&     rm
+      -rf $CONDA_DIR/share/jupyter/lab/staging &&     rm -rf /home/$NB_USER/.cache/yarn
+      &&     rm -rf /home/$NB_USER/.node-gyp
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python3 -m pip install jupyter_contrib_nbextensions
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "python3 -m pip install git+https://github.com/data-8/nbgitpuller \tplotly"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - jupyter labextension install @jupyterlab/hub-extension &&     jupyter labextension
+      install @jupyter-widgets/jupyterlab-manager
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - jupyter lab build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - conda create --quiet --yes -n ipykernel_py2 python=2 ipykernel &&     python
+      -m ipykernel install --user
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - conda config --add channels conda-forge &&     conda create --quiet --yes -n
+      java_env scijava-jupyter-kernel
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bash -c "source activate java_env" &&     bash -c "source activate ipykernel_py2"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python3 -m pip install numpy==1.14
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - jupyter kernelspec list
+    Name: run
+    PrependShell: true
   From:
-    Image: combro2k/alpine-nginx-php7:latest
+    Image: nvidia/cuda:9.0-cudnn7-devel
   Name: ""
   Platform: ""
-  SourceCode: FROM combro2k/alpine-nginx-php7:latest
+  SourceCode: FROM nvidia/cuda:9.0-cudnn7-devel

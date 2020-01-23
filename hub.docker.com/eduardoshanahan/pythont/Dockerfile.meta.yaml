@@ -1,0 +1,129 @@
+MetaArgs:
+- DefaultValue: null
+  Key: ARCH
+  ProvidedValue: null
+  Value: null
+- DefaultValue: null
+  Key: BASEIMAGE_BRANCH
+  ProvidedValue: null
+  Value: null
+Stages:
+- As: builder
+  BaseName: $ARCH/alpine:3.10.2
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build_tmp/qemu/
+    - /usr/bin/
+  - CmdLine:
+    - "printf \"http://dl-cdn.alpinelinux.org/alpine/edge/testing\\\\n\" >> /etc/apk/repositories
+      && \tapk update && \tapk --no-cache add \t\tlibmodbus-dev \t\tlinux-headers
+      \t\tca-certificates \t\tmake \t\tfile \t\tgcc \t\tg++ \t\tgit \t\twget"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "mkdir /build && \tmkdir /build/SDM120C && \tgit clone https://github.com/gianfrdp/SDM120C
+      /build/SDM120C && \tmake -s -C /build/SDM120C/ clean && \tmake -s -C /build/SDM120C/
+      && \twget http://www.curtronics.com/Solar/ftp/aurora-1.9.3.tar.gz -P /build/
+      && \ttar -xzvf /build/aurora*.tar.gz -C /build/ && \trm /build/aurora*.tar.gz
+      && \tmv /build/aurora* /build/aurora && \tln -s /usr/include/linux/can/error.h
+      /usr/include/error.h && \tmake -s -C /build/aurora/ clean && \tmake -s -C /build/aurora/"
+    Name: run
+    PrependShell: true
+  From:
+    Image: $ARCH/alpine:3.10.2
+  Name: builder
+  Platform: ""
+  SourceCode: FROM $ARCH/alpine:3.10.2 as builder
+- BaseName: edofede/nginx-php-fpm:$BASEIMAGE_BRANCH-$ARCH
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/SDM120C/sdm120c
+    - /build/aurora/aurora
+    - /usr/local/bin/
+  - CmdLine:
+    - "apk update && \tapk --no-cache add \t\trrdtool && \tprintf \"http://dl-cdn.alpinelinux.org/alpine/edge/testing\\\\n\"
+      >> /etc/apk/repositories && \tapk update && \tapk --no-cache add \t\tlibmodbus
+      \t\tlibmodbus-doc && \trm -rf /var/cache/apk/* && \tsed -i \"$ d\" /etc/apk/repositories
+      && \tcp /usr/share/zoneinfo/Europe/Rome /etc/localtime"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - imageFiles/
+    - /
+  - CmdLine:
+    - "sed -i \"s/;cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/\" /etc/php7/php.ini && \tadduser
+      nginx dialout && \tadduser nginx uucp && \tchmod 755 /var/www/scripts/update123solarAndMetern.sh
+      && \tchmod 755 /var/www/scripts/updateComapps.sh && \tchmod 4711 /usr/local/bin/sdm120c
+      /usr/local/bin/aurora && \t/var/www/scripts/update123solarAndMetern.sh && \t/var/www/scripts/updateComapps.sh
+      && \tprintf \"admin:$(openssl passwd -crypt admin)\\\\n\" > /var/www/123solar/config/.htpasswd
+      && \tprintf \"admin:$(openssl passwd -crypt admin)\\\\n\" > /var/www/metern/config/.htpasswd
+      && \tchown -R nginx:www-data /var/www && \tchmod 755 /var/www/123solar/ /var/www/metern/
+      /var/www/comapps/ && \tsed -i -e 's/\\r$//' /var/www/comapps/* && \tprintf \"\\\\n\"
+      >> /var/www/comapps/pooler485.sh && \tln -s /var/www/comapps/cleanlog.sh /usr/local/bin/cleanlog
+      && \tln -s /var/www/comapps/eflow.php /usr/local/bin/eflow && \tln -s /var/www/comapps/eflowlive.php
+      /usr/local/bin/eflowlive && \tln -s /var/www/comapps/houseenergy.php /usr/local/bin/houseenergy
+      && \tln -s /var/www/comapps/pool123s.php /usr/local/bin/pool123s && \tln -s
+      /var/www/comapps/pooler485.sh /usr/local/bin/pooler485 && \tln -s /var/www/comapps/poolerconsumi.php
+      /usr/local/bin/poolerconsumi && \tln -s /var/www/comapps/poolerproduzione.php
+      /usr/local/bin/poolerproduzione && \tln -s /var/www/comapps/pooltot.php /usr/local/bin/pooltot
+      && \tln -s /var/www/comapps/reqLineValues.php /usr/local/bin/reqLineValues &&
+      \tln -s /var/www/comapps/reqsdm.php /usr/local/bin/reqsdm && \tln -s /var/www/comapps/testcom.php
+      /usr/local/bin/testcom"
+    Name: run
+    PrependShell: true
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: maintainer
+      Value: '"Edoardo Federici <hello@edoardofederici.com>"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0.0-rc.1"'
+    - Key: org.label-schema.vendor
+      Value: '"Edoardo Federici"'
+    - Key: org.label-schema.url
+      Value: '"https://edoardofederici.com/123solar-metern-synology-docker/"'
+    - Key: org.label-schema.name
+      Value: '"123solar-metern"'
+    - Key: org.label-schema.description
+      Value: '"Docker image for 123Solar and meterN web apps"'
+    - Key: org.label-schema.version
+      Value: $VERSION
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/EdoFede/123Solar-meterN"'
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.docker.cmd
+      Value: '"SERVER_PORT=10080 && docker create --name 123Solar-meterN --device=/dev/ttyUSB0:rwm
+        --volume 123solar_config:/var/www/123solar/config --volume 123solar_data:/var/www/123solar/data
+        --volume metern_config:/var/www/metern/config --volume metern_data:/var/www/metern/data
+        -p $SERVER_PORT:80 edofede/123solar-metern:latest"'
+    Name: label
+  - Name: volume
+    Volumes:
+    - /var/www/123solar/config
+    - /var/www/123solar/data
+    - /var/www/metern/config
+    - /var/www/metern/data
+  From:
+    Image: edofede/nginx-php-fpm:$BASEIMAGE_BRANCH-$ARCH
+  Name: ""
+  Platform: ""
+  SourceCode: FROM edofede/nginx-php-fpm:$BASEIMAGE_BRANCH-$ARCH

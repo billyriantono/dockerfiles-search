@@ -1,0 +1,107 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:latest
+  Commands:
+  - Key: TOXCORE_VERSION
+    Name: arg
+    Value: v0.2.9
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - apk add --no-cache build-base cmake git libsodium-dev libconfig-dev yasm     linux-headers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/TokTok/c-toxcore.git .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git checkout ${TOXCORE_VERSION}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cmake . -DBUILD_TOXAV=OFF -DDHT_BOOTSTRAP=OFF -DENABLE_STATIC=OFF -DUSE_STDERR_LOGGER=ON
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -j$(nproc) && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip /usr/local/bin/tox-bootstrapd
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:latest as builder
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - adduser -h /var/lib/tox-bootstrapd -S -s /sbin/nologin tox-bootstrapd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache libsodium libconfig bash jq curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch /etc/tox-bootstrapd.conf     && chown tox-bootstrapd /etc/tox-bootstrapd.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/tox-bootstrapd
+    - /usr/local/bin/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib64/libtoxcore.so.2
+    - /usr/local/lib/
+  - Name: workdir
+    Path: /var/lib/tox-bootstrapd
+  - Name: volume
+    Volumes:
+    - /var/lib/tox-bootstrapd
+  - Name: user
+    User: tox-bootstrapd
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - get-nodes.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --config
+    - /etc/tox-bootstrapd.conf
+    - --log-backend
+    - stdout
+    - --foreground
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - 33445/tcp
+    - 33445/udp
+    - 3389/tcp
+    - 443/tcp
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

@@ -20,7 +20,7 @@ ENV SHELL  "/bin/bash"
 ENV TZ     "UTC"
 
 ENV OPENJDK_RELEASE              "8"
-ENV CROWD_VERSION                "3.7.1"
+ENV CROWD_VERSION                "3.6.0"
 ENV CROWD_OWNER                  "crowd"
 ENV CROWD_GROUP                  "crowd"
 ENV CROWD_HOME                   "/var/atlassian/application-data/crowd"
@@ -42,7 +42,7 @@ WORKDIR $CROWD_HOME
 EXPOSE 8020
 EXPOSE 8095
 
-ENTRYPOINT [ "dumb-init", "--", "docker-entrypoint.sh" ]
+ENTRYPOINT [ "tini", "-g", "--", "docker-entrypoint.sh" ]
 CMD        [ "start_crowd.sh", "-fg" ]
 
 # Hotfix for en_US.utf8 locale

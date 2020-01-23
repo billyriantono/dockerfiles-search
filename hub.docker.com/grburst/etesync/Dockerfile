@@ -1,4 +1,4 @@
-FROM python:latest
+FROM python:alpine
 
 ENV BASE_DIR /etesync
 ENV DATA_DIR /data
@@ -21,22 +21,28 @@ WORKDIR $BASE_DIR
 ADD https://github.com/etesync/server-skeleton/archive/master.tar.gz $BASE_DIR
 
 RUN set -e && \
-    groupadd -r -g $PGID etesync && \
-    useradd -d $BASE_DIR -r -M -s /bin/sh -g $PGID -u $PUID etesync && \
+    addgroup -g $PGID -S etesync && \
+    adduser -h $BASE_DIR -s /bin/sh -D -H -G etesync -u $PUID etesync && \
     mkdir -p $DATA_DIR && \
     mkdir -p $CERT_DIR && \
     mkdir -p $STATIC_DIR && \
-    tar xvf $BASE_DIR/master.tar.gz -C $BASE_DIR --strip-components=1 --exclude="example-configs" --exclude-vcs && \
+    tar x -v -z -f $BASE_DIR/master.tar.gz -C /tmp --exclude */example-configs --exclude */.git* && \
+    mv /tmp/server-master/* $BASE_DIR/ && \
+    apk add --no-cache openssl libressl && \
+    apk add --no-cache mailcap && \
+    apk add --no-cache --virtual .build-deps coreutils gcc make linux-headers libc-dev libressl-dev && \
     pip install -r $BASE_DIR/requirements.txt uwsgi && \
+    apk del .build-deps && \
     $BASE_DIR/manage.py collectstatic && \
     mv $BASE_DIR/static $STATIC_DIR/ && \
     ln -s $STATIC_DIR/static $BASE_DIR/static && \
-    rm $BASE_DIR/master.tar.gz $BASE_DIR/requirements.txt $SECRET_FILE
+    rm $BASE_DIR/master.tar.gz $BASE_DIR/requirements.txt $SECRET_FILE && \
+    rm -r /tmp/server-master
 
 COPY context /
 
 # Fix permissions
-RUN chown -h etesync:etesync $BASE_DIR/static  && \
+RUN chown -h etesync:etesync $BASE_DIR/static && \
     chown -R etesync:etesync $STATIC_DIR && \
     chmod -R a=rX $STATIC_DIR && \
     chown -R etesync:etesync $DATA_DIR && \

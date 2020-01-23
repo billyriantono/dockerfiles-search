@@ -1,4 +1,4 @@
-FROM php:7.4.0-fpm
+FROM php:7.2.24-fpm
 
 ARG IBM_DSDRIVER_PACKAGE=ibm_data_server_driver_package_linuxx64_v11.1.tar.gz
 ARG IBM_DSDRIVER_ODBC=dsdriver/odbc_cli_driver/linuxamd64/ibm_data_server_driver_for_odbc_cli.tar.gz
@@ -22,8 +22,10 @@ RUN set -xe \
         libaio1 \
         libbz2-dev \
         libc-client-dev \
+        libfreetype6-dev \
         libgmp-dev \
         libicu-dev \
+        libjpeg-dev \
         libjpeg62-turbo \
         libjpeg62-turbo-dev \
         libkrb5-dev \
@@ -83,7 +85,9 @@ RUN set -xe \
         /tmp/${ORACLE_INSTANTCLIENT_SDK} \
         -d /opt/oracle \
 &&  rm -f /tmp/${ORACLE_INSTANTCLIENT_SDK} \
-&&  PHP_OPENSSL=yes docker-php-ext-configure \
+&&  docker-php-ext-configure \
+        gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/ \
+&&  docker-php-ext-configure \
         imap --with-imap-ssl --with-kerberos \
 &&  docker-php-ext-configure \
         oci8 --with-oci8=instantclient,${ORACLE_HOME} \
@@ -115,6 +119,7 @@ RUN set -xe \
         sysvsem \
         sysvshm \
         tidy \
+        wddx \
         xmlrpc \
         xsl \
         zip \
@@ -130,19 +135,19 @@ RUN set -xe \
 &&  pecl install \
         ibm_db2 \
         igbinary \
-        mcrypt \
+        mcrypt-1.0.1 \
         mongodb \
-        # oauth \ https://bugs.php.net/bug.php?id=78027
-        pdo_sqlsrv-5.7.0preview \
+        oauth \
+        pdo_sqlsrv \
         redis \
-        sqlsrv-5.7.0preview \
+        sqlsrv \
         xdebug \
 &&  docker-php-ext-enable \
         ibm_db2 \
         igbinary \
         mcrypt \
         mongodb \
-        # oauth \ 
+        oauth \
         pdo_ibm \
         pdo_sqlsrv \
         redis \
@@ -152,8 +157,10 @@ RUN set -xe \
 &&  apt-get remove -y \
         libbz2-dev \
         libc-client-dev \
+        libfreetype6-dev \
         libgmp-dev \
         libicu-dev \
+        libjpeg-dev \
         libjpeg62-turbo-dev \
         libkrb5-dev \
         libldap2-dev \
@@ -172,7 +179,3 @@ RUN set -xe \
 &&  rm -rf /tmp/*
 
 COPY configs/ /
-
-EXPOSE 9000
-
-CMD ["php-fpm"]

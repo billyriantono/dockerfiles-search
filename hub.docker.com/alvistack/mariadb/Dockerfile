@@ -19,14 +19,14 @@ ENV LC_ALL "en_US.utf8"
 ENV SHELL  "/bin/bash"
 ENV TZ     "UTC"
 
-ENV MARIADB_RELEASE "10.2"
+ENV MARIADB_RELEASE "10.3"
 
 VOLUME  /var/lib/mysql
 WORKDIR /var/lib/mysql
 
 EXPOSE 3389
 
-ENTRYPOINT [ "dumb-init", "--", "docker-entrypoint.sh" ]
+ENTRYPOINT [ "tini", "-g", "--", "docker-entrypoint.sh" ]
 CMD        [ "mysqld" ]
 
 # Hotfix for en_US.utf8 locale

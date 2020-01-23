@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- As: builder-atlas
+  BaseName: maven:3.5.3-jdk-8
+  Commands:
+  - Env:
+    - Key: REPO
+      Value: https://git-wip-us.apache.org/repos/asf/atlas.git
+    Name: env
+  - Env:
+    - Key: BRANCH
+      Value: branch-1.0
+    Name: env
+  - Env:
+    - Key: MAVEN_OPTS
+      Value: '"-Xms2g -Xmx2g"'
+    Name: env
+  - CmdLine:
+    - "git clone --branch ${BRANCH} ${REPO} atlas \t&& cd atlas \t&& mvn clean -DskipTests
+      package -Pdist,embedded-hbase-solr \t&& mv distro/target/apache-atlas-*-bin.tar.gz
+      /apache-atlas.tar.gz"
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:3.5.3-jdk-8
+  Name: builder-atlas
+  Platform: ""
+  SourceCode: FROM maven:3.5.3-jdk-8 AS builder-atlas
+- BaseName: openjdk:8-jdk-alpine
+  Commands:
+  - Env:
+    - Key: ATLAS_HOME
+      Value: /opt/atlas
+    Name: env
+  - Chown: ""
+    From: builder-atlas
+    Name: copy
+    SourcesAndDest:
+    - /apache-atlas.tar.gz
+    - /apache-atlas.tar.gz
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - scripts/start_atlas.sh
+    - /usr/bin/start_atlas.sh
+  - CmdLine:
+    - "apk --no-cache add tar python bash supervisor \t&& mkdir -p ${ATLAS_HOME} \t&&
+      mkdir -p /var/lib/atlas \t&& tar xvz -C ${ATLAS_HOME} -f /apache-atlas.tar.gz
+      --strip-component=1 \t&& rm -rf /apache-atlas.tar.gz \t&& mkdir -p ${ATLAS_HOME}/libext
+      \t&& mv /opt/atlas/conf/hbase/hbase-site.xml.template /opt/atlas/conf/hbase/hbase-site.xml"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - data/je-7.5.11.tar.gz
+    - /tmp
+  - CmdLine:
+    - "cd /tmp \t&& tar xvzf je-7.5.11.tar.gz \t&& mv je-7.5.11/lib/* ${ATLAS_HOME}/libext/
+      \t&& rm -rf je-7.5.11*"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - http://archive.apache.org/dist/zookeeper/zookeeper-3.4.9/zookeeper-3.4.9.tar.gz
+    - /tmp
+  - CmdLine:
+    - "cd /tmp  \t&& tar xvfz zookeeper-3.4.9.tar.gz \t&& mkdir -p ${ATLAS_HOME}/zk
+      \t&& mv zookeeper-3.4.9/* ${ATLAS_HOME}/zk \t&& mv ${ATLAS_HOME}/zk/conf/zoo_sample.cfg
+      ${ATLAS_HOME}/zk/conf/zoo.cfg \t&& rm -rf zookeeper* \t&& mv ${ATLAS_HOME}/conf/atlas-application.properties
+      ${ATLAS_HOME}/conf/atlas-application.properties.bak"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisor/*.ini
+    - /etc/supervisor.d/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - conf/atlas-application.properties
+    - ${ATLAS_HOME}/conf/
+  - Name: expose
+    Ports:
+    - "21000"
+  - CmdLine:
+    - supervisord
+    - -n
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jdk-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-alpine

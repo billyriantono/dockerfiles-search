@@ -139,7 +139,7 @@ RUN wget -q https://packages.microsoft.com/config/ubuntu/18.04/packages-microsof
     && sudo apt-get install apt-transport-https -y \
     && sudo apt-get update \
     && sudo apt-get install dotnet-sdk-2.1 -y \
-    && sudo apt-get install dotnet-sdk-3.0 -y     
+    && sudo apt-get install dotnet-sdk-3.1 -y
 
 # Enable detection of running in a container
 ENV DOTNET_RUNNING_IN_CONTAINER=true \

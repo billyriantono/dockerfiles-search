@@ -1,46 +1,54 @@
-#
-# THIS DOCKERFILE IS GENERATED VIA "update.sh"
-#
-# PLEASE DO NOT EDIT IT DIRECTLY.
-#
-FROM debian:jessie
-MAINTAINER Arvid van den Brink <a.b.vandenbrink@alumnus.utwente.nl>
-ENV DEBIAN_FRONTEND noninteractive
+FROM brightcommerce/ubuntu:14.04.20140911
 
-#Build dependencies
-RUN apt-get update \
-  && apt-get install --no-install-recommends -y \
-    wget perl perl-tk fontconfig libwww-perl \
-  && apt-get clean \
-  && rm -rf /var/lib/apt/lists/*
-    
-#Configuration
-COPY texlive.profile /
-WORKDIR /data
-ENV TEXLIVE_VERSION 2018
-ENV TEXDIR /usr/local/texlive/$TEXLIVE_VERSION
-ENV TEXMFCONFIG /data/.texlive$TEXLIVE_VERSION/texmf-config
-ENV TEXMFHOME /data/texmf
-ENV TEXMFLOCAL /usr/local/texlive/texmf-local
-ENV TEXMFSYSCONFIG /usr/local/texlive/$TEXLIVE_VERSION/texmf-config
-ENV TEXMFSYSVAR /usr/local/texlive/$TEXLIVE_VERSION/texmf-var
-ENV TEXMFVAR /data/.texlive$TEXLIVE_VERSION/texmf-var
+MAINTAINER Brightcommerce <support@brightcommerce.com>
 
-            
-RUN apt-get update \
-  && apt-get install --no-install-recommends -y \
-    curl \
-  && apt-get clean \
-  && rm -rf /var/lib/apt/lists/*
-  
-RUN URL="$(curl -sILw '%{url_effective}' http://mirror.ctan.org/systems/texlive/tlnet/install-tl-unx.tar.gz -o /dev/null)" && echo $URL \
-  && wget $URL \
-  && wget $URL.sha512 \
-  && sha512sum -c install-tl-unx.tar.gz.sha512 \
-  && tar xzvf install-tl-unx.tar.gz \
-  && ./install-tl-*/install-tl -profile /texlive.profile -no-persistent-downloads \
-  && rm -rf install-tl-*
+ENV HOME /root
 
-ENV PATH="${TEXDIR}/bin/x86_64-linux:${PATH}"
+RUN add-apt-repository -y ppa:git-core/ppa \
+ && add-apt-repository -y ppa:brightbox/ruby-ng \
+ && add-apt-repository -y ppa:nginx/stable \
+ && apt-get update \
+ && apt-get install -y build-essential \
+                       checkinstall \
+                       cmake \
+                       postgresql-client \
+                       nginx \
+                       git-core \
+                       openssh-server \
+                       python2.7 \
+                       python-docutils \
+                       libmysqlclient-dev \
+                       libpq-dev \
+                       zlib1g-dev \
+                       libyaml-dev \
+                       libssl-dev \
+                       libgdbm-dev \
+                       libreadline-dev \
+                       libncurses5-dev \
+                       libffi-dev \
+                       libxml2-dev \
+                       libxslt-dev \
+                       libcurl4-openssl-dev \
+                       libicu-dev \
+                       ruby2.1 \
+                       ruby2.1-dev \
+ && gem install --no-ri --no-rdoc bundler
 
-VOLUME ["/data"]
+COPY assets/setup/ /app/setup/
+RUN chmod 755 /app/setup/install
+RUN /app/setup/install
+
+COPY assets/config/ /app/setup/config/
+COPY assets/init /app/init
+RUN chmod 755 /app/init
+
+EXPOSE 22
+EXPOSE 80
+EXPOSE 443
+
+VOLUME ["/home/git/data"]
+
+ENTRYPOINT ["/app/init"]
+CMD ["app:start"]
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*

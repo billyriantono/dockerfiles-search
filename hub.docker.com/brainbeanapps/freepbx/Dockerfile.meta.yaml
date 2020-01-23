@@ -1,0 +1,147 @@
+MetaArgs:
+- DefaultValue: latest-lts
+  Key: ASTERISK_VERSION
+  ProvidedValue: null
+  Value: latest-lts
+Stages:
+- BaseName: brainbeanapps/asterisk:${ASTERISK_VERSION}
+  Commands:
+  - Key: FREEPBX_VERSION
+    Name: arg
+    Value: "14.0"
+  - Key: FREEPBX_DBENGINE
+    Name: arg
+    Value: mysql
+  - Key: FREEPBX_DBNAME
+    Name: arg
+    Value: asterisk
+  - Key: FREEPBX_CDRDBNAME
+    Name: arg
+    Value: asteriskcdrdb
+  - Key: FREEPBX_DBUSER
+    Name: arg
+    Value: root
+  - Key: FREEPBX_DBPASS
+    Name: arg
+    Value: ""
+  - Key: FREEPBX_USER
+    Name: arg
+    Value: asterisk
+  - Key: FREEPBX_GROUP
+    Name: arg
+    Value: asterisk
+  - Key: FREEPBX_WEBROOT
+    Name: arg
+    Value: /var/www/html
+  - Key: FREEPBX_ASTETCDIR
+    Name: arg
+    Value: /etc/asterisk
+  - Key: FREEPBX_ASTMODDIR
+    Name: arg
+    Value: /usr/lib/asterisk/modules
+  - Key: FREEPBX_ASTVARLIBDIR
+    Name: arg
+    Value: /var/lib/asterisk
+  - Key: FREEPBX_ASTAGIDIR
+    Name: arg
+    Value: /var/lib/asterisk/agi-bin
+  - Key: FREEPBX_ASTSPOOLDIR
+    Name: arg
+    Value: /var/spool/asterisk
+  - Key: FREEPBX_ASTRUNDIR
+    Name: arg
+    Value: /var/run/asterisk
+  - Key: FREEPBX_ASTLOGDIR
+    Name: arg
+    Value: /var/log/asterisk
+  - Key: FREEPBX_AMPBIN
+    Name: arg
+    Value: /var/lib/asterisk/bin
+  - Key: FREEPBX_AMPSBIN
+    Name: arg
+    Value: /usr/sbin
+  - Key: FREEPBX_AMPCGIBIN
+    Name: arg
+    Value: /var/www/cgi-bin
+  - Key: FREEPBX_AMPPLAYBACK
+    Name: arg
+    Value: /var/lib/asterisk/playback
+  - CmdLine:
+    - yum -y update &&   yum -y install epel-release &&   yum -y install bash &&   yum
+      clean all &&   rm -rf /var/cache/yum
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum -y install https://mirror.webtatic.com/yum/el7/webtatic-release.rpm &&   yum
+      -y install php56w php56w-pdo php56w-mysql php56w-mbstring php56w-pear php56w-process
+      php56w-xml php56w-opcache     php56w-ldap php56w-intl php56w-soap php56w-gd     &&   yum
+      clean all &&   rm -rf /var/cache/yum &&   sed -i 's/\(^upload_max_filesize =
+      \).*/\1128M/' /etc/php.ini &&   sed -i 's/\(^memory_limit = \).*/\1256M/' /etc/php.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL https://rpm.nodesource.com/setup_8.x | bash - &&   yum install -y nodejs
+      &&   yum clean all &&   rm -rf /var/cache/yum
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum -y install mariadb-server &&   yum clean all &&   rm -rf /var/cache/yum
+      &&   chown -R mysql:mysql /var/lib/mysql &&   mysql_install_db --user=mysql
+      &&   (mysqld_safe > /dev/null 2>&1 &) && sleep 5 &&   mysql -e "DELETE FROM
+      mysql.user WHERE User='';" &&   mysql -e "DELETE FROM mysql.user WHERE User='root'
+      AND Host NOT IN ('localhost', '127.0.0.1', '::1');" &&   mysql -e "DROP DATABASE
+      IF EXISTS test;" &&   mysql -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';"
+      &&   mysql -e "FLUSH PRIVILEGES;" &&   mysqladmin --socket=/var/lib/mysql/mysql.sock
+      shutdown
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum -y install httpd &&   yum clean all &&   rm -rf /var/cache/yum &&   sed
+      -i "s/^\(User\).*/\1 ${FREEPBX_USER}/" /etc/httpd/conf/httpd.conf &&   sed -i
+      "s/^\(Group\).*/\1 ${FREEPBX_GROUP}/" /etc/httpd/conf/httpd.conf &&   sed -i
+      "s/AllowOverride None/AllowOverride All/" /etc/httpd/conf/httpd.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd "${FREEPBX_GROUP}" &&   adduser "${FREEPBX_USER}" -g "${FREEPBX_GROUP}"
+      -G mysql,mail -m -c "Asterisk User" &&   chown -R "${FREEPBX_USER}:${FREEPBX_GROUP}"
+      "${FREEPBX_ASTETCDIR}" &&   chown -R "${FREEPBX_USER}:${FREEPBX_GROUP}" "${FREEPBX_ASTVARLIBDIR}"
+      &&   chown -R "${FREEPBX_USER}:${FREEPBX_GROUP}" "${FREEPBX_ASTSPOOLDIR}" &&   chown
+      -R "${FREEPBX_USER}:${FREEPBX_GROUP}" "${FREEPBX_ASTLOGDIR}" &&   chown "${FREEPBX_USER}:${FREEPBX_GROUP}"
+      "${FREEPBX_ASTRUNDIR}"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/freepbx
+  - CmdLine:
+    - curl -fsSLo /tmp/freepbx.tar.gz http://mirror.freepbx.org/modules/packages/freepbx/freepbx-${FREEPBX_VERSION}-latest.tgz
+      &&   yum -y localinstall --nogpgcheck https://download1.rpmfusion.org/free/el/rpmfusion-free-release-7.noarch.rpm
+      &&   yum -y install mysql-connector-odbc net-tools sendmail sendmail-cf crontabs
+      rsync sox lame ffmpeg openssl gcc-c++     icu libicu-devel openssh-clients     &&   yum
+      clean all &&   rm -rf /var/cache/yum &&   tar -xzf /tmp/freepbx.tar.gz -C .
+      --strip-components=1 &&   chmod g+rwx /var/spool/mqueue &&   sed -i "s/-U asterisk/-U
+      ${FREEPBX_USER}/" ./start_asterisk &&   sed -i "s/-G asterisk/-G ${FREEPBX_GROUP}/"
+      ./start_asterisk &&   ./start_asterisk start &&   (mysqld_safe > /dev/null 2>&1
+      &) && sleep 5 &&   ./install -vv     --dbengine="${FREEPBX_DBENGINE}"     --dbname="${FREEPBX_DBNAME}"     --cdrdbname="${FREEPBX_CDRDBNAME}"     --dbuser="${FREEPBX_DBUSER}"     --dbpass="${FREEPBX_DBPASS}"     --user="${FREEPBX_USER}"     --group="${FREEPBX_GROUP}"     --webroot="${FREEPBX_WEBROOT}"     --astetcdir="${FREEPBX_ASTETCDIR}"     --astmoddir="${FREEPBX_ASTMODDIR}"     --astvarlibdir="${FREEPBX_ASTVARLIBDIR}"     --astagidir="${FREEPBX_ASTAGIDIR}"     --astspooldir="${FREEPBX_ASTSPOOLDIR}"     --astrundir="${FREEPBX_ASTRUNDIR}"     --astlogdir="${FREEPBX_ASTLOGDIR}"     --ampbin="${FREEPBX_AMPBIN}"     --ampsbin="${FREEPBX_AMPSBIN}"     --ampcgibin="${FREEPBX_AMPCGIBIN}"     --ampplayback="${FREEPBX_AMPPLAYBACK}"     &&   rm
+      -rf /tmp/freepbx &&   rm -rf /tmp/freepbx.tar.gz &&   fwconsole stop --immediate
+      --maxwait=60 --no-interaction -vv &&   mysqladmin --socket=/var/lib/mysql/mysql.sock
+      shutdown
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: brainbeanapps/asterisk:${ASTERISK_VERSION}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM brainbeanapps/asterisk:${ASTERISK_VERSION}

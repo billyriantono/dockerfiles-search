@@ -1,0 +1,90 @@
+MetaArgs: null
+Stages:
+- As: build-tools
+  BaseName: ubuntu:bionic
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y     build-essential     cmake     curl     git     tar     unzip     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - git clone https://github.com/Microsoft/vcpkg.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: vcpkg
+  - CmdLine:
+    - ./bootstrap-vcpkg.sh && ./vcpkg integrate install
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:bionic
+  Name: build-tools
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic AS build-tools
+- As: build-restsdk
+  BaseName: build-tools
+  Commands:
+  - Name: workdir
+    Path: /src/vcpkg
+  - CmdLine:
+    - ./vcpkg install cpprestsdk     && rm -rf buildtrees     && rm -rf downloads     &&
+      rm -rf packages
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build-tools
+  Name: build-restsdk
+  Platform: ""
+  SourceCode: FROM build-tools AS build-restsdk
+- As: build-wserv
+  BaseName: build-restsdk
+  Commands:
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - git clone https://github.com/ehnat0n/aqw-opcua-server.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ./aqw-opcua-server/build
+  - CmdLine:
+    - cmake -DCMAKE_TOOLCHAIN_FILE="../../vcpkg/scripts/buildsystems/vcpkg.cmake"
+      -DCMAKE_BUILD_TYPE=Release ..     && cmake --build . --config Release
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: build-restsdk
+  Name: build-wserv
+  Platform: ""
+  SourceCode: FROM build-restsdk AS build-wserv
+- BaseName: ubuntu:bionic
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y     ca-certificates     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt/weather-server
+  - Chown: ""
+    From: build-wserv
+    Name: copy
+    SourcesAndDest:
+    - /src/aqw-opcua-server/build/bin/aqw-opcua-server
+    - ./
+  - CmdLine:
+    - ./aqw-opcua-server
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:bionic
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic

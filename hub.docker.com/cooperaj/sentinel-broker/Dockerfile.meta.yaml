@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: golang:1.9
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/cooperaj/sentinel-broker
+  - Name: workdir
+    Path: /go/src/github.com/cooperaj/sentinel-broker
+  - CmdLine:
+    - go get -u github.com/golang/dep/cmd/dep     && dep ensure -vendor-only     &&
+      CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-extldflags
+      "-static"' -o app .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.9
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM golang:1.9 AS build-env
+- BaseName: scratch
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: maintainer
+      Value: '"Adam Cooper <adam@networkpie.co.uk>"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.name
+      Value: '"Sentinel Broker"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/cooperaj/sentinel-broker.git"'
+    - Key: org.label-schema.version
+      Value: '"0.8.9"'
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    Name: label
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/cooperaj/sentinel-broker/app
+    - /app/sentinel-broker
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/cooperaj/sentinel-broker/sentinel-config.json
+    - /app/sentinel-config.json
+  - Name: workdir
+    Path: /app
+  - Name: expose
+    Ports:
+    - "8080"
+  - Health:
+      Interval: 10000000000
+      StartPeriod: 20000000000
+      Test:
+      - CMD-SHELL
+      - wget -q http://localhost:8080/healthcheck || exit 1
+      Timeout: 2000000000
+    Name: healthcheck
+  - CmdLine:
+    - ./sentinel-broker
+    Name: cmd
+    PrependShell: false
+  - Expression: ADD ./sentinel-config.json /app/sentinel-config.json
+    Name: onbuild
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

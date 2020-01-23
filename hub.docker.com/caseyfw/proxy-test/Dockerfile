@@ -1,17 +1,17 @@
-FROM openjdk:alpine
+FROM alpine:latest
 
-RUN apk --update --no-cache add php7 php7-json php7-phar php7-openssl php7-ctype php7-mbstring php7-pdo_sqlite php7-tokenizer php7-xml php7-zlib curl
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-RUN apk --update --no-cache add nodejs
+MAINTAINER carriera
 
-RUN apk --update --no-cache add git openssh-client
-RUN mkdir ~/.ssh && \
-  chmod 700 ~/.ssh && \
-  touch ~/.ssh\known_hosts && \
-  ssh-keyscan github.com >> ~/.ssh/known_hosts && \
-  chmod 600 ~/.ssh\known_hosts
+RUN apk add --no-cache nginx nano vim
 
-ADD script.sh /script.sh
-RUN chmod 755 /script.sh
+ADD conf/nginx.conf /etc/nginx/
+ADD conf/symfony.conf /etc/nginx/sites-enabled/
 
-ENTRYPOINT ["/script.sh"]
+RUN echo "upstream php-upstream { server php:9000; }" > /etc/nginx/conf.d/upstream.conf
+
+WORKDIR /etc/nginx
+
+CMD ["nginx"]
+
+EXPOSE 80
+EXPOSE 443

@@ -1,0 +1,65 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:latest
+  Commands:
+  - Env:
+    - Key: REDMINE_BRANCH
+      Value: 3.4-stable
+    - Key: REDMINE_HOME
+      Value: /home/redmine
+    - Key: RAILS_ENV
+      Value: production
+    Name: env
+  - Name: workdir
+    Path: ${REDMINE_HOME}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /root/
+  - CmdLine:
+    - "set -ex &&\tchmod +x /root/docker-entrypoint.sh \t&&\tapk upgrade --update-cache
+      \t&&\tapk add --virtual .run-deps \ttzdata \ttini \truby \truby-json \truby-bigdecimal
+      \tlibressl \tlibxml2 \tlibxslt \txz-libs \timagemagick6 \tmariadb-connector-c
+      \tpostgresql-libs \tfreetds \tsqlite-libs &&\tln -s /usr/bin/convert-6 /usr/bin/convert
+      \t&&\tapk add --virtual .build-deps \tgit \tmake \tgcc \tlibc-dev \truby-dev
+      \tlibressl-dev \tlibxml2-dev \tlibxslt-dev \txz-dev \timagemagick6-dev \tmariadb-connector-c-dev
+      \tpostgresql-dev \tfreetds-dev \tsqlite-dev \t&&\techo \"gem: --no-document\"
+      > /etc/gemrc &&\tgem install bundler -v \"<2.0.0\" &&\tgit clone -b ${REDMINE_BRANCH}
+      https://github.com/redmine/redmine.git . &&\techo -e \"\\ngroup :${RAILS_ENV}
+      do\\n$(grep \"\\sgem\\s\\+\\(\\\"puma\\\"\\|\\'puma\\'\\)\" Gemfile || echo
+      \"  gem 'puma'\")\\nend\\n\" >> Gemfile &&      for adapter in mysql2 postgresql
+      sqlserver sqlite3; do \t\techo -e \"${RAILS_ENV}:\\n  adapter: ${adapter}\\n\"
+      > config/database.yml;                 bundle install --without development
+      test;                 mv Gemfile.lock Gemfile.lock.${adapter};         done
+      \t&&\tfor dir in `find $(gem env gemdir) -type f -name Makefile -exec dirname
+      {} \\;`; do \t\tcd $dir; \t\tmake clean; \tdone &&\tcd ${REDMINE_HOME} &&\tapk
+      del --purge .build-deps &&\trm -fr /var/cache/apk/* \t/root/.bundle \t/root/.gem
+      \t$(gem env gemdir)/cache \t.git* \t.*ignore \t$(find . -type f -name delete.me)
+      \tconfig/database.yml"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - ${REDMINE_HOME}/files
+    - ${REDMINE_HOME}/log
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - /root/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - rails
+    - server
+    - -b
+    - 0.0.0.0
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: "FROM\talpine:latest"

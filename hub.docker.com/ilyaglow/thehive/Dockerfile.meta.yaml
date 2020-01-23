@@ -1,0 +1,72 @@
+MetaArgs: null
+Stages:
+- As: build-env
+  BaseName: openjdk:8
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Ilya Glotov <contact@ilyaglotov.com>"'
+    - Key: repository
+      Value: '"https://github.com/TheHive-Project/TheHive"'
+    Name: label
+  - Key: THEHIVE_VERSION
+    Name: arg
+    Value: 3.3.1
+  - CmdLine:
+    - 'apt-get update   && apt-get install -y apt-transport-https     && echo "deb
+      https://dl.bintray.com/sbt/debian /" | tee -a /etc/apt/sources.list.d/sbt.list   &&
+      apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823   &&
+      apt-get update   && apt-get install -y sbt     && curl -sL https://deb.nodesource.com/setup_8.x
+      | bash -   && apt-get install -y nodejs                         git                         libpng-dev                         sudo                           &&
+      npm install -g grunt-cli                     bower   && git -c advice.detachedHead=false             clone             --branch=$THEHIVE_VERSION             --depth=1             https://github.com/TheHive-Project/TheHive.git   &&
+      echo ''{"allow_root": true}'' > /root/.bowerrc   && cd TheHive   && sbt clean
+      stage   && mv /TheHive/target/universal/stage /opt/thehive   && mv /TheHive/package/docker/entrypoint
+      /opt/thehive/entrypoint   && echo "play.http.secret.key=$(tr -dc ''A-Za-z0-9''
+      < /dev/urandom | head -c 49)" >> /opt/thehive/conf/application.conf   && mkdir
+      /var/log/thehive   && apt-get purge -y git                       sbt                       nodejs                       libpng-dev   &&
+      rm -rf /TheHive   && rm -rf /root/*   && rm -rf /var/lib/apt/lists/*'
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8
+  Name: build-env
+  Platform: ""
+  SourceCode: FROM openjdk:8 as build-env
+- BaseName: openjdk:8
+  Commands:
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /opt/thehive
+    - /opt/thehive
+  - Chown: ""
+    From: build-env
+    Name: copy
+    SourcesAndDest:
+    - /var/log/thehive
+    - /var/log/thehive
+  - CmdLine:
+    - useradd thehive   && chown -R thehive /opt/thehive                       /var/log/thehive   &&
+      mkdir /etc/thehive   && cp /opt/thehive/conf/application.conf /etc/thehive/application.conf   &&
+      cp /opt/thehive/conf/logback.xml /etc/thehive/logback.xml   && echo 'search.host
+      = ["elasticsearch:9300"]\ncortex.url = ${?CORTEX_URL}\ncortex.key = ${?CORTEX_KEY}\nplay.http.secret.key
+      = ${?PLAY_SECRET}' >> /etc/thehive/application.conf   && chmod +x /opt/thehive/entrypoint
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: thehive
+  - Name: expose
+    Ports:
+    - "9000"
+  - Name: workdir
+    Path: /opt/thehive
+  - CmdLine:
+    - ./entrypoint
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8

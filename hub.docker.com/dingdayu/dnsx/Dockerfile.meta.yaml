@@ -1,0 +1,87 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:latest
+  Commands:
+  - Env:
+    - Key: GO111MODULE
+      Value: "on"
+    - Key: GOPROXY
+      Value: https://goproxy.io,direct
+    Name: env
+  - Name: workdir
+    Path: /opt
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - /opt
+  - CmdLine:
+    - go mod tidy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X 'dnsx/api/controller/v1.BuildTime=`date
+      +"%Y-%m-%d %H:%M:%S"`' -X dnsx/api/controller/v1.BuildVersion=1.0.1" -tags=jsoniter
+      -o dnsx .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:latest as builder
+- BaseName: alpine:latest
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"dingdayu <614422099@qq.com>"'
+    Name: label
+  - CmdLine:
+    - sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories     &&
+      apk --no-cache add ca-certificates tzdata curl
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DREAMENV
+      Value: TEST
+    - Key: DEPLOY_TYPE
+      Value: DOCKER
+    Name: env
+  - Name: workdir
+    Path: /opt/dnsx
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /opt/dnsx
+    - .
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /opt/config/config.yaml
+    - /opt/dnsx/config/config.yaml
+  - Name: expose
+    Ports:
+    - "53"
+    - 53/udp
+    - "8080"
+  - Health:
+      Interval: 5000000000
+      Test:
+      - CMD-SHELL
+      - curl -fs -X HEAD http://127.0.0.1:8080/health || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - /opt/dnsx/dnsx
+    - server
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

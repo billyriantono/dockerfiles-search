@@ -79,6 +79,25 @@ Stages:
     Name: run
     PrependShell: true
   - CmdLine:
+    - sed 's/^deb/deb-src/' /etc/apt/sources.list >         /etc/apt/sources.list.d/deb-src.list     &&
+      dpkg --add-architecture armhf     && apt-get update     && apt-get install -y         --no-install-recommends         libssl-dev:armhf         libc6-dev:armhf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update     && apt-get install -y         --no-install-recommends         gcc-arm-linux-gnueabihf     &&
+      mkdir -p ~/.cargo     && echo '[target.armv7-unknown-linux-gnueabihf]' >> ~/.cargo/config     &&
+      echo 'linker = "arm-linux-gnueabihf-gcc"' >> ~/.cargo/config
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: CARGO_HOME
+      Value: '"/root/.cargo"'
+    Name: env
+  - Env:
+    - Key: USER
+      Value: '"root"'
+    Name: env
+  - CmdLine:
     - USER=root cargo new --bin /app
     Name: run
     PrependShell: true
@@ -102,6 +121,26 @@ Stages:
     SourcesAndDest:
     - ./build.rs
     - ./build.rs
+  - Env:
+    - Key: CC_armv7_unknown_linux_gnueabihf
+      Value: '"/usr/bin/arm-linux-gnueabihf-gcc"'
+    Name: env
+  - Env:
+    - Key: CROSS_COMPILE
+      Value: '"1"'
+    Name: env
+  - Env:
+    - Key: OPENSSL_INCLUDE_DIR
+      Value: '"/usr/include/arm-linux-gnueabihf"'
+    Name: env
+  - Env:
+    - Key: OPENSSL_LIB_DIR
+      Value: '"/usr/lib/arm-linux-gnueabihf"'
+    Name: env
+  - CmdLine:
+    - rustup target add armv7-unknown-linux-gnueabihf
+    Name: run
+    PrependShell: true
   - CmdLine:
     - cargo build --features ${DB} --release
     Name: run
@@ -121,7 +160,7 @@ Stages:
     Name: run
     PrependShell: true
   - CmdLine:
-    - cargo build --features ${DB} --release
+    - cargo build --features ${DB} --release --target=armv7-unknown-linux-gnueabihf
     Name: run
     PrependShell: true
   From:
@@ -129,7 +168,7 @@ Stages:
   Name: build
   Platform: ""
   SourceCode: FROM rust:1.40 as build
-- BaseName: debian:buster-slim
+- BaseName: balenalib/armv7hf-debian:buster
   Commands:
   - Env:
     - Key: ROCKET_ENV
@@ -144,6 +183,10 @@ Stages:
       Value: "10"
     Name: env
   - CmdLine:
+    - cross-build-start
+    Name: run
+    PrependShell: false
+  - CmdLine:
     - apt-get update && apt-get install -y     --no-install-recommends     openssl     ca-certificates     curl     sqlite3     &&
       rm -rf /var/lib/apt/lists/*
     Name: run
@@ -152,6 +195,10 @@ Stages:
     - mkdir /data
     Name: run
     PrependShell: true
+  - CmdLine:
+    - cross-build-end
+    Name: run
+    PrependShell: false
   - Name: volume
     Volumes:
     - /data
@@ -177,7 +224,7 @@ Stages:
     From: build
     Name: copy
     SourcesAndDest:
-    - app/target/release/bitwarden_rs
+    - /app/target/armv7-unknown-linux-gnueabihf/release/bitwarden_rs
     - .
   - Chown: ""
     From: ""
@@ -199,7 +246,7 @@ Stages:
     Name: cmd
     PrependShell: false
   From:
-    Image: debian:buster-slim
+    Image: balenalib/armv7hf-debian:buster
   Name: ""
   Platform: ""
-  SourceCode: FROM debian:buster-slim
+  SourceCode: FROM balenalib/armv7hf-debian:buster

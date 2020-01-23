@@ -1,7 +1,28 @@
-FROM ubuntu:18.04
-RUN apt-get update && \
-apt-get install --no-install-recommends -y apt-transport-https ca-certificates gnupg software-properties-common wget && \
-wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | apt-key add - && \
-apt-add-repository 'deb https://apt.kitware.com/ubuntu/ bionic main' && \
-apt-get update && \
-apt-get install --no-install-recommends -y cmake g++ make qt5-default git lcov curl qtdeclarative5-dev qtbase5-dev qtquickcontrols2-5-dev xvfb ninja-build qml-module-qtquick-controls
+FROM alpine
+
+# default variables
+ENV COUNTRY "UK"
+ENV STATE "Greater London"
+ENV LOCATION "London"
+ENV ORGANISATION "Example"
+ENV ROOT_CN "Root"
+ENV ISSUER_CN "Example Ltd"
+ENV PUBLIC_CN "*.example.com"
+ENV ROOT_NAME "root"
+ENV ISSUER_NAME "example"
+ENV PUBLIC_NAME "public"
+ENV RSA_KEY_NUMBITS "2048"
+ENV DAYS "365"
+
+# install openssl
+RUN apk add --update openssl && \
+  rm -rf /var/cache/apk/*
+
+# certificate directories
+ENV CERT_DIR "/etc/ssl/certs"
+VOLUME ["$CERT_DIR"]
+
+COPY *.ext /
+COPY generate.sh /
+RUN chmod +x /generate.sh
+CMD ["/generate.sh"]

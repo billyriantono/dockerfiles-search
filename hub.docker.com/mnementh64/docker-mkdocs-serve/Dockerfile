@@ -1,17 +1,7 @@
-FROM python:3.5-jessie
-MAINTAINER mnementh64 s.caillet@free.fr
-
-ENV UID 1000
-ENV GID 1000
-
-# Install mkdocs
-RUN pip install mkdocs
-RUN pip install mkdocs-material
-
-RUN useradd -m mkdocuser
-
-RUN mkdir /mkdoc
-WORKDIR /mkdocs
-
-COPY entrypoint.sh /entrypoint.sh
-ENTRYPOINT ["bash", "/entrypoint.sh"]
+FROM logstash:5
+MAINTAINER mishra.akshay91@gmail.com
+ADD logs/iis.log /var/log/iis.log
+expose 5044
+# Add your logstash plugins setup here
+# Example: RUN logstash-plugin install logstash-filter-json
+RUN logstash-plugin install logstash-input-beats

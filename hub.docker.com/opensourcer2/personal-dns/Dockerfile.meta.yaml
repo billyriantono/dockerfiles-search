@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /src
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - set -ex  && apk --no-cache add       bash       curl       git       make  &&
+      go get -v       github.com/Luzifer/named-blacklist       github.com/Luzifer/rootzone  &&
+      rootzone >named.stubs  && make blacklist
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine as builder
+- BaseName: alpine:latest
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: Knut Ahlers <knut@ahlers.me>
+    Name: label
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - set -ex  && apk --no-cache add       bash       bind       bind-tools  && /usr/local/bin/build.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/named.stubs
+    - /etc/bind/
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/named.blacklist
+    - /etc/bind/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - named.conf
+    - /etc/bind/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /usr/local/bin/
+  - Name: expose
+    Ports:
+    - "53"
+    - 53/udp
+  - Health:
+      Interval: 30000000000
+      Test:
+      - CMD-SHELL
+      - dig +short @localhost health.pdns.luzifer.io A || exit 1
+      Timeout: 5000000000
+    Name: healthcheck
+  - CmdLine:
+    - /usr/local/bin/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

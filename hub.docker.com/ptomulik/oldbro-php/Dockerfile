@@ -1,22 +1,62 @@
-#
-# NOTE: FILE GENERATED VIA "update.sh"
-#
-# PLEASE DO NOT EDIT IT DIRECTLY
-#
-FROM php:7.1-cli-jessie
-MAINTAINER Paweł Tomulik <ptomulik@meil.pw.edu.pl>
+# RocksDB is the first dependency
+FROM buildpack-deps AS rocksdb
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-      libldap2-dev \
-      libsasl2-dev && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \
-    curl -L https://github.com/jwilder/dockerize/releases/download/v0.6.0/dockerize-linux-amd64-v0.6.0.tar.gz \
-         --output /tmp/dockerize-linux-amd64-v0.6.0.tar.gz && \
-    tar -C /usr/local/bin -zxvf /tmp/dockerize-linux-amd64-v0.6.0.tar.gz && \
-    rm -f /tmp/dockerize-linux-amd64-v0.6.0.tar.gz && \
-    docker-php-ext-configure ldap --with-libdir=lib/x86_64-linux-gnu --with-ldap-sasl && \
-    docker-php-ext-install ldap
+ENV INSTALL_PATH /opt/rocksdb
+RUN apt-get update -y &&                                                \
+    apt-get install -y                                                  \
+        libbz2-dev                                                      \
+        libgflags-dev                                                   \
+        liblz4-dev                                                      \
+        libsnappy-dev                                                   \
+        # libzstd-dev   Doesn't work during linking for some reason...
+        zlib1g-dev &&                                                   \
+    wget https://github.com/facebook/rocksdb/archive/v5.12.4.tar.gz &&  \
+    tar xzvf v5.12.4.tar.gz &&                                          \
+    make -C rocksdb-5.12.4 -j$(nproc) shared_lib &&                     \
+    make -C rocksdb-5.12.4 install
 
-# vim: set ft=dockerfile:
+# gRPC installs Protobuf too
+FROM buildpack-deps AS grpc
+
+ENV prefix /opt/grpc
+RUN git clone -b v1.11.x https://github.com/grpc/grpc &&    \
+    cd grpc &&                                              \
+    git submodule update --init &&                          \
+    make -j$(nproc) &&                                      \
+    make install &&                                         \
+    make -C third_party/protobuf install prefix=$prefix
+
+# This last step builds ProfaneDB
+FROM buildpack-deps AS builder
+
+COPY --from=rocksdb /opt/rocksdb/   /usr/local
+COPY --from=grpc    /opt/grpc/      /usr/local
+
+ADD . /profanedb
+
+RUN apt-get update -y &&                \
+    apt-get install -y                  \
+        cmake                           \
+        libboost-dev                    \
+        libboost-filesystem-dev         \
+        libboost-log-dev                \
+        libboost-program-options-dev    \
+        libboost-random-dev             \
+        libboost-test-dev               \
+        libbz2-dev                      \
+        libgflags-dev                   \
+        liblz4-dev                      \
+        libsnappy-dev                   \
+        zlib1g-dev &&                   \
+    mkdir /profanedb/build &&           \
+    cd /profanedb/build &&              \
+    cmake                               \
+        -D BUILD_PROFANEDB_SERVER=ON    \
+        -D BUILD_TESTS=ON               \
+        .. &&                           \
+    make -j$(nproc) &&                  \
+    make install
+
+VOLUME [ "/var/profanedb/schema" ]
+
+CMD [ "profanedb_server", "-c /usr/local/etc/profanedb/server.conf" ]

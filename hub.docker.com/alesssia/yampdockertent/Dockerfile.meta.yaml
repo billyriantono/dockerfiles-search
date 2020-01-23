@@ -1,0 +1,130 @@
+MetaArgs: null
+Stages:
+- BaseName: java:8-jre-alpine
+  Commands:
+  - Maintainer: Denis Baryshev <dennybaa@gmail.com>
+    Name: maintainer
+  - Env:
+    - Key: HADOOP_VERSION
+      Value: 2.7.6
+    Name: env
+  - Env:
+    - Key: HADOOP_HOME
+      Value: /usr/local/hadoop-${HADOOP_VERSION}
+    Name: env
+  - Env:
+    - Key: HADOOP_CONF_DIR
+      Value: /etc/hadoop
+    Name: env
+  - Env:
+    - Key: HADOOP_HDFS_USER
+      Value: hdfs
+    Name: env
+  - Key: GLIBC_APKVER
+    Name: arg
+    Value: 2.27-r0
+  - Key: GOSU_VERSION
+    Name: arg
+    Value: "1.10"
+  - Env:
+    - Key: HADOOP_OPTS
+      Value: -Djava.net.preferIPv4Stack=true
+    Name: env
+  - Env:
+    - Key: HADOOP_PORTMAP_OPTS
+      Value: -Xmx512m
+    Name: env
+  - Env:
+    - Key: HADOOP_CLIENT_OPTS
+      Value: -Xmx512m
+    Name: env
+  - Labels:
+    - Key: vendor
+      Value: ActionML
+    - Key: version_tags
+      Value: '"[\"2.7\",\"2.7.6\"]"'
+    Name: label
+  - CmdLine:
+    - echo "@community http://nl.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
+      &&     apk add --update --no-cache bash curl shadow@community &&               useradd
+      -mU -d /home/hadoop hadoop && passwd -d hadoop &&       useradd -mU -d /home/hdfs
+      -G hadoop hdfs && passwd -d hdfs &&       useradd -mU -d /home/hbase -G hadoop
+      hbase && passwd -d hbase &&       useradd -mU -d /home/aml aml && passwd -d
+      aml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sSL https://github.com/sgerrand/alpine-pkg-glibc/releases/download/$GLIBC_APKVER/sgerrand.rsa.pub             -o
+      /etc/apk/keys/sgerrand.rsa.pub &&     curl -sSLO https://github.com/sgerrand/alpine-pkg-glibc/releases/download/$GLIBC_APKVER/glibc-i18n-$GLIBC_APKVER.apk
+      &&     curl -sSLO https://github.com/sgerrand/alpine-pkg-glibc/releases/download/$GLIBC_APKVER/glibc-$GLIBC_APKVER.apk
+      &&     curl -sSLO https://github.com/sgerrand/alpine-pkg-glibc/releases/download/$GLIBC_APKVER/glibc-bin-$GLIBC_APKVER.apk
+      &&     apk add --no-cache glibc-$GLIBC_APKVER.apk glibc-bin-$GLIBC_APKVER.apk
+      glibc-i18n-$GLIBC_APKVER.apk &&     echo "export LANG=$LANG" > /etc/profile.d/locale.sh
+      &&       rm /etc/apk/keys/sgerrand.rsa.pub glibc-*.apk
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --update --no-cache --virtual .build-deps gnupg &&       curl -sSL https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64            -o
+      /usr/local/bin/gosu && chmod 755 /usr/local/bin/gosu &&       curl -sSL -o /tmp/gosu.asc
+      https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64.asc
+      &&         export GNUPGHOME=/tmp &&                   curl -L https://github.com/kelseyhightower/confd/releases/download/v0.16.0/confd-0.16.0-linux-amd64            -o
+      /usr/local/bin/confd && chmod 755 /usr/local/bin/confd &&     apk del .build-deps
+      && rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L http://www-us.apache.org/dist/hadoop/common/hadoop-$HADOOP_VERSION/hadoop-$HADOOP_VERSION.tar.gz         |
+      tar -xzp -C /usr/local &&       mv ${HADOOP_HOME}/etc/hadoop /etc/ &&       ln
+      -s /etc/hadoop/ ${HADOOP_HOME}/etc/hadoop &&       mkdir -p /hadoop/dfs/name
+      /hadoop/dfs/sname1 /hadoop/dfs/data1 &&       chown -R hdfs:hdfs /hadoop/dfs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L https://raw.githubusercontent.com/eficode/wait-for/master/wait-for >
+      /wait-for &&            chmod +x /wait-for
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /etc/hadoop
+    - /hadoop/dfs/name
+    - /hadoop/dfs/sname1
+    - /hadoop/dfs/data1
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./conf.d
+    - /etc/confd/conf.d
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./templates
+    - /etc/confd/templates
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./hdfs-site.xml
+    - ./hdfs-bootstrap-paths
+    - ${HADOOP_CONF_DIR}/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./*.sh
+    - /
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "50010"
+    - "50020"
+    - "50070"
+    - "50075"
+    - "50090"
+    - "8020"
+  From:
+    Image: java:8-jre-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM java:8-jre-alpine

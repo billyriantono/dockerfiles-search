@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- As: build-mongo-tool
+  BaseName: golang:1.11-stretch
+  Commands:
+  - Env:
+    - Key: MONGOTOOL_VERSION
+      Value: v3.0
+    Name: env
+  - Env:
+    - Key: VERSION_PACKAGE
+      Value: github.com/mongodb/mongo-tools/common/options
+    Name: env
+  - CmdLine:
+    - "cd / && \tgit clone -b \"${MONGOTOOL_VERSION}\" --depth 1 \"https://github.com/mongodb/mongo-tools\"
+      && \tcd /mongo-tools && \t. ./set_gopath.sh && \tmkdir -p bin && \tgo build
+      -v  \t\t-ldflags \"-X ${VERSION_PACKAGE}.VersionStr=$(git describe) -X ${VERSION_PACKAGE}.Gitspec=$(git
+      rev-parse HEAD)\" \t\t-o bin/mongoimport \t\tmongoimport/main/mongoimport.go
+      && \tbin/mongoimport --version"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-stretch
+  Name: build-mongo-tool
+  Platform: ""
+  SourceCode: FROM golang:1.11-stretch AS build-mongo-tool
+- BaseName: tomcat:8-jre8
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Yohany Flores <yohanyflores@gmail.com>"'
+    Name: label
+  - Labels:
+    - Key: com.imolko.group
+      Value: imolko
+    Name: label
+  - Labels:
+    - Key: com.imolko.type
+      Value: base
+    Name: label
+  - Env:
+    - Key: JAVA_OPTS
+      Value: '"-Djavax.servlet.request.encoding=UTF8 -Dfile.encoding=UTF8 -Dcom.sun.management.jmxremote
+        -Dcom.sun.management.jmxremote.port=8090 -Dcom.sun.management.jmxremote.ssl=false
+        -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.local.only=false"'
+    Name: env
+  - CmdLine:
+    - echo "America/Caracas" > /etc/timezone && dpkg-reconfigure -f noninteractive
+      tzdata
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-mongo-tool
+    Name: copy
+    SourcesAndDest:
+    - /mongo-tools/bin/mongoimport
+    - /usr/local/bin/
+  - CmdLine:
+    - ldd /usr/local/bin/mongoimport && mongoimport --version
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -x && curl -O http://dl.zeroturnaround.com/jrebel-stable-nosetup.zip \t&&
+      unzip jrebel-stable-nosetup.zip \t&& rm -rf jrebel-stable-nosetup.zip"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "curl -o /usr/local/share/ca-certificates/cacert.crt https://imolko-dev.nyc3.digitaloceanspaces.com/certs/certs/ca-dev/cacert.crt
+      \    && update-ca-certificates \t&& keytool -list -keystore $JAVA_HOME/lib/security/cacerts
+      -storepass \"changeit\""
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "1043"
+  - Name: expose
+    Ports:
+    - "8090"
+  From:
+    Image: tomcat:8-jre8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tomcat:8-jre8

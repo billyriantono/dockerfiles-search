@@ -1,0 +1,15 @@
+FROM ubuntu:14.04.2
+
+RUN \
+  apt-get update -y \
+  && apt-get install -y --allow-unauthenticated --no-install-recommends software-properties-common python-software-properties \
+  && add-apt-repository -y ppa:webupd8team/java \
+  && apt-get update -y \
+  && echo debconf shared/accepted-oracle-license-v1-1 select true | debconf-set-selections \
+  && echo debconf shared/accepted-oracle-license-v1-1 seen true | debconf-set-selections \
+  && apt-get install -y oracle-java8-installer \
+  && add-apt-repository -y --remove ppa:webupd8team/java \
+  && apt-get purge -y --auto-remove python-software-properties software-properties-common python python3 perl \
+  && apt-get clean -y \
+  && rm -rf /var/cache/oracle-jdk8-installer
+

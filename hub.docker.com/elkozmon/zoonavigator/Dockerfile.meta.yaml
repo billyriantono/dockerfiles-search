@@ -3,10 +3,10 @@ MetaArgs:
   Key: APP_VERSION
   ProvidedValue: null
   Value: null
-- DefaultValue: 1.2.8
+- DefaultValue: 1.3.6
   Key: SBT_VERSION
   ProvidedValue: null
-  Value: 1.2.8
+  Value: 1.3.6
 - DefaultValue: 99E82A75642AC823
   Key: SBT_GPG_KEY
   ProvidedValue: null
@@ -19,19 +19,44 @@ MetaArgs:
   Key: BASE_HREF
   ProvidedValue: null
   Value: '"/"'
+- DefaultValue: "0"
+  Key: DEBUG
+  ProvidedValue: null
+  Value: "0"
 Stages:
-- As: npm
-  BaseName: node:11.15.0-alpine
+- As: dockerize
+  BaseName: ubuntu:18.04
   Commands:
   - Maintainer: Lubos Kozmon <contact@elkozmon.com>
     Name: maintainer
   - Key: DOCKERIZE_VERSION
     Name: arg
     Value: null
+  - CmdLine:
+    - apt-get update   && apt-get install -y curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl     -Lo dockerize-alpine-linux-amd64-v${DOCKERIZE_VERSION}.tar.gz     https://github.com/jwilder/dockerize/releases/download/v${DOCKERIZE_VERSION}/dockerize-alpine-linux-amd64-v${DOCKERIZE_VERSION}.tar.gz   &&
+      tar xzvf dockerize-alpine-linux-amd64-v${DOCKERIZE_VERSION}.tar.gz -C /usr/local/bin   &&
+      rm dockerize-alpine-linux-amd64-v${DOCKERIZE_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: dockerize
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as dockerize
+- As: npm
+  BaseName: node:13.6.0-stretch-slim
+  Commands:
   - Key: APP_VERSION
     Name: arg
     Value: null
   - Key: BASE_HREF
+    Name: arg
+    Value: null
+  - Key: DEBUG
     Name: arg
     Value: null
   - CmdLine:
@@ -54,15 +79,15 @@ Stages:
     - /build/docker/files/zoonavigator-web
     - .
   - CmdLine:
-    - apk --no-cache add tar curl python-dev make g++
+    - apt-get update   && apt-get install -y python-dev make g++
     Name: run
     PrependShell: true
-  - CmdLine:
-    - curl     -Lo dockerize-alpine-linux-amd64-v${DOCKERIZE_VERSION}.tar.gz     https://github.com/jwilder/dockerize/releases/download/v${DOCKERIZE_VERSION}/dockerize-alpine-linux-amd64-v${DOCKERIZE_VERSION}.tar.gz   &&
-      tar xzvf dockerize-alpine-linux-amd64-v${DOCKERIZE_VERSION}.tar.gz -C /usr/local/bin   &&
-      rm dockerize-alpine-linux-amd64-v${DOCKERIZE_VERSION}.tar.gz
-    Name: run
-    PrependShell: true
+  - Chown: ""
+    From: dockerize
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/dockerize
+    - /usr/local/bin/dockerize
   - CmdLine:
     - dockerize     -template ./environment.ts.template:./src/environments/environment.prod.ts
     Name: run
@@ -73,12 +98,12 @@ Stages:
     Name: run
     PrependShell: true
   From:
-    Image: node:11.15.0-alpine
+    Image: node:13.6.0-stretch-slim
   Name: npm
   Platform: ""
-  SourceCode: FROM node:11.15.0-alpine as npm
+  SourceCode: FROM node:13.6.0-stretch-slim as npm
 - As: sbt
-  BaseName: openjdk:8u151-jdk-alpine3.7
+  BaseName: openjdk:11-jdk-slim
   Commands:
   - Key: SBT_VERSION
     Name: arg
@@ -86,6 +111,10 @@ Stages:
   - Key: SBT_GPG_KEY
     Name: arg
     Value: null
+  - CmdLine:
+    - apt-get update   && apt-get install -y zip
+    Name: run
+    PrependShell: true
   - Name: workdir
     Path: /src
   - Chown: ""
@@ -101,7 +130,8 @@ Stages:
     - /app
     - ./play/public
   - CmdLine:
-    - apk --no-cache add aria2 gnupg ca-certificates bash   && aria2c -x4 "https://github.com/sbt/sbt/releases/download/v${SBT_VERSION}/sbt-${SBT_VERSION}.tgz"   &&
+    - apt-get update   && apt-get install -y aria2 gnupg ca-certificates   && aria2c
+      -x4 "https://github.com/sbt/sbt/releases/download/v${SBT_VERSION}/sbt-${SBT_VERSION}.tgz"   &&
       aria2c -x4 "https://github.com/sbt/sbt/releases/download/v${SBT_VERSION}/sbt-${SBT_VERSION}.tgz.asc"   &&
       gpg --keyserver keyserver.ubuntu.com --recv-keys ${SBT_GPG_KEY}   && gpg --verify
       sbt-${SBT_VERSION}.tgz.asc sbt-${SBT_VERSION}.tgz   && tar xvfz sbt-${SBT_VERSION}.tgz
@@ -115,15 +145,58 @@ Stages:
     Name: run
     PrependShell: true
   From:
-    Image: openjdk:8u151-jdk-alpine3.7
+    Image: openjdk:11-jdk-slim
   Name: sbt
   Platform: ""
-  SourceCode: FROM openjdk:8u151-jdk-alpine3.7 as sbt
-- BaseName: openjdk:14-jdk-slim
+  SourceCode: FROM openjdk:11-jdk-slim as sbt
+- As: ubuntu
+  BaseName: ubuntu:18.04
   Commands:
   - Key: BASE_HREF
     Name: arg
     Value: null
+  - Chown: ""
+    From: dockerize
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/dockerize
+    - /usr/local/bin/dockerize
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: sbt
+    Name: copy
+    SourcesAndDest:
+    - /app
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /build/docker/files/zoonavigator-api
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - /build/docker/files/zoonavigator-web
+    - .
+  - CmdLine:
+    - dockerize     -template ./run.sh.template:./run.sh     -template ./healthcheck.sh.template:./healthcheck.sh   &&
+      chmod +x     ./run.sh     ./healthcheck.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chgrp -R 0 .   && chmod -R g=u .
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: ubuntu
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as ubuntu
+- BaseName: openjdk:11-jdk-slim
+  Commands:
   - Env:
     - Key: HTTP_PORT
       Value: "9000"
@@ -137,47 +210,27 @@ Stages:
       Value: "5000"
     Name: env
   - CmdLine:
-    - apt-get update   && apt-get install -y curl krb5-user   && apt-get clean
+    - apt-get update   && apt-get install -y curl krb5-user   && rm -rf /var/lib/apt/lists/*
     Name: run
     PrependShell: true
+  - Chown: ""
+    From: dockerize
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/dockerize
+    - /usr/local/bin/dockerize
   - Name: workdir
     Path: /app
   - CmdLine:
-    - groupadd -g 1000 zoonavigator   && useradd -r -u 1000 -g zoonavigator zoonavigator  &&
-      chown -R zoonavigator:zoonavigator .
+    - chgrp -R 0 .   && chmod -R g=u .
     Name: run
     PrependShell: true
-  - Name: user
-    User: zoonavigator:zoonavigator
-  - Chown: zoonavigator:zoonavigator
-    From: sbt
+  - Chown: ""
+    From: ubuntu
     Name: copy
     SourcesAndDest:
     - /app
     - .
-  - Chown: zoonavigator:zoonavigator
-    From: npm
-    Name: copy
-    SourcesAndDest:
-    - /usr/local/bin/dockerize
-    - /usr/local/bin/dockerize
-  - Chown: zoonavigator:zoonavigator
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - /build/docker/files/zoonavigator-api
-    - .
-  - Chown: zoonavigator:zoonavigator
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - /build/docker/files/zoonavigator-web
-    - .
-  - CmdLine:
-    - dockerize     -template ./run.sh.template:./run.sh     -template ./healthcheck.sh.template:./healthcheck.sh   &&
-      chmod +x     ./run.sh     ./healthcheck.sh
-    Name: run
-    PrependShell: true
   - Health:
       Interval: 30000000000
       Test:
@@ -192,8 +245,10 @@ Stages:
     - ./run.sh
     Name: entrypoint
     PrependShell: false
+  - Name: user
+    User: "1000"
   From:
-    Image: openjdk:14-jdk-slim
+    Image: openjdk:11-jdk-slim
   Name: ""
   Platform: ""
-  SourceCode: FROM openjdk:14-jdk-slim
+  SourceCode: FROM openjdk:11-jdk-slim

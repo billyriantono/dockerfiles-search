@@ -1,13 +1,22 @@
-FROM centos:7
+FROM hongkongkiwi/alpine-node-docker-supercronic:node-8.11.2
 
-RUN groupadd -g 9000 pinguser && \
-    useradd -r -u 9000 -g pinguser pinguser
-    
-USER pinguser
+MAINTAINER Andy Savage <andy@savage.hk>
 
-COPY ping /
+LABEL org.label-schema.name="docker-node-docker-supercronic-python" \
+      org.label-schema.description="Useful base docker image which includes a base system with Node.js, Docker, Supercronic & Python" \
+      org.label-schema.vcs-url="https://github.com/hongkongkiwi/docker-alpine-node-supercronic" \
+      org.label-schema.license="MIT"
 
-HEALTHCHECK --interval=5s --timeout=3s \
-    CMD ps aux | grep '[s]h ping' || exit 1
-    
-CMD ["sh", "ping"]
+RUN echo "Installing Packages" \
+ && apk add --no-cache \
+        python3 \
+        python3-dev \
+        python \
+      	python-dev \
+        py2-pip \
+ && echo "Upgrading Pip" \
+ && pip3 install -q --no-cache-dir --upgrade pip \
+ && pip2 install -q --no-cache-dir --upgrade pip \
+ && echo "Cleaning Up" \
+ && rm -rf ~/.cache/pip \
+ && rm -rf /var/cache/apk/*

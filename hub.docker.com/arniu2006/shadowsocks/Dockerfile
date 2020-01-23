@@ -1,0 +1,24 @@
+FROM imhang/shadowsocks-docker
+
+ARG KCP_VER=20171021
+
+RUN \
+    apk add --no-cache --virtual .build-deps curl \
+    && curl -fSL https://github.com/xtaci/kcptun/releases/download/v$KCP_VER/kcptun-linux-amd64-$KCP_VER.tar.gz | tar xz -C /usr/local/bin server_linux_amd64 \
+    && apk del .build-deps \
+    && apk add --no-cache supervisor
+
+ENV \
+    KCP_PORT=9443   \
+    KCP_KEY=123456  \
+    KCP_CRYPT=none  \
+    KCP_MODE=fast2  \
+    MTU=1350        \
+    SNDWND=512      \
+    RCVWND=128      \
+    DATASHARD=10    \
+    PARITYSHARD=0
+
+COPY supervisord.conf /etc/supervisord.conf
+
+ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]

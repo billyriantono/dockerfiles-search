@@ -1,21 +1,11 @@
-# Pull python 3.6 image from docker hub
-FROM python:3.6
+FROM liuchong/rustup:stable-musl as builder
+WORKDIR /app
+COPY . .
+RUN cargo build --release --features=simd
 
-# Set env parameter
-ENV PYTHONUNBUFFERED 1
-
-RUN apt-get update
-RUN apt-get install python3-dev default-libmysqlclient-dev -y
-
-# Create and specific workdir
-RUN mkdir /code
-WORKDIR /code
-
-# Update pip
-RUN pip install pip -U
-
-# Copy . to /code in container
-COPY . /code/
-
-# Install lib from requirements.txt
-RUN pip install -r requirements.txt
+FROM alpine:latest
+RUN apk update && apk upgrade && apk add --no-cache bash util-linux
+WORKDIR /app
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/scavenger .
+ENTRYPOINT ["./scavenger"]
+CMD ["--config","/data/config.yaml"]

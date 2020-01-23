@@ -1,4 +1,4 @@
-FROM fastgenomics/jupyter-base:0.1.7
+FROM fastgenomics/jupyter-base:0.1.9
 
 # bugfix for error during slingshot install:
 # "libGL.so.1: cannot open shared object file: No such file or directory"

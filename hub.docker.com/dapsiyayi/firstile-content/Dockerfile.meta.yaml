@@ -1,0 +1,196 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:latest
+  Commands:
+  - Key: SQUID_CONF
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SQUID_CONF
+      Value: ${SQUID_CONF:-/etc/squid/squid.conf}
+    Name: env
+  - Key: SQUID_CACHEMGR_PASSWD
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SQUID_CACHEMGR_PASSWD
+      Value: ${SQUID_CACHEMGR_PASSWD:-secretpassword}
+    Name: env
+  - Key: SQUID_PROXY_PORT
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SQUID_PROXY_PORT
+      Value: ${SQUID_PROXY_PORT:-3128}
+    Name: env
+  - Key: SQUID_ICP_PORT
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SQUID_ICP_PORT
+      Value: ${SQUID_ICP_PORT:-3130}
+    Name: env
+  - Key: SQUID_USERNAME
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SQUID_USERNAME
+      Value: ${SQUID_USERNAME:-someuser}
+    Name: env
+  - Key: SQUID_PASSWORD
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SQUID_PASSWORD
+      Value: ${SQUID_PASSWORD:-somepass}
+    Name: env
+  - Key: SQUID_HTCP_PORT
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SQUID_HTCP_PORT
+      Value: ${SQUID_HTCP_PORT:-4827}
+    Name: env
+  - Key: SQUID_MULTICAST
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SQUID_MULTICAST
+      Value: ${SQUID_MULTICAST:-multicast.fqdn.tld}
+    Name: env
+  - Key: SQUID_PEER_NAME
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SQUID_PEER_NAME
+      Value: ${SQUID_PEER_NAME:-localhost}
+    Name: env
+  - Key: SQUID_EMAIL_ADMIN
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SQUID_EMAIL_ADMIN
+      Value: ${SQUID_EMAIL_ADMIN:-foo@bar.com}
+    Name: env
+  - Key: SQUID_EFFECTIVE_USER
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SQUID_EFFECTIVE_USER
+      Value: ${SQUID_EFFECTIVE_USER:-proxy}
+    Name: env
+  - Key: SQUID_EFFECTIVE_GROUP
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SQUID_EFFECTIVE_GROUP
+      Value: ${SQUID_EFFECTIVE_GROUP:-proxy}
+    Name: env
+  - Key: SQUID_ERROR_TEXT
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SQUID_ERROR_TEXT
+      Value: ${SQUID_ERROR_TEXT:-dansta_ubuntu_squid_proxy}
+    Name: env
+  - Key: SQUID_VISIBLE_HOSTNAME
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SQUID_VISIBLE_HOSTNAME
+      Value: ${SQUID_VISIBLE_HOSTNAME:-squid.fqdn.tld}
+    Name: env
+  - Key: SQUID_EMAIL_FROMADDRESS
+    Name: arg
+    Value: null
+  - Env:
+    - Key: SQUID_EMAIL_FROMADDRESS
+      Value: ${SQUID_EMAIL_FROMADDRESS:-squid@localhost.localdomain}
+    Name: env
+  - Labels:
+    - Key: maintainer
+      Value: dansta
+    Name: label
+  - CmdLine:
+    - apt-get update && apt-get install -y squid                                          python3                                          apache2-utils                                          squidclient
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/squid.conf
+    - ${SQUID_CONF}
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/replace.py
+    - /usr/local/bin/replace_conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/hosts
+    - /etc/hosts
+  - CmdLine:
+    - chmod +rx /usr/local/bin/replace_conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/replace_conf ${SQUID_CONF} SQUID &&     rm -f /usr/local/bin/replace_conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /etc/squid3/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch /etc/squid3/users &&     chown ${SQUID_EFFECTIVE_USER}:${SQUID_EFFECTIVE_GROUP}
+      /etc/squid3/ /etc/squid3/users &&     chmod g+rwx /etc/squid3/ /etc/squid3/users
+      &&     htpasswd -c -db /etc/squid3/users ${SQUID_USERNAME} ${SQUID_PASSWORD}
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/wrapper.sh
+    - /usr/local/bin/wrapper
+  - CmdLine:
+    - chmod +rx /usr/local/bin/wrapper
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/log/
+  - Name: volume
+    Volumes:
+    - /var/spool/squid/
+  - CmdLine:
+    - echo "* */2 * * * /usr/local/squid/bin/squid -k rotate" >> /var/spool/cron/root
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get remove -y python3             apache2-utils &&             apt-get autoremove
+      -y
+    Name: run
+    PrependShell: true
+  - Health:
+      StartPeriod: 60000000000
+      Test:
+      - CMD-SHELL
+      - squidclient -h localhost cache_object://localhost/ mgr:info || exit 1
+    Name: healthcheck
+  - Name: expose
+    Ports:
+    - ${SQUID_HTCP_PORT}/tcp
+    - ${SQUID_ICP_PORT}/tcp
+    - ${SQUID_PROXY_PORT}/tcp
+    - 4002:4002/tcp
+    - 4003:4003/tcp
+  - CmdLine:
+    - /usr/local/bin/wrapper
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: ubuntu:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:latest

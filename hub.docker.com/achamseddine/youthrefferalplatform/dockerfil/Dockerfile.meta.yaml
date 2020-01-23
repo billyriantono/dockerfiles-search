@@ -1,0 +1,271 @@
+MetaArgs:
+- DefaultValue: latest
+  Key: BASETAG
+  ProvidedValue: null
+  Value: latest
+Stages:
+- As: stage-ubuntu
+  BaseName: ubuntu:${BASETAG}
+  Commands:
+  - Key: ARG_VERSION_STICKER
+    Name: arg
+    Value: null
+  - Key: ARG_VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: maintainer
+      Value: '"https://github.com/accetto"'
+    - Key: vendor
+      Value: '"accetto"'
+    - Key: version-sticker
+      Value: '"${ARG_VERSION_STICKER}"'
+    - Key: org.label-schema.vcs-ref
+      Value: '"${ARG_VCS_REF}"'
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/accetto/xubuntu-vnc-novnc"'
+    Name: label
+  - CmdLine:
+    - apt-get update && apt-get install -y         inetutils-ping         lsb-release         net-tools         sudo         unzip         vim         zip         curl         git         wget     &&
+      apt-get -y autoremove     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '{     JQ_VERSION="1.6" ;     JQ_DISTRO="jq-linux64" ;     cd /tmp ;     wget
+      -q "https://github.com/stedolan/jq/releases/download/jq-${JQ_VERSION}/${JQ_DISTRO}"
+      ;     wget -q "https://raw.githubusercontent.com/stedolan/jq/master/sig/v${JQ_VERSION}/sha256sum.txt"
+      ;     test=$(grep "${JQ_DISTRO}" sha256sum.txt | sha256sum -c | grep -c "${JQ_DISTRO}:
+      OK") ;     if [[ $test -ne 1 ]] ; then         echo "FAILURE: ${JQ_DISTRO} failed
+      checksum test" ;         exit 1 ;     else         rm sha256sum.txt ;         chown
+      root "${JQ_DISTRO}" ;         chmod +x "${JQ_DISTRO}" ;         mv -f "${JQ_DISTRO}"
+      /usr/bin/jq ;     fi ;     cd - ; }'
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:${BASETAG}
+  Name: stage-ubuntu
+  Platform: ""
+  SourceCode: FROM ubuntu:${BASETAG} as stage-ubuntu
+- As: stage-xfce
+  BaseName: stage-ubuntu
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: LANG
+      Value: '''en_US.UTF-8'''
+    - Key: LANGUAGE
+      Value: '''en_US:en'''
+    - Key: LC_ALL
+      Value: '''en_US.UTF-8'''
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y         locales         supervisor         xfce4         xfce4-terminal         xfce4-screenshooter         mousepad         ristretto     &&
+      locale-gen en_US.UTF-8     && apt-get purge -y         pm-utils         xscreensaver*     &&
+      apt-get -y autoremove     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: stage-ubuntu
+  Name: stage-xfce
+  Platform: ""
+  SourceCode: FROM stage-ubuntu as stage-xfce
+- As: stage-vnc
+  BaseName: stage-xfce
+  Commands:
+  - CmdLine:
+    - wget -qO- https://dl.bintray.com/tigervnc/stable/tigervnc-1.10.1.x86_64.tar.gz
+      | tar xz --strip 1 -C /
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: stage-xfce
+  Name: stage-vnc
+  Platform: ""
+  SourceCode: FROM stage-xfce as stage-vnc
+- As: stage-novnc
+  BaseName: stage-vnc
+  Commands:
+  - Env:
+    - Key: NO_VNC_HOME
+      Value: /usr/share/usr/local/share/noVNCdim
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y         python-numpy     && mkdir -p ${NO_VNC_HOME}/utils/websockify     &&
+      wget -qO- https://github.com/novnc/noVNC/archive/v1.1.0.tar.gz | tar xz --strip
+      1 -C ${NO_VNC_HOME}     && wget -qO- https://github.com/novnc/websockify/archive/v0.8.0.tar.gz
+      | tar xz --strip 1 -C ${NO_VNC_HOME}/utils/websockify     && chmod +x -v ${NO_VNC_HOME}/utils/*.sh     &&
+      rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "<!DOCTYPE html>\n" "<html>\n" "    <head>\n" "        <title>noVNC</title>\n"
+      "        <meta charset=\"utf-8\"/>\n" "    </head>\n" "    <body>\n" "        <p><a
+      href=\"vnc_lite.html\">noVNC Lite Client</a></p>\n" "        <p><a href=\"vnc.html\">noVNC
+      Full Client</a></p>\n" "    </body>\n" "</html>" > ${NO_VNC_HOME}/index.html
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 2
+      Named: stage-vnc
+  Name: stage-novnc
+  Platform: ""
+  SourceCode: FROM stage-vnc as stage-novnc
+- As: stage-tini
+  BaseName: stage-novnc
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/krallin/tini/releases/download/v0.18.0/tini
+    - /tini
+  - CmdLine:
+    - chmod +x /tini
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 3
+      Named: stage-novnc
+  Name: stage-tini
+  Platform: ""
+  SourceCode: FROM stage-novnc as stage-tini
+- As: stage-final
+  BaseName: stage-tini
+  Commands:
+  - Labels:
+    - Key: any.accetto.description
+      Value: '"Headless Ubuntu/VNC/noVNC container with Xfce desktop"'
+    - Key: any.accetto.display-name
+      Value: '"Headless Ubuntu/VNC/noVNC container with Xfce desktop"'
+    - Key: any.accetto.expose-services
+      Value: '"6901:http,5901:xvnc"'
+    - Key: any.accetto.tags
+      Value: '"ubuntu, xfce, vnc, novnc"'
+    Name: label
+  - Key: ARG_HOME
+    Name: arg
+    Value: null
+  - Key: ARG_VNC_BLACKLIST_THRESHOLD
+    Name: arg
+    Value: null
+  - Key: ARG_VNC_BLACKLIST_TIMEOUT
+    Name: arg
+    Value: null
+  - Key: ARG_VNC_PW
+    Name: arg
+    Value: null
+  - Key: ARG_VNC_RESOLUTION
+    Name: arg
+    Value: null
+  - Key: ARG_SUPPORT_USER_GROUP_OVERRIDE
+    Name: arg
+    Value: null
+  - Env:
+    - Key: DISPLAY
+      Value: :1
+    - Key: HOME
+      Value: ${ARG_HOME:-/home/headless}
+    - Key: STARTUPDIR
+      Value: /dockerstartup
+    - Key: VNC_BLACKLIST_THRESHOLD
+      Value: ${ARG_VNC_BLACKLIST_THRESHOLD:-20}
+    - Key: VNC_BLACKLIST_TIMEOUT
+      Value: ${ARG_VNC_BLACKLIST_TIMEOUT:-0}
+    - Key: VNC_COL_DEPTH
+      Value: "24"
+    - Key: VNC_PORT
+      Value: '"5901"'
+    - Key: NO_VNC_PORT
+      Value: '"6901"'
+    - Key: VNC_PW
+      Value: ${ARG_VNC_PW:-headless}
+    - Key: VNC_RESOLUTION
+      Value: ${ARG_VNC_RESOLUTION:-1360x768}
+    - Key: VNC_VIEW_ONLY
+      Value: "false"
+    - Key: SUPPORT_USER_GROUP_OVERRIDE
+      Value: ${ARG_SUPPORT_USER_GROUP_OVERRIDE}
+    Name: env
+  - Name: workdir
+    Path: ${HOME}
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -c
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/startup
+    - ${STARTUPDIR}/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/home/Desktop
+    - ${HOME}/Desktop/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/home/config/xfce4
+    - ${HOME}/.config/xfce4/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./src/home/config/autostart
+    - ${HOME}/.config/autostart/
+  - CmdLine:
+    - chmod 664 /etc/passwd /etc/group     && echo "headless:x:1001:0:Default:${HOME}:/bin/bash"
+      >> /etc/passwd     && adduser headless sudo     && echo "headless:$VNC_PW" |
+      chpasswd     && chmod +x         "${STARTUPDIR}/set_user_permissions.sh"         "${STARTUPDIR}/generate_container_user.sh"         "${STARTUPDIR}/vnc_startup.sh"         "${STARTUPDIR}/version_of.sh"         "${STARTUPDIR}/version_sticker.sh"     &&
+      ${ARG_SUPPORT_USER_GROUP_OVERRIDE/*/chmod a+w /etc/passwd /etc/group}     &&
+      gtk-update-icon-cache -f /usr/share/icons/hicolor
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '"${STARTUPDIR}"/set_user_permissions.sh "${STARTUPDIR}" "${HOME}"'
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - ${NO_VNC_PORT}
+    - ${VNC_PORT}
+  - Name: user
+    User: "1001"
+  - Key: ARG_REFRESHED_AT
+    Name: arg
+    Value: null
+  - Key: ARG_VERSION_STICKER
+    Name: arg
+    Value: null
+  - Env:
+    - Key: REFRESHED_AT
+      Value: ${ARG_REFRESHED_AT}
+    - Key: VERSION_STICKER
+      Value: ${ARG_VERSION_STICKER}
+    Name: env
+  - CmdLine:
+    - /tini
+    - --
+    - /dockerstartup/vnc_startup.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - --wait
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 4
+      Named: stage-tini
+  Name: stage-final
+  Platform: ""
+  SourceCode: FROM stage-tini as stage-final

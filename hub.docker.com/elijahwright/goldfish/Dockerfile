@@ -1,33 +1,15 @@
-FROM alpine:3.6
+FROM phusion/baseimage:latest
 
-# Version of goldfish to install
-ENV GOLDFISH_VERSION=v0.7.4 \
-    VAULT_TOKEN=
+MAINTAINER Eduardo Pires
 
-# Directory to put Goldfish binary in
-WORKDIR /app
+# Use baseimage-docker's init system.
+CMD ["/sbin/my_init"]
 
-# Install Goldfish binary and clean up
-RUN apk --no-cache add \
-        --virtual build-dependencies \
-          unzip && \
-    apk --no-cache add \
-          jq \
-          curl \
-          ca-certificates && \
-          curl -L -o goldfish https://github.com/Caiyeon/goldfish/releases/download/$GOLDFISH_VERSION/goldfish-linux-amd64 && \
-          chmod +x ./goldfish && \
-          apk del build-dependencies
+RUN curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && \
+echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" | tee -a /etc/apt/sources.list.d/kubernetes.list && \
+apt-get update && \
+apt-get install -y kubectl && \
+apt-get -y upgrade
 
-#Copy Goldfish files
-COPY docker.hcl .
-COPY entrypoint.sh .
-
-#Set entrypoint to executable for docker-compose
-RUN chmod +x ./entrypoint.sh
-
-#Default port to expose
-EXPOSE 8000
-
-#Default command to run
-CMD /app/goldfish -config=/app/docker.hcl -token=${VAULT_TOKEN}
+# Clean up APT when done.
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*

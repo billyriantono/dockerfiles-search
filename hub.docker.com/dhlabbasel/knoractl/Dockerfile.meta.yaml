@@ -1,0 +1,111 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: openjdk:8u121-jre-alpine
+  Commands:
+  - CmdLine:
+    - echo "installing dependencies" &&     apk --update add gc-dev clang musl-dev
+      libc-dev build-base git &&     apk add libunwind-dev --update-cache --repository
+      http://nl.alpinelinux.org/alpine/edge/main
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/google/re2.git && cd re2 &&     CXX=clang++ make
+      && make install
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SBT_VERSION
+      Value: 0.13.15
+    Name: env
+  - Env:
+    - Key: SBT_HOME
+      Value: /usr/local/sbt
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: ${PATH}:${SBT_HOME}/bin
+    Name: env
+  - CmdLine:
+    - echo "installing SBT $SBT_VERSION" &&     apk add --no-cache --update bash wget
+      && mkdir -p "$SBT_HOME" &&     wget -qO - --no-check-certificate "https://dl.bintray.com/sbt/native-packages/sbt/$SBT_VERSION/sbt-$SBT_VERSION.tgz"
+      | tar xz -C $SBT_HOME --strip-components=1 &&     echo -ne "- with sbt $SBT_VERSION\n"
+      >> /root/.built &&     sbt sbtVersion
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /root/project-build/project
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root/project-build
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./project/plugins.sbt
+    - project/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./project/build.properties
+    - project/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - build.sbt
+    - .
+  - CmdLine:
+    - sbt update
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /root/project-build/
+  - CmdLine:
+    - sbt clean nativeLink
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp ./target/scala-2.11/*-out ./project-build-out
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8u121-jre-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM openjdk:8u121-jre-alpine AS build
+- BaseName: alpine:3.3
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/libunwind.so.8
+    - /usr/lib/libunwind-x86_64.so.8
+    - /usr/lib/libgc.so.1
+    - /usr/lib/libstdc++.so.6
+    - /usr/lib/libgcc_s.so.1
+    - /usr/lib/
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/libre2.so.0
+    - /usr/local/lib/libre2.so.0
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /root/project-build/project-build-out
+    - .
+  - CmdLine:
+    - ./project-build-out
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.3
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.3

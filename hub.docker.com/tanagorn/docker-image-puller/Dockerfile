@@ -1,25 +1,19 @@
-FROM python:2.7.13-slim
+FROM java:7-jre
+MAINTAINER Ömer Yildiz <hallo@systemfreund.com>
 
-ENV HOME=/usr/src/docker-image-updater/ \
-    TEMP_APP=/tmp/app
+# Download version 1.4.2 of logstash
+RUN cd /tmp && \
+    wget https://download.elasticsearch.org/logstash/logstash/logstash-1.4.2.tar.gz && \
+    tar -xzvf ./logstash-1.4.2.tar.gz && \
+    mv ./logstash-1.4.2 /opt/logstash && \
+    rm ./logstash-1.4.2.tar.gz
 
-WORKDIR $HOME
+# Install contrib plugins
+RUN /opt/logstash/bin/plugin install contrib
 
-EXPOSE 9999
+# Copy build files to container root
+RUN mkdir /app
+ADD . /app
 
-# Install app dependencies
-COPY . $TEMP_APP
-
-# Build Application
-# Optimize images
-
-RUN mkdir -p ${HOME} \
-    && mkdir -p ${TEMP_APP} \
-    && cd ${TEMP_APP} \
-
-    && cp -a docker ${HOME} \
-    && cp app-swarm.py requirements.txt ${HOME} \
-    && pip install --no-cache-dir -r requirements.txt \
-    && apt-get clean
-
-ENTRYPOINT ["python", "-u", "app-swarm.py"]
+# Start logstash
+ENTRYPOINT ["/app/bin/boot"]

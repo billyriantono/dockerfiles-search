@@ -1,0 +1,79 @@
+MetaArgs: null
+Stages:
+- As: build_base
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk --no-cache add git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /build
+  - Key: GO111MODULE
+    Name: arg
+    Value: "on"
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.mod
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - go.sum
+    - .
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: build_base
+  Platform: ""
+  SourceCode: FROM golang:alpine as build_base
+- As: builder
+  BaseName: build_base
+  Commands:
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - main.go
+    - .
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -tags netgo -ldflags
+      '-w -extldflags "-static"' -o minecraft_lan_broadcaster .
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: build_base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM build_base as builder
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/minecraft_lan_broadcaster
+    - /
+  - Env:
+    - Key: MCLB_LOG_TS
+      Value: "0"
+    Name: env
+  - CmdLine:
+    - /minecraft_lan_broadcaster
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

@@ -1,27 +1,15 @@
-FROM rastasheep/ubuntu-sshd:16.04
+FROM alpine
 
-MAINTAINER huanmeng "imhuanmeng@outlook.com"
+ADD entrypoint.sh /entrypoint.sh
 
-RUN apt-get -yqq update 
-RUN apt-get -yqq install transmission-cli transmission-common transmission-daemon
-RUN apt-get -yqq install nginx
+RUN apk add --no-cache dhcp && \
+    mkdir /data && \
+    chmod +x /entrypoint.sh && \
+    rm /etc/dhcp/dhcpd.conf.example
 
-RUN service transmission-daemon stop
-RUN service nginx stop
+EXPOSE 67/udp
 
+VOLUME /data
+VOLUME /config
 
-COPY /settings.json /var/lib/transmission-daemon/info/settings.json
-COPY /entry.sh /usr/local/entry.sh
-COPY /download.conf /etc/nginx/conf.d/download.conf
-
-
-RUN chmod +x /usr/local/entry.sh
-
-EXPOSE 22
-EXPOSE 80
-EXPOSE 443
-EXPOSE 8081
-EXPOSE 9091
-EXPOSE 51413
-
-ENTRYPOINT ["/usr/local/entry.sh"]
+ENTRYPOINT [ "/bin/sh", "/entrypoint.sh" ]

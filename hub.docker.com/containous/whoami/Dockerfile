@@ -1,26 +1,33 @@
-FROM golang:1-alpine as builder
+FROM jolokia/java-jolokia:7
 
-RUN apk --no-cache --no-progress add git ca-certificates tzdata make \
-    && update-ca-certificates \
-    && rm -rf /var/cache/apk/*
+MAINTAINER roland@jolokia.org
 
-WORKDIR /go/whoami
+EXPOSE 8080 8778
 
-# Download go modules
-COPY go.mod .
-COPY go.sum .
-RUN GO111MODULE=on GOPROXY=https://proxy.golang.org go mod download
+ENV TOMCAT_VERSION 4.1.40
+ENV DEPLOY_DIR /maven
 
-COPY . .
+ENV JAVA_HOME /usr/lib/jvm/java-7-openjdk-amd64
 
-RUN make build
 
-# Create a minimal container to run a Golang static binary
-FROM scratch
+# Get and Unpack Tomcat
+RUN wget http://archive.apache.org/dist/tomcat/tomcat-4/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz -O /tmp/catalina.tar.gz && tar xzf /tmp/catalina.tar.gz -C /opt && ln -s /opt/apache-tomcat-${TOMCAT_VERSION} /opt/tomcat && rm /tmp/catalina.tar.gz
 
-COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /go/whoami/whoami .
+# Add roles
+ADD tomcat-users.xml /opt/apache-tomcat-${TOMCAT_VERSION}/conf/
 
-ENTRYPOINT ["/whoami"]
-EXPOSE 80
+# Jolokia config
+ADD jolokia.properties /opt/jolokia/jolokia.properties
+
+# Startup script
+ADD deploy-and-run.sh /opt/apache-tomcat-${TOMCAT_VERSION}/bin/
+
+# Remove unneeded apps
+RUN rm -rf /opt/tomcat/webapps/jsp-examples /opt/tomcat/webapps/servlets-examples /opt/tomcat/webapps/tomcat-docs /opt/tomcat/webapps/webdav 
+
+VOLUME ["/opt/tomcat/logs", "/opt/tomcat/work", "/opt/tomcat/temp", "/tmp/hsperfdata_root" ]
+
+ENV CATALINA_HOME /opt/tomcat
+ENV PATH $PATH:$CATALINA_HOME/bin
+
+CMD /opt/tomcat/bin/deploy-and-run.sh

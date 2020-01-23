@@ -1,0 +1,65 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alecx/golang-build
+  Commands:
+  - Name: workdir
+    Path: /build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./backend
+    - .
+  - CmdLine:
+    - if [ -f .mongo ] ; then export MONGO_TEST=$(cat .mongo) ; fi &&     cd app &&     if
+      [ -z "$SKIP_TEST" ] ; then         go test -mod=vendor -covermode=count -coverprofile=/profile.cov_tmp
+      ./... &&         cat /profile.cov_tmp > /profile.cov ;     else echo "skip tests"
+      ; fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "mongo=${MONGO_TEST}" >> /etc/hosts
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ -z "$SKIP_TEST" ] ; then     if [ -f .mongo ] ; then export MONGO_TEST=$(cat
+      .mongo) ; fi &&         golangci-lint run --out-format=tab --disable-all --tests=false
+      --enable=unconvert         --enable=megacheck --enable=structcheck --enable=gas
+      --enable=gocyclo --enable=dupl --enable=misspell         --enable=unparam --enable=varcheck
+      --enable=deadcode --enable=typecheck         --enable=ineffassign --enable=varcheck
+      ./... ;     else echo "skip linters" ; fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ -z "$COVERALLS_TOKEN" ] ; then     echo "coverall not enabled" ;     else
+      goveralls -coverprofile=/profile.cov -service=travis-ci -repotoken $COVERALLS_TOKEN
+      || echo "coverall failed!"; fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd app && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod vendor -o /build/server
+    Name: run
+    PrependShell: true
+  From:
+    Image: alecx/golang-build
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alecx/golang-build AS builder
+- BaseName: alpine:3.9
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/server
+    - /srv/server
+  - CmdLine:
+    - /srv/server
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

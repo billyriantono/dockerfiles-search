@@ -1,37 +1,25 @@
-FROM ubuntu:14.04
+FROM node:6.10.3
+LABEL maintainer="richie.mackay@gmail.com"
 
-RUN apt-get update && apt-get install -y \
-    wget \
-    freeglut3-dev \
-    libplib-dev \
-    libopenal-dev \
-    libpng12-dev \
-    zlib1g-dev \
-    libogg-dev \
-    libvorbis-dev \
-    g++ \
-    libalut-dev \
-    libxi-dev \
-    libxmu-dev \
-    libxrandr-dev \
-    make \
-    patch
+RUN apt-get update; apt-get install -y gettext-base \
+    ruby-full
+# for https
+RUN apt-get install -yyq ca-certificates
+# install libraries
+RUN apt-get install -yyq libappindicator1 libasound2 libatk1.0-0 libc6 libcairo2 libcups2 libdbus-1-3 libexpat1 libfontconfig1 libgcc1 libgconf-2-4 libgdk-pixbuf2.0-0 libglib2.0-0 libgtk-3-0 libnspr4 libnss3 libpango-1.0-0 libpangocairo-1.0-0 libstdc++6 libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 libxext6 libxfixes3 libxi6 libxrandr2 libxrender1 libxss1 libxtst6
+# tools
+RUN apt-get install -yyq gconf-service lsb-release wget xdg-utils
+# and fonts
+RUN apt-get install -yyq fonts-liberation
 
-WORKDIR /tmp
+RUN gem install --no-rdoc --no-ri sass -v 3.4.22
+RUN gem install --no-rdoc --no-ri compass
 
-RUN wget https://sourceforge.net/projects/torcs/files/all-in-one/1.3.4/torcs-1.3.4.tar.bz2/download -O torcs-1.3.4.tar.bz2
-RUN tar xjf torcs-1.3.4.tar.bz2
+# Set the timezone.
+ENV TZ=Europe/London
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-WORKDIR torcs-1.3.4
+RUN npm install -g grunt-cli
 
-RUN wget https://sourceforge.net/projects/cig/files/SCR%20Championship/Server%20Linux/2.1/scr-linux-patch.tgz/download -O scr-patch.tgz
-RUN tar xzf scr-patch.tgz
-
-RUN cd src && \
-    patch -p1 -f < ../scr-patch/patch.dat
-
-RUN ./configure
-
-RUN make && make install && make datainstall
-
-CMD ["/usr/local/lib/torcs/torcs-bin"]
+# Install local project node dependencies
+WORKDIR /usr/src/app

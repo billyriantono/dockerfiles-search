@@ -1,0 +1,114 @@
+MetaArgs: null
+Stages:
+- BaseName: node:10.15.2-stretch-slim
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"https://github.com/blacktop"'
+    Name: label
+  - CmdLine:
+    - "apt-get update && apt-get install -y --no-install-recommends \tgit \tbzip2
+      \tunzip \txz-utils \t&& rm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'deb http://deb.debian.org/debian stretch-backports main' > /etc/apt/sources.list.d/stretch-backports.list
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - CmdLine:
+    - "{ \techo '#!/bin/sh'; \techo 'set -e'; \techo; \techo 'dirname \"$(dirname
+      \"$(readlink -f \"$(which javac || which java)\")\")\"'; \t} > /usr/local/bin/docker-java-home
+      \t&& chmod +x /usr/local/bin/docker-java-home"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -svT "/usr/lib/jvm/java-11-openjdk-$(dpkg --print-architecture)" /docker-java-home
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JAVA_HOME
+      Value: /docker-java-home
+    Name: env
+  - Env:
+    - Key: JAVA_VERSION
+      Value: 11.0.3
+    Name: env
+  - Env:
+    - Key: JAVA_DEBIAN_VERSION
+      Value: 11.0.3+1-1~bpo9+1
+    Name: env
+  - CmdLine:
+    - "set -ex; \t\tif [ ! -d /usr/share/man/man1 ]; then \tmkdir -p /usr/share/man/man1;
+      \tfi; \t\tln -svT /docker-java-home/bin/java /usr/local/bin/java; \t\tapt-get
+      update; \tapt-get install -y --no-install-recommends \topenjdk-11-jre=\"$JAVA_DEBIAN_VERSION\"
+      \t; \trm -rf /var/lib/apt/lists/*; \t\trm -v /usr/local/bin/java; \t\tkeytool
+      -importkeystore -srckeystore /etc/ssl/certs/java/cacerts -destkeystore /etc/ssl/certs/java/cacerts.jks
+      -deststoretype JKS -srcstorepass changeit -deststorepass changeit -noprompt;
+      \tmv /etc/ssl/certs/java/cacerts.jks /etc/ssl/certs/java/cacerts; \t/var/lib/dpkg/info/ca-certificates-java.postinst
+      configure; \t\t[ \"$(readlink -f \"$JAVA_HOME\")\" = \"$(docker-java-home)\"
+      ]; \t\tupdate-alternatives --get-selections | awk -v home=\"$(readlink -f \"$JAVA_HOME\")\"
+      'index($3, home) == 1 { $2 = \"manual\"; print | \"update-alternatives --set-selections\"
+      }'; \tupdate-alternatives --query java | grep -q 'Status: manual'"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: ${PATH}:${JAVA_HOME}/bin:/plugin/kibana/bin:${PATH}
+    Name: env
+  - Key: VERSION
+    Name: arg
+    Value: 7.0.0
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - node-prune.sh
+    - /usr/bin/node-prune
+  - CmdLine:
+    - "echo \"===> Installing elasticdump\" \t&& set -ex \t&& yarn global add elasticdump
+      \t&& cd /usr/local/lib/ && node-prune || true"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /plugin
+  - CmdLine:
+    - "echo \"===> Cloning Kibana v$VERSION\" \t&& git clone --depth 1 -b v${VERSION}
+      https://github.com/elastic/kibana.git"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /plugin/kibana
+  - CmdLine:
+    - "set -ex \t&& yarn kbn bootstrap \t&& cd /usr/local/lib \t&& node-prune || true
+      \t&& chown -R node:node /plugin"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - chown node:node /entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: node
+  - Name: expose
+    Ports:
+    - "5601"
+    - "9200"
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: node:10.15.2-stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:10.15.2-stretch-slim

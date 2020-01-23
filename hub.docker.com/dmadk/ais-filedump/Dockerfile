@@ -1,10 +1,8 @@
-FROM java:8
-
-RUN mkdir -p /data
-RUN wget --progress=bar "https://dma.ci.cloudbees.com/job/AisLib/lastSuccessfulBuild/artifact/*zip*/archive.zip" -O /archive.zip
-RUN unzip /archive.zip -d /
-ADD ./start.sh /start.sh
-
-ENV DIRECTORY /data
-
-CMD ["/bin/bash", "/start.sh"]
+FROM nginx:alpine
+RUN apk update && apk add --no-cache bash curl bc
+ADD init/nginx.conf /etc/nginx/
+COPY init/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+VOLUME ["/etc/nginx/conf.d"]
+ENTRYPOINT ["/entrypoint.sh"]
+EXPOSE 80 443

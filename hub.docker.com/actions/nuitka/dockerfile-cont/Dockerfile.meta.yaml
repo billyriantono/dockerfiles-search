@@ -1,0 +1,232 @@
+MetaArgs: null
+Stages:
+- BaseName: nvidia/cuda:8.0-devel
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update -y && apt-get install -y git vim sudo openssh-server python-pip     python-virtualenv
+      gcc gfortran binutils python-dev libffi-dev libzmq3-dev locate
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://www.open-mpi.org/software/ompi/v2.0/downloads/openmpi-2.0.0.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xzf openmpi-2.0.0.tar.gz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /openmpi-2.0.0
+  - CmdLine:
+    - ./configure --with-cuda=/usr/local/cuda --prefix=/openmpi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make -j$(nproc) && make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - git clone https://github.com/xianyi/OpenBLAS
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd OpenBLAS && make -j$(nproc) FC=gfortran && make PREFIX=/OpenBLAS install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo '/OpenBLAS/lib' > /etc/ld.so.conf.d/openblas.conf && ldconfig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install cython
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/numpy/numpy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "[openblas]" >> numpy/site.cfg &&     echo "libraries = openblas" >> numpy/site.cfg
+      &&     echo "library_dirs = /OpenBLAS/lib" >> numpy/site.cfg &&     echo "include_dirs
+      = /OpenBLAS/include" >> numpy/site.cfg &&     echo "runtime_library_dirs = /OpenBLAS/lib"
+      >> numpy/site.cfg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd numpy && python setup.py config &&     python setup.py build -j $(nproc)
+      && python setup.py install
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: '"/OpenBLAS/bin:/openmpi/bin:$PATH"'
+    Name: env
+  - Env:
+    - Key: LD_LIBRARY_PATH
+      Value: '"/OpenBLAS/lib:/openmpi/lib:$LD_LIBRARY_PATH"'
+    Name: env
+  - Env:
+    - Key: CUDA_ROOT
+      Value: '"/usr/local/cuda"'
+    Name: env
+  - Env:
+    - Key: NOTVISIBLE
+      Value: '"in users profile"'
+    Name: env
+  - CmdLine:
+    - pip install --no-use-wheel scipy
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./requirements.txt
+    - requirements.txt
+  - CmdLine:
+    - pip install -r requirements.txt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/inducer/pycuda --recursive
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd pycuda && ./configure.py && make -j$(nproc) && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/lebedov/scikit-cuda
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd scikit-cuda && python setup.py install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./requirements-gpu.txt
+    - requirements-gpu.txt
+  - CmdLine:
+    - pip install -r requirements-gpu.txt
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: USERNAME
+      Value: crow
+    Name: env
+  - Env:
+    - Key: HOME
+      Value: /home/${USERNAME}
+    Name: env
+  - Name: user
+    User: root
+  - CmdLine:
+    - useradd -s /bin/bash -m ${USERNAME}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "${USERNAME}:${USERNAME}" | chpasswd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /var/run/sshd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'export VISIBLE=now' >> /etc/profile.d/crow.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'export PATH=/OpenBLAS/bin:/openmpi/bin:/usr/local/cuda/bin:$PATH' >> /etc/profile.d/crow.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'export LD_LIBRARY_PATH="/OpenBLAS/lib:/openmpi/lib:$LD_LIBRARY_PATH"'
+      >> /etc/profile.d/crow.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'export CUDA_ROOT=/usr/local/cuda' >> /etc/profile.d/crow.sh
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${USERNAME}
+  - Name: workdir
+    Path: ${HOME}
+  - CmdLine:
+    - mkdir data cache results
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - virtualenv -p python --system-site-packages venv
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'cd ${HOME}' >> .profile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo '. /etc/profile.d/crow.sh' >> .profile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo '. ${HOME}/venv/bin/activate' >> .profile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/acopar/crow src
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv src/.git* . && mv src/* .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bash -c "source ~/venv/bin/activate && cd crow && python setup.py install"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - echo "from cuda_cffi import cusparse" >> build_cusparse.py
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - start.sh
+    - start.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - users.sh
+    - users.sh
+  - Name: expose
+    Ports:
+    - "22"
+  - CmdLine:
+    - /start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nvidia/cuda:8.0-devel
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nvidia/cuda:8.0-devel

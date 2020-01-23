@@ -1,0 +1,70 @@
+MetaArgs: null
+Stages:
+- As: buildstage
+  BaseName: maven
+  Commands:
+  - CmdLine:
+    - git clone https://github.com/mysinmyc/java-playground.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd java-playground/j2ee-rest &&  mvn -P!wlp-embedded,wlp-mariadb package
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /staging/j2ee-rest && unzip -qq /java-playground/j2ee-rest/target/j2ee-rest_mariadb.zip
+      -d /staging/j2ee-rest_mariadb
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven
+  Name: buildstage
+  Platform: ""
+  SourceCode: FROM maven as buildStage
+- As: buildgo
+  BaseName: golang
+  Commands:
+  - CmdLine:
+    - go get github.com/mysinmyc/mytester
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang
+  Name: buildgo
+  Platform: ""
+  SourceCode: FROM golang as buildGo
+- BaseName: open-liberty:webProfile8
+  Commands:
+  - Chown: ""
+    From: buildStage
+    Name: copy
+    SourcesAndDest:
+    - /staging/j2ee-rest_mariadb/wlp/usr/
+    - /opt/ol/wlp/usr
+  - Chown: ""
+    From: buildGo
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/mytester
+    - /usr/local/bin
+  - CmdLine:
+    - /opt/ol/wlp/bin/server
+    - run
+    - j2ee-restServer_mariadb
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 5000000000
+      Retries: 3
+      StartPeriod: 60000000000
+      Test:
+      - CMD-SHELL
+      - /usr/local/bin/mytester -url http://localhost:9080/j2ee-rest/whoami || exit
+        1
+      Timeout: 30000000000
+    Name: healthcheck
+  From:
+    Image: open-liberty:webProfile8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM open-liberty:webProfile8

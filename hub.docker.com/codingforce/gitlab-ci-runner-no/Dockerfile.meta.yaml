@@ -1,0 +1,114 @@
+MetaArgs: null
+Stages:
+- BaseName: php:7.2-fpm-stretch
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Christian-Maximilian Steier"'
+    Name: label
+  - Key: VERSION
+    Name: arg
+    Value: "3"
+  - Key: RELEASE
+    Name: arg
+    Value: "7"
+  - Key: minimal_apt_get_install
+    Name: arg
+    Value: '''apt-get install -y --no-install-recommends'''
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: DEBCONF_NONINTERACTIVE_SEEN
+      Value: "true"
+    Name: env
+  - Key: WEB_USER
+    Name: arg
+    Value: www-data
+  - Key: WEB_GROUP
+    Name: arg
+    Value: www-data
+  - Key: PHP_ROOT_DIR
+    Name: arg
+    Value: /usr/local/etc
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build/root/
+    - /
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - build/scripts
+    - /scripts
+  - CmdLine:
+    - "export sysdirs=\"/bin /etc /lib /sbin /usr\" &&     echo \"[i] Remove crufty...\\n
+      \  /etc/shadow-\\n   /etc/passwd-\\n   /etc/group-\" &&     find $sysdirs -xdev
+      -type f -regex '.*-$' -exec rm -f {} + &&     echo \"[i] Ensure system dirs
+      are owned by root and not writable by anybody else.\" &&     find $sysdirs -xdev
+      -type d -exec chown root:root {} \\; -exec chmod 0755 {} \\; &&     echo \"[i]
+      Set wright permissions for /tmp and /var/tmp.\" &&     chmod a=rwx,o+t /tmp
+      /var/tmp &&     echo \"[i] Remove all suid files.\" &&     find $sysdirs -xdev
+      -type f -a -perm -4000 -delete &&     echo \"[i] Remove other programs that
+      could be dangerous.\" &&     find $sysdirs -xdev \\( -name hexdump -o -name
+      chgrp -o -name od -o -name strings -o -name su \\) -delete &&     echo \"[i]
+      Remove unnecessary user accounts.\" &&     for user in $(cat /etc/passwd | awk
+      -F':' '{print $1}' | grep -ve root -ve nobody -ve daemon -ve www-data -ve nologin
+      -ve _apt); do deluser \"$user\"; done &&     for group in $(cat /etc/group |
+      awk -F':' '{print $1}' | grep -ve root -ve nogroup -ve www-data -ve node -ve
+      staff); do delgroup \"$group\"; done &&     echo \"[i] Remove interactive login
+      shell\" &&     sed -i -r 's#^(.*):[^:]*$#\\1:/sbin/nologin#' /etc/passwd &&
+      \    echo \"[i] Remove init scripts\" &&     rm -fr /etc/init.d /lib/rc /etc/conf.d
+      /etc/inittab /etc/runlevels /etc/rc.conf &&     echo \"[i] Remove kernel tunables\"
+      &&     rm -fr /etc/sysctl* /etc/modprobe.d /etc/modules /etc/mdev.conf /etc/acpi
+      &&         /scripts/prepare.sh &&         echo \"\\n[i] Install s6-overlay\\n\"
+      &&     $minimal_apt_get_install curl gnupg &&     GPG=\"DB30 1BA3 F6F8 07E0
+      D0E6  CCB8 6101 B278 3B2F D161\" &&     S6OVERLAY=$(curl -s https://api.github.com/repos/just-containers/s6-overlay/releases/latest
+      | grep -oP '\"tag_name\": \"\\K(.*)(?=\")') &&     if [ $(uname -m) = \"armv6l\"
+      ] || [ $(uname -m) = \"armv7l\" ]; then ARCHTAG=armhf ; elif [ $(uname -m) =
+      \"aarch64\" ]; then ARCHTAG=aarch64 ; elif [ $(uname -m) = \"x86_64\" ]; then
+      ARCHTAG=amd64 ; fi &&     curl -o /tmp/s6-overlay.tar.gz -L https://github.com/just-containers/s6-overlay/releases/download/${S6OVERLAY}/s6-overlay-${ARCHTAG}.tar.gz
+      &&     curl -o /tmp/s6-overlay.tar.gz.sig -L https://github.com/just-containers/s6-overlay/releases/download/${S6OVERLAY}/s6-overlay-${ARCHTAG}.tar.gz.sig
+      &&     curl https://keybase.io/justcontainers/key.asc | gpg --import &&     FINGERPRINT=\"$(LANG=C
+      gpg --verify /tmp/s6-overlay.tar.gz.sig /tmp/s6-overlay.tar.gz 2>&1 | sed -n
+      \"s#Primary key fingerprint: \\(.*\\)#\\1#p\")\" &&     gpg --verify /tmp/s6-overlay.tar.gz.sig
+      /tmp/s6-overlay.tar.gz &&     if [ -z \"${FINGERPRINT}\" ]; then echo \"[!!]
+      Invalid GPG signature!\" && exit 1; fi &&     if [ \"${FINGERPRINT}\" != \"${GPG}\"
+      ]; then echo \"[!!] Wrong GPG fingerprint!\" && exit 1; fi &&     echo \"[i]
+      All seems good, now unpacking s6-overlay.tar.gz\" &&     tar xzf /tmp/s6-overlay.tar.gz
+      -C / &&         echo -e \"\\n[i] Install cron\\n\" &&     $minimal_apt_get_install
+      cron &&         echo -e \"\\n[i] Install often used tools\\n\" &&     $minimal_apt_get_install
+      bzip2 vim-tiny curl git-core rsync unzip graphviz &&     ln -s /usr/bin/vim.tiny
+      /usr/bin/vim &&         usermod -u 1000 ${WEB_USER} &&     groupmod -g 1000
+      ${WEB_GROUP} &&     sed -i 's*;catch_workers_output = yes*catch_workers_output
+      = yes*g' $PHP_ROOT_DIR/php-fpm.d/www.conf &&     sed -i 's*;php_flag[display_errors]
+      = off*php_flag[display_errors] = off*g' $PHP_ROOT_DIR/php-fpm.d/www.conf &&
+      \    sed -i 's*;php_admin_flag[log_errors] = on*php_admin_flag[log_errors] =
+      on*g' $PHP_ROOT_DIR/php-fpm.d/www.conf &&     sed -i 's*;php_admin_value[error_log]
+      = /var/log/fpm-php.www.log*php_admin_value[error_log] = ${PHP_ROOT_DIR}/logs/error.log*g'
+      $PHP_ROOT_DIR/php-fpm.d/www.conf &&     sed -i 's*listen = 9000*listen = 0.0.0.0:9000*g'
+      $PHP_ROOT_DIR/php-fpm.d/zz-docker.conf &&     /scripts/php-extensions.sh &&
+      \        echo \"\\n[i] Install Composer\\n\" &&     curl -sS https://getcomposer.org/installer
+      | php &&     chmod +x ./composer.phar &&     mv ./composer.phar /usr/local/bin/composer
+      &&     composer require rybakit/msgpack &&         /scripts/moodle.sh &&     mkdir
+      /var/www/moodledata &&     chown -R www-data:root /var/www &&     chmod -R g=u
+      /var/www &&         echo \"\\n[i] Install MOOSH\\n\" &&     if [ ! -d /opt ];
+      then mkdir /opt ; fi &&     cd /opt &&     git clone git://github.com/tmuras/moosh.git
+      &&     cd moosh &&     rm -rf .git &&     composer install &&     ln -s $PWD/moosh.php
+      /bin/moosh &&         apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
+      bzip2 vim-tiny git-core &&     apt-get clean &&     rm -rf \t/etc/machine-id
+      \t/var/lib/dbus/machine-id \t/var/lib/apt/lists/* \t/var/log/alternatives.log
+      \t/var/log/apt/history.log \t/var/log/apt/term.log \t/var/log/dpkg.log \t/etc/ssh/ssh_host_*
+      \t/var/cache/ldconfig/aux-cache \t/usr/share/doc \t/usr/share/man/ \t/usr/share/info/*
+      \t/var/cache/man/*  \t/tmp/* \t/etc/fstab \t/scripts \t/etc/services.d/apache"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: php:7.2-fpm-stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.2-fpm-stretch

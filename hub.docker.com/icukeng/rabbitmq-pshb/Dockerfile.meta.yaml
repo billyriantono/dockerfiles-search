@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- As: dev
+  BaseName: ubuntu:16.04
+  Commands:
+  - CmdLine:
+    - apt-get update &&   DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends
+      -y      erlang-nox erlang-dev erlang-src make git ca-certificates curl python
+      zip &&     apt-get clean &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/brc859844/rabbithub
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd rabbithub && make deps && make && make package
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.04
+  Name: dev
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04 as dev
+- As: prod
+  BaseName: ubuntu:16.04
+  Commands:
+  - CmdLine:
+    - apt-get update &&   DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends
+      -y      erlang-nox logrotate socat ca-certificates &&     apt-get clean &&     rm
+      -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://packagecloud.io/rabbitmq/rabbitmq-server/packages/ubuntu/xenial/rabbitmq-server_3.6.6-1_all.deb/download.deb
+    - /root/rabbitmq-server_3.6.6-1_all.deb
+  - CmdLine:
+    - dpkg -i /root/rabbitmq-server_3.6.6-1_all.deb
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /rabbithub/dist/*.ez
+    - /usr/lib/rabbitmq/lib/rabbitmq_server-3.6.6/plugins
+  - CmdLine:
+    - rabbitmq-plugins enable --offline rabbitmq_management
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rabbitmq-plugins enable --offline rabbithub
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rabbitmq.config
+    - /var/lib/rabbitmq/
+  - CmdLine:
+    - 'ln -s /var/lib/rabbitmq/rabbitmq.config /etc/rabbitmq/ && chown rabbitmq: /var/lib/rabbitmq/rabbitmq.config'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: rabbitmq:rabbitmq
+  - Name: expose
+    Ports:
+    - "15670"
+    - "15672"
+  - Name: volume
+    Volumes:
+    - /var/lib/rabbitmq
+  - CmdLine:
+    - rabbitmq-server
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:16.04
+  Name: prod
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04 as prod

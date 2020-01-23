@@ -1,24 +1,11 @@
-FROM python:3-alpine
+FROM debian:buster-slim
+LABEL maintainer="n.vogels@aves-it.nl"
 
-ENV REDIS_URL="redis://redis:6379" \
-    DJANGO_SETTINGS_MODULE="settings"
+RUN	apt-get update && apt-get install -y --no-install-recommends postfix rsyslog ca-certificates postfix-mysql postfix-pgsql postfix-ldap postfix-pcre postfix-lmdb postfix-sqlite \
+                   && rm -rf /var/lib/apt/lists/* /var/tmp/*
 
-ENV OTREE_ADMIN_PASSWORD=$OTREE_ADMIN_PASSWORD
+ENV USE_RSPAMD 1
 
-ADD ./ /opt/otree
+# RUN << IETS OM DE CONFIG TE VULLEN VOOR EEN RELAY >>
 
-RUN apk -U add --no-cache bash \
-                          curl \
-                          gcc \
-                          musl-dev \
-                          postgresql \
-                          postgresql-dev \
-    && pip install --no-cache-dir -r /opt/otree/requirements.txt \
-    && mkdir -p /opt/init \
-    && chmod +x /opt/otree/entrypoint.sh \
-    && apk del curl gcc musl-dev postgresql-dev
-
-WORKDIR /opt/otree
-VOLUME /opt/init
-ENTRYPOINT /opt/otree/entrypoint.sh
-EXPOSE 80
+CMD [ "/usr/sbin/postfix", "start-fg" ]

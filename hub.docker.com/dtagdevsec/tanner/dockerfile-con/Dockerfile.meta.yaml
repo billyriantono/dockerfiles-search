@@ -1,0 +1,106 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: dspace/dspace-dependencies:dspace-7_x
+  Commands:
+  - Key: TARGET_DIR
+    Name: arg
+    Value: dspace-installer
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - 'mkdir /install     && chown -Rv dspace: /install     && chown -Rv dspace: /app'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: dspace
+  - Chown: dspace
+    Name: add
+    SourcesAndDest:
+    - .
+    - /app/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dspace/src/main/docker/local.cfg
+    - /app/local.cfg
+  - CmdLine:
+    - mvn package &&   mv /app/dspace/target/${TARGET_DIR}/* /install &&   mvn clean
+    Name: run
+    PrependShell: true
+  From:
+    Image: dspace/dspace-dependencies:dspace-7_x
+  Name: build
+  Platform: ""
+  SourceCode: FROM dspace/dspace-dependencies:dspace-7_x as build
+- As: ant_build
+  BaseName: tomcat:8-jre8
+  Commands:
+  - Key: TARGET_DIR
+    Name: arg
+    Value: dspace-installer
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /install
+    - /dspace-src
+  - Name: workdir
+    Path: /dspace-src
+  - Env:
+    - Key: ANT_VERSION
+      Value: 1.10.7
+    Name: env
+  - Env:
+    - Key: ANT_HOME
+      Value: /tmp/ant-$ANT_VERSION
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $ANT_HOME/bin:$PATH
+    Name: env
+  - CmdLine:
+    - mkdir $ANT_HOME &&     wget -qO- "https://archive.apache.org/dist/ant/binaries/apache-ant-$ANT_VERSION-bin.tar.gz"
+      | tar -zx --strip-components=1 -C $ANT_HOME
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ant init_installation update_configs update_code update_webapps
+    Name: run
+    PrependShell: true
+  From:
+    Image: tomcat:8-jre8
+  Name: ant_build
+  Platform: ""
+  SourceCode: FROM tomcat:8-jre8 as ant_build
+- BaseName: tomcat:8-jre8
+  Commands:
+  - Env:
+    - Key: DSPACE_INSTALL
+      Value: /dspace
+    Name: env
+  - Chown: ""
+    From: ant_build
+    Name: copy
+    SourcesAndDest:
+    - /dspace
+    - $DSPACE_INSTALL
+  - Name: expose
+    Ports:
+    - "8009"
+    - "8080"
+  - Env:
+    - Key: JAVA_OPTS
+      Value: -Xmx2000m
+    Name: env
+  - CmdLine:
+    - ln -s $DSPACE_INSTALL/webapps/server   /usr/local/tomcat/webapps/server   &&     ln
+      -s $DSPACE_INSTALL/webapps/rest          /usr/local/tomcat/webapps/rest
+    Name: run
+    PrependShell: true
+  From:
+    Image: tomcat:8-jre8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tomcat:8-jre8

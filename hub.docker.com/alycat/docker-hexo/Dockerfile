@@ -1,21 +1,42 @@
-FROM node:latest
-ENV LANG C.UTF-8
-MAINTAINER Alycat Lee, alycat@sina.cn
-LABEL author=alycat email=alycat@sina.cn site=http://www.alycat.cn
-WORKDIR /
-RUN \
-  mkdir blog && cd blog && \
-  # install hexo
-  npm install hexo-cli -g && \
-  hexo init && npm install && \
-  # install plugins for hexo
-  npm install hexo-generator-sitemap --save && \
-  npm install hexo-generator-feed --save && \
-  npm install hexo-deployer-git --save && \
-  npm un hexo-renderer-marked --save && \
-  npm i hexo-renderer-markdown-it --save
-WORKDIR /blog
-ADD hexo.sh /root/
-VOLUME ["/blog"]
-EXPOSE 4000
-ENTRYPOINT ["/bin/bash","/root/hexo.sh"]
+# Seleccionamos la imagen base. En este caso, se trata del SO minideb:
+FROM bitnami/minideb:latest
+
+# Información sobre el mantenedor:
+LABEL maintainer="Álvaro alvaro89@correo.ugr.es"
+
+# Definir el puerto y la uri de la base de datos como variables de entorno:
+ENV PORT ${PORT}
+ENV DB_URI ${DB_URI} 
+
+# Establecer el directorio de trabajo:
+WORKDIR /usr/src/app
+
+# Instalar python3
+# Atualizar pip e instalar las dependencias. 
+# Instalar netbase para que se cree el fichero /etc/protocols en el contenedor. Este fichero
+# es necesario para los workers asíncronos de gunicorn.
+# No usamos el requirements.txt porque contiene módulos que no son necesarios en el contenedor. 
+# Además indicamos que no use la caché.
+RUN install_packages python3 python3-pip netbase \
+    && python3 -m pip install --no-cache-dir --upgrade pip \
+    && python3 -m pip install --no-cache-dir dnspython \
+    gunicorn[gevent] \
+    gunicorn \
+    hug \
+    pymongo
+
+# Copiar solamente los tres scripts de python necesarios:
+COPY src/Events.py src/events_rest.py src/mongo_data_manager.py ./
+
+# Esta orden solo tiene carácter informativo. Indica a futuros usuarios de este
+# dockerfile el puerto en el que escucha el microservicio.
+EXPOSE ${PORT}
+
+# Creamos un usuario para evitar que el servidor se ejecute con permisos de
+# superusuario, por temas de seguridad:
+# https://devcenter.heroku.com/articles/container-registry-and-runtime#testing-an-image-locally
+RUN useradd -m nonroot
+USER nonroot
+
+# Lanzar gunicorn:
+CMD gunicorn --worker-class gevent -w 10 -b 0.0.0.0:${PORT} events_rest:__hug_wsgi__

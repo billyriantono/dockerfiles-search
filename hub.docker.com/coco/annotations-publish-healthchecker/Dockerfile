@@ -1,31 +1,19 @@
-FROM golang:1.8-alpine
+FROM ubuntu
+LABEL maintainer="Julian Nonino <noninojulian@gmail.com>"
 
-ENV PROJECT=annotations-publish-healthchecker
-COPY . /${PROJECT}-sources/
+RUN apt-get update -y && \
+    apt-get install -y build-essential wget tar tcpdump && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* 
 
-RUN apk --no-cache --virtual .build-dependencies add git \
-  && ORG_PATH="github.com/Financial-Times" \
-  && REPO_PATH="${ORG_PATH}/${PROJECT}" \
-  && mkdir -p $GOPATH/src/${ORG_PATH} \
-  # Linking the project sources in the GOPATH folder
-  && ln -s /${PROJECT}-sources $GOPATH/src/${REPO_PATH} \
-  && cd $GOPATH/src/${REPO_PATH} \
-  && BUILDINFO_PACKAGE="${ORG_PATH}/${PROJECT}/vendor/${ORG_PATH}/service-status-go/buildinfo." \
-  && VERSION="version=$(git describe --tag --always 2> /dev/null)" \
-  && DATETIME="dateTime=$(date -u +%Y%m%d%H%M%S)" \
-  && REPOSITORY="repository=$(git config --get remote.origin.url)" \
-  && REVISION="revision=$(git rev-parse HEAD)" \
-  && BUILDER="builder=$(go version)" \
-  && LDFLAGS="-X '"${BUILDINFO_PACKAGE}$VERSION"' -X '"${BUILDINFO_PACKAGE}$DATETIME"' -X '"${BUILDINFO_PACKAGE}$REPOSITORY"' -X '"${BUILDINFO_PACKAGE}$REVISION"' -X '"${BUILDINFO_PACKAGE}$BUILDER"'" \
-  && echo "Build flags: $LDFLAGS" \
-  && echo "Fetching dependencies..." \
-  && go get -u github.com/kardianos/govendor \
-  && $GOPATH/bin/govendor sync \
-  && go build -ldflags="${LDFLAGS}" \
-  && mv ${PROJECT} /${PROJECT} \
-  && apk del .build-dependencies \
-  && rm -rf $GOPATH /var/cache/apk/*
+ENV COLLECD_VERSION 5.8.0
+RUN wget https://collectd.org/files/collectd-${COLLECD_VERSION}.tar.bz2 && \
+    tar -jxvf collectd-${COLLECD_VERSION}.tar.bz2 && \
+    rm -rf collectd-${COLLECD_VERSION}.tar.bz2 && \
+    cd collectd-${COLLECD_VERSION} && \
+    ./configure && \
+    make all install && \
+    rm -rf /opt/collectd/etc/collectd.conf
 
-WORKDIR /
-
-CMD [ "/annotations-publish-healthchecker" ]
+COPY entrypoint.sh /usr/local/bin
+ENTRYPOINT [ "/usr/local/bin/entrypoint.sh" ]

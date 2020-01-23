@@ -21,7 +21,7 @@ RUN set -xe; \
     ./install.sh; \
     ~/.local/bin/akku
 
-FROM weinholt/ironscheme:latest
+FROM weinholt/guile:latest
 RUN apt-get update && apt-get -y --no-install-recommends install \
        ca-certificates \
        curl \

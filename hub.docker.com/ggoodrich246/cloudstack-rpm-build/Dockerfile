@@ -19,3 +19,4 @@ RUN yum install -y \
         which
 RUN yum install -y mysql-connector-python
 
+RUN useradd -ms /bin/bash jenkins

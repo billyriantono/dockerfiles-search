@@ -1,25 +1,29 @@
-FROM alpine:3.7
+FROM centos:8
+MAINTAINER dongyupu@foxmail.com
 
-ENV AWS_REGION=eu-west-1 \
-    BACKUP_PATH= \
-    S3_TMP=/tmp/s3cmd.zip \
-    S3_ZIP=/tmp/s3cmd-master
+# Configuration variables.
+USER root
+ENV RUN_USER root
+ENV RUN_GROUP root
+ENV JIRA_HOME     /var/atlassian/jira
+ENV JIRA_INSTALL  /opt/atlassian/jira
+ENV JIRA_VERSION 4.5.1
+ENV DOWNLOAD_URL https://product-downloads.atlassian.com/software/jira/downloads/atlassian-servicedesk-4.5.1.tar.gz 
+EXPOSE 8080
+WORKDIR $JIRA_HOME
+#install Opnejdk-1.8.0 and jira-software 8.5.0
+RUN set -x \
+    && yum -y update \
+    && yum -y groupinstall Fonts \
+    && yum -y install java-1.8.0-openjdk java-1.8.0-openjdk-devel \
+    && echo -e "export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk-1.8.0.232.b09-0.el7_7.x86_64" ~/.bash_profile \
+    && echo -e "export PATH=$PATH:$JAVA_HOME/bin" ~/.bash_profile \
+    && echo -e "export CLASSPATH=.:$JAVA_HOME/jre/lib:$JAVA_HOME/lib:$JAVA_HOME/lib/tools.jar" ~/.bash_profile \
+    && source ~/.bash_profile \
+    && mkdir -p "${JIRA_INSTALL}/conf/Catalina" \
+    && curl -Ls "${DOWNLOAD_URL}" | tar -xz --directory "${JIRA_INSTALL}" --strip-components=1 --no-same-owner \
+    && chown -R $RUN_USER:$RUN_GROUP $JIRA_INSTALL \
+    && yum clean all
 
-RUN apk --no-cache add \
-      mongodb-tools \
-      curl \
-      py-pip \
-      python \
-      pv \
- && pip install --upgrade \
-      pip \
-      python-dateutil \
- && curl -sSL --output ${S3_TMP} https://github.com/s3tools/s3cmd/archive/master.zip \
- && unzip -q ${S3_TMP} -d /tmp \
- && mv ${S3_ZIP}/S3 ${S3_ZIP}/s3cmd /usr/bin/ \
- && rm -rf /tmp/* \
- && mkdir /backup
-
-COPY entrypoint.sh /usr/local/bin/entrypoint
-
-CMD /usr/local/bin/entrypoint
+#enterypoint
+CMD ["/opt/atlassian/jira/bin/start-jira.sh", "-fg"]

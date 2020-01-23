@@ -1,12 +1,9 @@
-FROM greyfoxit/alpine-glibc:alpine3.6_glibc2.26
+FROM google/cloud-sdk
 
-# maintainer: Greyfox Team | team@greyfox.it | @greyfoxit
+RUN mkdir /backup
 
-ENV JAVA_HOME=/usr/lib/jvm/default-jvm \
-    JAVA_VERSION=8u131 \
-    JAVA_ALPINE_VERSION=8.131.11-r2
+ADD run /app/run
+ADD restore /app/restore
 
-ENV PATH=$PATH:$JAVA_HOME/jre/bin:$JAVA_HOME/bin \
-    LANG=C.UTF-8
-
-RUN apk add --no-cache openjdk8="$JAVA_ALPINE_VERSION"
+RUN chmod +x /app/run
+RUN chmod +x /app/restore

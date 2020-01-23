@@ -1,0 +1,88 @@
+MetaArgs: null
+Stages:
+- As: caddy-builder
+  BaseName: abiosoft/caddy:builder
+  Commands:
+  - Key: version
+    Name: arg
+    Value: '"0.10.10"'
+  - CmdLine:
+    - VERSION=${version} PLUGINS=cache /bin/sh /usr/bin/builder.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: abiosoft/caddy:builder
+  Name: caddy-builder
+  Platform: ""
+  SourceCode: FROM abiosoft/caddy:builder as caddy-builder
+- As: php-builder
+  BaseName: composer:1.5
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - composer.json
+    - composer.lock
+    - /src/
+  - Name: workdir
+    Path: /src
+  - CmdLine:
+    - composer install -o         --prefer-dist --no-dev --ignore-platform-reqs         --no-ansi
+      --no-interaction
+    Name: run
+    PrependShell: true
+  From:
+    Image: composer:1.5
+  Name: php-builder
+  Platform: ""
+  SourceCode: FROM composer:1.5 as php-builder
+- BaseName: php:7.1-fpm-alpine
+  Commands:
+  - CmdLine:
+    - apk add -u --no-cache $PHPIZE_DEPS     && pecl install apcu     && docker-php-ext-enable
+      apcu     && apk del $PHPIZE_DEPS
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: php-builder
+    Name: copy
+    SourcesAndDest:
+    - /src
+    - /app
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - public
+    - /app/public
+  - Chown: ""
+    From: caddy-builder
+    Name: copy
+    SourcesAndDest:
+    - /install/caddy
+    - /usr/bin/caddy
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Caddyfile
+    - /etc/Caddyfile
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - /usr/bin/caddy
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -conf
+    - /etc/Caddyfile
+    - --log
+    - stdout
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:7.1-fpm-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.1-fpm-alpine

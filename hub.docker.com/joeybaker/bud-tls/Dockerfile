@@ -1,60 +1,54 @@
-# bud-tls
+FROM debian:stretch
+LABEL maintainer="Lin Song <linsongui@gmail.com>"
 
-FROM      node:6
-MAINTAINER Joey Baker <joey@byjoeybaker.com>
+ENV REFRESHED_AT 2017-10-26
+ENV SWAN_VER 3.22
+ENV PROXY_VER 0.8.8
 
-ENV BUD_VERSION 4.0.3
+WORKDIR /opt/src
 
-# Build bud from source
-# the npm install is borked https://github.com/indutny/bud/issues/57
-# make sure the package repository is up to date
-RUN apt-get update -qq \
-  && apt-get install build-essential net-tools -y \
-  # pull down bud
-  && mkdir /opt/bud-install \
-  && cd /opt/bud-install \
-  && git clone --depth 1 https://github.com/indutny/bud \
-  && cd bud \
-  && git checkout v$BUD_VERSION \
-  && git submodule update --init --recursive \
-  # build gyp, we need subversion to get it, so install and then remove
-  && git clone https://chromium.googlesource.com/external/gyp.git tools/gyp \
-  # build bud
-  && ./gyp_bud \
-  && make -C out/ \
-  # move bud into place
-  && mkdir -p /opt/bud/ \
-  && cp -rf out/Release/bud /opt/bud/ \
-  # cleanup
-  && cd / \
-  && rm -rf /opt/bud-install \
-  && apt-get purge build-essential -y \
-  && apt-get autoremove -y
+RUN apt-get -yqq update \
+    && DEBIAN_FRONTEND=noninteractive \
+       apt-get -yqq --no-install-recommends install \
+         wget dnsutils openssl ca-certificates kmod \
+         iproute gawk grep sed net-tools iptables \
+         bsdmainutils libcurl3-nss \
+         libnss3-tools libevent-dev libcap-ng0 xl2tpd \
+         libnss3-dev libnspr4-dev pkg-config libpam0g-dev \
+         libcap-ng-dev libcap-ng-utils libselinux1-dev \
+         libcurl4-nss-dev flex bison gcc make vim tcpdump \
+    && wget -t 3 -T 30 -nv -O "libreswan.tar.gz" "https://github.com/libreswan/libreswan/archive/v${SWAN_VER}.tar.gz" \
+    || wget -t 3 -T 30 -nv -O "libreswan.tar.gz" "https://download.libreswan.org/libreswan-${SWAN_VER}.tar.gz" \
+    && tar xzf "libreswan.tar.gz" \
+    && rm -f "libreswan.tar.gz" \
+    && cd "libreswan-${SWAN_VER}" \
+    && printf 'WERROR_CFLAGS =\nUSE_DNSSEC = false\nUSE_SYSTEMD_WATCHDOG = false\n' > Makefile.inc.local \
+    && make -s base \
+    && make -s install-base \
+    && cd /opt/src \
+    && rm -rf "/opt/src/libreswan-${SWAN_VER}" \
+    && wget https://github.com/z3APA3A/3proxy/archive/3proxy-${PROXY_VER}.tar.gz \
+    && tar xzfv 3proxy-${PROXY_VER}.tar.gz -C /tmp \
+    && echo '#define ANONYMOUS 1' >> /tmp/3proxy-3proxy-${PROXY_VER}/src/3proxy.h \
+    && make -C /tmp/3proxy-3proxy-${PROXY_VER} -f Makefile.Linux \
+    && make -C /tmp/3proxy-3proxy-${PROXY_VER} -f Makefile.Linux install \
+    && rm 3proxy-${PROXY_VER}.tar.gz \
+    && ln -sf /dev/stdout /var/log/3proxy.log \
+    && apt-get -yqq remove \
+         libnss3-dev libnspr4-dev pkg-config libpam0g-dev \
+         libcap-ng-dev libcap-ng-utils libselinux1-dev \
+         libcurl4-nss-dev flex bison gcc make \
+         perl-modules perl \
+    && apt-get -yqq autoremove \
+    && apt-get -y clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# add a user for bud to run workers as
-RUN adduser --system --shell=/bin/bash --group --gecos "" bud
+COPY ./run.sh ./xTun ./vpn-up.sh /opt/src/
+COPY rootfs /
+RUN chmod 755 /opt/src/run.sh
 
-# install voxer's bud logger https://github.com/indutny/bud-logger
-# b/c the built in logger isn't so great, and @indutny suggested it
-RUN mkdir /opt/bud-logger-install \
-  && cd /opt/bud-logger-install \
-  && apt-get install build-essential -y \
-  && git clone --recursive git://github.com/indutny/bud-logger \
-  && cd bud-logger \
-  && ./gyp_logger \
-  && make -C out/ -j24 \
-  && cp -rf ./out/Release/logger.bud /opt/bud/ \
-  # cleanup
-  && cd / \
-  && rm -rf /opt/bud-logger-install \
-  && apt-get purge build-essential -y \
-  && apt-get autoremove -y 
-  # Add `logger.bud` to the `tracing.dso` section in bud configuration
+EXPOSE 500/udp 4500/udp 3128/tcp
 
-# for some reason things break if using CMD, so we'll just have a script kick off bud
-ADD ./start.sh /opt/bud/start.sh
-RUN chmod 770 /opt/bud/start.sh
+VOLUME ["/lib/modules"]
 
-ENTRYPOINT ["/opt/bud/start.sh"]
-
-EXPOSE 443
+CMD ["/opt/src/run.sh"]

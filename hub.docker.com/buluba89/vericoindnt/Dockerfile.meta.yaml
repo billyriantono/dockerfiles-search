@@ -1,0 +1,126 @@
+MetaArgs: null
+Stages:
+- BaseName: bugzilla/bugzilla-base
+  Commands:
+  - Maintainer: David Lawrence <dkl@mozilla.com>
+    Name: maintainer
+  - Env:
+    - Key: BUGZILLA_USER
+      Value: bugzilla
+    Name: env
+  - Env:
+    - Key: BUGS_DB_DRIVER
+      Value: mysql
+    Name: env
+  - Env:
+    - Key: GITHUB_BASE_GIT
+      Value: https://github.com/bugzilla/bugzilla
+    Name: env
+  - Env:
+    - Key: GITHUB_BASE_BRANCH
+      Value: master
+    Name: env
+  - Env:
+    - Key: PATCH_DIR
+      Value: /patch_dir
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/rpm_list
+    - /
+  - CmdLine:
+    - yum -y -q install `cat /rpm_list` &&     yum clean all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -m -G wheel -u 1000 -s /bin/bash $BUGZILLA_USER     && passwd -u -f
+      $BUGZILLA_USER     && echo "bugzilla:bugzilla" | chpasswd
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/bugzilla.conf
+    - /etc/httpd/conf.d/bugzilla.conf
+  - CmdLine:
+    - chown root.root /etc/httpd/conf.d/bugzilla.conf &&     chmod 440 /etc/httpd/conf.d/bugzilla.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/my.cnf
+    - /etc/my.cnf
+  - CmdLine:
+    - chmod 644 /etc/my.cnf &&     chown root.root /etc/my.cnf &&     rm -rf /etc/mysql
+      &&     rm -rf /var/lib/mysql/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/bin/mysql_install_db --user=$BUGZILLA_USER --basedir=/usr --datadir=/var/lib/mysql
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PGDATA
+      Value: /var/lib/pgsql/data
+    Name: env
+  - Env:
+    - Key: PGPORT
+      Value: "5432"
+    Name: env
+  - CmdLine:
+    - su postgres -c "initdb"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "host all all 0.0.0.0/0 trust" >> $PGDATA/pg_hba.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - conf/postgresql.conf
+    - $PGDATA
+  - CmdLine:
+    - cpanm -l $BUGZILLA_LIB  --quiet --notest Test::WWW::Selenium && rm -rf ~/.cpanm
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - scripts/*
+    - /usr/local/bin/
+  - CmdLine:
+    - chmod 755 /usr/local/bin/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://selenium-release.storage.googleapis.com/2.53/selenium-server-standalone-2.53.1.jar
+    - /selenium-server.jar
+  - CmdLine:
+    - echo "NETWORKING=yes" > /etc/sysconfig/network
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: expose
+    Ports:
+    - "5900"
+  - CmdLine:
+    - runtests.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: bugzilla/bugzilla-base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM bugzilla/bugzilla-base

@@ -1,22 +1,18 @@
-FROM ruby:2.1.5
+FROM rocker/rstudio-stable:3.4.0
 
-# install Lilypond
-RUN curl -O http://download.linuxaudio.org/lilypond/binaries/linux-64/lilypond-2.18.2-1.linux-64.sh \
-    && sh lilypond-2.18.2-1.linux-64.sh \
-    && rm lilypond-2.18.2-1.linux-64.sh
+COPY ./Level2_to_Level3_and4.R /home/rstudio/
 
-# install fluidsynth & lame
-RUN apt-get update \
-    && apt-get install -y fluidsynth lame fluid-soundfont-gm
+RUN apt-get update -qq && \
+    apt-get install -y \
+    zlib1g-dev \
+    libssh2-1-dev \
+    libxml2-dev \
+    curl \
+    libpng-dev \
+    sudo \
+    wget
 
-# throw errors if Gemfile has been modified since Gemfile.lock
-RUN bundle config --global frozen 1
-
-RUN mkdir -p /usr/src/app
-WORKDIR /usr/src/app
-
-ONBUILD COPY Gemfile /usr/src/app/
-ONBUILD COPY Gemfile.lock /usr/src/app/
-ONBUILD RUN bundle install
-
-ONBUILD COPY . /usr/src/app
+RUN R -e "source('https://bioconductor.org/biocLite.R'); biocLite('GRmetrics', ask=FALSE, siteRepos='https://mran.microsoft.com/snapshot/2017-11-01');"
+RUN R -e "install.packages('ghit', repos = 'https://mran.microsoft.com/snapshot/2017-11-01')"
+RUN R -e "install.packages('readr', repos = 'https://mran.microsoft.com/snapshot/2017-11-01')"
+RUN R -e "ghit::install_github('schurerlab/LINCSDataPortal@3680b4dc2d6b5af192f49987eda96ee477da334a')"

@@ -1,0 +1,125 @@
+MetaArgs: null
+Stages:
+- As: build-socks5
+  BaseName: alpine
+  Commands:
+  - Key: DOCKER_OS_PACKAGES
+    Name: arg
+    Value: '"bash curl git go godep make musl-dev"'
+  - Env:
+    - Key: GOROOT
+      Value: /usr/lib/go
+    Name: env
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /go/bin:${PATH}
+    Name: env
+  - CmdLine:
+    - mkdir -p ${GOPATH}/src ${GOPATH}/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache ${DOCKER_OS_PACKAGES}
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/socks5
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/src/
+    - .
+  - CmdLine:
+    - godep get
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-s' -o ${GOPATH}/bin/socks5
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: build-socks5
+  Platform: ""
+  SourceCode: FROM alpine AS build-socks5
+- BaseName: alpine
+  Commands:
+  - Maintainer: Fidy Andrianaivo (fidy@andrianaivo.org)
+    Name: maintainer
+  - Labels:
+    - Key: Description
+      Value: '"cigate base image"'
+    Name: label
+  - Key: DOCKER_OS_PACKAGES
+    Name: arg
+    Value: '"nginx privoxy tzdata"'
+  - Key: APP_NAME
+    Name: arg
+    Value: '"cigate"'
+  - Env:
+    - Key: APP_NAME
+      Value: ${APP_NAME}
+    Name: env
+  - Key: TZ
+    Name: arg
+    Value: '"Europe/Vienna"'
+  - Env:
+    - Key: TZ
+      Value: ${TZ}
+    Name: env
+  - CmdLine:
+    - apk update   && apk add ${DOCKER_OS_PACKAGES}   && ln -snf /usr/share/zoneinfo/$TZ
+      /etc/localtime   && echo $TZ > /etc/timezone
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-socks5
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/socks5
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/bin/
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/etc/
+    - /etc/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tests/
+    - /tests/
+  - CmdLine:
+    - echo "[>] adding temporary hosts entries"   && echo "127.0.0.2 appserver1" >>/etc/hosts   &&
+      echo "127.0.0.2 appserver2" >>/etc/hosts   && nginx -t -g "pid /var/run/nginx.pid;"
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /etc/nginx/conf.d
+    - /var/log/nginx
+  - Name: expose
+    Ports:
+    - "1080"
+    - "8080"
+  - CmdLine:
+    - run.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

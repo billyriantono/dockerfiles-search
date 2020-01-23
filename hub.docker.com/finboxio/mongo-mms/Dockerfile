@@ -1,6 +1,6 @@
 FROM alpine:latest
 
-ENV MMS_VERSION 10.4.1.5917-1
+ENV MMS_VERSION 10.9.0.6088-1
 
 RUN adduser -S mms
 

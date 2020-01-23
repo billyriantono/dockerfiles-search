@@ -1,0 +1,143 @@
+FROM ubuntu:16.04
+LABEL maintainer "Chen Zhenpeng <chenzpbj@hotmail.com>"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+ca-certificates apt-transport-https gnupg-curl && \
+    NVIDIA_GPGKEY_SUM=d1be581509378368edeec8c1eb2958702feedf3bc3d17011adbf24efacce4ab5 && \
+    NVIDIA_GPGKEY_FPR=ae09fe4bbd223a84b2ccfce3f60f4b3d7fa2af80 && \
+    apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/7fa2af80.pub && \
+    apt-key adv --export --no-emit-version -a $NVIDIA_GPGKEY_FPR | tail -n +5 > cudasign.pub && \
+    echo "$NVIDIA_GPGKEY_SUM  cudasign.pub" | sha256sum -c --strict - && rm cudasign.pub && \
+    echo "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64 /" > /etc/apt/sources.list.d/cuda.list && \
+    echo "deb https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1604/x86_64 /" > /etc/apt/sources.list.d/nvidia-ml.list && \
+    apt-get purge --auto-remove -y gnupg-curl && \
+rm -rf /var/lib/apt/lists/*
+
+ENV CUDA_VERSION 10.1.243
+
+ENV CUDA_PKG_VERSION 10-1=$CUDA_VERSION-1
+
+# For libraries in the cuda-compat-* package: https://docs.nvidia.com/cuda/eula/index.html#attachment-a
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        cuda-cudart-$CUDA_PKG_VERSION \
+cuda-compat-10-1 && \
+ln -s cuda-10.1 /usr/local/cuda && \
+    rm -rf /var/lib/apt/lists/*
+
+# Required for nvidia-docker v1
+RUN echo "/usr/local/nvidia/lib" >> /etc/ld.so.conf.d/nvidia.conf && \
+    echo "/usr/local/nvidia/lib64" >> /etc/ld.so.conf.d/nvidia.conf
+
+ENV PATH /usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH}
+ENV LD_LIBRARY_PATH /usr/local/nvidia/lib:/usr/local/nvidia/lib64
+
+# nvidia-container-runtime
+ENV NVIDIA_VISIBLE_DEVICES all
+ENV NVIDIA_DRIVER_CAPABILITIES compute,utility
+ENV NVIDIA_REQUIRE_CUDA "cuda>=10.1 brand=tesla,driver>=384,driver<385 brand=tesla,driver>=396,driver<397 brand=tesla,driver>=410,driver<411"
+
+
+ENV NCCL_VERSION 2.4.8
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cuda-libraries-$CUDA_PKG_VERSION \
+cuda-nvtx-$CUDA_PKG_VERSION \
+libnccl2=$NCCL_VERSION-1+cuda10.1 && \
+    apt-mark hold libnccl2 && \
+    rm -rf /var/lib/apt/lists/*
+    
+    
+    
+#!/bin/bash
+RUN apt update && apt install -y \
+    curl \
+    gnupg2 \
+    lsb-release
+
+RUN curl http://repo.ros2.org/repos.key | apt-key add -
+RUN sh -c 'echo "deb [arch=amd64,arm64] http://packages.ros.org/ros2/ubuntu `lsb_release -cs` main" > /etc/apt/sources.list.d/ros2-latest.list'
+
+# install necessary packages
+RUN apt update && apt install -y \
+    libcv2.4\
+    build-essential \
+    cmake \
+    git \
+    python3-colcon-common-extensions \
+    python3-pip \
+    python-rosdep \
+    python3-vcstool \
+    wget
+
+# install some pip packages needed for testing
+RUN python3 -m pip install -U \
+    argcomplete \
+    flake8 \
+    flake8-blind-except \
+    flake8-builtins \
+    flake8-class-newline \
+    flake8-comprehensions \
+    flake8-deprecated \
+    flake8-docstrings \
+    flake8-import-order \
+    flake8-quotes \
+    git+https://github.com/lark-parser/lark.git@0.7d \
+    pytest-repeat \
+    pytest-rerunfailures \
+    pytest \
+    pytest-cov \
+    pytest-runner \
+    setuptools
+
+# install Fast-RTPS dependencies
+RUN apt install --no-install-recommends -y \
+    libasio-dev \
+    libtinyxml2-dev
+
+# install opencv3.3.1 ------------------------------------------------------------------
+# url: https://github.com/BVLC/caffe/wiki/OpenCV-3.3-Installation-Guide-on-Ubuntu-16.04
+# First: get all the dependencies:
+#
+RUN apt-get update
+RUN apt-get install --assume-yes build-essential cmake git
+RUN apt-get install --assume-yes pkg-config unzip ffmpeg qtbase5-dev python-dev python3-dev python-numpy python3-numpy
+RUN apt-get install --assume-yes libopencv-dev libgtk-3-dev libdc1394-22 libdc1394-22-dev libjpeg-dev libpng12-dev libtiff5-dev libjasper-dev
+RUN apt-get install --assume-yes libavcodec-dev libavformat-dev libswscale-dev libxine2-dev libgstreamer0.10-dev libgstreamer-plugins-base0.10-dev
+RUN apt-get install --assume-yes libv4l-dev libtbb-dev libfaac-dev libmp3lame-dev libopencore-amrnb-dev libopencore-amrwb-dev libtheora-dev
+RUN apt-get install --assume-yes libvorbis-dev libxvidcore-dev v4l-utils vtk6
+RUN apt-get install --assume-yes liblapacke-dev libopenblas-dev libgdal-dev checkinstall
+RUN apt-get install -y wget
+
+# Just get a simple editor for convienience (you could just cancel this line)
+RUN sudo apt-get install -y vim
+
+RUN git clone https://github.com/opencv/opencv.git \
+    && cd opencv \
+    && git checkout 3.3.1 \
+    && cd ..
+ 
+RUN git clone https://github.com/opencv/opencv_contrib.git \
+    && cd opencv_contrib \
+    && git checkout 3.3.1 \
+    && cd ..
+
+RUN cd opencv \
+    && mkdir build \
+    && cd build \
+    && cmake -D CMAKE_BUILD_TYPE=RELEASE \
+      -D CMAKE_INSTALL_PREFIX=/usr/local \
+      -D INSTALL_C_EXAMPLES=ON \
+      -D INSTALL_PYTHON_EXAMPLES=ON \
+      -D WITH_TBB=ON \
+      -D WITH_V4L=ON \
+      -D WITH_QT=ON \
+      -D WITH_OPENGL=ON \
+      -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
+      -D BUILD_EXAMPLES=ON .. \
+    && make -j4 \
+    && make install \
+    && sh -c 'echo "/usr/local/lib" >> /etc/ld.so.conf.d/opencv.conf' \
+    && ldconfig
+    
+
+CMD ["/bin/bash"]

@@ -1,36 +1,29 @@
-############################################################
-# Dockerfile
-# Install latest Jenkins
-############################################################
-FROM cloudbees/jenkins-enterprise:1.651.21.1
-MAINTAINER sion@osodevops.io
+FROM alpine:latest AS builder
+RUN apk add --no-cache python3 python3-dev gcc g++ make libffi-dev openssl-dev git && \
+    python3 -m ensurepip && \
+    rm -r /usr/lib/python*/ensurepip && \
+    pip3 install --upgrade pip setuptools && \
+    pip3 install pycrypto && \
+    rm -r /root/.cache
+WORKDIR /opt
+RUN git clone https://github.com/opensvc/opensvc.git
+WORKDIR opensvc
+RUN VERSION=$(git describe --tags --abbrev=0) && \
+    RELEASE=$(git describe --tags|cut -d- -f2) && \
+    echo "version = \"$VERSION-$RELEASE\"" | tee /opt/opensvc/lib/version.py
+RUN rm -rf .git* .codecov* .travis* *.cmd test*
 
-COPY config_master.groovy /usr/share/jenkins/ref/init.groovy.d/config_master.groovy
-# Create Jenkins Log Folder
-#USER root
-#RUN mkdir /var/log/jenkins
-#RUN chown -R jenkins:jenkins /var/log/jenkins
-#USER jenkins
-
-#USER jenkins
-
-#ENV JAVA_OPTS="-Xmx8192m"
-#ENV JENKINS_OPTS="--handlerCountStartup=100 --handlerCountMax=300"
-
-# Install vim to modify files
-# Restore basic bash commands like top, less, more, clear
-
-#USER root
-#RUN apt-get -y update && \
-#    apt-get install -y vim && \
-#    export TERM=xterm && \
-#    echo export TERM=xterm >> /root/.bashrc
-#USER jenkins
-
-# Set default options
-#ENV JAVA_OPTS="-Xmx8192m"
-#ENV JENKINS_OPTS="--handlerCountStartup=100 --handlerCountMax=300 --logfile=/var/log/jenkins/jenkins.log"
-
-EXPOSE 8080
-
-#CMD ["tail", "-f", "/dev/null"]
+FROM alpine:latest
+ENV ADDR=${ADDR:-0.0.0.0}
+ENV PORT=${PORT:-1214}
+RUN apk add --no-cache python3 && ln -sf /usr/bin/python3 /usr/bin/python
+COPY --from=builder /usr/lib/python3.6/site-packages/Crypto /usr/lib/python3.6/site-packages/Crypto
+COPY --from=builder /usr/lib/python3.6/site-packages/pycrypto-2.6.1-py3.6.egg-info /usr/lib/python3.6/site-packages/pycrypto-2.6.1-py3.6.egg-info
+RUN echo -e "OSVC_ROOT_PATH=/opt/opensvc\\nOSVC_PYTHON=/usr/bin/python" > /etc/conf.d/opensvc
+COPY --from=builder /opt/opensvc /opt/opensvc
+RUN /usr/bin/python /opt/opensvc/bin/postinstall
+ENV PATH /opt/opensvc/bin:$PATH
+EXPOSE ${PORT}/tcp
+COPY ./docker-entrypoint.sh /
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["relay"]

@@ -1,21 +1,46 @@
-FROM debian:stretch
-MAINTAINER Martin Raiber <martin@urbackup.org>
+FROM ubuntu:18.04
+RUN apt -y update && apt install -y apt-utils
 
-ENV APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1
+RUN DEBIAN_FRONTEND=noninteractive \
+    apt install -y --no-install-recommends \
+    make \
+    gcc \
+    git \
+    ca-certificates \
+    autoconf \
+    automake \
+    libtool \
+    pkg-config \
+    libfftw3-dev \
+    libatlas3-base \
+    libatlas-base-dev \
+    libplplot-dev \
+    libcurl4 \
+    libcurl4-openssl-dev
 
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y gnupg &&\
-    echo 'deb http://download.opensuse.org/repositories/home:/uroni/Debian_9.0/ /' > /etc/apt/sources.list.d/urbackup-server.list &&\
-    apt-key adv --fetch-keys http://download.opensuse.org/repositories/home:/uroni/Debian_9.0/Release.key &&\
-    apt-get update &&\
-    echo "urbackup-server urbackup/backuppath string /backups" | debconf-set-selections &&\
-    export DEBIAN_FRONTEND=noninteractive &&\
-    apt-get install -y --no-install-recommends --allow-unauthenticated urbackup-server btrfs-tools &&\
-    rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /src \
+    && cd /src \
+    && git clone https://github.com/astromatic/sextractor.git sourceextractor \
+    && cd sourceextractor \
+    && sh autogen.sh \
+    && ./configure \
+    && make \
+    && make install
 
-COPY start /usr/bin/start
+RUN cd /src \
+    && git clone https://github.com/astromatic/psfex.git psfex \
+    && cd psfex \
+    && sh autogen.sh \
+    && ./configure \
+    && make \
+    && make install
 
-EXPOSE 55413/tcp 55414/tcp 55415/tcp 35623/udp
+RUN cd /src \
+    && git clone https://github.com/astromatic/scamp.git scamp \
+    && cd scamp \
+    && sh autogen.sh \
+    && ./configure \
+    && make \
+    && make install
 
-VOLUME [ "/backups", "/var/urbackup", "/var/log", "/usr/share/urbackup" ]
-ENTRYPOINT ["/usr/bin/start"]
-CMD ["run"]
+    

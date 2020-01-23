@@ -1,0 +1,82 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: openjdk:8u171-jdk-alpine3.7
+  Commands:
+  - Key: VERSION
+    Name: arg
+    Value: 0.14.0
+  - CmdLine:
+    - apk add --no-cache bash git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/apache/incubator-gobblin.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --no-cache bash &&     cd /incubator-gobblin && git checkout tags/release-$VERSION
+      &&     ./gradlew build -x findbugsMain -x test -Pversion=$VERSION
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8u171-jdk-alpine3.7
+  Name: builder
+  Platform: ""
+  SourceCode: FROM openjdk:8u171-jdk-alpine3.7 as builder
+- As: gobblin
+  BaseName: openjdk:8u171-jre-alpine3.7
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"cgiraldo@gradiant.org"'
+    Name: label
+  - Labels:
+    - Key: organization
+      Value: '"gradiant.org"'
+    Name: label
+  - Key: VERSION
+    Name: arg
+    Value: 0.14.0
+  - Env:
+    - Key: VERSION
+      Value: $VERSION
+    Name: env
+  - Env:
+    - Key: GOBBLIN_WORK_DIR
+      Value: /root
+    Name: env
+  - Env:
+    - Key: GOBBLIN_FWDIR
+      Value: /gobblin-dist
+    Name: env
+  - Env:
+    - Key: GOBBLIN_JOB_CONFIG_DIR
+      Value: /etc/gobblin
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /incubator-gobblin/apache-gobblin-incubating-bin-$VERSION.tar.gz
+    - /
+  - CmdLine:
+    - apk add --no-cache bash libc6-compat && mkdir -p /etc/gobblin && tar -xvzf /apache-gobblin-incubating-bin-$VERSION.tar.gz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/
+    - /gobblin-dist/
+  - CmdLine:
+    - /gobblin-dist/bin/gobblin-standalone.sh
+    - start
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: openjdk:8u171-jre-alpine3.7
+  Name: gobblin
+  Platform: ""
+  SourceCode: FROM openjdk:8u171-jre-alpine3.7 as gobblin

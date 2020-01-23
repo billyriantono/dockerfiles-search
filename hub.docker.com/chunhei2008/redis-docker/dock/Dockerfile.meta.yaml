@@ -1,0 +1,118 @@
+MetaArgs: null
+Stages:
+- As: frontend-builder
+  BaseName: node:12
+  Commands:
+  - Name: workdir
+    Path: /usr/src/vor/frontend
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./frontend/package.json
+    - /usr/src/vor/frontend/package.json
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./frontend/yarn.lock
+    - /usr/src/vor/frontend/yarn.lock
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./frontend/*.tgz
+    - /usr/src/vor/frontend/
+  - CmdLine:
+    - yarn install --production --network-timeout 100000
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./frontend
+    - /usr/src/vor/frontend
+  - CmdLine:
+    - yarn build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /frontend
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -r ./public /frontend/public
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12
+  Name: frontend-builder
+  Platform: ""
+  SourceCode: FROM node:12 AS frontend-builder
+- As: api-builder
+  BaseName: golang:1.13
+  Commands:
+  - Name: workdir
+    Path: /usr/src/vor
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./go.mod
+    - /usr/src/vor/go.mod
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./go.sum
+    - /usr/src/vor/go.sum
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /usr/src/vor
+  - CmdLine:
+    - go build -o ./app pkg/*.go
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.13
+  Name: api-builder
+  Platform: ""
+  SourceCode: FROM golang:1.13 AS api-builder
+- BaseName: gcr.io/distroless/base
+  Commands:
+  - Name: workdir
+    Path: /usr/src/vor
+  - Chown: ""
+    From: frontend-builder
+    Name: copy
+    SourcesAndDest:
+    - /frontend
+    - ./frontend
+  - Chown: ""
+    From: api-builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/vor/app
+    - ./app
+  - Env:
+    - Key: ENV
+      Value: production
+    Name: env
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - ./app
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: gcr.io/distroless/base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM gcr.io/distroless/base

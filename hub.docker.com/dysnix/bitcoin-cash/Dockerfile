@@ -1,8 +1,9 @@
-ARG SRC_IMAGE=zquestz/bitcoin-abc
-ARG SRC_IMAGE_TAG=latest
-FROM $SRC_IMAGE:$SRC_IMAGE_TAG
+FROM node:10
 
-COPY docker-entrypoint.sh /usr/local/bin/
-USER bitcoin
-ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["bitcoind"]
+ADD . ./server
+WORKDIR /server
+
+RUN npm ci
+RUN chmod +x ./wait-for-it.sh
+
+CMD ["npm", "run", "start-production"]

@@ -1,0 +1,108 @@
+MetaArgs: null
+Stages:
+- BaseName: goodrainapps/alpine:3.6
+  Commands:
+  - Maintainer: zhouyq@goodrain.com
+    Name: maintainer
+  - Env:
+    - Key: PACKAGE_DEPS
+      Value: "alpine-sdk \t\tbison flex     coreutils \t\tperl perl-utils\t\treadline-dev
+        \t\tzlib-dev     dpkg-dev dpkg     openssl-dev     libc-dev     libedit-dev
+        \    libxml2-dev     libxslt-dev     util-linux-dev     zlib-dev"
+    Name: env
+  - Env:
+    - Key: PG_VERSION
+      Value: 9.3.17
+    Name: env
+  - Env:
+    - Key: PG_SHA256
+      Value: 9c03e5f280cfe9bd202fa01af773eb146abd8ab3065f7279d574c568f6948dbe
+    Name: env
+  - Env:
+    - Key: PG_URL
+      Value: https://ftp.postgresql.org/pub/source/v${PG_VERSION}/postgresql-${PG_VERSION}.tar.bz2
+    Name: env
+  - Env:
+    - Key: OSSP_UUID_VERSION
+      Value: 1.6.2
+    Name: env
+  - Env:
+    - Key: OSSP_UUID_SHA256
+      Value: 11a615225baa5f8bb686824423f50e4427acd3f70d394765bdff32801f0fd5b0
+    Name: env
+  - CmdLine:
+    - "set -xe     && apk add --no-cache --virtual .build-deps $PACKAGE_DEPS     \t\t&&
+      wget -O uuid.tar.gz \"https://www.mirrorservice.org/sites/ftp.ossp.org/pkg/lib/uuid/uuid-$OSSP_UUID_VERSION.tar.gz\"
+      \t\t&& echo \"$OSSP_UUID_SHA256 *uuid.tar.gz\" | sha256sum -c - \t\t&& mkdir
+      -p /usr/src/ossp-uuid \t\t&& tar \t\t\t--extract \t\t\t--file uuid.tar.gz \t\t\t--directory
+      /usr/src/ossp-uuid \t\t\t--strip-components 1 \t\t&& rm uuid.tar.gz \t\t&& (
+      \t\tcd /usr/src/ossp-uuid \t\t&& gnuArch=\"$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)\"
+      \t\t&& wget -O config.guess 'https://git.savannah.gnu.org/cgit/config.git/plain/config.guess?id=7d3d27baf8107b630586c962c057e22149653deb'
+      \t\t&& wget -O config.sub 'https://git.savannah.gnu.org/cgit/config.git/plain/config.sub?id=7d3d27baf8107b630586c962c057e22149653deb'
+      \t\t&& ./configure \t\t\t--build=\"$gnuArch\" \t\t\t--prefix=/usr/local \t\t&&
+      make -j \"$(nproc)\" \t\t&& make install \t\t) \t\t&& rm -rf /usr/src/ossp-uuid
+      \t\t    && wget -O postgresql.tar.bz2 ${PG_URL}     && echo \"$PG_SHA256 *postgresql.tar.bz2\"
+      | sha256sum -c -     && mkdir -p /usr/src/postgresql     && tar --strip-components
+      1 -xjf postgresql.tar.bz2 -C /usr/src/postgresql     && rm postgresql.tar.bz2
+      \    && cd /usr/src/postgresql     && awk '$1 == \"#define\" && $2 == \"DEFAULT_PGSOCKET_DIR\"
+      && $3 == \"\\\"/tmp\\\"\" { $3 = \"\\\"/var/run/postgresql\\\"\"; print; next
+      } { print }' src/include/pg_config_manual.h > src/include/pg_config_manual.h.new
+      \    && grep '/var/run/postgresql' src/include/pg_config_manual.h.new     &&
+      mv src/include/pg_config_manual.h.new src/include/pg_config_manual.h     &&
+      gnuArch=\"$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)\" \t\t&& wget -O config/config.guess
+      'https://git.savannah.gnu.org/cgit/config.git/plain/config.guess?id=7d3d27baf8107b630586c962c057e22149653deb'
+      \t\t&& wget -O config/config.sub 'https://git.savannah.gnu.org/cgit/config.git/plain/config.sub?id=7d3d27baf8107b630586c962c057e22149653deb'
+      \        && ./configure       --build=\"$gnuArch\"       --enable-integer-datetimes
+      \      --enable-thread-safety \t\t\t--disable-rpath \t\t\t--with-ossp-uuid \t\t\t--with-gnu-ld
+      \      --with-openssl       --with-libxml       --with-libxslt \t\t\t--with-includes=/usr/local/include
+      \t\t\t--with-libraries=/usr/local/lib \t\t\t--prefix=/usr/local   \t&& make
+      -j \"$(nproc)\" world   \t&& make install-world    \t&& make -C contrib install
+      \        && runDeps=\"$( \t\tscanelf --needed --nobanner --recursive /usr/local
+      \t\t\t| awk '{ gsub(/,/, \"\\nso:\", $2); print \"so:\" $2 }' \t\t\t| sort -u
+      \t\t\t| xargs -r apk info --installed \t\t\t| sort -u \t  )\"     && apk add
+      --no-cache --virtual .postgresql-rundeps $runDeps      && cd /     && rm -rf
+      /usr/src/postgresql         && apk del --no-cache .build-deps"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/run/postgresql && chown -R postgres:postgres /var/run/postgresql
+      && chmod 2777 /var/run/postgresql
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PGDATA
+      Value: /var/lib/postgresql/data
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: en_US.utf8
+    Name: env
+  - Name: volume
+    Volumes:
+    - /var/lib/postgresql/data
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - chmod +x /docker-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "5432"
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - postgres
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: goodrainapps/alpine:3.6
+  Name: ""
+  Platform: ""
+  SourceCode: FROM goodrainapps/alpine:3.6

@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:7u181-jre-alpine3.8
+  Commands:
+  - Labels:
+    - Key: MAINTAINER
+      Value: '''Maksim Kostromin https://github.com/daggerok'''
+    Name: label
+  - Key: CONFLUENT_VERSION
+    Name: arg
+    Value: '''5.0'''
+  - Key: CONFLUENT_FULL_VERSION
+    Name: arg
+    Value: '''5.0.0'''
+  - Key: SCALA_VERSION
+    Name: arg
+    Value: '''2.11'''
+  - Key: CONFLUENT_DIRNAME
+    Name: arg
+    Value: '"confluent-${CONFLUENT_FULL_VERSION}"'
+  - Key: CONFLUENT_BASE_URL
+    Name: arg
+    Value: '''https://packages.confluent.io/archive'''
+  - Key: CONFLUENT_ARCHIVE_ARG
+    Name: arg
+    Value: '"confluent-oss-${CONFLUENT_FULL_VERSION}-${SCALA_VERSION}.zip"'
+  - Key: CONFLUENT_URL_ARG
+    Name: arg
+    Value: '"${CONFLUENT_BASE_URL}/${CONFLUENT_VERSION}/${CONFLUENT_ARCHIVE_ARG}"'
+  - Key: ZOOKEEPER_PORT_ARG
+    Name: arg
+    Value: '''2181'''
+  - Key: KAFKA_PORT_ARG
+    Name: arg
+    Value: '''9092'''
+  - Key: JAVA_OPTS_ARG
+    Name: arg
+    Value: '''-Djava.net.preferIPv4Stack=true -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap
+      -XshowSettings:vm '''
+  - Env:
+    - Key: KAFKA_PATH
+      Value: '"/root/kafka"'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"${KAFKA_PATH}/${CONFLUENT_DIRNAME}/bin:${PATH}"'
+    - Key: CONFLUENT_HOME
+      Value: '"${KAFKA_PATH}/${CONFLUENT_DIRNAME}"'
+    - Key: JAVA_OPTS
+      Value: '"${JAVA_OPTS} ${JAVA_OPTS_ARG}"'
+    - Key: CONFLUENT_ARCHIVE
+      Value: ${CONFLUENT_ARCHIVE_ARG}
+    - Key: ZOOKEEPER_PORT
+      Value: ${ZOOKEEPER_PORT_ARG}
+    - Key: CONFLUENT_URL
+      Value: ${CONFLUENT_URL_ARG}
+    - Key: KAFKA_PORT
+      Value: ${KAFKA_PORT_ARG}
+    Name: env
+  - Name: workdir
+    Path: ${KAFKA_PATH}
+  - CmdLine:
+    - apk add --no-cache --upgrade --update bash curl unzip lsof  && curl ${CONFLUENT_URL}  --silent
+      --output /tmp/${CONFLUENT_ARCHIVE}  && unzip -q -d ./ /tmp/${CONFLUENT_ARCHIVE}  &&
+      apk del unzip wget  && apk cache clean || echo 'no cache found.'  && rm -rf  /tmp/*             /var/cache/apk/*             ${CONFLUENT_HOME}/src             ${CONFLUENT_HOME}/share/doc             ${CONFLUENT_HOME}/bin/windows  &&
+      echo 'for topic in $(echo ${KAFKA_TOPICS:-ololo,trololo}|tr -s ","  " "); do             kafka-topics
+      --create               --zookeeper 127.0.0.1:${ZOOKEEPER_PORT}               --replication-factor
+      1               --partitions 1               --topic ${topic} ;           done'
+      > ${CONFLUENT_HOME}/bin/create-kafka-topics  && chmod +x ${CONFLUENT_HOME}/bin/create-kafka-topics
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: true
+  - CmdLine:
+    - confluent start kafka          ; create-kafka-topics & confluent log zookeeper
+      -f & confluent log kafka -f
+    Name: entrypoint
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - ${KAFKA_PORT}
+    - ${ZOOKEEPER_PORT}
+  - Health:
+      Retries: 33
+      Test:
+      - CMD-SHELL
+      - (test `lsof -i:${KAFKA_PORT}|awk '{print $2}'|wc -l` -ge 1     && test `lsof
+        -i:${ZOOKEEPER_PORT}|awk '{print $2}'|wc -l` -ge 1)     || exit 1
+      Timeout: 1000000000
+    Name: healthcheck
+  From:
+    Image: openjdk:7u181-jre-alpine3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:7u181-jre-alpine3.8

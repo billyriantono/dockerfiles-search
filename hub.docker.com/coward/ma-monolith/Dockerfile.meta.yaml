@@ -1,0 +1,120 @@
+MetaArgs: null
+Stages:
+- As: openalpr
+  BaseName: ubuntu:16.04
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install -y software-properties-common
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-add-repository -y ppa:jonathonf/ffmpeg-3 &&         apt-get update &&         apt-get
+      install -y         build-essential         cmake         curl         git         wget         unzip         yasm         libgtk2.0-dev         pkg-config         libavcodec-dev         libswscale-dev         libtbb2         libtbb-dev         libjpeg-dev         libpng-dev         libtiff-dev         libjasper-dev         libavformat-dev         libpq-dev         libcurl3-dev         libleptonica-dev         liblog4cplus-dev         libtesseract-dev         ocl-icd-libopencl1         opencl-headers         ocl-icd-opencl-dev         beignet         ffmpeg         libavresample-dev
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - wget https://github.com/opencv/opencv/archive/3.3.0.zip     && unzip 3.3.0.zip     &&
+      mkdir /opencv-3.3.0/cmake_binary     && cd /opencv-3.3.0/cmake_binary     &&
+      cmake -DBUILD_TIFF=ON       -DBUILD_opencv_java=OFF       -DWITH_CUDA=OFF       -DENABLE_AVX=ON       -DWITH_OPENGL=ON       -DWITH_OPENCL=ON       -DWITH_IPP=ON       -DWITH_TBB=ON       -DWITH_EIGEN=ON       -DWITH_V4L=ON       -DBUILD_TESTS=OFF       -DBUILD_PERF_TESTS=OFF       -DCMAKE_BUILD_TYPE=RELEASE       -DCMAKE_INSTALL_PREFIX=/usr
+      ..     && make -j4     && make install     && rm /3.3.0.zip     && rm -r /opencv-3.3.0
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/openalpr/openalpr.git /srv/openalpr     && mkdir
+      /srv/openalpr/src/build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /srv/openalpr/src/build
+  - CmdLine:
+    - cmake -DCMAKE_INSTALL_PREFIX:PATH=/usr -DCMAKE_INSTALL_SYSCONFDIR:PATH=/etc
+      .. &&     make -j2 &&     make install && rm -r /srv
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.04
+  Name: openalpr
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04 as openalpr
+- As: builder
+  BaseName: openalpr
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get install -y curl git build-essential &&     curl
+      -O https://storage.googleapis.com/golang/go1.9.linux-amd64.tar.gz &&     tar
+      -xvf go1.9.linux-amd64.tar.gz &&     mv go /usr/local &&     export PATH="/usr/local/go/bin:$PATH"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $GOPATH/bin:/usr/local/go/bin:$PATH
+    Name: env
+  - CmdLine:
+    - mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 777 "$GOPATH"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./
+    - /go/src/github.com/dgmann/ma-monolith
+  - Name: workdir
+    Path: /go/src/github.com/dgmann/ma-monolith
+  - CmdLine:
+    - go get -d -v ./... && CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo
+      -o /monolith .
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: openalpr
+  Name: builder
+  Platform: ""
+  SourceCode: FROM openalpr as builder
+- As: release
+  BaseName: openalpr
+  Commands:
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /monolith
+    - /monolith
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./openalpr.conf
+    - /
+  - Env:
+    - Key: RUNTIME_DATA_DIR
+      Value: '"/usr/share/openalpr/runtime_data"'
+    - Key: REDIS_HOST
+      Value: redis
+    Name: env
+  - Name: volume
+    Volumes:
+    - /stats
+  - CmdLine:
+    - /monolith
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: openalpr
+  Name: release
+  Platform: ""
+  SourceCode: FROM openalpr as release

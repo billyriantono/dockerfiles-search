@@ -1,0 +1,2 @@
+FROM gcr.io/knative-releases/github.com/knative/serving/cmd/activator@sha256:c75dc977b2a4d16f01f89a1741d6895990b7404b03ffb45725a63104d267b74a
+MAINTAINER allen

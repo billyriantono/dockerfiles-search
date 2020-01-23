@@ -1,8 +1,15 @@
-FROM circleci/python:3.6-node
+FROM circleci/python:2.7
 LABEL maintainer="Kitware, Inc. <kitware@kitware.com>"
 
 # Don't use "sudo"
 USER root
+
+# Install Node.js 10
+RUN curl --silent --location https://deb.nodesource.com/setup_10.x | bash - \
+  && apt-get install --assume-yes \
+    'nodejs=10.*' \
+  && npm install --global \
+    npm
 
 # Install Girder system prereqs (including those for all plugins)
 RUN apt-get update \
@@ -14,16 +21,7 @@ RUN apt-get update \
 RUN apt-get update \
   && apt-get install --assume-yes \
     cmake \
-  # Note: universal-ctags is installed for use in the public_names CI job.
-  && git clone "https://github.com/universal-ctags/ctags.git" "./ctags" \
-  && cd ./ctags \
-  && ./autogen.sh \
-  && ./configure \
-  && make \
-  && make install \
-  && cd .. \
-  && rm -rf ./ctags \
-  && pip3 install --no-cache --upgrade \
+  && pip install --no-cache --upgrade \
     pip \
     setuptools \
     tox

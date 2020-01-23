@@ -1,8 +1,18 @@
-FROM fedora:latest
+FROM ubuntu:trusty
 
-MAINTAINER oh@bootjp.me
+RUN apt-get update && \
+    apt-get install -yqq libssl-dev build-essential libffi-dev libxml2-dev \
+    libxslt-dev python-dev python-pip git curl wget
+    
 
-ADD ./ /app/
+ADD . /ursula
 
-RUN dnf install -y php-cli php-mbstring git  && dnf clean all
-RUN cd /app && curl -sS https://getcomposer.org/installer | /usr/bin/php && /usr/bin/php composer.phar install
+WORKDIR /ursula
+
+RUN pip install -U pip 
+
+RUN pip install -r requirements.txt
+
+RUN mkdir /root/.ssh
+
+CMD test/setup && test/run deploy

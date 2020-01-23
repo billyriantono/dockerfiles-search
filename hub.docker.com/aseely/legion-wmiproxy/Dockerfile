@@ -1,10 +1,23 @@
-FROM ubuntu:xenial
+FROM aschults/bluebox_squid:base_latest
+RUN apk update
+RUN apk add db perl perl-uri perl-libwww libgcc
+ENV SQUIDGUARD_VERSION=1.4
+COPY build.sh /
+RUN sh /build.sh
 
-ADD wmi-proxy-simulator /opt/wmi-proxy-simulator
+EXPOSE 3128
+RUN mkdir -p /var/lib/squidGuard/conf.d /usr/local/squidGuard/lists
+VOLUME ["/var/lib/squidGuard/conf.d"]
 
-RUN apt-get update && apt-get install -y libboost-dev libboost-iostreams-dev libboost-filesystem-dev libboost-system-dev libboost-thread-dev
+#ENV redirect_base=http://squidproxy/squidGuardLanding
+ENV redirect_base=http://127.0.0.1/squidGuardLanding
+RUN mkdir -p  /var/www/localhost/htdocs/squidGuardLanding
+ADD blocked.txt /var/www/localhost/htdocs/squidGuardLanding
+RUN curl -o /var/www/localhost/htdocs/squidGuardLanding/1x1.png https://upload.wikimedia.org/wikipedia/commons/c/ca/1x1.png
 
-EXPOSE 3000/tcp
 
-ENTRYPOINT ["/opt/wmi-proxy-simulator/bin/wmi-proxy-simulator"]
-
+COPY sg_conf /usr/local/squidGuard/
+COPY conf /etc/squid/
+COPY liveness_check_sg.sh /
+RUN mkdir -p  /var/www/localhost/htdocs/liveness
+COPY liveness  /var/www/localhost/htdocs/liveness/

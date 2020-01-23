@@ -1,15 +1,16 @@
-# Redis server based on openSUSE Leap 15
-FROM fcrespel/base-image:opensuse15
+# fblgit/docker-dbninja
+FROM ubuntu:trusty
 
-# Redis
-RUN zypper in -y redis &&\
-	zypper clean -a
+MAINTAINER fblgit@github
 
-# Files
-COPY ./root /
-RUN chmod +x /run.sh &&\
-	chmod a+rw /etc/passwd /etc/group &&\
-	chmod -R a+rwX /var/lib/redis /var/lib/redis/default
+RUN apt-get update && apt-get upgrade -y
+RUN apt-get install -qy mysql-client-5.6 apache2 libapache2-mod-php5 php5-mysql wget
+ADD start.sh /data/
+ADD install.sh /data/
+RUN chmod 755 /data/*.sh
+RUN /data/install.sh
+# Exposing Web Port
+EXPOSE 80
 
-# Ports
-EXPOSE 6379
+
+CMD ["/data/start.sh"]

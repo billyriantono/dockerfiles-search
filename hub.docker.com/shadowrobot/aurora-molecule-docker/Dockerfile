@@ -1,8 +1,8 @@
-FROM shadowrobot/aurora-molecule:xenial
+FROM shadowrobot/aurora-molecule:bionic
 
 MAINTAINER "Shadow Robot's Software Team <software@shadowrobot.com>"
 
-LABEL Description="Ubuntu Xenial image contains Ansible, Molecule and Docker driver" Vendor="Shadow Robot" Version="1.0"
+LABEL Description="Ubuntu Bionic image contains Ansible, Molecule and Docker driver" Vendor="Shadow Robot" Version="1.0"
 
 ARG ml_docker_aurora_branch
 

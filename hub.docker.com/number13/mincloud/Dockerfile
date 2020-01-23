@@ -1,18 +1,22 @@
-FROM ubuntu
-
-MAINTAINER Johannes <johannes@number13.de>
+FROM norionomura/swift:511
+LABEL maintainer "Norio Nomura <norio.nomura@gmail.com>"
 
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-dev \
-    python3-pip \
-    git
+    libsqlite3-dev ruby-dev && \
+    rm -r /var/lib/apt/lists/*
 
-RUN git clone https://github.com/number13dev/mincloud.git
+ENV SOURCEKITTEN_REVISION="0.28.0"
+ENV JAZZY_VERSION=""
 
-WORKDIR /mincloud
-RUN pip3 install -r requirements.txt
-RUN chmod +x run.sh
+# Install SourceKitten
+RUN git clone --branch $SOURCEKITTEN_REVISION https://github.com/jpsim/SourceKitten.git && \
+    cd SourceKitten && \
+    swift build --configuration release --static-swift-stdlib && \
+    mv `swift build --configuration release --static-swift-stdlib --show-bin-path`/sourcekitten /usr/bin && \
+    cd .. && \
+    rm -rf SourceKitten && \
+    gem install bundler && \
+    gem install jazzy --version "$JAZZY_VERSION"
 
-EXPOSE 80
-CMD ["/mincloud/run.sh"]
+# Print Installed SourceKitten Version
+RUN sourcekitten version

@@ -1,0 +1,150 @@
+MetaArgs: null
+Stages:
+- As: builder-caddy
+  BaseName: golang:1.9-alpine3.6
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"ulrich.schreiner@gmail.com"'
+    Name: label
+  - Env:
+    - Key: CADDY_VERSION
+      Value: v0.10.10
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - caddy-build
+    - /caddy-build
+  - CmdLine:
+    - apk --no-cache update     && apk --no-cache --update add git bash     && cd
+      /caddy-build     && env OS=linux ARCH=amd64 ./build_caddy.sh     && ls -la /caddy-build/caddy
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.9-alpine3.6
+  Name: builder-caddy
+  Platform: ""
+  SourceCode: FROM golang:1.9-alpine3.6 as builder-caddy
+- BaseName: daspanel/engine-base-dev:dev
+  Commands:
+  - Maintainer: Abner G Jacobsen - http://daspanel.com <admin@daspanel.com>
+    Name: maintainer
+  - Chown: ""
+    From: builder-caddy
+    Name: copy
+    SourcesAndDest:
+    - /caddy-build/caddy
+    - /usr/sbin/caddy
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Key: VCS_URL
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: S6_OVERLAY_VERSION
+    Name: arg
+    Value: v1.21.4.0
+  - Key: DASPANEL_IMG_NAME
+    Name: arg
+    Value: engine-static
+  - Key: DASPANEL_OS_VERSION
+    Name: arg
+    Value: alpine3.6
+  - Key: GOTTY_URL
+    Name: arg
+    Value: '"https://github.com/yudai/gotty/releases/download/v2.0.0-alpha.3/gotty_2.0.0-alpha.3_linux_amd64.tar.gz"'
+  - Env:
+    - Key: S6_BEHAVIOUR_IF_STAGE2_FAILS
+      Value: "2"
+    - Key: TZ
+      Value: '"UTC"'
+    - Key: DASPANEL_WAIT_FOR_API
+      Value: '"YES"'
+    Name: env
+  - Labels:
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.version
+      Value: $VERSION
+    - Key: org.label-schema.vcs-url
+      Value: $VCS_URL
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.name
+      Value: '"daspanel/engine-static"'
+    - Key: org.label-schema.description
+      Value: '"This service provides HTTP static engine server to Daspanel sites."'
+    Name: label
+  - Env:
+    - Key: TERM
+      Value: xterm-256color
+    Name: env
+  - Env:
+    - Key: VAR_PREFIX
+      Value: /var/run
+    Name: env
+  - Env:
+    - Key: LOG_PREFIX
+      Value: /var/log/caddy
+    Name: env
+  - Env:
+    - Key: TEMP_PREFIX
+      Value: /tmp
+    Name: env
+  - Env:
+    - Key: CACHE_PREFIX
+      Value: /var/cache
+    Name: env
+  - Env:
+    - Key: PAGER
+      Value: '''more'''
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rootfs
+    - /
+  - CmdLine:
+    - 'set -x     && sh /opt/daspanel/bootstrap/${DASPANEL_OS_VERSION}/00_base     &&
+      wget -O /tmp/opt-daspanel.zip "https://github.com/daspanel/rootfs-base/releases/download/0.1.0/opt-daspanel.zip"     &&
+      unzip -o -d / /tmp/opt-daspanel.zip     && wget -O /tmp/alpine-s6.zip "https://github.com/daspanel/rootfs-base/releases/download/0.1.0/alpine-s6.zip"     &&
+      unzip -o -d / /tmp/alpine-s6.zip     && wget https://github.com/just-containers/s6-overlay/releases/download/$S6_OVERLAY_VERSION/s6-overlay-amd64.tar.gz
+      --no-check-certificate -O /tmp/s6-overlay.tar.gz     && tar xvfz /tmp/s6-overlay.tar.gz
+      -C /     && rm -f /tmp/s6-overlay.tar.gz     && sh /opt/daspanel/bootstrap/${DASPANEL_OS_VERSION}/99_install_pkgs
+      "git zip python3 python3-dev mariadb-dev"     && python3 -m ensurepip     &&
+      rm -r /usr/lib/python*/ensurepip     && pip3 install --no-cache-dir --upgrade
+      pip setuptools     && pip3 install pipenv     && curl --progress-bar --show-error
+      --fail --location         --header "Accept: application/tar+gzip, application/x-gzip,
+      application/octet-stream" -o /tmp/gotty.tar.gz         "${GOTTY_URL}"     &&
+      tar -C /usr/sbin -xvzf /tmp/gotty.tar.gz     && chmod 0755 /usr/sbin/gotty     &&
+      mkdir /lib64     && ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2     &&
+      rm /tmp/gotty.tar.gz     && chmod 0755 /usr/sbin/caddy     && setcap "cap_net_bind_service=+ep"
+      /usr/sbin/caddy     && rm -rf /tmp/*     && rm -rf /var/cache/apk/*'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine: []
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "443"
+  From:
+    Image: daspanel/engine-base-dev:dev
+  Name: ""
+  Platform: ""
+  SourceCode: FROM daspanel/engine-base-dev:dev

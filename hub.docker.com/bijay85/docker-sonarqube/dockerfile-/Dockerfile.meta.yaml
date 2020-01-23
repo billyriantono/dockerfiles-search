@@ -1,0 +1,97 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8u131-jdk
+  Commands:
+  - CmdLine:
+    - apt-get update -qq  && apt-get install -y --no-install-recommends     git     sendmail  &&
+      apt-get clean autoclean  && apt-get autoremove --yes  && rm -rf /var/lib/{apt,dpkg,cache,log}/
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JENKINS_USER
+      Value: jenkins
+    - Key: JENKINS_UID
+      Value: "1592"
+    - Key: JENKINS_GROUP
+      Value: jenkins
+    - Key: JENKINS_GID
+      Value: "1592"
+    - Key: JENKINS_HOME
+      Value: /var/jenkins
+    - Key: JENKINS_SLAVE_AGENT_PORT
+      Value: "50000"
+    - Key: JENKINS_EXECUTORS
+      Value: "2"
+    - Key: JENKINS_INSTALL_DIR
+      Value: /usr/share/jenkins
+    Name: env
+  - CmdLine:
+    - addgroup     --gid ${JENKINS_GID}     ${JENKINS_GROUP}  && adduser     --uid
+      ${JENKINS_UID}     --ingroup ${JENKINS_GROUP}     --home ${JENKINS_HOME}     --shell
+      /bin/bash     --disabled-password     -c "Jenkins Account"     --gecos ""     ${JENKINS_USER}
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TINI_VERSION
+      Value: 0.14.0
+    - Key: TINI_SHA
+      Value: 6c41ec7d33e857d4779f14d9c74924cab0c7973485d2972419a3b7c7620ff5fd
+    Name: env
+  - CmdLine:
+    - curl -fsSL https://github.com/krallin/tini/releases/download/v${TINI_VERSION}/tini-static-amd64
+      -o /bin/tini  && chmod +x /bin/tini  && echo "$TINI_SHA  /bin/tini" | sha256sum
+      -c -
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tcp-slave-agent-port.groovy
+    - executors.groovy
+    - ${JENKINS_INSTALL_DIR}/ref/init.groovy.d/
+  - Env:
+    - Key: COPY_REFERENCE_FILE_LOG
+      Value: ${JENKINS_HOME}/copy_reference_file.log
+    - Key: JENKINS_VERSION
+      Value: "2.88"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - jenkins-support
+    - jenkins.sh
+    - docker-entrypoint.sh
+    - /usr/local/bin/
+  - CmdLine:
+    - curl -fsSL https://repo.jenkins-ci.org/public/org/jenkins-ci/main/jenkins-war/${JENKINS_VERSION}/jenkins-war-${JENKINS_VERSION}.war
+      -o ${JENKINS_INSTALL_DIR}/jenkins.war  && chown -R ${JENKINS_USER}:${JENKINS_GROUP}
+      ${JENKINS_INSTALL_DIR}/ref  && chmod -R 755 /usr/local/bin
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - Name: volume
+    Volumes:
+    - ${JENKINS_HOME}
+  - Name: expose
+    Ports:
+    - ${JENKINS_SLAVE_AGENT_PORT}
+    - "8080"
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - sh
+    - -c
+    - su -s /bin/bash --preserve-environment -c '/bin/tini -- /usr/local/bin/jenkins.sh'
+      ${JENKINS_USER}
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8u131-jdk
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8u131-jdk

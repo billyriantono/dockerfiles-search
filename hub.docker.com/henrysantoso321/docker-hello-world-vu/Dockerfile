@@ -1,9 +1,32 @@
-FROM nginx:1.10.1-alpine
+FROM abiosoft/caddy:php
+MAINTAINER Kai Hendry <hendry@iki.fi>
 
-Add index.html /usr/share/nginx/html/index.html
+RUN composer require aws/aws-sdk-php
 
-# Override the nginx start from the base container
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
+RUN mkdir /srv/logs
 
-ENTRYPOINT ["/start.sh"]
+ADD http://momentjs.com/downloads/moment.min.js /srv/m/moment.min.js
+ADD http://cdn.ractivejs.org/latest/ractive.min.js /srv/h/ractive.min.js
+
+ADD Caddyfile /etc/Caddyfile
+
+ARG COMMIT
+ENV COMMIT ${COMMIT}
+
+ADD config.php /srv
+ADD aws-helpers.php /srv
+
+ADD index /srv/index
+# d.$HOST - docs
+ADD docs /srv/docs
+# m.$HOST - for managers
+ADD m /srv/m
+# h.$HOST - for home owners
+ADD h /srv/h
+# g.$HOST for guards
+ADD g /srv/g
+
+USER root
+RUN chmod -R a+rx /srv/
+
+VOLUME /srv/data

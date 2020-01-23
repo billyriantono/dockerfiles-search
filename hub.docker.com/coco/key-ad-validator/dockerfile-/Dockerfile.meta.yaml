@@ -1,0 +1,116 @@
+MetaArgs: null
+Stages:
+- As: mbedtlsbuilder
+  BaseName: alpine:edge
+  Commands:
+  - Maintainer: Jose Cabral <cabralcochi@gmail.com>
+    Name: maintainer
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - "apk add --no-cache bash git gcc g++ make cmake     && git clone -b mbedtls-2.7.1
+      https://github.com/ARMmbed/mbedtls mbedtls \t&& cd mbedtls \t&& mkdir build
+      \t&& cd build \t&& cmake -DENABLE_TESTING=Off ../ \t&& make -j8"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: mbedtlsbuilder
+  Platform: ""
+  SourceCode: FROM alpine:edge as mbedtlsBuilder
+- As: opcuabuilder
+  BaseName: alpine:edge
+  Commands:
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: mbedtlsBuilder
+    Name: copy
+    SourcesAndDest:
+    - /mbedtls
+    - /mbedtls
+  - CmdLine:
+    - "apk add --no-cache bash git cmake gcc make g++ python py-pip py-six \t&& git
+      clone -b v1.0 https://github.com/open62541/open62541.git open62541     && cd
+      open62541 \t&& git submodule update --init --recursive \t&& mkdir build/ \t&&
+      cd build/ \t&& cmake -DCMAKE_BUILD_TYPE=Release           -DUA_ENABLE_AMALGAMATION=ON
+      \t\t  -DUA_ENABLE_ENCRYPTION=ON \t\t  -DMBEDCRYPTO_LIBRARY=/mbedtls/build/crypto/library/libmbedcrypto.a
+      \t\t  -DMBEDTLS_INCLUDE_DIRS=/mbedtls/include \t\t  -DMBEDTLS_LIBRARY=/mbedtls/build/library/libmbedtls.a
+      \t\t  -DMBEDX509_LIBRARY=/mbedtls/build/library/libmbedx509.a \t\t  ../     &&
+      make -j8"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: opcuabuilder
+  Platform: ""
+  SourceCode: FROM alpine:edge as opcuaBuilder
+- As: fortebuilder
+  BaseName: alpine:edge
+  Commands:
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: mbedtlsBuilder
+    Name: copy
+    SourcesAndDest:
+    - /mbedtls
+    - /mbedtls
+  - Chown: ""
+    From: opcuaBuilder
+    Name: copy
+    SourcesAndDest:
+    - /open62541
+    - /open62541
+  - CmdLine:
+    - "apk add --no-cache bash git cmake gcc make g++ \t&& git clone -b develop https://git.eclipse.org/r/4diac/org.eclipse.4diac.forte
+      \    && cd org.eclipse.4diac.forte \t&& mkdir build \t&& cd build \t&& cmake
+      -G \"Unix Makefiles\" -DCMAKE_BUILD_TYPE=Release         -DFORTE_ARCHITECTURE=Posix
+      \t\t-DFORTE_MODULE_CONVERT=ON \t\t-DFORTE_MODULE_UTILS=ON         -DFORTE_COM_ETH=ON
+      \t\t-DFORTE_MODULE_IEC61131=ON         -DFORTE_COM_OPC_UA=ON         -DFORTE_COM_OPC_UA_INCLUDE_DIR=/open62541/build/
+      \        -DFORTE_COM_OPC_UA_LIB_DIR=/open62541/build/bin         -DFORTE_COM_OPC_UA_LIB=libopen62541.a
+      \t\t-DFORTE_COM_OPC_UA_MASTER_BRANCH=ON \t\t-DFORTE_COM_OPC_UA_ENCRYPTION=ON
+      \t\t-DFORTE_COM_OPC_UA_ENCRYPTION_INCLUDE_DIR=/mbedtls/include \t\t-DFORTE_COM_OPC_UA_ENCRYPTION_LIB_DIR=\"/mbedtls/build/crypto/library/;/mbedtls/build/library/\"
+      \t\t../     && make -j8"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: fortebuilder
+  Platform: ""
+  SourceCode: FROM alpine:edge as forteBuilder
+- BaseName: alpine:edge
+  Commands:
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: forteBuilder
+    Name: copy
+    SourcesAndDest:
+    - org.eclipse.4diac.forte/build/src/forte
+    - .
+  - CmdLine:
+    - apk add --no-cache libstdc++
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "4840"
+    - "4841"
+    - "4842"
+    - "61499"
+    - "61500"
+    - "61501"
+    - "61502"
+    - "61503"
+    - "61504"
+    - "61505"
+  - CmdLine:
+    - /forte
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:edge

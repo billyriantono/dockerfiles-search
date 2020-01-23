@@ -1,14 +1,14 @@
-FROM mhart/alpine-node
+FROM chentung/base:latest
+LABEL maintainer="chentung <chentung.wu@outlook.com>"
 
-RUN mkdir /app
+RUN apk add --update mysql mysql-client \
+    && rm -rf /var/cache/apk/*
 
-COPY package.json /app/
+COPY entrypoint.sh /entrypoint.sh
+COPY my.cnf /etc/mysql/my.cnf
 
-WORKDIR /app
+RUN chmod a+x /entrypoint.sh
 
-RUN npm install --production
+EXPOSE 3306
 
-COPY . /app
-
-EXPOSE 8080
-CMD ["npm", "start"]
+ENTRYPOINT ["/entrypoint.sh"]

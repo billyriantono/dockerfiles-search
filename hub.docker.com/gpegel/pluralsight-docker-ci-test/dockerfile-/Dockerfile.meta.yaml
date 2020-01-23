@@ -1,0 +1,119 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12-alpine3.9
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/concourse/s3-resource
+  - Env:
+    - Key: CGO_ENABLED
+      Value: "0"
+    Name: env
+  - CmdLine:
+    - go build -o /assets/in github.com/concourse/s3-resource/cmd/in
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -o /assets/out github.com/concourse/s3-resource/cmd/out
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go build -o /assets/check github.com/concourse/s3-resource/cmd/check
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /go/src/github.com/concourse/s3-resource
+  - CmdLine:
+    - "set -e; for pkg in $(go list ./...); do \t\tgo test -o \"/tests/$(basename
+      $pkg).test\" -c $pkg; \tdone"
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12-alpine3.9
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12-alpine3.9 as builder
+- As: resource
+  BaseName: alpine:edge
+  Commands:
+  - CmdLine:
+    - apk add --no-cache bash tzdata ca-certificates unzip zip gzip tar
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - assets/
+    - /opt/resource/
+  - CmdLine:
+    - chmod +x /opt/resource/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:edge
+  Name: resource
+  Platform: ""
+  SourceCode: FROM alpine:edge AS resource
+- As: tests
+  BaseName: resource
+  Commands:
+  - Key: S3_TESTING_ACCESS_KEY_ID
+    Name: arg
+    Value: null
+  - Key: S3_TESTING_SECRET_ACCESS_KEY
+    Name: arg
+    Value: null
+  - Key: S3_TESTING_SESSION_TOKEN
+    Name: arg
+    Value: null
+  - Key: S3_VERSIONED_TESTING_BUCKET
+    Name: arg
+    Value: null
+  - Key: S3_TESTING_BUCKET
+    Name: arg
+    Value: null
+  - Key: S3_TESTING_REGION
+    Name: arg
+    Value: null
+  - Key: S3_ENDPOINT
+    Name: arg
+    Value: null
+  - Key: S3_USE_INSTANCE_PROFILE
+    Name: arg
+    Value: null
+  - Key: TEST_SESSION_TOKEN
+    Name: arg
+    Value: null
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tests
+    - /go-tests
+  - Name: workdir
+    Path: /go-tests
+  - CmdLine:
+    - "set -e; for test in /go-tests/*.test; do \t\t$test; \tdone"
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: resource
+  Name: tests
+  Platform: ""
+  SourceCode: FROM resource AS tests
+- BaseName: resource
+  Commands: null
+  From:
+    Stage:
+      Index: 1
+      Named: resource
+  Name: ""
+  Platform: ""
+  SourceCode: FROM resource

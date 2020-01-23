@@ -1,0 +1,2 @@
+FROM gcr.io/knative-releases/github.com/knative/serving/cmd/controller@sha256:df02e462373a3e4a408356d8d6240222bfe31f6aebbac804d28a6982532fb45f
+MAINTAINER allen

@@ -1,0 +1,125 @@
+MetaArgs: null
+Stages:
+- As: ipxe_build
+  BaseName: ubuntu:bionic
+  Commands:
+  - Key: EFI_COMPILE_ARGS
+    Name: arg
+    Value: '''DEBUG=dhcp,tftp,http,scsi,iscsi,aoe,bzimage,netdevice,snpnet,snponly,snp,efi_snp,efi_init,efi_pci,efi_driver,device,realtek,pci'''
+  - Key: KPXE_COMPILE_ARGS
+    Name: arg
+    Value: '''DEBUG=dhcp,tftp,http,scsi,iscsi,aoe,bzimage,netdevice,snpnet,snponly,snp,efi_snp,efi_init,efi_pci,efi_driver,device,realtek,pci,undi,undiload,undinet'''
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -y install git make gcc binutils perl mtools syslinux liblzma-dev genisoimage
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone git://git.ipxe.org/ipxe.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /ipxe && git checkout master
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/^CFLAGS.*/CFLAGS := -fno-pie/g' /ipxe/src/Makefile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/.*CONSOLE_CMD.*/#define CONSOLE_CMD/g' /ipxe/src/config/general.h
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/.*IMAGE_PNG.*/#define IMAGE_PNG/g' /ipxe/src/config/general.h
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/.*CONSOLE_FRAMEBUFFER.*/#define CONSOLE_FRAMEBUFFER/g' /ipxe/src/config/console.h
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/.*IMAGE_TRUST_CMD.*/#define IMAGE_TRUST_CMD/g' /ipxe/src/config/console.h
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /ipxe/src && make bin-x86_64-efi/ipxe.efi ${EFI_COMPILE_ARGS}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /ipxe/src && make bin-x86_64-pcbios/undionly.kpxe ${KPXE_COMPILE_ARGS}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /ipxe/src && make bin-x86_64-pcbios/undionly.kkpxe ${KPXE_COMPILE_ARGS}
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:bionic
+  Name: ipxe_build
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic AS ipxe_build
+- BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk update &&     apk upgrade &&     apk add tftp-hpa --no-cache &&     mkdir
+      /data
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ipxe_build
+    Name: copy
+    SourcesAndDest:
+    - /ipxe/src/bin-x86_64-pcbios/undionly.kpxe
+    - /data/undionly.kpxe
+  - Chown: ""
+    From: ipxe_build
+    Name: copy
+    SourcesAndDest:
+    - /ipxe/src/bin-x86_64-pcbios/undionly.kkpxe
+    - /data/undionly.kkpxe
+  - Chown: ""
+    From: ipxe_build
+    Name: copy
+    SourcesAndDest:
+    - /ipxe/src/bin-x86_64-efi/ipxe.efi
+    - /data/ipxe.efi
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - http://boot.ipxe.org/undionly.kpxe
+    - /data/undionly_original.kpxe
+  - CmdLine:
+    - chmod -R a+rX /data/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - 69/udp
+  - Name: expose
+    Ports:
+    - 48000-49000/udp
+  - CmdLine:
+    - in.tftpd
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -L
+    - --verbose
+    - -u
+    - root
+    - --secure
+    - --create
+    - /data
+    - --port-range
+    - 48000:49000
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

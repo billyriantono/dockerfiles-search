@@ -1,10 +1,14 @@
-FROM dockdev/base
+FROM jess/telize:latest
 
-RUN apt-get update && apt-get install openjdk-7-jre-headless -y
-RUN curl -fsSL https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein > \
-            /usr/local/bin/lein && \
-            chmod 0755 /usr/local/bin/lein
-RUN curl -fsSL https://github.com/boot-clj/boot-bin/releases/download/latest/boot.sh > \
-            /usr/local/bin/boot && \
-            chmod 0755 /usr/local/bin/boot
-RUN apt-get install rlwrap -y
+RUN apk update && apk add supervisor && rm -rf /var/cache/apk/*
+
+COPY supervisord.conf /etc/supervisord.conf
+
+RUN apk update && apk add supervisor curl && rm -rf /var/cache/apk/*
+
+COPY update-geodb.sh /etc/periodic/weekly/update-geodb.sh
+COPY telize.conf /etc/nginx/conf.d/telize.conf
+
+EXPOSE 80
+
+CMD ["supervisord"]

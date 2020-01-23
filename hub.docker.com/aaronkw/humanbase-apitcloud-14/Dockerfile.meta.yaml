@@ -1,0 +1,78 @@
+MetaArgs: null
+Stages:
+- As: configurability_opcache
+  BaseName: golang
+  Commands:
+  - Maintainer: brian.wilkinson@1and1.co.uk
+    Name: maintainer
+  - Name: workdir
+    Path: /go/src/github.com/1and1internet/configurability
+  - CmdLine:
+    - "git clone https://github.com/1and1internet/configurability.git /go/src/github.com/1and1internet/configurability
+      \t&& make php_opcache \t&& echo \"configurability opcache plugin successfully
+      built\""
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang
+  Name: configurability_opcache
+  Platform: ""
+  SourceCode: FROM golang as configurability_opcache
+- BaseName: 1and1internet/ubuntu-18-apache-php-7.2
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"brian.wilkinson@1and1.co.uk"'
+    Name: label
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files
+    - /
+  - Chown: ""
+    From: configurability_opcache
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/1and1internet/configurability/bin/plugins/php_opcache.so
+    - /opt/configurability/goplugins
+  - Env:
+    - Key: NEXTCLOUD_VERSION
+      Value: "14"
+    - Key: RELEASES_URL
+      Value: '"https://download.nextcloud.com/server/releases/"'
+    - Key: RELEASES_FILE
+      Value: /tmp/releases.html
+    - Key: SOURCE_FOLDER
+      Value: /opt/nextcloud
+    - Key: DOCUMENT_ROOT
+      Value: nextcloud
+    - Key: MYSQL_DATABASE
+      Value: nextcloud
+    Name: env
+  - Env:
+    - Key: SITE_FOLDER
+      Value: /var/www/${DOCUMENT_ROOT}
+    - Key: DATA_FOLDER
+      Value: /var/www/${DOCUMENT_ROOT}/data
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y php-redis &&   cd $SOURCE_FOLDER &&   curl
+      -s $RELEASES_URL > $RELEASES_FILE &&   LATEST_VERSION=$(cat $RELEASES_FILE |
+      grep "nextcloud-${NEXTCLOUD_VERSION}" | grep "tar.bz2" | sed "s/.*nextcloud-\(${NEXTCLOUD_VERSION}.*\).tar.bz2.*/\1/"
+      | tail -1) &&   FILES=$(grep "nextcloud-${LATEST_VERSION}" $RELEASES_FILE |
+      grep "tar.bz2" | sed "s/.*\(nextcloud-${LATEST_VERSION}[^\<]*\).*/\1/") &&   for
+      RELEASE_FILENAME in $FILES;   do     wget -q ${RELEASES_URL}/${RELEASE_FILENAME};   done
+      &&   INSTALLATION_FILE=$(ls nextcloud-*.tar.bz2) &&   sha256sum -c ${INSTALLATION_FILE}.sha256
+      < ${INSTALLATION_FILE} | grep -q OK && echo "Verified" &&   chmod -R 777 $SOURCE_FOLDER
+      &&   apt-get -y clean &&   rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: 1and1internet/ubuntu-18-apache-php-7.2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM 1and1internet/ubuntu-18-apache-php-7.2

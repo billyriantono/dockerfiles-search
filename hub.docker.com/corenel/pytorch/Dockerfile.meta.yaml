@@ -1,0 +1,209 @@
+MetaArgs:
+- DefaultValue: '"9.0"'
+  Key: CUDA
+  ProvidedValue: null
+  Value: '"9.0"'
+- DefaultValue: '"7"'
+  Key: CUDNN
+  ProvidedValue: null
+  Value: '"7"'
+- DefaultValue: '"16.04"'
+  Key: UBUNTU
+  ProvidedValue: null
+  Value: '"16.04"'
+Stages:
+- BaseName: nvidia/cuda:${CUDA}-cudnn${CUDNN}-devel-ubuntu${UBUNTU}
+  Commands:
+  - Key: USE_MIRROR
+    Name: arg
+    Value: '"true"'
+  - Key: BUILD_NIGHTLY
+    Name: arg
+    Value: '"false"'
+  - Key: PYTORCH_VERSION
+    Name: arg
+    Value: 1.1.0
+  - Env:
+    - Key: TORCHVISION_VERSION
+      Value: 0.2.2.post3
+    Name: env
+  - Key: PYTHON_VERSION
+    Name: arg
+    Value: "3.5"
+  - Key: HOROVOD_VERSION
+    Name: arg
+    Value: 0.16.1
+  - CmdLine:
+    - if [ "x${USE_MIRROR}" = "xtrue" ] ; then echo "Use mirrors"; fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ "x${BUILD_NIGHTLY}" = "xtrue" ] ; then echo "Build with pytorch-nightly";
+      fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ "x${USE_MIRROR}" = "xtrue" ] ; then  sed -i 's/archive.ubuntu.com/mirrors.ustc.edu.cn/g'
+      /etc/apt/sources.list  && sed -i 's/http:\/\/mirrors.ustc.edu.cn/https:\/\/mirrors.ustc.edu.cn/g'
+      /etc/apt/sources.list;  fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update -y  && apt-get install -y curl ca-certificates sudo git curl
+      bzip2 wget rsync && apt-get install -y build-essential cmake tree htop bmon
+      iotop g++  && apt-get install -y libx11-6 libglib2.0-0 libsm6 libxext6 libxrender-dev  &&
+      apt-get install -y libjpeg-dev libpng-dev  && apt-get install -y libibverbs-dev  &&
+      apt-get install -y python${PYTHON_VERSION}  && apt-get install -y python${PYTHON_VERSION}-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sf /usr/bin/python${PYTHON_VERSION} /usr/bin/python
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -O https://bootstrap.pypa.io/get-pip.py &&     python get-pip.py &&     rm
+      get-pip.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /app/code
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser --disabled-password --gecos '' --shell /bin/bash user  && chown -R user:user
+      /app
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/90-user
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HOME
+      Value: /home/user
+    Name: env
+  - CmdLine:
+    - pip install ipython
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ "x${USE_MIRROR}" = "xtrue" ] ; then   pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+      ;  fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install 'numpy<1.15.0' lmdb tqdm click pillow easydict tensorboardX scipy
+      scikit-image scikit-learn ninja yacs cython matplotlib==3.0.3 opencv-python
+      h5py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ "x${BUILD_NIGHTLY}" = "xtrue" ] ; then   pip install torch_nightly -f https://download.pytorch.org/whl/nightly/cu90/torch_nightly.html
+      ;  else   pip install torch==${PYTORCH_VERSION} ;  fi
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - if [ "x${BUILD_NIGHTLY}" = "xtrue" ] ; then   git clone https://github.com/pytorch/vision.git   &&
+      cd vision   && python setup.py install   && cd .. && rm -rf vision  else   pip
+      install torchvision==${TORCHVISION_VERSION} ;  fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /tmp/openmpi &&     cd /tmp/openmpi &&     wget https://www.open-mpi.org/software/ompi/v4.0/downloads/openmpi-4.0.0.tar.gz
+      &&     tar zxf openmpi-4.0.0.tar.gz &&     cd openmpi-4.0.0 &&     ./configure
+      --enable-orterun-prefix-by-default &&     make -j $(nproc) all &&     make install
+      &&     ldconfig &&     rm -rf /tmp/openmpi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y --no-install-recommends openssh-client openssh-server gosu
+      &&     mkdir -p /var/run/sshd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cat /etc/ssh/ssh_config | grep -v StrictHostKeyChecking > /etc/ssh/ssh_config.new
+      &&     echo "    StrictHostKeyChecking no" >> /etc/ssh/ssh_config.new &&     mv
+      /etc/ssh/ssh_config.new /etc/ssh/ssh_config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'root:screencast' | chpasswd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'user:user' | chpasswd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/#AuthorizedKeysFile/AuthorizedKeysFile/g' /etc/ssh/sshd_config
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g'
+      -i /etc/pam.d/sshd
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NOTVISIBLE
+      Value: '"in users profile"'
+    Name: env
+  - CmdLine:
+    - echo "export VISIBLE=now" >> /etc/profile
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "22"
+  - CmdLine:
+    - apt-get update && apt-get install -y locales
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "LC_ALL=en_US.UTF-8" >> /etc/environment
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "LANG=en_US.UTF-8" > /etc/locale.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - locale-gen en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ldconfig /usr/local/cuda-9.0/targets/x86_64-linux/lib/stubs &&     HOROVOD_GPU_ALLREDUCE=NCCL
+      HOROVOD_WITHOUT_TENSORFLOW=1 HOROVOD_WITH_PYTORCH=1 pip install -U horovod==${HOROVOD_VERSION}
+      &&     ldconfig
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/code
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - entrypoint.sh
+    - .
+  - CmdLine:
+    - /app/code/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: nvidia/cuda:${CUDA}-cudnn${CUDNN}-devel-ubuntu${UBUNTU}
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nvidia/cuda:${CUDA}-cudnn${CUDNN}-devel-ubuntu${UBUNTU}

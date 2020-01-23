@@ -1,11 +1,14 @@
-FROM alpine:3.2
+FROM jasonrivers/nagios:latest
 
-MAINTAINER domeos
-
-RUN apk add -U curl python && \
-    curl -sSL https://bootstrap.pypa.io/get-pip.py | python && \
-    pip install virtualenv && \
-    rm -rf /var/cache/apk/*
-
-CMD ["python"]
+RUN apt-get update && apt-get install -y    \
+    python3-requests                        \
+    apt-utils                               \
+    python3-pycurl                          \
+    python3-pip                             \
+    apt-utils                               \
+    && apt-get clean                        \
+    && rm -Rf /var/lib/apt/lists/*          \
+    && pip3 install --upgrade pip           \
+    && hash -r pip                          \
+    && pip3 install twx.botapi
 

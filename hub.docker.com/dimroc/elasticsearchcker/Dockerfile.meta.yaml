@@ -1,0 +1,80 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: golang:1.12.1-alpine
+  Commands:
+  - Env:
+    - Key: TERRAFORM_VERSION
+      Value: 0.11.14
+    Name: env
+  - Env:
+    - Key: DDCLOUD_VERSION
+      Value: "2.0"
+    Name: env
+  - CmdLine:
+    - apk add --update git bash openssh make
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TF_DEV
+      Value: "true"
+    Name: env
+  - Env:
+    - Key: TF_RELEASE
+      Value: "true"
+    Name: env
+  - Name: workdir
+    Path: $GOPATH/src/github.com/hashicorp/terraform
+  - CmdLine:
+    - git clone https://github.com/hashicorp/terraform.git ./ &&     git checkout
+      v${TERRAFORM_VERSION} &&     /bin/bash scripts/build.sh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $GOPATH/src/github.com/DimensionDataResearch/dd-cloud-compute-terraform/
+  - CmdLine:
+    - git clone https://github.com/DimensionDataResearch/dd-cloud-compute-terraform.git
+      ./ &&     git checkout release/v${DDCLOUD_VERSION} &&     go get github.com/pkg/errors
+      &&     go get golang.org/x/crypto/pkcs12 &&     go get github.com/DimensionDataResearch/go-dd-cloud-compute/compute
+      &&     make dev &&     ls /usr/local/bin
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12.1-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM golang:1.12.1-alpine as build
+- BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --update git bash openssh curl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/terraform
+    - /bin
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/terraform-provider-ddcloud
+    - /bin
+  - CmdLine:
+    - wget https://storage.googleapis.com/kubernetes-release/release/v1.15.3/bin/linux/amd64/kubectl
+      &&     chmod +x ./kubectl &&     mv ./kubectl /usr/local/bin/kubectl
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /bin
+  - CmdLine:
+    - terraform
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

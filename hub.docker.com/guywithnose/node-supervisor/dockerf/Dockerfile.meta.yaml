@@ -1,0 +1,88 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk add --no-cache git ca-certificates upx binutils
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -D -g '' appuser
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $GOPATH/src/github.com/gutmensch/goweck/
+  - Name: workdir
+    Path: $GOPATH/src/github.com/gutmensch/goweck/
+  - CmdLine:
+    - go get -u github.com/go-bindata/go-bindata/...   && go-bindata -o bindata.go
+      asset/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOFLAGS=-mod=vendor go build -a -installsuffix
+      cgo -ldflags="-w -s" -o /go/bin/goweck   && strip -s /go/bin/goweck   && upx
+      /go/bin/goweck
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:alpine AS builder
+- BaseName: scratch
+  Commands:
+  - Key: LISTEN_PORT
+    Name: arg
+    Value: '"8081"'
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/go/lib/time/zoneinfo.zip
+    - /usr/local/go/lib/time/zoneinfo.zip
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/ca-certificates.crt
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/passwd
+    - /etc/passwd
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/goweck
+    - /go/bin/goweck
+  - Env:
+    - Key: ZONEINFO
+      Value: /usr/local/go/lib/time/zoneinfo.zip
+    Name: env
+  - Env:
+    - Key: LISTEN
+      Value: '":${LISTEN_PORT}"'
+    Name: env
+  - Name: user
+    User: appuser
+  - Name: expose
+    Ports:
+    - ${LISTEN_PORT}
+  - CmdLine:
+    - /go/bin/goweck
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

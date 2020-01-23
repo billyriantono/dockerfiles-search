@@ -1,2 +1,2 @@
-FROM agiper/teamcity:latest
+FROM agiper/teamcity
 MAINTAINER Tom Nuen <tomnuen@iconviet.io>

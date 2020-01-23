@@ -1,0 +1,95 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: sgrio/java-oracle:jdk_8
+  Commands:
+  - Maintainer: Jonathan Hart <jono@opennetworking.org>
+    Name: maintainer
+  - Env:
+    - Key: HOME
+      Value: /root
+    Name: env
+  - Env:
+    - Key: BUILD_NUMBER
+      Value: docker
+    Name: env
+  - Env:
+    - Key: JAVA_TOOL_OPTIONS
+      Value: -Dfile.encoding=UTF8
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /src/onos/
+  - Name: workdir
+    Path: /src/onos
+  - CmdLine:
+    - apt-get update && apt-get install -y zip python git bzip2 build-essential &&         curl
+      -L -o bazel.sh https://github.com/bazelbuild/bazel/releases/download/0.19.0/bazel-0.19.0-installer-linux-x86_64.sh
+      &&         chmod +x bazel.sh &&         ./bazel.sh --user &&         export
+      ONOS_ROOT=/src/onos &&         ln -s /usr/lib/jvm/java-8-oracle/bin/jar /etc/alternatives/jar
+      &&         ln -s /etc/alternatives/jar /usr/bin/jar &&         ~/bin/bazel build
+      onos --verbose_failures --jobs 2 &&         mkdir -p /src/tar &&         cd
+      /src/tar &&         tar -xf /src/onos/bazel-bin/onos.tar.gz --strip-components=1
+      &&         rm -rf /src/onos/bazel-* .git
+    Name: run
+    PrependShell: true
+  From:
+    Image: sgrio/java-oracle:jdk_8
+  Name: builder
+  Platform: ""
+  SourceCode: FROM sgrio/java-oracle:jdk_8 as builder
+- BaseName: anapsix/alpine-java:8_server-jre
+  Commands:
+  - CmdLine:
+    - apk update &&         apk add curl &&         mkdir -p /root/onos
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root/onos
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/tar/
+    - .
+  - CmdLine:
+    - sed -ibak '/log4j.rootLogger=/s/$/, stdout/' $(ls -d apache-karaf-*)/etc/org.ops4j.pax.logging.cfg
+    Name: run
+    PrependShell: true
+  - Labels:
+    - Key: org.label-schema.name
+      Value: '"ONOS"'
+    - Key: org.label-schema.description
+      Value: '"SDN Controller"'
+    - Key: org.label-schema.usage
+      Value: '"http://wiki.onosproject.org"'
+    - Key: org.label-schema.url
+      Value: '"http://onosproject.org"'
+    - Key: org.label-scheme.vendor
+      Value: '"Open Networking Foundation"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0"'
+    Name: label
+  - Name: expose
+    Ports:
+    - "6640"
+    - "6653"
+    - "8101"
+    - "8181"
+    - "9876"
+  - CmdLine:
+    - ./bin/onos-service
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - server
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: anapsix/alpine-java:8_server-jre
+  Name: ""
+  Platform: ""
+  SourceCode: FROM anapsix/alpine-java:8_server-jre

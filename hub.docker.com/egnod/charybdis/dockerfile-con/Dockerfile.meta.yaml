@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- As: dependencies
+  BaseName: node:alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache --virtual .gyp python make g++
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - .
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:alpine
+  Name: dependencies
+  Platform: ""
+  SourceCode: FROM node:alpine as dependencies
+- As: builder
+  BaseName: dependencies
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Key: NODE_ENV
+    Name: arg
+    Value: production
+  - Env:
+    - Key: NODE_ENV
+      Value: $NODE_ENV
+    Name: env
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: dependencies
+  Name: builder
+  Platform: ""
+  SourceCode: FROM dependencies as builder
+- As: release
+  BaseName: nginx:alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - default.conf
+    - /etc/nginx/conf.d/
+  - Name: workdir
+    Path: /usr/share/nginx/html
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /var/build/dist
+    - .
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - nginx
+    - -g
+    - daemon off;
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginx:alpine
+  Name: release
+  Platform: ""
+  SourceCode: FROM nginx:alpine as release

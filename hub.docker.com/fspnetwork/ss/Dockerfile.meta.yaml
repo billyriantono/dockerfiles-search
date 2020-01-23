@@ -1,0 +1,69 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine
+  Commands:
+  - Key: SS_VER
+    Name: arg
+    Value: 3.2.5
+  - Key: SS_DOWNLOAD
+    Name: arg
+    Value: https://github.com/shadowsocks/shadowsocks-libev/releases/download/v${SS_VER}/shadowsocks-libev-${SS_VER}.tar.gz
+  - Key: OBFS_DOWNLOAD
+    Name: arg
+    Value: https://github.com/shadowsocks/simple-obfs.git
+  - CmdLine:
+    - set -ex && apk upgrade     && apk add bash tzdata rng-tools     && apk add --no-cache
+      --virtual .build-deps         gcc         make         openssl         libpcre32         g++         curl         autoconf         build-base         libtool         linux-headers         libressl-dev         zlib-dev         asciidoc         udns-dev         xmlto         pcre-dev         automake         mbedtls-dev         libsodium-dev         c-ares-dev         libev-dev         tar         git     &&
+      curl -fsSL ${SS_DOWNLOAD} | tar xz     && (cd shadowsocks-libev-${SS_VER}     &&
+      ./configure --prefix=/usr --disable-documentation     && make install)     &&
+      git clone ${OBFS_DOWNLOAD}     && (cd simple-obfs     && git submodule update
+      --init --recursive     && ./autogen.sh && ./configure --prefix=/usr --disable-documentation    &&
+      make && make install)     && cd ..     && runDeps="$(         scanelf --needed
+      --nobanner /usr/bin/ss-* /usr/local/bin/obfs-*         | awk '{ gsub(/,/, "\nso:",
+      $2); print "so:" $2 }'         | xargs -r apk info --installed         | sort
+      -u         )"     && apk add --virtual .run-deps $runDeps     && apk del .build-deps     &&
+      rm -rf shadowsocks-libev-${SS_VER}.tar.gz         shadowsocks-libev-${SS_VER}         simple-obfs         /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: SS_PORT
+      Value: "8388"
+    Name: env
+  - Env:
+    - Key: PASSWORD
+      Value: value
+    Name: env
+  - Env:
+    - Key: SS_METHOD
+      Value: chacha20-ietf-poly1305
+    Name: env
+  - Env:
+    - Key: SS_TIMEOUT
+      Value: "60"
+    Name: env
+  - Env:
+    - Key: DNS_ADDR
+      Value: 8.8.8.8,8.8.4.4
+    Name: env
+  - Env:
+    - Key: PLUGIN
+      Value: obfs-server
+    Name: env
+  - Env:
+    - Key: PLUGIN_OPTS
+      Value: obfs=tls;fast-open;failover=0.0.0.0:8443
+    Name: env
+  - Name: expose
+    Ports:
+    - $SS_PORT/tcp
+    - $SS_PORT/udp
+  - CmdLine:
+    - ss-server -p $SS_PORT -k $PASSWORD -m $SS_METHOD -t $SS_TIMEOUT -d $DNS_ADDR
+      --plugin $PLUGIN --plugin-opts $PLUGIN_OPTS -u --fast-open --no-delay
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

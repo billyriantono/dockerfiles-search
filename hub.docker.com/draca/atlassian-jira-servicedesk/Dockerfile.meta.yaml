@@ -1,67 +1,61 @@
 MetaArgs: null
 Stages:
-- BaseName: anapsix/alpine-java:8u201b09_jdk
+- As: builder
+  BaseName: busybox:latest
   Commands:
-  - Maintainer: draca <info@draca.be>
-    Name: maintainer
-  - Key: JIRA_VERSION
-    Name: arg
-    Value: 3.14.2
-  - Key: JIRA_DOWNLOAD
-    Name: arg
-    Value: https://www.atlassian.com/software/jira/downloads/binary/atlassian-servicedesk-3.14.2.tar.gz
+  - Labels:
+    - Key: maintainer
+      Value: '"dperezcabrera@gmail.com"'
+    Name: label
   - Env:
-    - Key: JIRA_HOME
-      Value: /opt/atlassian/jira/data
+    - Key: JASYPT_VERSION
+      Value: '"1.9.3"'
     Name: env
-  - Env:
-    - Key: JIRA_INSTALL
-      Value: /opt/atlassian/jira/install
-    Name: env
-  - Env:
-    - Key: JIRA_CERTS
-      Value: /opt/atlassian/jira/certs
-    Name: env
-  - Env:
-    - Key: RUN_USER
-      Value: jira
-    Name: env
-  - Env:
-    - Key: RUN_GROUP
-      Value: jira
-    Name: env
-  - Name: expose
-    Ports:
-    - "8080"
-  - Name: workdir
-    Path: $JIRA_HOME
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://github.com/jasypt/jasypt/releases/download/jasypt-${JASYPT_VERSION}/jasypt-${JASYPT_VERSION}-dist.zip
+    - /
   - CmdLine:
-    - apk add --no-cache curl tar shadow tzdata     && groupadd -r ${RUN_GROUP}     &&
-      useradd -d "${JIRA_HOME}" -r -g ${RUN_GROUP} ${RUN_USER}     && mkdir -p "${JIRA_HOME}"
-      "${JIRA_INSTALL}" "${JIRA_CERTS}"     && curl -Ls ${JIRA_DOWNLOAD} | tar -xz
-      --directory "${JIRA_INSTALL}" --strip-components=1 --no-same-owner     && echo
-      -e "\njira.home=${JIRA_HOME}" >> "${JIRA_INSTALL}/atlassian-jira/WEB-INF/classes/jira-application.properties"     &&
-      apk del curl tar shadow     && chown -R ${RUN_USER}:${RUN_GROUP} "${JIRA_HOME}"
-      "${JIRA_INSTALL}" "${JIRA_CERTS}"
+    - unzip jasypt-${JASYPT_VERSION}-dist.zip
     Name: run
     PrependShell: true
+  - CmdLine:
+    - mv /jasypt-${JASYPT_VERSION}/lib/jasypt-${JASYPT_VERSION}.jar /jasypt.jar
+    Name: run
+    PrependShell: true
+  From:
+    Image: busybox:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM busybox:latest AS builder
+- BaseName: openjdk:8-jre-alpine
+  Commands:
+  - Env:
+    - Key: ALGORITHM
+      Value: PBEWithMD5AndDES
+    Name: env
+  - Env:
+    - Key: MASTER_KEY
+      Value: supersecret
+    Name: env
+  - Env:
+    - Key: ENCRYPTED_PASSWORD
+      Value: secret
+    Name: env
   - Chown: ""
-    From: ""
+    From: builder
     Name: copy
     SourcesAndDest:
-    - '"entrypoint.sh"'
-    - '"/"'
+    - /jasypt.jar
+    - /app/jasypt.jar
   - CmdLine:
-    - /entrypoint.sh
-    Name: entrypoint
-    PrependShell: false
-  - CmdLine:
-    - /opt/atlassian/jira/install/bin/start-jira.sh
-    - -fg
+    - java -Djava.security.egd=file:/dev/./urandom -cp /app/jasypt.jar org.jasypt.intf.cli.JasyptPBEStringDecryptionCLI
+      input="$ENCRYPTED_PASSWORD" password="$MASTER_KEY" algorithm="$ALGORITHM"
     Name: cmd
-    PrependShell: false
+    PrependShell: true
   From:
-    Image: anapsix/alpine-java:8u201b09_jdk
+    Image: openjdk:8-jre-alpine
   Name: ""
   Platform: ""
-  SourceCode: FROM anapsix/alpine-java:8u201b09_jdk
+  SourceCode: FROM openjdk:8-jre-alpine

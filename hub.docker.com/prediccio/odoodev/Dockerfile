@@ -1,0 +1,7 @@
+FROM nginx:latest
+
+ENV MYSQL_ROOT_PASSWORD=electrix
+ENV MYSQL_DATABASE=wp
+ENV MYSQL_USER=katmai
+ENV MYSQL_PASSWORD=electrix
+

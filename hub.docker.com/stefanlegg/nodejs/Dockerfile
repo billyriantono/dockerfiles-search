@@ -1,18 +1,37 @@
-FROM stefanlegg/base
-MAINTAINER Stefan Legg <legg.stefan@gmail.com>
+ARG pyversion=3.7
+FROM python:${pyversion}-buster
+ARG pyversion=3.7
+ENV PYVERSION ${pyversion:-3.7}
 
-RUN apt-get -qq update
-RUN apt-get -yqq upgrade
-RUN apt-get -yqq install build-essential python wget
+# Install packages
+RUN apt-get -yqq update && \
+    apt-get -yqq install apache2 apache2-dev locales && \
+    apt-get clean
 
-# NODE V0.10.23
-RUN wget http://nodejs.org/dist/v0.10.23/node-v0.10.23.tar.gz
-RUN tar -zxvf node-v0.10.23.tar.gz
-RUN rm node-v0.10.23.tar.gz
-WORKDIR node-v0.10.23
+# Install locale
+COPY ./locale.gen /etc/locale.gen
+RUN locale-gen
 
-RUN ./configure
-RUN make
-RUN make install
+# Prepare virtualenv
+RUN mkdir /app
+WORKDIR /app
+RUN python -m venv ./virtualenv
+RUN ./virtualenv/bin/pip install --upgrade pip setuptools
 
-EXPOSE 80 443
+# Install mod_wsgi
+RUN ./virtualenv/bin/pip install mod_wsgi
+RUN ln -s /app/virtualenv/lib/python$PYVERSION/site-packages/mod_wsgi/server/mod_wsgi-*.so /app/virtualenv/lib/python$PYVERSION/site-packages/mod_wsgi/server/mod_wsgi.so
+
+# Prepare app directory
+RUN mkdir ./pylibs
+
+# Configure Apache
+COPY ./start-apache.sh /
+COPY ./wsgi.conf.tmpl /tmp/wsgi.conf.tmpl
+RUN a2dismod mpm_event && a2enmod mpm_prefork
+RUN sed -e s/\$PYVERSION/$PYVERSION/g /tmp/wsgi.conf.tmpl | sed -e s/\$PYV/`echo $PYVERSION | sed -e "s/\\.//"`/g >/etc/apache2/mods-enabled/wsgi.conf
+ONBUILD COPY apache.conf /etc/apache2/sites-available/000-default.conf
+
+# Start Apache
+EXPOSE 80
+CMD ["/bin/sh", "/start-apache.sh"]

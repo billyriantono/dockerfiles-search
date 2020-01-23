@@ -1,0 +1,196 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8-jdk
+  Commands:
+  - Key: PROXY
+    Name: arg
+    Value: ""
+  - Env:
+    - Key: HTTP_PROXY
+      Value: $PROXY
+    Name: env
+  - Env:
+    - Key: HTTPS_PROXY
+      Value: $PROXY
+    Name: env
+  - Env:
+    - Key: http_proxy
+      Value: $PROXY
+    Name: env
+  - Env:
+    - Key: https_proxy
+      Value: $PROXY
+    Name: env
+  - Env:
+    - Key: TZ
+      Value: America/Buenos_Aires
+    Name: env
+  - CmdLine:
+    - ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo deb http://ftp.us.debian.org/debian testing main contrib non-free > /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update  && apt-get install -y sudo && apt-get install -y git/testing
+      && apt-get install -y dos2unix less mc nano docker-compose
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y curl && curl -sSL https://get.docker.com/ | sh && sh -c sleep
+      3;  apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "app ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/user && chmod 0440 /etc/sudoers.d/user
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - groupadd -r app -g 1000 && useradd -u 1000 -r -g app -m -d /app -p zzz -s /sbin/nologin
+      -c "Compiler user" app && chmod 755 /app
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo ". /app/bin/init.sh" >> /app/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "alias ll='ls -alF'" >> /app/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "alias cls='clear'" >> /app/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "export PATH=$PATH:/app/bin:/app/gitbin" >> /app/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo ''export PS1="\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$
+      "'' >> /app/.bashrc'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'sudo chown -R app:app /var/run/docker.sock' >> /app/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /app/bin && chown -R app.app /app/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - usermod -aG docker app
+    Name: run
+    PrependShell: true
+  - Key: MAVEN_VERSION
+    Name: arg
+    Value: 3.5.2
+  - Key: USER_HOME_DIR
+    Name: arg
+    Value: '"/app"'
+  - Key: SHA
+    Name: arg
+    Value: 707b1f6e390a65bde4af4cdaf2a24d45fc19a6ded00fff02e91626e3e42ceaff
+  - Key: BASE_URL
+    Name: arg
+    Value: https://apache.osuosl.org/maven/maven-3/${MAVEN_VERSION}/binaries
+  - CmdLine:
+    - mkdir -p /usr/share/maven /usr/share/maven/ref   && curl -fsSL -o /tmp/apache-maven.tar.gz
+      ${BASE_URL}/apache-maven-$MAVEN_VERSION-bin.tar.gz   && echo "${SHA}  /tmp/apache-maven.tar.gz"
+      | sha256sum -c -   && tar -xzf /tmp/apache-maven.tar.gz -C /usr/share/maven
+      --strip-components=1   && rm -f /tmp/apache-maven.tar.gz   && ln -s /usr/share/maven/bin/mvn
+      /usr/bin/mvn
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MAVEN_HOME
+      Value: /usr/share/maven
+    Name: env
+  - Env:
+    - Key: MAVEN_CONFIG
+      Value: '"$USER_HOME_DIR/.m2"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mvn-entrypoint.sh
+    - /usr/local/bin/mvn-entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - settings-docker.xml
+    - /usr/share/maven/ref/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - settings.xml
+    - /usr/share/maven/ref/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin
+    - /app/bin
+  - CmdLine:
+    - chmod +x /app/bin/* && dos2unix /app/bin/* && chown -R app.app /app/bin/* &&
+      for a in $(find bin | grep .sh$) ; do echo chmod +x $a; dos2unix $a ;done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod 777 /usr/local/bin/mvn-entrypoint.sh
+    Name: run
+    PrependShell: true
+  - Key: GITLAB_USER
+    Name: arg
+    Value: ""
+  - Key: GITLAB_PASSWORD
+    Name: arg
+    Value: ""
+  - CmdLine:
+    - git clone https://$GITLAB_USER:$GITLAB_PASSWORD@github.com/coc1961/repobin.git
+      $USER_HOME_DIR/gitbin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R app.app $USER_HOME_DIR/gitbin && cd $USER_HOME_DIR/gitbin  && git pull  &&
+      $USER_HOME_DIR/bin/git-save-pass.sh
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - '"$USER_HOME_DIR/.m2"'
+  - Name: volume
+    Volumes:
+    - '"$USER_HOME_DIR/bin"'
+  - Name: workdir
+    Path: $USER_HOME_DIR
+  - CmdLine:
+    - chown -R app $USER_HOME_DIR
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown app $USER_HOME_DIR
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  - CmdLine:
+    - /usr/local/bin/mvn-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /bin/bash
+    - --login
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jdk
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk

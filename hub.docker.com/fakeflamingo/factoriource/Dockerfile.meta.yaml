@@ -1,0 +1,94 @@
+MetaArgs: null
+Stages:
+- As: hadolint
+  BaseName: hadolint/hadolint:v1.16.3
+  Commands: null
+  From:
+    Image: hadolint/hadolint:v1.16.3
+  Name: hadolint
+  Platform: ""
+  SourceCode: FROM hadolint/hadolint:v1.16.3 AS hadolint
+- As: shellcheck
+  BaseName: koalaman/shellcheck:v0.6.0
+  Commands: null
+  From:
+    Image: koalaman/shellcheck:v0.6.0
+  Name: shellcheck
+  Platform: ""
+  SourceCode: FROM koalaman/shellcheck:v0.6.0 AS shellcheck
+- As: build
+  BaseName: alpine:3.9
+  Commands:
+  - Name: workdir
+    Path: /tmp/build
+  - Env:
+    - Key: KUBE_VERSION
+      Value: '"1.11.10"'
+    Name: env
+  - Env:
+    - Key: kubectlURL
+      Value: https://storage.googleapis.com/kubernetes-release/release/v${KUBE_VERSION}/bin/linux/amd64/kubectl
+    Name: env
+  - CmdLine:
+    - apk --no-cache --quiet add jq curl upx;     curl -L -s -o /usr/local/bin/kubectl         ${kubectlURL}
+      &&     chmod +x /usr/local/bin/kubectl &&     upx --brute /usr/local/bin/kubectl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Chown: ""
+    From: hadolint
+    Name: copy
+    SourcesAndDest:
+    - /bin/hadolint
+    - /usr/local/bin/hadolint
+  - Chown: ""
+    From: shellcheck
+    Name: copy
+    SourcesAndDest:
+    - /bin/shellcheck
+    - /usr/local/bin/shellcheck
+  - CmdLine:
+    - /usr/local/bin/hadolint ./Dockerfile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/shellcheck --format=gcc ./bin/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: build
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as build
+- BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk --no-cache --quiet add jq~=1.6 bash~=4.4
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/kubectl
+    - /usr/local/bin/kubectl
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bin/*
+    - /opt/resource/
+  - CmdLine:
+    - /usr/local/bin/kubectl
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.9

@@ -1,12 +1,19 @@
-FROM python:3.7-stretch as base
+FROM ubuntu:14.04
 
-FROM base as builder
+ENV DEBIAN_FRONTEND noninteractive
 
-MAINTAINER Fisher Pri Catz "fisher.wei@wqfw.de"
+RUN addgroup no-root && \
+    adduser \
+      --system \
+      --ingroup no-root \
+      --disabled-login \
+      no-root
 
-RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+RUN mkdir /var/nfs-test
 
-WORKDIR /app
+ADD nfs-test.sh /
+RUN chmod +x /nfs-test.sh
 
-ENTRYPOINT ["bash", "-c", "git clone $GIT_REPO /app && pip install -r requirements.txt ; $ENTRYPOINT"]
-
+USER no-root
+VOLUME ["/var/nfs-test"]
+ENTRYPOINT ["/nfs-test.sh"]

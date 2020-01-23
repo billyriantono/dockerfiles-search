@@ -1,15 +1,8 @@
-FROM debian:9
+# Ubuntu with curl and ssh
+#
+# VERSION               0.0.1
 
-RUN apt-get update && apt-get install -y bind9 && rm -rf /var/lib/apt/lists/* 
+FROM      ubuntu
+MAINTAINER Andrew Browne <brownie@brownie.com.au>
 
-RUN mkdir -p /var/run/named /etc/bind/zones
-
-RUN chmod 755 /var/run/named
-
-RUN chown root:bind /var/run/named > /dev/nul 2>&1
-
-EXPOSE 53
-EXPOSE 53/udp
-
-CMD ["/usr/sbin/named","-g","-c","/etc/bind/named.conf","-u","bind"]
-
+RUN apt-get update && apt-get install -y curl openssh-server

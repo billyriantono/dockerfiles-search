@@ -1,13 +1,52 @@
-FROM autopas/build-base
+FROM python:3.7-alpine3.10
 
-# install base requirements
-RUN true \
-	&& apt-get -qq update \
-	&& apt-get -qq install -y --no-install-recommends \
-		lcov \
-		gcovr \
-	&& rm -rf /var/lib/apt/lists/*
+# need to update libressl first so other packages will install later.
+# adding libc6-compat to allow for AWS built binaries to run in this instance.
+RUN apk update && \
+    apk add -u \
+    libressl \
+    libc6-compat
 
-ENTRYPOINT []
+# install required packages for psycopg2 pillow postgis
+RUN apk add -u \
+    postgresql-dev \
+    gcc \
+    g++ \
+    python3-dev \
+    musl-dev \
+    libffi-dev \
+    jpeg-dev \
+    zlib-dev \
+    libmemcached-dev \
+    libffi-dev \
+    tiff-dev \
+    openjpeg-dev \
+    libpng-dev \
+    freetype-dev \
+    lcms2-dev \
+    libwebp-dev \
+    curl
 
-CMD ["sh", "-c", "cmake -GNinja -DAUTOPAS_CODE_COVERAGE=ON -DCMAKE_BUILD_TYPE=Debug ../.. && ninja AutoPas_cobertura"]
+# install packages from testing
+RUN apk add \
+    --no-cache \
+    --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing \
+    --repository http://dl-cdn.alpinelinux.org/alpine/edge/main \
+    gdal-dev \
+    geos-dev \
+    protobuf-c-dev \
+    gdal
+
+
+ENV PYTHON_LOG_LEVEL warning
+
+ENV PYTHONUNBUFFERED 0
+
+ENV SYS_ENVIRONMENT=docker
+ENV CODE_ENVIRONMENT=default
+
+WORKDIR /usr/src/app
+
+EXPOSE 8000
+
+CMD './docker_start.sh'

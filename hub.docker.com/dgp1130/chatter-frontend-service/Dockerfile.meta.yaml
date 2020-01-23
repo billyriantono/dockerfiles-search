@@ -1,0 +1,187 @@
+MetaArgs: null
+Stages:
+- As: flutter
+  BaseName: google/dart:2.4
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y     unzip     wget     xz-utils
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -nv https://storage.googleapis.com/flutter_infra/releases/stable/linux/flutter_linux_v1.9.1+hotfix.2-stable.tar.xz
+      -O /tmp/flutter.tar.xz     && mkdir /flutter/     && tar xf /tmp/flutter.tar.xz
+      -C /flutter/ --strip-components=1     && rm /tmp/flutter.tar.xz
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: '"/flutter/bin:/flutter/.pub-cache/bin:${PATH}"'
+    Name: env
+  - Env:
+    - Key: PUB_CACHE
+      Value: '"/flutter/.pub-cache"'
+    Name: env
+  - CmdLine:
+    - flutter channel master     && flutter upgrade     && flutter config --enable-web
+      --no-analytics     && flutter precache
+    Name: run
+    PrependShell: true
+  From:
+    Image: google/dart:2.4
+  Name: flutter
+  Platform: ""
+  SourceCode: FROM google/dart:2.4 AS flutter
+- As: client
+  BaseName: flutter
+  Commands:
+  - Name: workdir
+    Path: /chatter/client/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client/pubspec.yaml
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client/pubspec.lock
+    - .
+  - CmdLine:
+    - flutter packages get
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client/assets/
+    - assets/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client/lib/
+    - lib/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client/web/
+    - web/
+  - CmdLine:
+    - flutter build web
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: flutter
+  Name: client
+  Platform: ""
+  SourceCode: FROM flutter as client
+- As: test
+  BaseName: client
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - client/test/
+    - test/
+  - CmdLine:
+    - flutter
+    - packages
+    - pub
+    - run
+    - test
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 1
+      Named: client
+  Name: test
+  Platform: ""
+  SourceCode: FROM client as test
+- As: tsc
+  BaseName: node:10-slim
+  Commands:
+  - CmdLine:
+    - npm install -g typescript
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10-slim
+  Name: tsc
+  Platform: ""
+  SourceCode: FROM node:10-slim as tsc
+- As: deps
+  BaseName: tsc
+  Commands:
+  - Name: workdir
+    Path: /chatter/services/frontend/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - services/frontend/package.json
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - services/frontend/package-lock.json
+    - .
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 3
+      Named: tsc
+  Name: deps
+  Platform: ""
+  SourceCode: FROM tsc as deps
+- As: server
+  BaseName: deps
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - services/frontend/
+    - .
+  - CmdLine:
+    - tsc src/server.ts
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: client
+    Name: copy
+    SourcesAndDest:
+    - /chatter/client/assets/
+    - /chatter/client/assets/
+  - Chown: ""
+    From: client
+    Name: copy
+    SourcesAndDest:
+    - /chatter/client/build/web/
+    - /chatter/client/build/web/
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - npm
+    - start
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 4
+      Named: deps
+  Name: server
+  Platform: ""
+  SourceCode: FROM deps as server

@@ -1,11 +1,9 @@
-FROM python:3.7-alpine3.9
+FROM python:alpine
 LABEL maintainer="Axel Gembe <derago@gmail.com>"
 
-COPY ./bin /usr/local/bin
 COPY ./VERSION /tmp
 
 RUN VERSION=$(cat /tmp/VERSION) && \
-    chmod a+x /usr/local/bin/* && \
     apk add --no-cache git build-base openssl && \
     apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/main leveldb-dev && \
     apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing rocksdb-dev && \
@@ -24,8 +22,12 @@ ENV SERVICES=tcp://:50001,ssl://:50002,wss://:50004,rpc://0.0.0.0:8000
 ENV SSL_CERTFILE ${DB_DIRECTORY}/electrumx.crt
 ENV SSL_KEYFILE ${DB_DIRECTORY}/electrumx.key
 ENV HOST ""
+ENV PATH=/electrumx_server:$PATH
 WORKDIR /data
 
 EXPOSE 50001 50002 50004 8000
 
-CMD ["init"]
+COPY docker-entrypoint.sh /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+
+CMD ["electrumx_server"]

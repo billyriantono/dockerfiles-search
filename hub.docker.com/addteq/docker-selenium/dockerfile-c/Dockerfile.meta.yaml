@@ -1,0 +1,91 @@
+MetaArgs:
+- DefaultValue: '"1.5.0"'
+  Key: Version
+  ProvidedValue: null
+  Value: '"1.5.0"'
+- DefaultValue: '"3.10"'
+  Key: AlpineVersion
+  ProvidedValue: null
+  Value: '"3.10"'
+Stages:
+- As: builder
+  BaseName: alpine:$AlpineVersion
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache     autoconf     automake     bison     build-base     flex     libev-dev     openssl-dev
+    Name: run
+    PrependShell: true
+  - Key: Version
+    Name: arg
+    Value: null
+  - Env:
+    - Key: VERSION
+      Value: '"$Version"'
+    Name: env
+  - CmdLine:
+    - wget "https://github.com/varnish/hitch/archive/${VERSION}.tar.gz" &&     tar
+      -vxzf "${VERSION}.tar.gz" || true
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /hitch-${Version}
+  - Env:
+    - Key: LDFLAGS
+      Value: '"--static"'
+    Name: env
+  - CmdLine:
+    - ./bootstrap &&     ./configure &&     make &&     make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:$AlpineVersion
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:$AlpineVersion as builder
+- BaseName: alpine:$AlpineVersion
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache ca-certificates tini netcat-openbsd openssl
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/sbin/hitch
+    - /usr/local/sbin/
+  - Key: Version
+    Name: arg
+    Value: null
+  - Env:
+    - Key: VERSION
+      Value: '"$Version"'
+    Name: env
+  - CmdLine:
+    - '[ "$(hitch --version)" = "hitch $VERSION" ]'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tini
+    - --
+    - hitch
+    Name: entrypoint
+    PrependShell: false
+  - Health:
+      Test:
+      - CMD-SHELL
+      - pgrep hitch || exit 1
+    Name: healthcheck
+  - Labels:
+    - Key: Name
+      Value: '"Hitch"'
+    Name: label
+  - Labels:
+    - Key: Version
+      Value: '"${Version}"'
+    Name: label
+  From:
+    Image: alpine:$AlpineVersion
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:$AlpineVersion

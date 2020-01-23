@@ -1,13 +1,24 @@
-FROM alpine
+FROM node:lts
+MAINTAINER frankqcc
 
-MAINTAINER Maik Ellerbrock (https://github.com/ellerbrock)
+ENV LANG C.UTF-8
 
-RUN apk update && \
-    apk add --no-cache fish && \
-    rm -f /tmp/* /etc/apk/cache/*
-
-RUN sed -i -e "s/bin\/ash/usr\/bin\/fish/" /etc/passwd
-
-ENV SHELL /usr/bin/fish
-
-CMD ["fish", "--version"]
+RUN sed -i s@deb.debian.org@mirrors.aliyun.com@g /etc/apt/sources.list \
+        && sed -i s@security.debian.org@mirrors.aliyun.com@g /etc/apt/sources.list \
+        && sed -i s@httpredir.debian.org@mirrors.aliyun.com@g /etc/apt/sources.list \
+        && sed -i s@cdn-fastly.deb.debian.org@mirrors.aliyun.com@g /etc/apt/sources.list \
+        && echo "deb http://mirrors.ustc.edu.cn/debian/ stretch main" >> /etc/apt/sources.list \
+        && echo "deb http://mirrors.ustc.edu.cn/debian/ stretch-updates main" >> /etc/apt/sources.list \
+        && npm config set registry http://registry.npm.taobao.org/ \
+        && mkdir /api \
+        && cd /api \
+        && git clone -b fine --depth=1 https://github.com/congqiu/yapi.git vendors \
+        && cp /api/vendors/config_example.json /api/config.json \
+        && cd /api/vendors \
+        && npm install --production --registry \
+        && npm i -g yapi-cli ykit
+        
+ENV TZ="Asia/Shanghai" HOME="/api/vendors"
+WORKDIR ${HOME}
+EXPOSE 3000
+ENTRYPOINT ["node"]

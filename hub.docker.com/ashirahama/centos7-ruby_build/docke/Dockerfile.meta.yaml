@@ -1,0 +1,119 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: circleci/node:8
+  Commands: null
+  From:
+    Image: circleci/node:8
+  Name: base
+  Platform: ""
+  SourceCode: FROM circleci/node:8 as base
+- As: tf
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /home/circleci
+  - CmdLine:
+    - curl https://releases.hashicorp.com/terraform/0.11.11/terraform_0.11.11_linux_amd64.zip
+      -o terraform_0.11.11_linux_amd64.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip terraform_0.11.11_linux_amd64.zip -d terraform
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L https://github.com/sl1pm4t/terraform-provider-kubernetes/releases/download/v1.3.0-custom/terraform-provider-kubernetes_v1.3.0-custom_linux_amd64.zip
+      -o terraform-provider-kubernetes_v1.3.0-custom_linux_amd64.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip terraform-provider-kubernetes_v1.3.0-custom_linux_amd64.zip -d tf-k8s
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ls tf-k8s
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: tf
+  Platform: ""
+  SourceCode: FROM base AS tf
+- As: final
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /usr/bin
+  - Chown: ""
+    From: tf
+    Name: copy
+    SourcesAndDest:
+    - /home/circleci/terraform
+    - .
+  - CmdLine:
+    - ls /usr/bin/terraform
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir ~/.terraform.d
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir ~/.terraform.d/plugins
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: tf
+    Name: copy
+    SourcesAndDest:
+    - /home/circleci/tf-k8s/
+    - /home/circleci/.terraform.d/plugins/
+  - CmdLine:
+    - ls ~/.terraform.d/plugins/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HELM_VERSION
+      Value: '"v2.12.3"'
+    Name: env
+  - CmdLine:
+    - export CLOUD_SDK_REPO="cloud-sdk-jessie"     && echo "deb http://packages.cloud.google.com/apt
+      $CLOUD_SDK_REPO main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add
+      -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo apt-get update     && sudo apt-get install -y google-cloud-sdk kubectl     &&
+      sudo apt-get -y autoclean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo curl -L https://storage.googleapis.com/kubernetes-helm/helm-${HELM_VERSION}-linux-amd64.tar.gz
+      -o helm.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo tar -xzO linux-amd64/helm -f helm.tar.gz > ~/helm     && sudo mv ~/helm
+      /usr/local/bin/helm     && sudo chmod +x /usr/local/bin/helm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - helm init --client-only
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/circleci
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: final
+  Platform: ""
+  SourceCode: FROM base AS final

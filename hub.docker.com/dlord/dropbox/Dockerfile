@@ -1,25 +1,50 @@
-FROM debian:jessie
-MAINTAINER John Paul Alcala, jp@jpalcala.com
+FROM php:7.3-fpm-stretch
 
-# Taken from the official Postgres Dockerfile
-# grab gosu for easy step-down from root
-RUN gpg --keyserver pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
-    && apt-get update && apt-get install -y --no-install-recommends ca-certificates wget && rm -rf /var/lib/apt/lists/* \
-	&& wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/1.2/gosu-$(dpkg --print-architecture)" \
-	&& wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/1.2/gosu-$(dpkg --print-architecture).asc" \
-	&& gpg --verify /usr/local/bin/gosu.asc \
-	&& rm /usr/local/bin/gosu.asc \
-	&& chmod +x /usr/local/bin/gosu
+# install dependencies
+RUN apt-get update && apt-get install -y \
+wget \
+imagemagick \
+libfreetype6-dev \
+libjpeg62-turbo-dev \
+libpng-dev \
+libmcrypt-dev \
+libxml2-dev \
+curl \
+git \
+subversion \
+openssh-client \
+openssl \
+mercurial \
+bash \
+zlib1g-dev \
+libzip-dev \
+locales
 
-ENV DROPBOX_HOME=/opt/dropbox
+# install, configure and enable php extensions
+RUN locale-gen && localedef -i de_DE -f UTF-8 de_DE.UTF-8 \
+&& NPROC=$(grep -c ^processor /proc/cpuinfo 2>/dev/null || 1) \
+&& docker-php-ext-configure gd \
+--with-gd \
+--with-freetype-dir=/usr/include/ \
+--with-png-dir=/usr/include/ \
+--with-jpeg-dir=/usr/include/ \
+&& docker-php-ext-install -j${NPROC} mysqli calendar zip soap iconv gd
 
-RUN groupadd -g 1000 dropbox && \
-    useradd -g dropbox -u 1000 -r -M dropbox && \
-    mkdir -p $DROPBOX_HOME && \
-    wget -O - "https://www.dropbox.com/download?plat=lnx.x86_64" | tar xzf - -C $DROPBOX_HOME && \
-    chown -R dropbox:dropbox $DROPBOX_HOME
+# clean up
+RUN apt-get remove -y \
+libfreetype6-dev \
+libjpeg62-turbo-dev \
+libpng-dev \
+libxml2-dev \
+&& apt-get autoremove -y \
+&& apt-get clean
 
-COPY dropbox /usr/local/bin/
+# add custom php settings
+COPY config/custom.ini /usr/local/etc/php/conf.d/custom.ini
 
-ENTRYPOINT ["dropbox"]
-CMD ["run"]
+# install composer
+COPY config/composer-installer /usr/local/bin/
+RUN chmod a+x /usr/local/bin/composer-installer
+RUN composer-installer
+
+WORKDIR /usr/local/apache2/htdocs

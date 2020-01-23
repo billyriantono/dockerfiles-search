@@ -64,8 +64,8 @@ RUN pip3 install --upgrade pip
 RUN pip3 install --upgrade setuptools
 WORKDIR /home
 
-RUN git clone https://github.com/buffer/thug.git && \
-  pip3 install thug/.travis/stpyv8-7.9.317.31-cp36-cp36m-linux_x86_64.whl && \
+RUN git clone https://github.com/area1/stpyv8 && \
+  pip3 install stpyv8/wheels/ubuntu-18.04/stpyv8-7.9.317.31-cp36-cp36m-linux_x86_64.whl && \
   rm -rf thug
 
 RUN git clone https://github.com/buffer/libemu.git && \
@@ -78,6 +78,23 @@ RUN git clone https://github.com/buffer/libemu.git && \
 
 RUN ldconfig
 RUN pip3 install thug
+
+RUN git clone https://github.com/buffer/thug.git && \
+  mkdir /etc/thug && \
+  mkdir /etc/thug/rules && \
+  mkdir /etc/thug/personalities && \
+  mkdir /etc/thug/scripts && \
+  mkdir /etc/thug/plugins && \
+  mkdir /etc/thug/hooks && \
+  cp -R thug/thug/Classifier/rules/* /etc/thug/rules/ && \
+  cp -R thug/thug/DOM/personalities/* /etc/thug/personalities && \
+  cp thug/thug/DOM/thug.js /etc/thug/scripts && \
+  cp thug/thug/DOM/storage.js /etc/thug/scripts && \
+  cp thug/thug/DOM/date.js /etc/thug/scripts && \
+  cp thug/thug/DOM/eval.js /etc/thug/scripts && \
+  cp thug/thug/DOM/write.js /etc/thug/scripts && \
+  cp thug/conf/thug.conf /etc/thug && \
+  rm -rf thug
 
 RUN groupadd -r thug && \
   useradd -r -g thug -d /home/thug -s /sbin/nologin -c "Thug User" thug && \

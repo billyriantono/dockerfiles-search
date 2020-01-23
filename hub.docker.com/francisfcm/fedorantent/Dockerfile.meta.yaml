@@ -1,0 +1,111 @@
+MetaArgs: null
+Stages:
+- As: apt
+  BaseName: python:3.8.1-buster
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"fraph24@gmail.com"'
+    Name: label
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/app
+  From:
+    Image: python:3.8.1-buster
+  Name: apt
+  Platform: ""
+  SourceCode: FROM python:3.8.1-buster AS apt
+- As: builder
+  BaseName: apt
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - apt-get install -y npm &&     cd web &&     npm ci
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: apt
+  Name: builder
+  Platform: ""
+  SourceCode: FROM apt AS builder
+- As: base
+  BaseName: apt
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/app
+    - .
+  - CmdLine:
+    - useradd --user-group --system --no-create-home --no-log-init app &&     chown
+      -R app:app . &&     pip3 install --requirement requirements.txt &&     apt-get
+      install -y         uwsgi         mime-support         libsqlite3-mod-spatialite         spatialite-bin
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: apt
+  Name: base
+  Platform: ""
+  SourceCode: FROM apt AS base
+- As: tester
+  BaseName: base
+  Commands:
+  - Name: workdir
+    Path: /home/app/tests
+  - CmdLine:
+    - pip3 install --requirement requirements.txt &&     apt-get install -y firefox-esr
+      xvfb &&     seleniumbase install geckodriver
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  - CmdLine:
+    - pytest
+    - --browser=firefox
+    - --save_screenshot
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 2
+      Named: base
+  Name: tester
+  Platform: ""
+  SourceCode: FROM base AS tester
+- As: runner
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: DISPLAY
+      Value: :99
+    Name: env
+  - Name: user
+    User: app
+  - Name: expose
+    Ports:
+    - 8000/tcp
+  - CmdLine:
+    - uwsgi
+    - --ini
+    - uwsgi.ini
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 2
+      Named: base
+  Name: runner
+  Platform: ""
+  SourceCode: FROM base AS runner

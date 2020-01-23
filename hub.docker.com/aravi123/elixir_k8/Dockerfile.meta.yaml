@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- BaseName: elixir:1.6.6-alpine
+  Commands:
+  - Key: APP_NAME
+    Name: arg
+    Value: elixir_k8
+  - Key: PHOENIX_SUBDIR
+    Name: arg
+    Value: .
+  - Env:
+    - Key: MIX_ENV
+      Value: prod
+    - Key: REPLACE_OS_VARS
+      Value: "true"
+    - Key: TERM
+      Value: xterm
+    Name: env
+  - Name: workdir
+    Path: /opt/app
+  - CmdLine:
+    - apk update     && apk --no-cache --update add nodejs nodejs-npm     && mix local.rebar
+      --force     && mix local.hex --force
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - mix do deps.get, deps.compile, compile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${PHOENIX_SUBDIR}/assets     && npm install     && ./node_modules/brunch/bin/brunch
+      build -p     && cd ..     && mix phx.digest
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mix release --env=prod --verbose     && mv _build/prod/rel/${APP_NAME} /opt/release     &&
+      mv /opt/release/bin/${APP_NAME} /opt/release/bin/start_server
+    Name: run
+    PrependShell: true
+  From:
+    Image: elixir:1.6.6-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM elixir:1.6.6-alpine
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk update && apk --no-cache --update add bash openssl-dev
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PORT
+      Value: "8080"
+    - Key: MIX_ENV
+      Value: prod
+    - Key: REPLACE_OS_VARS
+      Value: "true"
+    Name: env
+  - Name: workdir
+    Path: /opt/app
+  - Name: expose
+    Ports:
+    - ${PORT}
+  - Chown: ""
+    From: "0"
+    Name: copy
+    SourcesAndDest:
+    - /opt/release
+    - .
+  - CmdLine:
+    - /opt/app/bin/start_server
+    - foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

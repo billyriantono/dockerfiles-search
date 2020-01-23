@@ -1,0 +1,119 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: i386/debian:stable-slim
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"docker-wix@fritz-elfert.de"'
+    Name: label
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends wine &&     apt-get
+      purge -y --auto-remove --purge tzdata && apt-get clean && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - exelink.sh
+    - /tmp/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - pwrap
+    - waiton
+    - mkhostwrappers
+    - /usr/local/bin/
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends curl &&     curl
+      -kSL https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks     >
+      /usr/local/bin/winetricks && apt-get purge -y --auto-remove --purge curl &&     sed
+      -i -E 's!felfert/wix!felfert/wix:latest-slim!' /usr/local/bin/mkhostwrappers
+      &&     rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/X11/locale &&     chmod
+      +x /usr/local/bin/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends curl bsdtar &&     mkdir
+      -p /opt/wix/bin &&     curl -kSL https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip
+      |     bsdtar -C /opt/wix/bin -xf - && sh /tmp/exelink.sh /opt/wix/bin && rm
+      -f /tmp/exelink.sh &&     apt-get purge -y --auto-remove --purge curl bsdtar
+      && apt-get clean &&     rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/X11/locale
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - useradd -m -s /bin/bash wix && mkdir /work && chown wix:wix -R /work
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: WINEDEBUG
+      Value: -all
+    - Key: WD
+      Value: /
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends curl procps &&     echo
+      insecure > /home/wix/.curlrc &&     su -c "wine wineboot --init && waiton wineserver
+      && winetricks --unattended dotnet40 && waiton wineserver" wix &&     apt-get
+      purge -y --auto-remove --purge curl procps && apt-get clean &&     rm -rf /home/wix/.curlrc
+      /var/lib/apt/lists/* /usr/share/doc/* /usr/share/X11/locale     /home/wix/.wine/drive_c/users/wix/Temp/*
+      /usr/local/bin/waiton /usr/local/bin/winetricks
+    Name: run
+    PrependShell: true
+  From:
+    Image: i386/debian:stable-slim
+  Name: build
+  Platform: ""
+  SourceCode: FROM i386/debian:stable-slim AS build
+- BaseName: i386/alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk --no-cache upgrade && apk --no-cache add wine bash libpng
+      && apk del wget && rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser -D -s /bin/bash wix && mkdir /work && chown wix:wix -R /work
+    Name: run
+    PrependShell: true
+  - Chown: wix:wix
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /home/wix/.wine
+    - /home/wix/.wine
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /opt/wix
+    - /opt/wix
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/etc/wixbins.lst
+    - /usr/local/etc/wixbins.lst
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/*
+    - /usr/local/bin/
+  - Name: volume
+    Volumes:
+    - /work
+  - Key: finaluser
+    Name: arg
+    Value: wix
+  - Name: user
+    User: $finaluser
+  - CmdLine:
+    - pwrap
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: i386/alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM i386/alpine

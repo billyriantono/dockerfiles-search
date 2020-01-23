@@ -1,7 +1,31 @@
 MetaArgs: null
 Stages:
+- As: terraform-binary
+  BaseName: hashicorp/terraform:0.12.12
+  Commands: null
+  From:
+    Image: hashicorp/terraform:0.12.12
+  Name: terraform-binary
+  Platform: ""
+  SourceCode: FROM hashicorp/terraform:0.12.12 AS terraform-binary
+- As: jsonnet-binary
+  BaseName: bitnami/jsonnet:0.14.0
+  Commands: null
+  From:
+    Image: bitnami/jsonnet:0.14.0
+  Name: jsonnet-binary
+  Platform: ""
+  SourceCode: FROM bitnami/jsonnet:0.14.0 as jsonnet-binary
+- As: prometheus-binary
+  BaseName: quay.io/prometheus/prometheus:v2.12.0
+  Commands: null
+  From:
+    Image: quay.io/prometheus/prometheus:v2.12.0
+  Name: prometheus-binary
+  Platform: ""
+  SourceCode: FROM quay.io/prometheus/prometheus:v2.12.0 AS prometheus-binary
 - As: helm-builder
-  BaseName: golang:1.12.9-stretch
+  BaseName: golang:1.12-stretch
   Commands:
   - CmdLine:
     - mkdir /kapitan
@@ -38,72 +62,87 @@ Stages:
     Name: run
     PrependShell: true
   From:
-    Image: golang:1.12.9-stretch
+    Image: golang:1.12-stretch
   Name: helm-builder
   Platform: ""
-  SourceCode: FROM golang:1.12.9-stretch AS helm-builder
-- As: python-builder
-  BaseName: python:3.7-slim-stretch
+  SourceCode: FROM golang:1.12-stretch AS helm-builder
+- BaseName: python:3.7-buster
   Commands:
+  - Key: CLOUD_SDK_VERSION
+    Name: arg
+    Value: 274.0.0
+  - Env:
+    - Key: CLOUD_SDK_VERSION
+      Value: $CLOUD_SDK_VERSION
+    Name: env
+  - Env:
+    - Key: KAPP_URL
+      Value: https://github.com/k14s/kapp/releases/download/v0.14.0/kapp-linux-amd64
+    Name: env
+  - Env:
+    - Key: KBLD_URL
+      Value: https://github.com/k14s/kbld/releases/download/v0.11.0/kbld-linux-amd64
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"/opt/venv/bin:${PATH}"'
+    Name: env
+  - Chown: ""
+    From: terraform-binary
+    Name: copy
+    SourcesAndDest:
+    - /bin/terraform
+    - /usr/bin/terraform
+  - Chown: ""
+    From: jsonnet-binary
+    Name: copy
+    SourcesAndDest:
+    - /opt/bitnami/jsonnet/bin/jsonnet
+    - /usr/bin/jsonnet
+  - Chown: ""
+    From: jsonnet-binary
+    Name: copy
+    SourcesAndDest:
+    - /opt/bitnami/jsonnet/bin/jsonnetfmt
+    - /usr/bin/jsonnetfmt
+  - Chown: ""
+    From: prometheus-binary
+    Name: copy
+    SourcesAndDest:
+    - /bin/promtool
+    - /usr/bin/promtool
   - Chown: ""
     From: helm-builder
     Name: copy
     SourcesAndDest:
     - /kapitan
     - /kapitan
-  - Name: workdir
-    Path: /kapitan
-  - Env:
-    - Key: PATH
-      Value: '"/opt/venv/bin:${PATH}"'
-    Name: env
   - CmdLine:
-    - apt-get update     && apt-get install --no-install-recommends -y         build-essential     &&
-      python -m venv /opt/venv     && pip install --upgrade pip yq     && pip install
-      -r requirements.txt     && ./kapitan/inputs/helm/build.sh     && pip install
-      .
+    - apt-get update     && apt-get install --no-install-recommends -y         apt-transport-https         bash         bsdmainutils         build-essential         curl         docker.io         git         gnupg         jq         lsb-release         wget         zip     &&
+      export CLOUD_SDK_REPO="cloud-sdk-$(lsb_release -c -s)"     && echo "deb https://packages.cloud.google.com/apt
+      $CLOUD_SDK_REPO main" > /etc/apt/sources.list.d/google-cloud-sdk.list     &&
+      curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -     &&
+      apt-get update     && apt-get install -y         google-cloud-sdk=${CLOUD_SDK_VERSION}-0         kubectl     &&
+      apt-get clean     && rm -rf /var/lib/apt/lists/*     && gcloud config set core/disable_usage_reporting
+      true     && gcloud config set component_manager/disable_update_check true     &&
+      gcloud config set metrics/environment github_docker_image     && python -m venv
+      /opt/venv     && pip install --upgrade pip yq     && pip install -r ./kapitan/requirements.txt     &&
+      ./kapitan/kapitan/inputs/helm/build.sh     && pip install ./kapitan     && rm
+      -rf ./kapitan     && curl -L -o /usr/local/bin/kapp ${KAPP_URL}     && chmod
+      +x /usr/local/bin/kapp     && curl -L -o /usr/local/bin/kbld ${KBLD_URL}     &&
+      chmod +x /usr/local/bin/kbld     && gcloud --version     && kubectl version
+      --client     && terraform --version
     Name: run
     PrependShell: true
-  From:
-    Image: python:3.7-slim-stretch
-  Name: python-builder
-  Platform: ""
-  SourceCode: FROM python:3.7-slim-stretch AS python-builder
-- BaseName: python:3.7-slim-stretch
-  Commands:
-  - Chown: ""
-    From: python-builder
-    Name: copy
-    SourcesAndDest:
-    - /opt/venv
-    - /opt/venv
-  - Env:
-    - Key: PATH
-      Value: '"/opt/venv/bin:${PATH}"'
-    Name: env
-  - Env:
-    - Key: SEARCHPATH
-      Value: '"/src"'
-    Name: env
   - Name: volume
     Volumes:
-    - ${SEARCHPATH}
-  - Name: workdir
-    Path: ${SEARCHPATH}
+    - /root/.config
   - CmdLine:
-    - apt-get update     && apt-get install --no-install-recommends -y         git         ssh-client         gnupg     &&
-      apt-get clean     && rm -rf /var/lib/apt/lists/*     && useradd --create-home
-      --no-log-init --user-group kapitan
-    Name: run
-    PrependShell: true
-  - Name: user
-    User: kapitan
-  - CmdLine:
-    - kapitan
-    Name: entrypoint
+    - /bin/bash
+    Name: cmd
     PrependShell: false
   From:
-    Image: python:3.7-slim-stretch
+    Image: python:3.7-buster
   Name: ""
   Platform: ""
-  SourceCode: FROM python:3.7-slim-stretch
+  SourceCode: FROM python:3.7-buster

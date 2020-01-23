@@ -1,0 +1,173 @@
+MetaArgs: null
+Stages:
+- BaseName: agaveapi/centos-base
+  Commands:
+  - Maintainer: Rion Dooley <dooley@tacc.utexas.edu>
+    Name: maintainer
+  - CmdLine:
+    - yum -y localinstall http://repo.grid.iu.edu/osg-el6-release-latest.rpm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum -y localinstall http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - yum -y install myproxy myproxy-server myproxy-admin myproxy-doc globus-simple-ca
+      perl-Text-CSV perl-Email-Valid bind-utils libtool gcc-c++ igtf-ca-certs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - grid-ca-create -subject "CN=Docker MyProxy, OU=dockerCA, OU=Dev Certificate
+      Authorities, O=Texas Advanced Computing Center, C=US"     -email root@docker.example.com     -pass
+      globus     -days 3650
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s /var/lib/globus/simple_ca/globus-host-ssl.conf /etc/grid-security/ &&     ln
+      -s /var/lib/globus/simple_ca/globus-user-ssl.conf /etc/grid-security/ &&     ln
+      -s /var/lib/globus/simple_ca/grid-security.conf /etc/grid-security/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "sed -ri 's/default_bits\t\t= 1024/default_bits\t\t= 2048/g' /var/lib/globus/simple_ca/globus-host-ssl.conf"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /etc/grid-security ; grid-cert-request -host docker.example.com
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /etc/grid-security; echo "globus" | grid-ca-sign -days 3650 -in hostcert_request.pem
+      -out hostcert.pem
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /var/lib/globus/simple_ca/newcerts/01.pem /etc/grid-security/myproxy/hostcert.pem
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /etc/grid-security/hostkey.pem /etc/grid-security/myproxy/hostkey.pem
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R root:root /var/lib/myproxy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R myproxy:myproxy /var/lib/globus/simple_ca
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CERT_HASH=$(openssl x509 -in /var/lib/globus/simple_ca/cacert.pem -noout -hash)
+      &&   ln -s /var/lib/globus/simple_ca/cacert.pem $CERT_HASH.0
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - myproxy/myproxy-server.config
+    - /etc/myproxy-server.config
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - myproxy/myproxy-server-trusted.config
+    - /etc/myproxy-server-trusted.config
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - myproxy/myproxy.pam
+    - /etc/pam.d/myproxy
+  - Env:
+    - Key: X509_USER_CERT
+      Value: /etc/grid-security/myproxy/hostcert.pem
+    Name: env
+  - Env:
+    - Key: X509_USER_KEY
+      Value: /etc/grid-security/myproxy/hostkey.pem
+    Name: env
+  - CmdLine:
+    - echo '"/C=US/O=Texas Advanced Computing Center/OU=Dev Certificate Authorities/OU=dockerCA/CN=testuser"
+      testuser' >> /etc/grid-security/grid-mapfile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo '"/C=US/O=Texas Advanced Computing Center/OU=Dev Certificate Authorities/OU=dockerCA/CN=testshareuser"
+      testshareuser' >> /etc/grid-security/grid-mapfile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo '"/C=US/O=Texas Advanced Computing Center/OU=Dev Certificate Authorities/OU=dockerCA/CN=testother"
+      testother' >> /etc/grid-security/grid-mapfile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +r /etc/grid-security/grid-mapfile
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /myproxy-gateway
+  - CmdLine:
+    - mkdir hostcerts;
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /myproxy-gateway/hostcerts
+  - CmdLine:
+    - grid-cert-request -host docker.example.com -dir . -service mpg -prefix mpg -nopw
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "globus" | grid-ca-sign -days 3650 -in mpgcert_request.pem -out mpgcert.pem
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - openssl rsa -in mpgkey.pem -outform PEM -out new-mpgkey.pem
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/supervisord.conf
+  - CmdLine:
+    - mkdir /var/log/supervisor
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod -R 777 /var/log/supervisor
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - docker_entrypoint.sh
+    - /docker_entrypoint.sh
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - create_hostcert
+    - /usr/local/bin/create_hostcert
+  - Env:
+    - Key: MYPROXY_SERVER_DN
+      Value: '"/C=US/O=Texas Advanced Computing Center/OU=Dev Certificate Authorities/OU=dockerCA/CN=host/docker.example.com"'
+    Name: env
+  - CmdLine:
+    - /docker_entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "10389"
+    - "22"
+    - "7512"
+    - "7513"
+  - CmdLine:
+    - /usr/bin/supervisord
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: agaveapi/centos-base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM agaveapi/centos-base

@@ -1,0 +1,89 @@
+MetaArgs: null
+Stages:
+- As: generator
+  BaseName: chalmersrevere/dbc2odvd-amd64:v0.0.6
+  Commands:
+  - Maintainer: Christian Berger "christian.berger@gu.se"
+    Name: maintainer
+  - CmdLine:
+    - apt-get update -y &&     apt-get upgrade -y &&     apt-get dist-upgrade -y
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y --no-install-recommends       cmake
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /opt/sources
+  - Name: workdir
+    Path: /opt/sources
+  - CmdLine:
+    - mkdir build &&     cd build &&     generateHeaderOnly.sh ../src/batterygw.dbc
+      ../src/battery.odvd &&     cp batterygw.hpp /tmp
+    Name: run
+    PrependShell: true
+  From:
+    Image: chalmersrevere/dbc2odvd-amd64:v0.0.6
+  Name: generator
+  Platform: ""
+  SourceCode: FROM chalmersrevere/dbc2odvd-amd64:v0.0.6 as generator
+- As: builder
+  BaseName: alpine:3.7
+  Commands:
+  - Maintainer: Christian Berger "christian.berger@gu.se"
+    Name: maintainer
+  - CmdLine:
+    - apk update &&     apk --no-cache add         cmake         g++         linux-headers         make         upx
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /opt/sources
+  - Name: workdir
+    Path: /opt/sources
+  - CmdLine:
+    - mkdir -p /opt/sources/build
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: generator
+    Name: copy
+    SourcesAndDest:
+    - /tmp/batterygw.hpp
+    - /opt/sources/build
+  - CmdLine:
+    - cd /opt/sources/build &&     cmake -D CMAKE_BUILD_TYPE=Release -D CMAKE_INSTALL_PREFIX=/tmp/opendlv-device-can-battery-dest
+      .. &&     make && make install && upx -9 /tmp/opendlv-device-can-battery-dest/bin/opendlv-device-can-battery
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.7 as builder
+- BaseName: alpine:3.7
+  Commands:
+  - Maintainer: Christian Berger "christian.berger@gu.se"
+    Name: maintainer
+  - Name: workdir
+    Path: /usr/bin
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/opendlv-device-can-battery-dest/bin/opendlv-device-can-battery
+    - .
+  - CmdLine:
+    - /usr/bin/opendlv-device-can-battery
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

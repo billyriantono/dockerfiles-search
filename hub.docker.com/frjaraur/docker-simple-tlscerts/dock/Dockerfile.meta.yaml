@@ -1,0 +1,128 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:19.10
+  Commands:
+  - Env:
+    - Key: TZ
+      Value: UTC
+    Name: env
+  - Name: shell
+    Shell:
+    - /bin/bash
+    - -o
+    - pipefail
+    - -c
+  - CmdLine:
+    - ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get update && \tapt-get install --no-install-recommends -y \tca-certificates
+      cron \tapache2 libapache2-mod-php \tphp-curl php-gmp php-intl php-mbstring php-xml
+      php-zip \tphp-sqlite3 php-mysql php-pgsql && \trm -rf /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/www/FreshRSS/ /run/apache2/
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/www/FreshRSS
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /var/www/FreshRSS
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./Docker/*.Apache.conf
+    - /etc/apache2/sites-available/
+  - Key: FRESHRSS_VERSION
+    Name: arg
+    Value: null
+  - Key: SOURCE_BRANCH
+    Name: arg
+    Value: null
+  - Key: SOURCE_COMMIT
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.opencontainers.image.authors
+      Value: '"Alkarex"'
+    - Key: org.opencontainers.image.description
+      Value: '"A self-hosted RSS feed aggregator"'
+    - Key: org.opencontainers.image.documentation
+      Value: '"https://freshrss.github.io/FreshRSS/"'
+    - Key: org.opencontainers.image.licenses
+      Value: '"AGPL-3.0"'
+    - Key: org.opencontainers.image.revision
+      Value: '"${SOURCE_BRANCH}.${SOURCE_COMMIT}"'
+    - Key: org.opencontainers.image.source
+      Value: '"https://github.com/FreshRSS/FreshRSS"'
+    - Key: org.opencontainers.image.title
+      Value: '"FreshRSS"'
+    - Key: org.opencontainers.image.url
+      Value: '"https://freshrss.org/"'
+    - Key: org.opencontainers.image.vendor
+      Value: '"FreshRSS"'
+    - Key: org.opencontainers.image.version
+      Value: '"$FRESHRSS_VERSION"'
+    Name: label
+  - CmdLine:
+    - "a2dismod -f alias autoindex negotiation status && \ta2enmod deflate expires
+      headers mime setenvif && \ta2disconf '*' && \ta2dissite '*' && \ta2ensite 'FreshRSS*'"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "sed -r -i \"/^\\s*(CustomLog|ErrorLog|Listen) /s/^/#/\" /etc/apache2/apache2.conf
+      && \tsed -r -i \"/^\\s*Listen /s/^/#/\" /etc/apache2/ports.conf && \ttouch /var/www/FreshRSS/Docker/env.txt
+      && \techo \"7,37 * * * * . /var/www/FreshRSS/Docker/env.txt; \t\tsu www-data
+      -s /bin/sh -c 'php /var/www/FreshRSS/app/actualize_script.php' \t\t2>> /proc/1/fd/2
+      > /tmp/FreshRSS.log\" | crontab -"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: COPY_LOG_TO_SYSLOG
+      Value: "On"
+    Name: env
+  - Env:
+    - Key: COPY_SYSLOG_TO_STDERR
+      Value: "On"
+    Name: env
+  - Env:
+    - Key: CRON_MIN
+      Value: ''''''
+    Name: env
+  - Env:
+    - Key: FRESHRSS_ENV
+      Value: ''''''
+    Name: env
+  - CmdLine:
+    - ./Docker/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - "([ -z \"$CRON_MIN\" ] || cron) && \t. /etc/apache2/envvars && \texec apache2
+      -D FOREGROUND"
+    Name: cmd
+    PrependShell: true
+  - Health:
+      Interval: 37000000000
+      Retries: 3
+      StartPeriod: 20000000000
+      Test:
+      - CMD-SHELL
+      - (php -r "readfile('http://localhost/i/');" | grep -q 'jsonVars') || exit 1
+      Timeout: 5000000000
+    Name: healthcheck
+  From:
+    Image: ubuntu:19.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:19.10

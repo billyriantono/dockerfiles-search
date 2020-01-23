@@ -1,13 +1,31 @@
-FROM node:4-slim
-LABEL author="Erik Dasque <erik@frenchguys.com>"
+FROM node:8.4.0-alpine
 
-# Install base packages
-RUN apt-get update
-RUN apt-get upgrade -y
+WORKDIR /app
+COPY . /app/
 
-ADD thats-what-time-it-is.js thats-what-time-it-is.js
+RUN set -ex && \
+        buildDeps=' \
+                make \
+                gcc \
+                g++ \
+                python \
+                py-pip \
+        ' && \
+        runDeps=' \
+                curl \
+                openssl \
+        ' && \
+   apk add --no-cache \
+       --virtual .build-deps $buildDeps && \
+   apk add --no-cache \
+       --virtual .run-deps $runDeps && \
+   npm install && \
+   npm install --silent --save-dev -g \
+       gulp-cli \
+       typescript && \
+   tsc --target es5 connector.ts && \
+   rm -fr /app/package.json /app/*.ts && \
+   apk del .build-deps
 
-# Expose ports
-EXPOSE 8000 9000
-
-CMD node thats-what-time-it-is.js
+ENTRYPOINT ["node"]
+CMD ["connector.js"]

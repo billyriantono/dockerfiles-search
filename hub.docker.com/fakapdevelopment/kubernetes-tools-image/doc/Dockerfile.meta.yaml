@@ -1,0 +1,189 @@
+MetaArgs: null
+Stages:
+- As: base
+  BaseName: node:12-slim
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: production
+    Name: env
+  - Name: expose
+    Ports:
+    - "3000"
+  - CmdLine:
+    - mkdir /app && chown -R node:node /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Name: user
+    User: node
+  - Chown: node:node
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package.json
+    - package-lock*.json
+    - ./
+  - CmdLine:
+    - npm ci && npm cache clean --force > "/dev/null" 2>&1
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12-slim
+  Name: base
+  Platform: ""
+  SourceCode: FROM node:12-slim as base
+- As: dev
+  BaseName: base
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: development
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /app/node_modules/.bin:$PATH
+    Name: env
+  - CmdLine:
+    - npm i && npm cache clean --force > "/dev/null" 2>&1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - react-scripts
+    - start
+    - --inspect=0.0.0.0:9229
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: dev
+  Platform: ""
+  SourceCode: FROM base as dev
+- As: source
+  BaseName: base
+  Commands:
+  - Chown: node:node
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: source
+  Platform: ""
+  SourceCode: FROM base as source
+- As: test
+  BaseName: source
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: development
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /app/node_modules/.bin:$PATH
+    Name: env
+  - Chown: ""
+    From: dev
+    Name: copy
+    SourcesAndDest:
+    - /app/node_modules
+    - /app/node_modules
+  - CmdLine:
+    - npm run lint
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm
+    - run
+    - test
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 2
+      Named: source
+  Name: test
+  Platform: ""
+  SourceCode: FROM source as test
+- As: audit
+  BaseName: test
+  Commands:
+  - Name: user
+    User: root
+  - CmdLine:
+    - npm audit --audit-level critical
+    Name: run
+    PrependShell: true
+  - Key: MICROSCANNER_TOKEN
+    Name: arg
+    Value: '""'
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://get.aquasec.com/microscanner
+    - /
+  - CmdLine:
+    - chmod +x /microscanner
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /microscanner $MICROSCANNER_TOKEN --continue-on-failure
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 3
+      Named: test
+  Name: audit
+  Platform: ""
+  SourceCode: FROM test as audit
+- As: build
+  BaseName: source
+  Commands:
+  - Key: REACT_APP_API
+    Name: arg
+    Value: '""'
+  - Env:
+    - Key: REACT_APP_API
+      Value: $REACT_APP_API
+    Name: env
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 2
+      Named: source
+  Name: build
+  Platform: ""
+  SourceCode: FROM source as build
+- BaseName: nginx:1.16-alpine
+  Commands:
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app/build
+    - /usr/share/nginx/html
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - nginx
+    - -g
+    - daemon off;
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: nginx:1.16-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM nginx:1.16-alpine

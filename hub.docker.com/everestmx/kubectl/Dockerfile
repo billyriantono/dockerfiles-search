@@ -1,22 +1,21 @@
-FROM alpine
+FROM alpine:3.5
 
-MAINTAINER "NEO Dev <everestmx@gmail.com>"
+ENV PYCURL_SSL_LIBRARY openssl
 
-ENV KUBE_CONFIG=""
-ENV KUBE_VERSION="v1.11.3"
+RUN apk add --no-cache gcc musl-dev libcurl curl-dev libjpeg jpeg-dev python python-dev py-pip py-setuptools tzdata && \
+    pip install --upgrade pip tornado jinja2 pillow pycurl motioneye && \
+    apk --purge -v del python-dev py-pip gcc musl-dev curl-dev jpeg-dev
 
-# Install kubectl
-# Note: Latest version may be found on:
-# https://aur.archlinux.org/packages/kubectl-bin/
-ADD https://storage.googleapis.com/kubernetes-release/release/v1.6.4/bin/linux/amd64/kubectl /usr/local/bin/kubectl
+RUN mkdir /etc/motioneye && \
+    cp /usr/share/motioneye/extra/motioneye.conf.sample /etc/motioneye/motioneye.conf
 
-RUN set -x && \
-    apk add --no-cache curl ca-certificates bash && \
-    chmod +x /usr/local/bin/kubectl && \
-    kubectl version --client
+CMD /usr/bin/meyectl startserver -c /etc/motioneye/motioneye.conf
 
-ADD entrypoint.sh /entrypoint.sh
+VOLUME /etc/motioneye
+VOLUME /var/lib/motioneye
 
-RUN chmod +x /entrypoint.sh
+EXPOSE 8765
 
-ENTRYPOINT ["/entrypoint.sh"]
+RUN cp /usr/share/zoneinfo/Australia/Perth /etc/localtime && \
+    echo "Australia/Perth" > /etc/timezone
+

@@ -1,6 +1,6 @@
 # Version Image
 ARG IMAGE=fuseboat/alpine
-ARG VERSION=latest
+ARG VERSION=3.8
 
 FROM ${IMAGE}:${VERSION}
 LABEL maintainer="Fusengine <info@fusengine.ch>"

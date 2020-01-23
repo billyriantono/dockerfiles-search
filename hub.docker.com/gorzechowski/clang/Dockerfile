@@ -1,16 +1,16 @@
-FROM ubuntu:xenial
+FROM ubuntu:trusty
 
 RUN apt-get update && apt-get -y install software-properties-common
 
-# RUN add-apt-repository -y ppa:h-rayflood/llvm
+RUN add-apt-repository -y ppa:h-rayflood/llvm
 
 RUN apt-get update && apt-get -y --allow-unauthenticated install \
-    clang-3.8 \
+    clang-3.4 \
     make \
     cmake \
     subversion
 
-RUN ln -sf /usr/bin/clang++-3.8 /usr/bin/clang++ && ln -sf /usr/bin/clang-3.8 /usr/bin/clang
+RUN ln -sf /usr/bin/clang++-3.4 /usr/bin/clang++ && ln -sf /usr/bin/clang-3.4 /usr/bin/clang
 
 RUN svn co --quiet http://llvm.org/svn/llvm-project/libcxx/trunk libcxx
 RUN export CXXFLAGS="-std=c++0x -stdlib=libc++"; cd libcxx/lib; \

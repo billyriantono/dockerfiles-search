@@ -1,0 +1,128 @@
+MetaArgs: null
+Stages:
+- As: build
+  BaseName: elixir:1.9.0-alpine
+  Commands:
+  - CmdLine:
+    - apk add --update git build-base nodejs npm python
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - mix local.hex --force &&     mix local.rebar --force
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MIX_ENV
+      Value: prod
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mix.exs
+    - mix.lock
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config
+    - config
+  - CmdLine:
+    - mix deps.get
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mix deps.compile
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - assets
+    - assets
+  - CmdLine:
+    - cd assets && npm install && npm run deploy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mix phx.digest
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - priv
+    - priv
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - lib
+    - lib
+  - CmdLine:
+    - mix compile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mix release
+    Name: run
+    PrependShell: true
+  From:
+    Image: elixir:1.9.0-alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM elixir:1.9.0-alpine as build
+- As: app
+  BaseName: alpine:3.9
+  Commands:
+  - CmdLine:
+    - apk add --update bash openssl postgresql-client
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app/_build/prod/rel/demiurge
+    - ./
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /app/lib/demiurge/entrypoint.sh
+    - ./demiurge/entrypoint.sh
+  - CmdLine:
+    - 'chown -R nobody: /app'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: nobody
+  - Env:
+    - Key: HOME
+      Value: /app
+    Name: env
+  - CmdLine:
+    - bash
+    - ./demiurge/entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.9
+  Name: app
+  Platform: ""
+  SourceCode: FROM alpine:3.9 AS app

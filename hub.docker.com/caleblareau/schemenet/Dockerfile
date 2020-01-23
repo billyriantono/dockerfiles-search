@@ -1,36 +1,60 @@
-FROM rocker/shiny
+# build this with: docker build -t caiobegotti/kubedebug .
+#
+# to run this container: kubectl run kubedebug --rm -it --image=caiobegotti/kubedebug:latest
+#
+# to debug mongo connections: mongo mongodb://mongodb:27017/?replicaSet=MainRepSet --authenticationDatabase admin -u '' -p ''
+#
+# to debug vault clusters you will need VAULT_ADDR, VAULT_CAPATH and VAULT_TOKEN set
+#
+# to debug kafka producers and consumers look for scripts in /kafka*/bin/
 
-#RUN rm /var/lib/apt/lists/*dists* && \
-RUN apt-get update && \
-    apt-get install -y git libxml2-dev libssl-dev ghostscript
- 
-# Install scHemeNet
-COPY . /srv/shiny-server/scHemeNet
- 
-WORKDIR /srv/shiny-server/scHemeNet
+FROM ubuntu:18.04
 
-# Install packrat packages
-RUN Rscript -e 'install.packages("packrat"); \
-                packrat::restore()'
+RUN apt-get update -y && \
+	apt-get install -y \
+	dnsutils \
+	postgresql-client \
+	iputils-ping \
+	python-pip \
+	python-pymongo \
+	python-setuptools \
+	mongodb-clients \
+	mongo-tools \
+	openjdk-11-jre-headless \
+	curl \
+	lynx \
+	nmap \
+	less \
+	telnet \
+	tcpdump \
+	procps \
+	strace \
+	lsof \
+	traceroute \
+	jq \
+	netcat-openbsd \
+	net-tools \
+	wget \
+	kafkacat \
+	python-confluent-kafka \
+	vim \
+	unzip
 
-# Temporary permissions hack
-RUN chown shiny:shiny -R packrat && \
-    chown shiny:shiny .gitignore 
+RUN pip install cassandra-driver cqlsh \
+	&& mkdir -p /root/.cassandra/ \
+	&& echo -e "[cql]\nversion=3.4.4" > /root/.cassandra/cqlshrc \
+	&& rm -rf /root/.cache/*
 
-# Serve only the scHemeNet app (replace /srv/shiny-server with /srv/shiny-server/scHemeNet)
-RUN sed -i 's/\/srv\/shiny-server/\/srv\/shiny-server\/scHemeNet/' /etc/shiny-server/shiny-server.conf
+RUN wget https://github.com/protocolbuffers/protobuf/releases/download/v3.10.0/protoc-3.10.0-linux-x86_64.zip -O protoc.zip \
+	&& unzip protoc.zip -d /usr/local/ \
+	&& rm -rf protoc.zip
 
-# Improve first page load time by not shutting down the R session when idle
-RUN sed -i '/location \/ {/a app_idle_timeout 0;' /etc/shiny-server/shiny-server.conf
+# a lean grpc_cli installation is still pending
 
-# Increase app load timeout
-RUN sed -i '/location \/ {/a app_init_timeout 60;' /etc/shiny-server/shiny-server.conf
+RUN wget https://releases.hashicorp.com/vault/1.1.3/vault_1.1.3_linux_amd64.zip -O - | gunzip - > vault && chmod +x vault
+RUN wget http://ftp.unicamp.br/pub/apache/kafka/2.3.0/kafka_2.12-2.3.0.tgz -O - | tar zxv -C /
 
-# Add Google Analytics tracking code
-# RUN sed -i '/location \/ {/a google_analytics_id UA-85072543-2;' /etc/shiny-server/shiny-server.conf
+RUN wget https://github.com/pressly/goose/releases/download/v2.6.0/goose-linux64 -O /usr/local/bin/goose \
+	&& chmod +x /usr/local/bin/goose
 
-# Start and expose shiny server
-EXPOSE 3838
-CMD /usr/bin/shiny-server.sh
-
-
+ENV CQLSH_NO_BUNDLED="true"

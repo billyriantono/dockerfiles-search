@@ -1,0 +1,180 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: php:7.1-stretch
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y gnupg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL https://deb.nodesource.com/setup_8.x | bash -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends         libzip-dev         build-essential         libfreetype6-dev         libjpeg62-turbo-dev         libmcrypt-dev         libpng-dev         mysql-client         git         nodejs     &&
+      docker-php-ext-install         gd         opcache         pdo         pdo_mysql         zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: COMPOSER_COMMIT
+      Value: 877cb10b101957ef8bbb9d196f711dbb8a011bb4
+    Name: env
+  - CmdLine:
+    - curl -o composer-setup.php --remote-name "https://raw.githubusercontent.com/composer/getcomposer.org/$COMPOSER_COMMIT/web/installer"
+      | php -- --quiet > 'composer-setup.php'     && php -r "if (hash_file('SHA384',
+      'composer-setup.php') === '93b54496392c062774670ac18b134c3b3a95e5a5e5c8f1a9f115f203b75bf9a129d5daa8ba6a13e2cc8a1da0806388a8')
+      { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php');
+      } echo PHP_EOL;"     && php composer-setup.php --install-dir=/usr/local/bin
+      --filename=composer     && php -r "unlink('composer-setup.php');"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root
+  From:
+    Image: php:7.1-stretch
+  Name: builder
+  Platform: ""
+  SourceCode: FROM php:7.1-stretch as builder
+- BaseName: php:7.1-fpm-stretch
+  Commands:
+  - Env:
+    - Key: NGINX_DOC_ROOT
+      Value: /var/www/html/web
+    Name: env
+  - Env:
+    - Key: DRUPAL_CONSOLE_VERSION
+      Value: 1.8.0
+    Name: env
+  - Env:
+    - Key: DRUSH_VERSION
+      Value: 0.6.0
+    Name: env
+  - Env:
+    - Key: NGINX_VERSION
+      Value: 1.16.0
+    Name: env
+  - Env:
+    - Key: NJS_VERSION
+      Value: 0.3.1
+    Name: env
+  - Env:
+    - Key: PKG_RELEASE
+      Value: 1~stretch
+    Name: env
+  - CmdLine:
+    - "set -x \t&& apt-get update \t&& apt-get install --no-install-recommends --no-install-suggests
+      -y gnupg1 apt-transport-https ca-certificates \t&& \tNGINX_GPGKEY=573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62;
+      \tfound=''; \tfor server in \t\tha.pool.sks-keyservers.net \t\thkp://keyserver.ubuntu.com:80
+      \t\thkp://p80.pool.sks-keyservers.net:80 \t\tpgp.mit.edu \t; do \t\techo \"Fetching
+      GPG key $NGINX_GPGKEY from $server\"; \t\tapt-key adv --keyserver \"$server\"
+      --keyserver-options timeout=10 --recv-keys \"$NGINX_GPGKEY\" && found=yes &&
+      break; \tdone; \ttest -z \"$found\" && echo >&2 \"error: failed to fetch GPG
+      key $NGINX_GPGKEY\" && exit 1; \tapt-get remove --purge --auto-remove -y gnupg1
+      && rm -rf /var/lib/apt/lists/* \t&& dpkgArch=\"$(dpkg --print-architecture)\"
+      \t&& nginxPackages=\" \t\tnginx=${NGINX_VERSION}-${PKG_RELEASE} \t\tnginx-module-xslt=${NGINX_VERSION}-${PKG_RELEASE}
+      \t\tnginx-module-geoip=${NGINX_VERSION}-${PKG_RELEASE} \t\tnginx-module-image-filter=${NGINX_VERSION}-${PKG_RELEASE}
+      \t\tnginx-module-njs=${NGINX_VERSION}.${NJS_VERSION}-${PKG_RELEASE} \t\" \t&&
+      case \"$dpkgArch\" in \t\tamd64|i386) \t\t\techo \"deb https://nginx.org/packages/debian/
+      stretch nginx\" >> /etc/apt/sources.list.d/nginx.list \t\t\t&& apt-get update
+      \t\t\t;; \t\t*) \t\t\techo \"deb-src https://nginx.org/packages/debian/ stretch
+      nginx\" >> /etc/apt/sources.list.d/nginx.list \t\t\t\t\t\t&& tempDir=\"$(mktemp
+      -d)\" \t\t\t&& chmod 777 \"$tempDir\" \t\t\t\t\t\t&& savedAptMark=\"$(apt-mark
+      showmanual)\" \t\t\t\t\t\t&& apt-get update \t\t\t&& apt-get build-dep -y $nginxPackages
+      \t\t\t&& ( \t\t\t\tcd \"$tempDir\" \t\t\t\t&& DEB_BUILD_OPTIONS=\"nocheck parallel=$(nproc)\"
+      \t\t\t\t\tapt-get source --compile $nginxPackages \t\t\t) \t\t\t\t\t\t&& apt-mark
+      showmanual | xargs apt-mark auto > /dev/null \t\t\t&& { [ -z \"$savedAptMark\"
+      ] || apt-mark manual $savedAptMark; } \t\t\t\t\t\t&& ls -lAFh \"$tempDir\" \t\t\t&&
+      ( cd \"$tempDir\" && dpkg-scanpackages . > Packages ) \t\t\t&& grep '^Package:
+      ' \"$tempDir/Packages\" \t\t\t&& echo \"deb [ trusted=yes ] file://$tempDir
+      ./\" > /etc/apt/sources.list.d/temp.list \t\t\t&& apt-get -o Acquire::GzipIndexes=false
+      update \t\t\t;; \tesac \t\t&& apt-get install --no-install-recommends --no-install-suggests
+      -y \t\t\t\t\t\t$nginxPackages \t\t\t\t\t\tgettext-base \t&& apt-get remove --purge
+      --auto-remove -y apt-transport-https ca-certificates && rm -rf /var/lib/apt/lists/*
+      /etc/apt/sources.list.d/nginx.list \t\t&& if [ -n \"$tempDir\" ]; then \t\tapt-get
+      purge -y --auto-remove \t\t&& rm -rf \"$tempDir\" /etc/apt/sources.list.d/temp.list;
+      \tfi"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/www/html
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends     mysql-client     libpng-dev     libzip-dev     ca-certificates     supervisor     &&
+      docker-php-ext-install gd     opcache     pdo     pdo_mysql     zip     && rm
+      -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php/php.ini
+    - /usr/local/etc/php
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisord.conf
+    - /etc/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx.conf
+    - /etc/nginx/
+  - CmdLine:
+    - curl https://github.com/hechoendrupal/drupal-console-launcher/releases/download/$DRUPAL_CONSOLE_VERSION/drupal.phar
+      -L -o drupal.phar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv drupal.phar /usr/local/bin/drupal
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /usr/local/bin/drupal
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://github.com/drush-ops/drush-launcher/releases/download/$DRUSH_VERSION/drush.phar
+      -L -o drush.phar
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv drush.phar /usr/local/bin/drush
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x /usr/local/bin/drush
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /var/www/html
+    - /var/www/html
+  - CmdLine:
+    - chown -R www-data:www-data /var/www/html
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: stopsignal
+    Signal: SIGTERM
+  - CmdLine:
+    - /usr/bin/supervisord
+    - -c
+    - /etc/supervisord.conf
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: php:7.1-fpm-stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.1-fpm-stretch

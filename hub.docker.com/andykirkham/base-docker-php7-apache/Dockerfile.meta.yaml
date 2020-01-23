@@ -1,0 +1,442 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - Maintainer: Andy Kirkham <andy@spiders-lair.com>
+    Name: maintainer
+  - Key: PHP_VER
+    Name: arg
+    Value: '"7.2.1"'
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: DEPS_TEMP
+      Value: "build-essential \tautoconf \tg++ \tgcc \tmake \tbison \tre2c \tcmake"
+    Name: env
+  - Env:
+    - Key: DEPS
+      Value: "apt-utils \tca-certificates \tfile \tlibc-dev \tpkg-config \tlibffi-dev
+        \tlibssl-dev \tlibxslt1-dev \tlibxml2 \tlibxml2-dev \tcurl \tlibcurl3 \tlibedit2
+        \tlibsqlite3-0 \tlibxml2 \txz-utils \tvim \tperl \tmlocate \twget \tunzip
+        \tlibmysqlclient-dev \tlibmysqlclient18 \tmysql-client \tlibbison-dev \tlibcurl4-gnutls-dev
+        \tlibedit-dev \tlibevent-dev \tlibzmq3-dev \tlibnanomsg-dev \tlibmemcached-dev
+        \tlibev-dev \tapache2-bin \tapache2-dev \tapache2.2-common \tssh \tgit"
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y $DEPS $DEPS_TEMP --no-install-recommends
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sSL https://github.com/php/php-src/archive/php-$PHP_VER.zip > /var/tmp/php-$PHP_VER.zip
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: APACHE_CONF_DIR
+      Value: /etc/apache2
+    Name: env
+  - Env:
+    - Key: APACHE_ENVVARS
+      Value: $APACHE_CONF_DIR/envvars
+    Name: env
+  - CmdLine:
+    - "set -ex \t&& . \"$APACHE_ENVVARS\" \t&& for dir in \t\t\"$APACHE_LOCK_DIR\"
+      \t\t\"$APACHE_RUN_DIR\" \t\t\"$APACHE_LOG_DIR\" \t\t/var/www/html \t; do \t\trm
+      -rvf \"$dir\" \t\t&& mkdir -p \"$dir\" \t\t&& chown -R \"$APACHE_RUN_USER:$APACHE_RUN_GROUP\"
+      \"$dir\"; \tdone"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2dismod mpm_event && a2enmod mpm_prefork
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -ex \t&& . \"$APACHE_ENVVARS\" \t&& ln -sfT /dev/stderr \"$APACHE_LOG_DIR/error.log\"
+      \t&& ln -sfT /dev/stdout \"$APACHE_LOG_DIR/access.log\" \t&& ln -sfT /dev/stdout
+      \"$APACHE_LOG_DIR/other_vhosts_access.log\""
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: APACHE_CONFFILE
+      Value: $APACHE_CONF_DIR/conf-available/docker-php.conf
+    Name: env
+  - CmdLine:
+    - mkdir -p $APACHE_CONF_DIR/conf-available
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "{ \techo '<FilesMatch \\.php$>'; \techo '\\tSetHandler application/x-httpd-php';
+      \techo '</FilesMatch>'; \techo; \techo 'DirectoryIndex disabled'; \techo 'DirectoryIndex
+      index.php index.html'; \techo; \techo '<Directory /var/www/>'; \techo '\\tOptions
+      -Indexes'; \techo '\\tAllowOverride All'; \techo '</Directory>';     } | tee
+      $APACHE_CONFFILE"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enconf docker-php
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_INI_DIR
+      Value: /usr/local/etc/php
+    Name: env
+  - CmdLine:
+    - "mkdir -p /tmp/build && cd /tmp/build \t&& cp /var/tmp/php-$PHP_VER.zip ./ \t&&
+      unzip -q php-$PHP_VER.zip \t&& rm -f php-$PHP_VER.zip \t&& cd /tmp/build/php-src-php-$PHP_VER
+      \t&& mkdir -p $PHP_INI_DIR/conf.d \t&& ./buildconf --force \t&& ./configure
+      \t\t--with-config-file-path=\"$PHP_INI_DIR\" \t\t--with-config-file-scan-dir=\"$PHP_INI_DIR/conf.d\"
+      \t\t--disable-cgi \t\t--enable-mysqlnd \t\t--with-pdo-mysql \t\t--enable-mbstring
+      \t\t--with-curl \t\t--with-libedit \t\t--with-openssl \t\t--with-zlib \t\t--enable-bcmath
+      \t\t--enable-pcntl \t\t--with-apxs2 \t\t--without-pear \t&& make -j\"$(nproc)\"
+      \t&& make install \t&& { find /usr/local/bin /usr/local/sbin -type f -executable
+      -exec strip --strip-all '{}' + || true; } \t&& make clean \t&& cd / \t&& rm
+      -rf /tmp/build"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /tmp/build
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dist/pecl-event-libevent.zip
+    - /tmp/build
+  - Name: workdir
+    Path: /tmp/build
+  - CmdLine:
+    - unzip pecl-event-libevent.zip && rm pecl-event-libevent.zip
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build/pecl-event-libevent-master
+  - CmdLine:
+    - phpize && ./configure && make && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "extension=libevent.so" > $PHP_INI_DIR/conf.d/99-libevent.ini
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - rm -rf /tmp/build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /tmp/build
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dist/pecl-zeromq.zip
+    - /tmp/build
+  - Name: workdir
+    Path: /tmp/build
+  - CmdLine:
+    - unzip pecl-zeromq.zip && rm pecl-zeromq.zip
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build/php-zmq-master
+  - CmdLine:
+    - phpize && ./configure && make && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "extension=zmq.so" > $PHP_INI_DIR/conf.d/99-zeromq.ini
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - rm -rf /tmp/build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /tmp/build
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dist/pecl-nanomsg.tgz
+    - /tmp/build/pecl-nanomsg.tgz
+  - Name: workdir
+    Path: /tmp/build
+  - CmdLine:
+    - tar -v -zxf pecl-nanomsg.tgz && rm pecl-nanomsg.tgz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build/php-nano-master
+  - CmdLine:
+    - phpize && ./configure && make && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "extension=nano.so" > $PHP_INI_DIR/conf.d/99-nanomsg.ini
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - rm -rf /tmp/build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /tmp/build
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dist/pecl-memcached.zip
+    - /tmp/build/pecl-memcached.zip
+  - Name: workdir
+    Path: /tmp/build
+  - CmdLine:
+    - unzip pecl-memcached.zip && rm pecl-memcached.zip
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build/php-memcached-php7
+  - CmdLine:
+    - phpize && ./configure && make && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "extension=memcached.so" > $PHP_INI_DIR/conf.d/99-memcached.ini
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - rm -rf /tmp/build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y librabbitmq-dev librabbitmq1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /tmp/build
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dist/pecl-php-amqp.zip
+    - /tmp/build/pecl-php-amqp.zip
+  - Name: workdir
+    Path: /tmp/build
+  - CmdLine:
+    - unzip pecl-php-amqp.zip && rm pecl-php-amqp.zip
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build/php-amqp-1.7.1
+  - CmdLine:
+    - phpize && ./configure && make && make install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "extension=amqp.so" > $PHP_INI_DIR/conf.d/99-amqp.ini
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - rm -rf /tmp/build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod rewrite
+    Name: run
+    PrependShell: true
+  - Key: JANSSON_VER
+    Name: arg
+    Value: '"2.10"'
+  - CmdLine:
+    - mkdir -p /tmp/build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build
+  - CmdLine:
+    - curl -sSL https://github.com/akheron/jansson/archive/v$JANSSON_VER.zip > jansson-$JANSSON_VER.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip jansson-$JANSSON_VER.zip
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build/jansson-$JANSSON_VER
+  - CmdLine:
+    - mkdir /tmp/build/jansson-$JANSSON_VER/build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build/jansson-$JANSSON_VER/build
+  - CmdLine:
+    - cmake .. && make && make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - rm -rf /tmp/build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /tmp/build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build
+  - CmdLine:
+    - curl -sSL https://github.com/stellartech/phpjansson/archive/master.zip > php_jansson.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - unzip php_jansson.zip
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build/phpjansson-master
+  - CmdLine:
+    - "phpize \t&& ./configure --with-jansson \t&& make \t&& make install"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "extension=jansson.so" > $PHP_INI_DIR/conf.d/99-jansson.ini
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - rm -rf /tmp/build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /tmp/build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build
+  - CmdLine:
+    - curl -sSL http://mirrorservice.org/sites/ftp.apache.org/zookeeper/zookeeper-3.4.11/zookeeper-3.4.11.tar.gz
+      > zookeeper-3.4.11.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar -zxf zookeeper-3.4.11.tar.gz
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build/zookeeper-3.4.11/src/c
+  - CmdLine:
+    - ./configure --prefix=/usr/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make && make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - rm -rf /tmp/build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /tmp/build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dist/php-zookeeper.zip
+    - /tmp/build/php-zookeeper.zip
+  - CmdLine:
+    - unzip php-zookeeper.zip
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build/php-zookeeper-php7
+  - CmdLine:
+    - "phpize \t&& ./configure \t&& make \t&& make install"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "extension=zookeeper.so" > $PHP_INI_DIR/conf.d/20-zookeeper.ini
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - rm -rf /tmp/build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y librdkafka1 librdkafka-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /tmp/build
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - dist/php-rdkafka.zip
+    - /tmp/build/php-rdkafka.zip
+  - CmdLine:
+    - unzip php-rdkafka.zip
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp/build/php-rdkafka-php7
+  - CmdLine:
+    - "phpize \t&& ./configure \t&& make \t&& make install"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "extension=rdkafka.so" > $PHP_INI_DIR/conf.d/30-rdkafka.ini
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - rm -rf /tmp/build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get remove -y $DEPS_TEMP \t&& apt-get autoremove -y \t&& rm -r /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin
+      --filename=composer
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

@@ -1,0 +1,94 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.11-stretch
+  Commands:
+  - Key: BUILD
+    Name: arg
+    Value: release
+  - Name: workdir
+    Path: /go/src/github.com/cozy/cozy-stack
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - set -eux &&     go get -d -v ./... &&     bash -ex ./scripts/build.sh ${BUILD}
+      &&     rm ./cozy-stack*.sha256
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.11-stretch
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.11-stretch AS builder
+- BaseName: node:8-stretch-slim
+  Commands:
+  - Env:
+    - Key: COUCHDB_PROTOCOL
+      Value: http
+    - Key: COUCHDB_HOST
+      Value: couchdb
+    - Key: COUCHDB_PORT
+      Value: "5984"
+    - Key: COUCHDB_USER
+      Value: cozy
+    - Key: COUCHDB_PASSWORD
+      Value: cozy
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/cozy/cozy-stack/cozy-stack*
+    - /usr/local/bin/cozy-stack
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./scripts/docker-entrypoint-production.sh
+    - /usr/local/bin/docker-entrypoint.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./scripts/wait-for-it.sh
+    - ./scripts/konnector-*-run.sh
+    - /usr/local/bin/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./scripts/cozy.yaml
+    - /etc/cozy/
+  - CmdLine:
+    - set -eux &&     apt-get update &&     apt-get upgrade -y &&     apt-get install
+      -y imagemagick ca-certificates curl gosu git &&     gosu nobody true &&     apt-get
+      clean &&     rm -rf /tmp/* /var/tmp &&     chmod +x /usr/local/bin/*.sh
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /var/lib/cozy
+  - Name: volume
+    Volumes:
+    - /var/lib/cozy/data
+  - Name: expose
+    Ports:
+    - "6060"
+    - "8080"
+  - CmdLine:
+    - docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - cozy-stack
+    - serve
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: node:8-stretch-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:8-stretch-slim

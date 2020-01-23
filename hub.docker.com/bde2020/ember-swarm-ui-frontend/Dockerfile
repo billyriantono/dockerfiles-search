@@ -1,11 +1,92 @@
-FROM semtech/mu-nginx-spa-proxy:1.0.1
+FROM bcgsc/orca-2:latest
+LABEL maintainer="sjackan@gmail.com" name="bcgsc/orca-3"
 
-MAINTAINER Aad Versteden <madnificent@gmail.com>
-
-ENV STATIC_FOLDERS_REGEX "^/(assets|font|images)/"
-
-RUN apt-get update; apt-get upgrade -y; apt-get install -y unzip wget;
-COPY package.json /package.json
-RUN mkdir /app; cd /app; wget https://github.com/big-data-europe/ember-swarm-ui-frontend/releases/download/v$(cat /package.json | grep version | head -n 1 | awk -F: '{ print $2 }' | sed 's/[ ",]//g')/dist.zip
-RUN cd /app; unzip dist.zip; mv dist/* .
-RUN rm /app/dist.zip package.json
+RUN brew install \
+cannoli \
+canu \
+cap3 \
+cd-hit \
+cegma \
+celera-assembler \
+centrifuge \
+circlator \
+circos \
+clark \
+clonalframeml \
+clonehd \
+clustal-omega \
+clustal-w \
+cmake \
+consel \
+crumble \
+curl \
+cutadapt \
+daligner \
+das_tool \
+dazz_db \
+delly \
+diamond \
+dida \
+discovar \
+disty \
+dsh-bio \
+dsk \
+dwgsim \
+e-mem \
+easel \
+edirect \
+elph \
+ema \
+emacs \
+emboss \
+epa-ng \
+exabayes \
+exonerate  \
+express \
+fasta \
+fastani \
+fastml \
+fastp \
+fastq-pair \
+fastq-tools \
+fastqc \
+fasttree \
+fastuniq \
+fastx_toolkit \
+fermi \
+fermi-lite \
+fermi2 \
+fermikit \
+figtree \
+filtlong \
+finch-rs \
+flash \
+flex \
+flowcraft \
+flye \
+fqzcomp \
+fraggenescan \
+freebayes \
+freec \
+fsa \
+fwdpp \
+gappa \
+gatb \
+gatk \
+gblocks \
+gemma \
+geneid \
+genewise \
+genome-painter \
+genometools \
+gepard \
+gfakluge \
+gfalint \
+gfaview \
+gingr \
+glimmerhmm \
+gmap-gsnap \
+grabix \
+graphviz \
+gsl \
+gzstream

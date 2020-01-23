@@ -1,0 +1,211 @@
+MetaArgs: null
+Stages:
+- As: build-image
+  BaseName: python:3.6-stretch
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    - Key: PIP_NO_CACHE_DIR
+      Value: "off"
+    Name: env
+  - CmdLine:
+    - mkdir -p /app/src/requirements
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/requirements/*.txt
+    - /app/src/requirements/
+  - Key: PIP_REQUIREMENTS
+    Name: arg
+    Value: /app/src/requirements/docker.txt
+  - CmdLine:
+    - pip install -r $PIP_REQUIREMENTS
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - find /usr/local/lib/python3.6/site-packages/ -name '*.po' -delete &&     find
+      /usr/local/lib/python3.6/site-packages/babel/locale-data/ -not -name 'en*' -not
+      -name 'nl*' -name '*.dat' -delete &&     find /usr/local/lib/python3.6/site-packages/tinymce/
+      -regextype posix-egrep -not -regex '.*/langs/(en|nl).*\.js' -wholename '*/langs/*.js'
+      -delete
+    Name: run
+    PrependShell: true
+  From:
+    Image: python:3.6-stretch
+  Name: build-image
+  Platform: ""
+  SourceCode: FROM python:3.6-stretch as build-image
+- As: frontend-build
+  BaseName: node:10-stretch
+  Commands:
+  - CmdLine:
+    - mkdir -p /app/src
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/package.json
+    - src/package-lock.json
+    - /app/src/
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/gulpfile.js
+    - /app/src/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src/frontend/
+    - /app/src/frontend/
+  - CmdLine:
+    - npm run gulp
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10-stretch
+  Name: frontend-build
+  Platform: ""
+  SourceCode: FROM node:10-stretch as frontend-build
+- BaseName: python:3.6-slim-stretch
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: PYTHONUNBUFFERED
+      Value: "1"
+    - Key: PIP_NO_CACHE_DIR
+      Value: "off"
+    - Key: UWSGI_PROCESSES
+      Value: "1"
+    - Key: UWSGI_THREADS
+      Value: "10"
+    - Key: UWSGI_OFFLOAD_THREADS
+      Value: "1"
+    - Key: UWSGI_MODULE
+      Value: fluentdemo.wsgi.docker:application
+    - Key: DJANGO_SETTINGS_MODULE
+      Value: fluentdemo.settings.docker
+    Name: env
+  - CmdLine:
+    - apt-get update &&     apt-get install --no-install-recommends -y libxml2 libjpeg62-turbo
+      gettext mime-support &&     rm -rf /var/lib/apt/lists/* /var/cache/debconf/*-old
+      &&     echo "font/woff2  woff2" >> /etc/mime.types &&     useradd --system --user-group
+      app
+    Name: run
+    PrependShell: true
+  - Maintainer: vdboor@edoburu.nl
+    Name: maintainer
+  - Name: expose
+    Ports:
+    - "1717"
+    - "8080"
+  - Health:
+      Interval: 300000000000
+      Test:
+      - CMD-SHELL
+      - curl -f http://localhost:8080/api/health/ || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - Chown: ""
+    From: build-image
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/
+    - /usr/local/bin/
+  - Chown: ""
+    From: build-image
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/lib/python3.6/site-packages/
+    - /usr/local/lib/python3.6/site-packages/
+  - Chown: ""
+    From: frontend-build
+    Name: copy
+    SourcesAndDest:
+    - /app/src/frontend/static
+    - /app/src/frontend/static
+  - Env:
+    - Key: DATABASE_URL
+      Value: sqlite:////tmp/demo.db
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - web
+    - /app/web
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - src
+    - /app/src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - deployment/docker/manage.py
+    - /usr/local/bin/
+  - Name: workdir
+    Path: /app/src
+  - CmdLine:
+    - rm /app/src/*/settings/local.py* &&     find . -name '*.pyc' -delete &&     python
+      -mcompileall -q */ &&     manage.py compilemessages &&     manage.py collectstatic
+      --noinput --link &&     manage.py migrate &&     manage.py loaddata example_data.json
+      &&     mkdir -p /app/web/media /app/web/static/CACHE &&     chown -R app:app
+      /app/web/media/ /app/web/static/CACHE /tmp/demo.db &&     chmod -R go+rw /app/web/media/
+      /app/web/static/CACHE /tmp/demo.db
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - deployment/docker/uwsgi.ini
+    - /app/uwsgi.ini
+  - CmdLine:
+    - /usr/local/bin/uwsgi
+    - --ini
+    - /app/uwsgi.ini
+    Name: cmd
+    PrependShell: false
+  - Name: volume
+    Volumes:
+    - /app/web/media
+  - Name: volume
+    Volumes:
+    - /app/web/static/CACHE
+  - Key: GIT_VERSION
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: git-version
+      Value: $GIT_VERSION
+    Name: label
+  - CmdLine:
+    - echo $GIT_VERSION > .docker-git-version
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: app
+  From:
+    Image: python:3.6-slim-stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM python:3.6-slim-stretch

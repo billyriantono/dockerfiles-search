@@ -1,22 +1,10 @@
-FROM hivesolutions/python:latest
+FROM centos:latest
 
-LABEL version="1.0"
-LABEL maintainer="Hive Solutions <development@hive.pt>"
+RUN ["yum","-y","install","httpd"]
 
-EXPOSE 8080
+WORKDIR /first
+WORKDIR second
+WORKDIR third
 
-ENV LEVEL INFO
-ENV SERVER netius
-ENV SERVER_ENCODING gzip
-ENV HOST 0.0.0.0
-ENV PORT 8080
-ENV MONGOHQ_URL mongodb://localhost
-ENV PYTHONPATH /src
-
-ADD requirements.txt /
-ADD extra.txt /
-ADD src /src
-
-RUN pip3 install -r /requirements.txt && pip3 install -r /extra.txt && pip3 install --upgrade netius
-
-CMD ["/usr/bin/python3", "/src/mock_api/main.py"]
+ADD index.html web/
+COPY index2.html web/

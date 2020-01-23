@@ -1,42 +1,65 @@
-FROM delhomme/upscb-rstudio
-MAINTAINER Nicolas Delhomme (nicolas.delhomme@umu.se)
+FROM alpine:3.8
 
-#########
-### Aptitude packages
-#########
-RUN apt-get update && apt install -y curl libssh2-1-dev libmariadb-client-lgpl-dev imagemagick
+MAINTAINER Arsen Arutyunyan <gdarutyunyan@gmail.com>
 
-#########
-# R packages
-#########
-WORKDIR /home/training
-ADD R-package-list.txt /home/training/R-package-list.txt
-ADD R-install-packages.R /home/training/R-install-packages.R
-ADD .Renviron /home/training/.Renviron
-RUN Rscript R-install-packages.R
+ENV KEEPASS_DOWNLOAD_URL http://http.debian.net/debian/pool/main/libf/libfile-keepass-perl/libfile-keepass-perl_2.03.orig.tar.gz
+ENV SHELLUI_DOWNLOAD_URL http://http.debian.net/debian/pool/main/libt/libterm-shellui-perl/libterm-shellui-perl_0.92.orig.tar.gz
+ENV SORTN_DOWNLOAD_URL http://search.cpan.org/CPAN/authors/id/B/BI/BINGOS/Sort-Naturally-1.03.tar.gz
+ENV READLINE_DOWNLOAD_URL http://http.debian.net/debian/pool/main/libt/libterm-readline-gnu-perl/libterm-readline-gnu-perl_1.35.orig.tar.gz
 
-########
-# R local packages
-#########
-RUN	mkdir /build
-WORKDIR /build
-RUN curl ftp://130.239.72.87/Facility/Workshop/RnaSeqTutorial_0.99.10.tar.gz > RnaSeqTutorial_0.99.10.tar.gz
-RUN R CMD INSTALL RnaSeqTutorial_0.99.10.tar.gz
+ENV KPCLI_VERSION 3.2
 
-########
-# GitHub package - kept as a reminder.
-########
-#RUN Rscript -e 'devtools::install_github("catavallejos/BASiCS")'
-
-#########
-### Cleanup
-#########
-WORKDIR /home/training
-RUN rm -rf R-package-list.txt R-install-packages.R
-WORKDIR /
-RUN rm -rf build
-
-#########
-### supervisord
-#########
-CMD ["/usr/bin/supervisord","-c","/etc/supervisor/conf.d/supervisord.conf"]
+RUN set -ex; \
+        \
+        apk add --no-cache --virtual .build-deps \
+                ncurses-dev \
+                readline-dev \
+                perl-dev \
+                build-base \
+                ca-certificates \
+                wget; \
+        \
+        apk add --no-cache \
+                perl-crypt-rijndael \
+                perl-term-readkey \
+                perl-sort-key \
+                perl-xml-parser \
+                perl-clone \
+                readline; \
+        \
+        mkdir -p /usr/src/keepass; cd /usr/src/keepass; \
+        wget -qO- $KEEPASS_DOWNLOAD_URL | tar -xvz -C /usr/src/keepass --strip-components 1; \
+        perl Makefile.PL; \
+        make install; \
+        make clean; \
+        rm -r /usr/src/keepass; \
+        \
+        mkdir -p /usr/src/shellui && cd /usr/src/shellui; \
+        wget -qO- $SHELLUI_DOWNLOAD_URL | tar -xvz -C /usr/src/shellui --strip-components 1; \
+        perl Makefile.PL; \
+        make install; \
+        make clean; \
+        rm -r /usr/src/shellui; \
+        \
+        mkdir -p /usr/src/sortn && cd /usr/src/sortn; \
+        wget -qO- $SORTN_DOWNLOAD_URL | tar -xvz -C /usr/src/sortn --strip-components 1; \
+        perl Makefile.PL; \
+        make install; \
+        make clean; \
+        rm -r /usr/src/sortn; \
+        \
+        mkdir -p /usr/src/readline && cd /usr/src/readline; \
+        wget -qO- $READLINE_DOWNLOAD_URL | tar -xvz -C /usr/src/readline --strip-components 1; \
+        perl Makefile.PL; \
+        make install; \
+        make clean; \
+        rm -r /usr/src/readline; \
+        \
+        mkdir -p /opt/keepass/kpcli/bin; \
+        wget https://downloads.sourceforge.net/project/kpcli/kpcli-${KPCLI_VERSION}.pl -O /opt/keepass/kpcli/bin/kpcli; \
+        chmod +x /opt/keepass/kpcli/bin/kpcli; \
+        ln -s /opt/keepass/kpcli/bin/kpcli /usr/bin/kpcli; \
+        \
+        apk del .build-deps
+        
+CMD ["kpcli"]

@@ -1,46 +1,55 @@
-FROM ubuntu:16.04
+FROM php:7.4-cli-buster
 
-# Core packages
-RUN apt-get update && \
-    apt-get install -y software-properties-common sudo git-core vim curl wget unzip
+LABEL MAINTAINER Exakat, Damien Seguy, dseguy@exakat.io
+ENV EXAKAT_VERSION 2.0.5
+ENV GREMLIN_VERSION 3.4.4
 
-# NodeJS
-RUN curl -sL https://deb.nodesource.com/setup_8.x | bash - && \
-    apt-get install -y nodejs build-essential
-RUN npm install npm@latest -g    
+ENV PATH="/usr/src/exakat/:${PATH}"
 
-# Watchman
-RUN apt-get install -y autoconf automake python-dev libssl-dev libtool pkg-config && \
-    git clone https://github.com/facebook/watchman.git && \
-    cd watchman/ && git checkout v4.9.0 && \
-    ./autogen.sh && \
-    ./configure && \
-    make && make install
+COPY exakat.sh /usr/src/exakat/
+COPY config/exakat.ini /usr/src/exakat/config/
 
-# Add repositories for and install Ansible, GoLang, Yarn, MongoDB
-RUN apt-add-repository ppa:ansible/ansible && \
-    add-apt-repository ppa:gophers/archive && \
-    curl -sL https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
-    echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list && \
-    apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5 && \
-    echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-3.6.list && \
+RUN \
+    echo "====> Exakat $EXAKAT_VERSION" && \
+    mkdir -p /usr/src/exakat && \
+    cd /usr/src/exakat && \
+    \
+    echo "===> php.ini" && \
+    echo "memory_limit=-1" >> /usr/local/etc/php/php.ini && \
+    \
+    echo "===> Java 8"  && \
+    mkdir -p /usr/share/man/man1 && \
     apt-get update && \
-    apt-get install -y ansible golang-1.11-go yarn mongodb-org-shell=3.6.7 mongodb-org-tools=3.6.7 && \
-    apt-get install -y mysql-client-5.7 libmysqlclient20
+    apt-get install -y default-jre && \
+    \
+    apt-get install -y --no-install-recommends procps git subversion mercurial bzr lsof unzip zip && \
+    \
+    echo "===> Composer"  && \
+    curl -sS https://getcomposer.org/installer -o composer-setup.php && \
+    HASH="$(curl --silent -o - https://composer.github.io/installer.sig)" && \
+    php -r "if (hash_file('SHA384', 'composer-setup.php') === '$HASH') { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); } echo PHP_EOL;" && \
+    php composer-setup.php --install-dir=/usr/local/bin --filename=composer && \
+    \
+    echo "====> Gremlin-Server" && \
+    curl --silent -o apache-tinkerpop-gremlin-server-$GREMLIN_VERSION-bin.zip http://dist.exakat.io/apache-tinkerpop-gremlin-server-$GREMLIN_VERSION-bin.zip && \
+    unzip apache-tinkerpop-gremlin-server-$GREMLIN_VERSION-bin.zip && \
+    mv apache-tinkerpop-gremlin-server-$GREMLIN_VERSION tinkergraph && \
+    rm -rf apache-tinkerpop-gremlin-server-$GREMLIN_VERSION-bin.zip  && \
+    cd tinkergraph && \
+    bin/gremlin-server.sh install org.apache.tinkerpop neo4j-gremlin $GREMLIN_VERSION && \
+    cd .. && \
+    \
+    echo "====> Exakat $EXAKAT_VERSION" && \
+    cd /usr/src/exakat && \
+    curl --silent http://dist.exakat.io/index.php?file=exakat-$EXAKAT_VERSION.phar -o exakat.phar && \
+    chmod a+x /usr/src/exakat/exakat.* && \
+    mv exakat.phar exakat && \
+    \
+    echo "====> Cleanup" && \
+    \
+    apt-get clean && \
+    rm -rf /var/cache/oracle-jdk8-installer  && \
+    rm -rf /var/lib/apt/lists/* && \
+    exakat doctor
 
-# Notes:
-# - this installs the latest Ubuntu package for Ansible. To control the version, install pip and then install Ansible via pip:
-#         apt-get install python-pip python-dev && pip install ansible==x.y.z.0
-# - installing MongoDB shell and tools only, MySQL client only
-
-# Misc additional packages
-RUN apt-get install -y python-jmespath python-pip libx11-dev
-
-# Additional Python Libraries for Ansible
-RUN pip install PyMySQL
-
-COPY ./*.sh /
-
-RUN chmod +x /*.sh
-
-CMD ["/zero-daemon.sh"]
+CMD [ "exakat", "doctor" ]

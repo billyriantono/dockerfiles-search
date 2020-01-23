@@ -1,34 +1,39 @@
-FROM continuumio/miniconda3
+# php7
+#
+# Reorganised to fit our standard /workspace model
+#
+# VERSION               0.0.2
+#
+# Note this is referenced from : https://hub.docker.com/_/php/
+#
+FROM php:7-apache
+MAINTAINER Eugene Cheah <eugene@picoded.com>
 
-RUN apt-get update && apt-get install -y \
-        pkg-config \
-        libfreetype6-dev \
-	build-essential \
-	libc-dev \
-        && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# install common package utility
+RUN apt-get update && apt-get install -y git unzip zip
 
-RUN conda update conda; conda update --all
-RUN conda install libgcc
-COPY requirements.txt /
-RUN pip install -r /requirements.txt
-RUN pip install -U numpy tensorflow 
+# install dependency module
+RUN apt-get update && apt-get install -y libmcrypt-dev libssl-dev libcurl4-openssl-dev ftp
 
-COPY jupyter_notebook_config.py /root/.jupyter/
+# Install pdo_mysql
+RUN docker-php-ext-install mysqli pdo_mysql
+RUN docker-php-ext-install curl sockets mbstring mcrypt zip
+RUN a2enmod rewrite
 
-# Jupyter has issues with being run directly:
-# https://github.com/ipython/ipython/issues/7062
-# We just add a little wrapper script.
-COPY run_jupyter.sh /
+# move the default /var/www contents to /workspace/www
+RUN mkdir /workspace && mkdir /workspace/www 
+RUN cp -R /var/www/html/* /workspace/www/ || true
 
-# tensorboard
-EXPOSE 6006
+# and relinks /var/www/html to /workspace/www
+RUN rm -R /var/www/html && ln -s /workspace/www /var/www && cd /var/www && mv www html
 
-# jupyter
-EXPOSE 8888
-EXPOSE 8889
+# Volume links
+VOLUME ["/workspace/www", "/var/log/apache2", "/etc/apache2"]
 
-WORKDIR "/notebooks"
+# expose port 80
+EXPOSE 80 443
+WORKDIR /workspace/www
 
-CMD ["/bin/bash"]
+# And start up the slave
+ENTRYPOINT apache2-foreground
+CMD apache2-foreground

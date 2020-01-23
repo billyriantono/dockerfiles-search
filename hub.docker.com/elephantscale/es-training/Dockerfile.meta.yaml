@@ -1,0 +1,537 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:bionic
+  Commands:
+  - Key: MYUSER
+    Name: arg
+    Value: ubuntu
+  - Key: DEFAULT_PASSWORD
+    Name: arg
+    Value: bingobob123
+  - Key: USER_GROUP_ID
+    Name: arg
+    Value: "1000"
+  - Key: HOME_DIR
+    Name: arg
+    Value: /home/${MYUSER}
+  - Key: APPS_DIR
+    Name: arg
+    Value: ${HOME_DIR}/apps
+  - Key: CONDA_DIR
+    Name: arg
+    Value: ${APPS_DIR}/anaconda
+  - Key: NVM_VERSION
+    Name: arg
+    Value: 0.34.0
+  - Key: R_STUDIO_SERVER_VERSION
+    Name: arg
+    Value: 1.2.1335
+  - Env:
+    - Key: NVM_DIR
+      Value: ${APPS_DIR}/nvm
+    Name: env
+  - Env:
+    - Key: NODE_VERSION
+      Value: 10.16.0
+    Name: env
+  - Env:
+    - Key: ES_HOME
+      Value: ${HOME_DIR}
+    Name: env
+  - Env:
+    - Key: NODE_PATH
+      Value: ${NVM_DIR}/v${NODE_VERSION}/lib/node_modules
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: ${NVM_DIR}/versions/node/v${NODE_VERSION}/bin:${PATH}
+    Name: env
+  - Env:
+    - Key: SHELL
+      Value: /bin/bash
+    Name: env
+  - Env:
+    - Key: USER
+      Value: ${MYUSER}
+    Name: env
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: DEBCONF_NONINTERACTIVE_SEEN
+      Value: "true"
+    Name: env
+  - CmdLine:
+    - echo "*** http_proxy=${http_proxy} ***"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt update --fix-missing -yq &&         apt -yq upgrade
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt update &&     apt install -yq  --no-install-recommends         atop         build-essential         ca-certificates         curl         git         gnupg         gnupg1         gnupg2         jq         less         nano         netcat         rsync         screen         sudo         unzip         vim         wget         zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt update &&     apt install -yq  --no-install-recommends         ntp          openssh-server         openssh-client
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt update &&     apt -y install  libcurl4-openssl-dev  r-base  r-base-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - R -e "install.packages('tidyverse' , repos = 'http://cran.us.r-project.org')"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt update &&     apt install -y   libclang-dev   psmisc  lsb-release
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget  --quiet "https://elephantscale-public.s3.amazonaws.com/downloads/rstudio-server-${R_STUDIO_SERVER_VERSION}-amd64.deb"
+      &&         dpkg -i  rstudio-server-${R_STUDIO_SERVER_VERSION}-amd64.deb &&         rm
+      -f rstudio-server*.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt update &&     apt install -y  xfce4 xfce4-goodies tightvncserver
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt update &&     apt install -yq         mysql-server         python-mysqldb         python-pymysql
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /var/run/mysqld
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R mysql:mysql /var/lib/mysql /var/run/mysqld &&     service mysql start
+      &&     mysql -u root -e "create database graphite;" &&     mysql -u root -e
+      "grant all privileges on graphite.* to 'graphite'@'%'  identified by '${DEFAULT_PASSWORD}';"
+      &&    mysql -u root -e "create database grafana;" &&     mysql -u root -e "grant
+      all privileges on grafana.* to 'graphite'@'%'  identified by '${DEFAULT_PASSWORD}';"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt update &&     apt install -y         apache2         libapache2-mod-wsgi
+      &&      a2enmod wsgi
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/apache-ports.conf
+    - /etc/apache2/ports.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/apache-000-default.conf
+    - /etc/apache2/sites-available/000-default.conf
+  - CmdLine:
+    - "curl https://packages.grafana.com/gpg.key | sudo apt-key add - && \tapt install
+      -y software-properties-common && \tadd-apt-repository \"deb https://packages.grafana.com/oss/deb
+      stable main\" && \tapt update && \tapt install -y grafana"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/grafana.ini
+    - /etc/grafana/grafana.ini
+  - CmdLine:
+    - "sudo apt -y install python-dev python-pip libcairo2-dev libffi-dev build-essential
+      && \texport PYTHONPATH=\"/opt/graphite/lib/:/opt/graphite/webapp/\" && \tsudo
+      -H pip install --no-binary=:all: https://github.com/graphite-project/whisper/tarball/master
+      && \tsudo -H pip install --no-binary=:all: https://github.com/graphite-project/carbon/tarball/master
+      && \tsudo -H pip install --no-binary=:all: https://github.com/graphite-project/graphite-web/tarball/master"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo -H PYTHONPATH=/opt/graphite/webapp django-admin.py migrate --settings=graphite.settings
+      --run-syncdb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo -H PYTHONPATH=/opt/graphite/webapp django-admin.py createsuperuser --settings=graphite.settings
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo -H PYTHONPATH=/opt/graphite/webapp django-admin.py collectstatic --noinput
+      --settings=graphite.settings
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /opt/graphite/conf/carbon.conf.example /opt/graphite/conf/carbon.conf  &&         cp
+      /opt/graphite/conf/storage-schemas.conf.example /opt/graphite/conf/storage-schemas.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/graphite.wsgi
+    - /opt/graphite/conf/graphite.wsgi
+  - CmdLine:
+    - "chmod +x /opt/graphite/conf/graphite.wsgi  && \tchown -R www-data:www-data
+      /opt/graphite"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/graphite-vhost.conf
+    - /etc/apache2/sites-available/graphite-vhost.conf
+  - CmdLine:
+    - "a2dissite 000-default && \ta2ensite graphite-vhost"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -L -s https://deb.nodesource.com/setup_10.x | sudo bash  &&         apt
+      install -y nodejs  &&         git clone https://github.com/etsy/statsd.git /opt/statsd
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/statsd-localConfig.js
+    - /opt/statsd/localConfig.js
+  - CmdLine:
+    - sudo apt install -y supervisor
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/statsd.conf
+    - /etc/supervisor/conf.d/statsd.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/carbon.conf
+    - /etc/supervisor/conf.d/carbon.conf
+  - CmdLine:
+    - apt update &&     apt install -yq openjdk-8-jdk
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "deb https://dl.bintray.com/sbt/debian /" >  /etc/apt/sources.list.d/sbt.list
+      &&     apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
+      &&     apt update &&     apt install -y  sbt scala
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt install -y firefox
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo apt install -y     iputils-ping     iproute2     netcat-traditional    netcat-openbsd    nmap
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -f /etc/apt/apt.conf.d/01proxy  &&         apt clean &&         rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/sshd_config
+    - /etc/ssh/sshd_config
+  - CmdLine:
+    - groupadd -g ${USER_GROUP_ID} ${MYUSER} &&     useradd -rm -d ${HOME_DIR} -s
+      /bin/bash -g ${MYUSER} -G sudo -u ${USER_GROUP_ID} ${MYUSER}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${HOME_DIR}  &&     chown -R ${MYUSER} ${HOME_DIR}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'echo  "${MYUSER} ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/${MYUSER}'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown ${MYUSER}  /usr/local/bin
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${MYUSER}
+  - Name: workdir
+    Path: ${HOME_DIR}
+  - CmdLine:
+    - mkdir -p ${HOME_DIR}/.ssh/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/ssh-config-ubuntu
+    - ${HOME_DIR}/.ssh/config
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/deploy-key1.pem
+    - ${HOME_DIR}/.ssh/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/deploy-key1.pub
+    - ${HOME_DIR}/.ssh/
+  - CmdLine:
+    - touch ${HOME_DIR}/.ssh/known_hosts
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ssh-keyscan github.com >> ${HOME_DIR}/.ssh/known_hosts
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo chown -R ${MYUSER}  ${HOME_DIR}/.ssh  &&     chmod 600  ${HOME_DIR}/.ssh/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${APPS_DIR}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${HOME_DIR}/src
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${APPS_DIR} &&       git clone git://github.com/etsy/statsd.git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/statsd-localConfig.js
+    - ${APPS_DIR}/statsd/localConfig.js
+  - CmdLine:
+    - mkdir -p ${NVM_DIR}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://raw.githubusercontent.com/creationix/nvm/v${NVM_VERSION}/install.sh
+      | bash         && . ${NVM_DIR}/nvm.sh         && nvm install ${NODE_VERSION}         &&
+      nvm alias default ${NODE_VERSION}         && nvm use default
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget --quiet https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein  -O
+      /usr/local/bin/lein &&     chmod 755 /usr/local/bin/lein
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sudo chown -R ${MYUSER}  /var/www/html
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd ${HOME_DIR}/src &&      git clone git@github.com:elephantscale/sandbox-info.git
+      &&      rsync -a sandbox-info/amazon-ubuntu-ami/  /var/www/html/
+    Name: run
+    PrependShell: true
+  - Key: MVN_VERSION
+    Name: arg
+    Value: 3.6.1
+  - CmdLine:
+    - cd ${APPS_DIR} &&     wget --quiet https://elephantscale-public.s3.amazonaws.com/downloads/apache-maven-${MVN_VERSION}-bin.tar.gz
+      &&     tar xf apache-maven-${MVN_VERSION}-bin.tar.gz &&     rm apache-maven-${MVN_VERSION}-bin.tar.gz
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: ${APPS_DIR}/apache-maven-${MVN_VERSION}/bin:${PATH}
+    Name: env
+  - Key: KAFKA_MANAGER_VERSION
+    Name: arg
+    Value: 2.0.0.2
+  - CmdLine:
+    - cd ${APPS_DIR} &&     wget --quiet https://elephantscale-public.s3.amazonaws.com/downloads/kafka-manager-${KAFKA_MANAGER_VERSION}.zip
+      &&     unzip -q kafka-manager-${KAFKA_MANAGER_VERSION}.zip &&     mv kafka-manager-${KAFKA_MANAGER_VERSION}  kafka-manager
+      &&     rm kafka-manager-${KAFKA_MANAGER_VERSION}.zip
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/kafka-manager.conf
+    - ${APPS_DIR}/kafka-manager/conf/application.conf
+  - CmdLine:
+    - cd ${APPS_DIR} &&     wget --quiet https://elephantscale-public.s3.amazonaws.com/downloads/zk-web.zip
+      &&     unzip -q zk-web.zip &&      rm -f zk-web.zip &&     cd ${APPS_DIR}/zk-web
+      && lein deps
+    Name: run
+    PrependShell: true
+  - Key: PARQUET_TOOLS_VERSION
+    Name: arg
+    Value: 1.5.0
+  - CmdLine:
+    - cd ${APPS_DIR} &&     wget --quiet https://elephantscale-public.s3.amazonaws.com/downloads/parquet-tools-${PARQUET_TOOLS_VERSION}-bin.zip
+      &&     unzip -q parquet-tools-${PARQUET_TOOLS_VERSION}-bin.zip  &&      mv parquet-tools-${PARQUET_TOOLS_VERSION}    parquet-tools  &&     rm
+      parquet-tools-${PARQUET_TOOLS_VERSION}-bin.zip
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: ${PATH}:${APPS_DIR}/parquet-tools
+    Name: env
+  - Key: VISUAL_VM_VERSION
+    Name: arg
+    Value: "143"
+  - CmdLine:
+    - cd ${APPS_DIR} &&     wget --quiet https://elephantscale-public.s3.amazonaws.com/downloads/visualvm_${VISUAL_VM_VERSION}.zip
+      &&     unzip -q visualvm_${VISUAL_VM_VERSION}.zip  &&      mv visualvm_${VISUAL_VM_VERSION}   visualvm  &&     rm
+      visualvm_${VISUAL_VM_VERSION}.zip
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: ${PATH}:${APPS_DIR}/visualvm/bin
+    Name: env
+  - CmdLine:
+    - cd ${APPS_DIR} &&      git clone https://github.com/novnc/noVNC &&      git
+      clone git@github.com:elephantscale/sandbox-info.git &&      rsync -a sandbox-info/amazon-ubuntu-ami/  noVNC/  &&     mkdir
+      -p ${HOME_DIR}/.vnc
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/vncserver-xstartup-xfce
+    - ${HOME_DIR}/.vnc/xstartup
+  - CmdLine:
+    - sudo chmod +x ${HOME_DIR}/.vnc/xstartup
+    Name: run
+    PrependShell: true
+  - Key: ECLIPSE_FILE
+    Name: arg
+    Value: eclipse-java-2019-06-R-linux-gtk-x86_64.tar.gz
+  - CmdLine:
+    - cd ${APPS_DIR} &&      wget --quiet  https://elephantscale-public.s3.amazonaws.com/downloads/${ECLIPSE_FILE}
+      &&      tar xf ${ECLIPSE_FILE} &&      rm ${ECLIPSE_FILE}  &&      mkdir -p
+      ${HOME_DIR}/Desktop &&      ln -s ${APPS_DIR}/eclipse/eclipse   ${HOME_DIR}/Desktop
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget   --quiet  https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+      -O ~/miniconda.sh &&         /bin/bash ~/miniconda.sh -b -p ${CONDA_DIR} &&         rm
+      ~/miniconda.sh &&         echo ". ${CONDA_DIR}/etc/profile.d/conda.sh" >> ~/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ${CONDA_DIR}/bin/conda  update conda
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ${CONDA_DIR}/bin/conda update --all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ${CONDA_DIR}/bin/conda install     ipykernel     gensim     jupyter      jupyterlab     matplotlib==3.1.0      numpy     opencv     pandas     pillow     pydot      scikit-learn    scipy     seaborn      unidecode     tensorflow
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ${CONDA_DIR}/bin/conda install -c conda-forge         findspark         httpie         keras         spacy         textblob         wordcloud
+      &&     ${CONDA_DIR}/bin/python -m spacy download en &&     ${CONDA_DIR}/bin/ipython
+      kernel install --user --name=python3
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ${CONDA_DIR}/bin/conda clean -tipsy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${HOME_DIR}/.jupyter/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./config/jupyter_notebook_config.py
+    - ${HOME_DIR}/.jupyter/jupyter_notebook_config.py.template
+  - Key: HOST_MAPPING_DIR
+    Name: arg
+    Value: '"${HOME_DIR}/dev"'
+  - CmdLine:
+    - mkdir -p ${HOST_MAPPING_DIR}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /bin/bash -c "ssh-keygen -q -t rsa -N '' -f ${HOME_DIR}/.ssh/id_rsa 2>/dev/null
+      <<< y >/dev/null"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cat ${HOME_DIR}/.ssh/id_rsa.pub > ${HOME_DIR}/.ssh/authorized_keys
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p ${HOME_DIR}/scripts
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./scripts/*
+    - ${HOME_DIR}/scripts/
+  - CmdLine:
+    - sudo chown ${MYUSER} ${HOME_DIR}/scripts/* && sudo chmod 755 ${HOME_DIR}/scripts/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ${HOME_DIR}/scripts/set-passwords.sh  "${DEFAULT_PASSWORD}"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'export PS1="\e[0;31m\u@es-training  \[\w\] > \e[m "' >> ~/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'alias l="ls -lh"' >> ~/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'alias L="ls -lah"' >> ~/.bashrc
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "conda activate base" >> ~/.bashrc
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${MYUSER}
+  - Name: workdir
+    Path: ${HOME_DIR}
+  - CmdLine:
+    - /bin/bash
+    - /home/ubuntu/scripts/startup.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:bionic
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:bionic

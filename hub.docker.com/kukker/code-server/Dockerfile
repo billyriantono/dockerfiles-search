@@ -1,5 +1,12 @@
 FROM ubuntu:19.04
 
+# Ansible
+RUN apt-get clean && apt-get update && apt-get install --no-install-recommends -y \
+    software-properties-common && \
+    apt-add-repository --yes --update ppa:ansible/ansible && \
+    apt-get install --no-install-recommends -y ansible
+
+
 # Packages
 RUN apt-get clean && apt-get update && apt-get install --no-install-recommends -y \
     gpg \
@@ -103,13 +110,14 @@ ENV DISABLE_TELEMETRY true
 # RUN export CODE_VERSION=$(curl --silent "https://api.github.com/repos/cdr/code-server/releases/latest" | grep -Po '"tag_name": "\K.*?(?=")') \
 #     && curl -sL https://github.com/cdr/code-server/releases/download/${CODE_VERSION}/code-server${CODE_VERSION}-linux-x64.tar.gz | tar --strip-components=1 -zx -C /usr/local/bin code-server${CODE_VERSION}-linux-x64/code-server
 
-RUN export CODE_VERSION=2.1688-vsc1.39.2 \
+RUN export CODE_VERSION=2.1698 \
+    && export VS_VERSION=vsc1.41.1 \
     && export CODE_ARCH=linux-x86_64 \
-    && curl -sL https://github.com/cdr/code-server/releases/download/${CODE_VERSION}/code-server${CODE_VERSION}-${CODE_ARCH}.tar.gz | tar --strip-components=1 -zx -C /usr/local/bin code-server${CODE_VERSION}-${CODE_ARCH}/code-server
+    && curl -sL https://github.com/cdr/code-server/releases/download/${CODE_VERSION}/code-server${CODE_VERSION}-${VS_VERSION}-${CODE_ARCH}.tar.gz | tar --strip-components=1 -zx -C /usr/local/bin code-server${CODE_VERSION}-${VS_VERSION}-${CODE_ARCH}/code-server
 
 # Setup User
-RUN groupadd --gid 1024 -r coder \
-    && useradd -m -r coder -g coder -s /bin/bash \
+RUN groupadd --gid 1000 -r coder \
+    && useradd -u 1000 -m -r coder -g coder -s /bin/bash \
     && echo "coder ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/nopasswd
 USER coder
 
@@ -117,6 +125,8 @@ USER coder
 # RUN mkdir /home/coder/go
 # ENV GOPATH "/home/coder/go"
 ENV PATH "${PATH}:/usr/local/go/bin:/home/coder/go/bin"
+RUN go get -u github.com/ramya-rao-a/go-outline
+RUN go get -u golang.org/x/tools/cmd/goimports
 
 # Setup Uset .NET Environment
 # ENV DOTNET_CLI_TELEMETRY_OPTOUT "true"
@@ -172,8 +182,8 @@ RUN mkdir -p ${VSCODE_EXTENSIONS}/gitlens \
     && curl -JLs https://marketplace.visualstudio.com/_apis/public/gallery/publishers/eamodio/vsextensions/gitlens/latest/vspackage | bsdtar --strip-components=1 -xf - -C ${VSCODE_EXTENSIONS}/gitlens extension
 
 # Setup Ansible Extension
-# RUN mkdir -p ${VSCODE_EXTENSIONS}/ansible \
-#     && curl -JLs https://marketplace.visualstudio.com/_apis/public/gallery/publishers/vscoss/vsextensions/vscode-ansible/latest/vspackage | bsdtar --strip-components=1 -xf - -C ${VSCODE_EXTENSIONS}/ansible extension
+RUN mkdir -p ${VSCODE_EXTENSIONS}/ansible \
+    && curl -JLs https://marketplace.visualstudio.com/_apis/public/gallery/publishers/vscoss/vsextensions/vscode-ansible/latest/vspackage | bsdtar --strip-components=1 -xf - -C ${VSCODE_EXTENSIONS}/ansible extension
 
 # Setup Docker Extension
 RUN mkdir -p ${VSCODE_EXTENSIONS}/docker \

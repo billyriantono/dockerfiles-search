@@ -7,20 +7,21 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update
 RUN apt install -yq software-properties-common
 
+# npm refuses to run scripts as root, which means it won't run scripts when
+# publishing packages, but this is necessary for compiling typescript e.g.
+RUN useradd -ms /bin/bash npm
+
 # PPA for up to date version of git (needed for --porcelain=2)
 RUN add-apt-repository -y ppa:git-core/ppa
-# Needed for installing jq
-RUN add-apt-repository universe
 RUN apt update
 
 # UTILS
 # libxml2-utils - contains xmllint, necessary for ebay-service tests
-# jq, necessary for website predeploy script
-RUN apt install -yq gettext-base curl apt-transport-https ca-certificates gnupg2 software-properties-common git libxml2-utils moreutils jq
+RUN apt install -yq gettext-base curl apt-transport-https ca-certificates gnupg2 software-properties-common git libxml2-utils moreutils
 
 # Yarn
 RUN curl -sL https://deb.nodesource.com/setup_10.x | bash -
-RUN apt install -yq nodejs
+RUN apt install -yq nodejs 
 RUN node --version
 RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
 RUN echo "deb https://dl.yarnpkg.com/debian/ stable main" > /etc/apt/sources.list.d/yarn.list
@@ -70,14 +71,14 @@ RUN apt install -yq --no-install-recommends wget \
   && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
   && sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list' \
   && apt update \
-  && apt install -qy --no-install-recommends google-chrome-unstable fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst ttf-freefont \
+  && apt install -qy --no-install-recommends google-chrome-stable fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst ttf-freefont \
   && rm -rf /var/lib/apt/lists/* \
   && rm -rf /src/*.deb
 
 ## Add user so we don't need --no-sandbox.
 RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
   && mkdir -p /home/pptruser/Downloads \
-  && chown -R pptruser:pptruser /home/pptruser
+  && chown -R pptruser:pptruser /home/pptruser 
 
 # killall
 RUN apt-get update \

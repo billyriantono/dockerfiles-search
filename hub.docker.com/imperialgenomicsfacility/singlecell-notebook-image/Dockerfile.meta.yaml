@@ -1,0 +1,107 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:16.04
+  Commands:
+  - Maintainer: igf[at]imperial.ac.uk
+    Name: maintainer
+  - Labels:
+    - Key: maintainer
+      Value: '"imperialgenomicsfacility"'
+    Name: label
+  - Env:
+    - Key: NB_USER
+      Value: vmuser
+    Name: env
+  - Env:
+    - Key: NB_GROUP
+      Value: vmuser
+    Name: env
+  - Env:
+    - Key: NB_UID
+      Value: "1000"
+    Name: env
+  - Name: user
+    User: root
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - adduser --disabled-password       --gecos "Default user"       --uid ${NB_UID}       ${NB_USER}
+      &&     usermod -a -G $NB_GROUP $NB_USER &&     apt-get -y update &&       apt-get
+      install --no-install-recommends -y       apt-utils       locales       wget       unzip       cmake       g++       libxml2-dev       ca-certificates       zlib1g-dev       libfftw3-dev       build-essential
+      &&     locale-gen en_US.UTF-8 &&     dpkg-reconfigure locales &&     apt-get
+      purge -y --auto-remove &&     apt-get clean &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TINI_VERSION
+      Value: v0.18.0
+    Name: env
+  - CmdLine:
+    - mkdir -p /tmp &&     wget --quiet --no-check-certificate       -O /tmp/tini       https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini
+      &&     mv /tmp/tini /usr/local/bin/tini &&     chmod +x /usr/local/bin/tini
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: $NB_USER
+  - Name: workdir
+    Path: /home/$NB_USER
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ${HOME}
+  - Name: user
+    User: root
+  - CmdLine:
+    - chown -R ${NB_UID} /home/$NB_USER &&     chmod a+x /home/$NB_USER/entrypoint.sh
+      &&      rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${NB_USER}
+  - Name: workdir
+    Path: /home/$NB_USER
+  - Env:
+    - Key: TMPDIR
+      Value: /home/$NB_USER/.tmp
+    Name: env
+  - CmdLine:
+    - mkdir -p ${TMPDIR} &&      wget --quiet --no-check-certificate        -O /home/$NB_USER/Miniconda3-latest-Linux-x86_64.sh        https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+      &&      bash /home/$NB_USER/Miniconda3-latest-Linux-x86_64.sh -b
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: $PATH:/home/$NB_USER/miniconda3/bin/
+    Name: env
+  - CmdLine:
+    - conda config --set safety_checks disabled &&     conda env create -q -n notebook-env
+      --file /home/$NB_USER/environment.yml &&     echo ". /home/$NB_USER/miniconda3/etc/profile.d/conda.sh"
+      >> ~/.bashrc &&     echo "source activate notebook-env" >> ~/.bashrc &&     conda
+      clean -a -y &&     rm -rf /home/$NB_USER/.cache &&     rm -rf /tmp/* &&     rm
+      -rf ${TMPDIR} &&     mkdir -p ${TMPDIR} &&     mkdir -p /home/$NB_USER/.cache
+      &&     mkdir -p /home/$NB_USER/.jupyter &&     find miniconda3/ -type f -name
+      *.pyc -exec rm -f {} \; &&     rm -f Miniconda3-latest-Linux-x86_64.sh &&     echo
+      "c.NotebookApp.password = u'sha1:0e221c95f37a:f9e0f0df2c274287b168eaa378877327fdd39029'"
+      > /home/$NB_USER/.jupyter/jupyter_notebook_config.py
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8888"
+  - CmdLine:
+    - /usr/local/bin/tini
+    - --
+    - /home/vmuser/entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - notebook
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:16.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04

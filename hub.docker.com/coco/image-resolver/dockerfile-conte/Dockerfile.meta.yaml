@@ -1,0 +1,175 @@
+MetaArgs: null
+Stages:
+- BaseName: phusion/baseimage
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Stefan Bratic <cobrijani@gmail.com>"'
+    Name: label
+  - Env:
+    - Key: GOSU_VERSION
+      Value: "1.8"
+    Name: env
+  - Key: DEBIAN_FRONTEND
+    Name: arg
+    Value: noninteractive
+  - CmdLine:
+    - set -x  && apt-get update -qq  && apt-get install -qqy --no-install-recommends
+      ca-certificates curl  && rm -rf /var/lib/apt/lists/*  && curl -L -o /usr/local/bin/gosu
+      "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg
+      --print-architecture)"  && curl -L -o /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg
+      --print-architecture).asc"  && export GNUPGHOME="$(mktemp -d)"  && gpg --keyserver
+      hkp://ha.pool.sks-keyservers.net:80 --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4  &&
+      gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu  && rm -r "$GNUPGHOME"
+      /usr/local/bin/gosu.asc  && chmod +x /usr/local/bin/gosu  && gosu nobody true  &&
+      apt-get update -qq  && apt-get install -qqy openjdk-8-jdk  && apt-get clean  &&
+      set +x
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ELK_VERSION
+      Value: 5.4.1
+    Name: env
+  - Env:
+    - Key: ES_VERSION
+      Value: ${ELK_VERSION}
+    Name: env
+  - Env:
+    - Key: ES_HOME
+      Value: /opt/elasticsearch
+    Name: env
+  - Env:
+    - Key: ES_PACKAGE
+      Value: elasticsearch-${ES_VERSION}.tar.gz
+    Name: env
+  - Env:
+    - Key: ES_GID
+      Value: "991"
+    Name: env
+  - Env:
+    - Key: ES_UID
+      Value: "991"
+    Name: env
+  - CmdLine:
+    - mkdir ${ES_HOME}  && curl -O https://artifacts.elastic.co/downloads/elasticsearch/${ES_PACKAGE}  &&
+      tar xzf ${ES_PACKAGE} -C ${ES_HOME} --strip-components=1  && rm -f ${ES_PACKAGE}  &&
+      groupadd -r elasticsearch -g ${ES_GID}  && useradd -r -s /usr/sbin/nologin -M
+      -c "Elasticsearch service user" -u ${ES_UID} -g elasticsearch elasticsearch  &&
+      mkdir -p /var/log/elasticsearch /etc/elasticsearch /etc/elasticsearch/scripts
+      /var/lib/elasticsearch  && chown -R elasticsearch:elasticsearch ${ES_HOME} /var/log/elasticsearch
+      /var/lib/elasticsearch  && .${ES_HOME}/bin/elasticsearch-plugin install --batch
+      x-pack  && .${ES_HOME}/bin/elasticsearch-plugin install ingest-user-agent  &&
+      .${ES_HOME}/bin/elasticsearch-plugin install ingest-geoip
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./elasticsearch-init
+    - /etc/init.d/elasticsearch
+  - CmdLine:
+    - sed -i -e 's#^ES_HOME=$#ES_HOME='$ES_HOME'#' /etc/init.d/elasticsearch  && chmod
+      +x /etc/init.d/elasticsearch
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./elasticsearch.yml
+    - /etc/elasticsearch/elasticsearch.yml
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./elasticsearch-log4j2.properties
+    - /etc/elasticsearch/log4j2.properties
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./elasticsearch-jvm.options
+    - /etc/elasticsearch/jvm.options
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./elasticsearch-default
+    - /etc/default/elasticsearch
+  - CmdLine:
+    - mkdir /etc/elasticsearch/ingest-geoip   && chmod -R +r /etc/elasticsearch
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./elasticsearch-logrotate
+    - /etc/logrotate.d/elasticsearch
+  - CmdLine:
+    - chmod 644 /etc/logrotate.d/elasticsearch
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: ES_CONFIG
+      Value: /etc/elasticsearch
+    Name: env
+  - Env:
+    - Key: X_PACK_ES
+      Value: ${ES_CONFIG}/x-pack
+    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./cryptography/certs/ca/ca.pem
+    - ${X_PACK_ES}/ca.pem
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./cryptography/certs/ca/ca.key
+    - ${X_PACK_ES}/ca.key
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./cryptography/certs/elusive-1/elusive-1.pem
+    - ${X_PACK_ES}/elusive-1.pem
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./cryptography/certs/elusive-1/elusive-1.key
+    - ${X_PACK_ES}/elusive-1.key
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./cryptography/jks/elasticsearch-keystore.jks
+    - ${X_PACK_ES}/elasticsearch-keystore.jks
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./cryptography/jks/elasticsearch-truststore.jks
+    - ${X_PACK_ES}/elasticsearch-truststore.jks
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - role_mapping.yml
+    - ${X_PACK_ES}/role_mapping.yml
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./start.sh
+    - /usr/local/bin/start.sh
+  - CmdLine:
+    - chmod +x /usr/local/bin/start.sh
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "9200"
+    - "9300"
+  - Name: volume
+    Volumes:
+    - /var/lib/elasticsearch
+  - CmdLine:
+    - /usr/local/bin/start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: phusion/baseimage
+  Name: ""
+  Platform: ""
+  SourceCode: FROM phusion/baseimage

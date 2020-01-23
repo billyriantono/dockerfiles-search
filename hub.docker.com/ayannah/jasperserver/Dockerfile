@@ -1,17 +1,20 @@
-FROM tomcat:7
-MAINTAINER John Paul Alcala jp@jpalcala.com
+FROM python:alpine
 
-ENV JASPERSERVER_VERSION=6.2.1
+MAINTAINER Carlos Sanz <carlos.sanzpenas@gmail.com>
 
-RUN apt-get update && apt-get install -y vim && rm -rf /var/lib/apt/lists/* && \
-    curl -SL http://sourceforge.net/projects/jasperserver/files/JasperServer/JasperReports%20Server%20Community%20Edition%20$JASPERSERVER_VERSION/jasperreports-server-cp-$JASPERSERVER_VERSION-bin.zip -o /tmp/jasperserver.zip && \
-    curl -SL https://jdbc.postgresql.org/download/postgresql-9.4.1208.jre7.jar -o $CATALINA_HOME/lib/postgresql-9.4.1208.jre7.jar && \
-    unzip /tmp/jasperserver.zip -d /usr/src/ && \
-    mv /usr/src/jasperreports-server-cp-$JASPERSERVER_VERSION-bin /usr/src/jasperreports-server && \
-    rm -rf /tmp/*
+LABEL org.label-schema.vendor = "Personal" \
+      org.label-schema.name = "Cisco Collab" \
+      org.label-schema.version = "Alpine" \
+      org.label-schema.docker.cmd = "docker run -it sanzcarlos/CiscoCollab" \
+      org.label-schema.name = "Cisco Collab" \
+      org.label-schema.build-date = "2018-05-08"
 
-ENV CATALINA_OPTS="-server -Xmx1536m -XX:MaxPermSize=256m -XX:+TieredCompilation -XX:CompileThreshold=1500 -XX:-DontCompileHugeMethods -XX:+UseCodeCacheFlushing -XX:ReservedCodeCacheSize=256m -XX:+UseBiasedLocking -XX:BiasedLockingStartupDelay=0 -XX:NewRatio=3 -XX:+UseParNewGC -XX:+UseConcMarkSweepGC -XX:+DisableExplicitGC -XX:+CMSIncrementalMode -XX:+CMSIncrementalPacing -XX:+CMSParallelRemarkEnabled -XX:+UseCompressedOops -XX:CMSInitiatingOccupancyFraction=30 -XX:+UseCMSInitiatingOccupancyOnly"
+RUN apk update && \
+    apk upgrade && \
+    apk add git && \
+    git clone https://github.com/sanzcarlos/CiscoCollab /usr/src/CiscoCollab/ && \
+    pip install -r /usr/src/CiscoCollab/requirements.txt
 
-COPY entrypoint.sh /
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["run"]
+WORKDIR /usr/src/CiscoCollab/
+
+CMD [ "python", "/usr/src/CiscoCollab/axl_cucm.py" ]

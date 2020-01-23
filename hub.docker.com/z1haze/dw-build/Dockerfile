@@ -1,16 +1,14 @@
-# Demandware deployment Dockerfile
+FROM ruby:2.2
 
-# source of the image
-FROM node:8
+ARG VERSION=0.6.2
 
-# install packages and update
-RUN apt-get update \
-&& apt-get upgrade -y \
-&& apt-get install -y rsync zip
+RUN set -x \
+  && apt-get update \
+  && apt-get -y install git \
+  && rm -rf /var/lib/apt/lists/*
 
-# fetch our deploy script and make it executable
-RUN mkdir -p dw && cd dw && wget https://raw.githubusercontent.com/z1haze/dw-deploy/master/dwdeploy.sh
-RUN chmod +x /dw/dwdeploy.sh
+RUN gem install github_cli -v ${VERSION} --no-rdoc --no-ri
 
-# this command will confirm node was installed correctly, and fail out if the command fails
-CMD [ "node" ]
+WORKDIR /project
+ENTRYPOINT ["gcli"]
+CMD ["--help"]

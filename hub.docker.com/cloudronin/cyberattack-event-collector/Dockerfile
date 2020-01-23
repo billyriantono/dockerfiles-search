@@ -1,31 +1,38 @@
-FROM ubuntu
-MAINTAINER vishnu@cloudron.in
+FROM alpine:3.5
 
-RUN \
-   apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 7F0CEB10 && \
-   echo 'deb http://downloads-distro.mongodb.org/repo/ubuntu-upstart dist 10gen' | sudo tee /etc/apt/sources.list.d/mongodb.list && \
-   apt-get update && \
-   apt-get install -y mongodb-org
+EXPOSE 7000 7001 7199 9042 9160
 
-RUN apt-get update --fix-missing
-RUN apt-get install -y --fix-missing wget default-jdk
-ENV JAVA_HOME /usr/lib/jvm/default-java
+ARG APK_CACHE_IP=172.17.0.1
+ARG APK_CACHE_DOMAIN='dl-cdn.alpinelinux.org'
 
+ARG RUN_DEPS='su-exec openjdk8-jre openssl bash'
+ARG BUILD_DEPS='tar coreutils'
 
-ADD http://www.us.apache.org/dist/maven/maven-3/3.3.3/binaries/apache-maven-3.3.3-bin.tar.gz /tmp/
-RUN tar xzvf /tmp/apache-maven-3.3.3-bin.tar.gz --directory /usr/lib
-ENV PATH /usr/lib/apache-maven-3.3.3/bin:$PATH
-RUN mkdir -p /opt/cyber-event-collector
-ADD src /opt/cyber-event-collector/src
-ADD pom.xml /opt/cyber-event-collector/pom.xml
-RUN mvn --file /opt/cyber-event-collector/pom.xml clean install
+ARG CASSANDRA_VERSION=3.9
+ARG CASSANDRA_URL='http://artfiles.org/apache.org/cassandra'
 
-VOLUME ["/data/db"]
-WORKDIR /data
+ENV CASSANDRA_HOME=/opt/cassandra
+ENV CASSANDRA_CONF=$CASSANDRA_HOME/conf
+ENV PATH=$CASSANDRA_HOME/bin:$PATH
 
-EXPOSE 27017
+ENV CASSANDRA_START_RPC=true
 
-ADD server.sh /
-RUN chmod u+x /server.sh
-CMD ["/server.sh"]
+RUN nc -z $APK_CACHE_IP 80 && echo $APK_CACHE_IP $APK_CACHE_DOMAIN >>/etc/hosts \
+  ; apk --update add --no-cache $RUN_DEPS $BUILD_DEPS \
+    && mkdir -p $CASSANDRA_HOME/data $CASSANDRA_HOME/logs $CASSANDRA_HOME/commitlog \
+    && cd $CASSANDRA_HOME \
+    && CASSANDRA_LATEST=$(wget -qO- $CASSANDRA_URL | egrep -o "[0-9]+\.[0-9]+" | sort -Vr | head -1) \
+    && : ${CASSANDRA_VERSION:=$CASSANDRA_LATEST} \
+    && wget -O- $CASSANDRA_URL/${CASSANDRA_VERSION}/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz | tar xz --strip-components=1 \
+    && sed -i 's|^start_rpc:.*$|start_rpc: true|' $CASSANDRA_CONF/cassandra.yaml \
+#    && sed -i 's|^listen_address:.*$|listen_address: localhost|' $CASSANDRA_CONF/cassandra.yaml \
+    && adduser -DH -s /sbin/nologin cassandra && chown -R cassandra:cassandra $CASSANDRA_HOME \
+  && apk del $BUILD_DEPS && rm -rf /var/cache/apk/*
 
+WORKDIR $CASSANDRA_HOME
+
+ADD . .
+
+VOLUME $CASSANDRA_HOME/data $CASSANDRA_HOME/logs $CASSANDRA_HOME/commitlog /tmp
+
+CMD ["su-exec", "cassandra", "cassandra", "-f"]

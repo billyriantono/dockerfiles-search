@@ -1,8 +1,8 @@
-FROM alpine:3.9
+FROM alpine:3.11
 LABEL description="Commix docker container" \
       maintainer="Djerfy <djerfy@gmail.com>"
 
-ENV VERSION=2.9-20190626
+ENV VERSION=3.0-20191111
 
 RUN apk -U add python wget && \
     wget https://github.com/commixproject/commix/archive/v${VERSION}.tar.gz -O commix.tar.gz && \

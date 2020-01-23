@@ -1,0 +1,133 @@
+MetaArgs: null
+Stages:
+- BaseName: php:7.4-fpm
+  Commands:
+  - Key: BUILD_ARGUMENT_DEBUG_ENABLED
+    Name: arg
+    Value: "false"
+  - Env:
+    - Key: DEBUG_ENABLED
+      Value: $BUILD_ARGUMENT_DEBUG_ENABLED
+    Name: env
+  - Key: BUILD_ARGUMENT_ENV
+    Name: arg
+    Value: dev
+  - Env:
+    - Key: ENV
+      Value: $BUILD_ARGUMENT_ENV
+    Name: env
+  - Env:
+    - Key: APP_HOME
+      Value: /var/www/html
+    Name: env
+  - CmdLine:
+    - if [ "$BUILD_ARGUMENT_ENV" = "default" ]; then echo "Set BUILD_ARGUMENT_ENV
+      in docker build-args like --build-arg BUILD_ARGUMENT_ENV=dev" && exit 2;     elif
+      [ "$BUILD_ARGUMENT_ENV" = "dev" ]; then echo "Building development environment.";     elif
+      [ "$BUILD_ARGUMENT_ENV" = "test" ]; then echo "Building test environment.";     elif
+      [ "$BUILD_ARGUMENT_ENV" = "prod" ]; then echo "Building production environment.";     else
+      echo "Set correct BUILD_ARGUMENT_ENV in docker build-args like --build-arg BUILD_ARGUMENT_ENV=dev.
+      Available choices are dev,test,prod." && exit 2;     fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get upgrade -y && apt-get install -y       procps       nano       git       unzip       libicu-dev       zlib1g-dev       libxml2       libxml2-dev       libreadline-dev       supervisor       cron       libzip-dev       librabbitmq-dev     &&
+      pecl install amqp     && docker-php-ext-configure pdo_mysql --with-pdo-mysql=mysqlnd     &&
+      docker-php-ext-install       pdo_mysql       sockets       intl       zip     &&
+      docker-php-ext-enable amqp &&       rm -fr /tmp/* &&       rm -rf /var/list/apt/*
+      &&       rm -r /var/lib/apt/lists/* &&       apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $APP_HOME/public
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R www-data:www-data $APP_HOME
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker/$BUILD_ARGUMENT_ENV/www.conf
+    - /usr/local/etc/php-fpm.d/www.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker/$BUILD_ARGUMENT_ENV/php.ini
+    - /usr/local/etc/php/php.ini
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker/general/do_we_need_xdebug.sh
+    - /tmp/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker/dev/xdebug.ini
+    - /tmp/
+  - CmdLine:
+    - chmod u+x /tmp/do_we_need_xdebug.sh && /tmp/do_we_need_xdebug.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/bin/
+      --filename=composer
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/log/supervisor
+    Name: run
+    PrependShell: true
+  - Chown: root:root
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker/general/supervisord.conf
+    - /etc/supervisor/conf.d/supervisord.conf
+  - Chown: root:root
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./docker/general/cron
+    - /var/spool/cron/crontabs/root
+  - CmdLine:
+    - chmod 0600 /var/spool/cron/crontabs/root
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $APP_HOME
+  - CmdLine:
+    - mkdir -p /var/www/.composer && chown -R www-data:www-data /var/www/.composer
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: www-data
+  - Chown: www-data:www-data
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - $APP_HOME/
+  - CmdLine:
+    - if [ "$BUILD_ARGUMENT_ENV" = "dev" ] || [ "$BUILD_ARGUMENT_ENV" = "test" ];
+      then composer install --optimize-autoloader --no-interaction --no-progress;     else
+      export APP_ENV=$BUILD_ARGUMENT_ENV && composer install --optimize-autoloader
+      --no-interaction --no-progress --no-dev;     fi
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - if [ "$BUILD_ARGUMENT_ENV" = "prod" ]; then composer dump-env $BUILD_ARGUMENT_ENV;     fi
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  From:
+    Image: php:7.4-fpm
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.4-fpm

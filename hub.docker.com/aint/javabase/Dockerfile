@@ -1,19 +1,8 @@
-FROM adoptopenjdk/openjdk11:latest AS builder
+FROM python:3.6
+WORKDIR /usr/src/app
 
-LABEL maintainer="olexandr.tyshkovets@gmail.com"
-
-RUN jlink \
-      --compress=2 \
-      --add-modules java.base,java.logging,java.xml,java.sql,java.desktop,java.naming,java.security.jgss,java.management,java.instrument,jdk.unsupported \
-      --no-header-files \
-      --no-man-pages \
-      --strip-debug \
-      --output /opt/jre
-
-FROM debian:9-slim
-
-COPY --from=builder /opt/jre /opt/jre
-
-ENV JAVA_HOME=/opt/jre
-
-ENV PATH="$PATH:$JAVA_HOME/bin"
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt \
+    && rm -rf ~/.cache/pip/* && rm -rf requirements.txt \
+    && rm -rf /tmp
+CMD [ "python3" ]

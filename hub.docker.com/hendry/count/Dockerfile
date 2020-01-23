@@ -1,17 +1,22 @@
-FROM golang:1.7-alpine
+FROM golang as builder
 
-ADD main.go /go/src/app/main.go
-ADD static /go/src/app/static/
+WORKDIR /app
 
-WORKDIR /go/src/app
+COPY . .
 
-RUN apk --no-cache add curl git && \
-	go get -v -d && \
-	go build && go install -v
+ARG TARGET_ARCH=amd64
+ARG VERSION
 
-ARG COMMIT
-ENV COMMIT ${COMMIT}
+LABEL org.label-schema.version=$VERSION
 
-EXPOSE 9000
+RUN echo Building for ${TARGET_ARCH}
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGET_ARCH} \
+	go build -ldflags "-X main.Version=${VERSION}"
 
-ENTRYPOINT ["/go/bin/app", "-port", "9000", "-openbrowser", "false"]
+FROM scratch
+COPY --from=builder /app/count /app/
+COPY --from=builder /app/static /app/static
+ENV PORT 8080
+
+WORKDIR /app
+ENTRYPOINT ["/app/count"]

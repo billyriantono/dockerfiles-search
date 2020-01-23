@@ -1,20 +1,99 @@
 MetaArgs: null
 Stages:
-- BaseName: cloudbees/jenkins-enterprise:1.651.21.1
+- As: builder
+  BaseName: alpine:latest
   Commands:
-  - Maintainer: sion@osodevops.io
-    Name: maintainer
+  - CmdLine:
+    - apk add --no-cache python3 python3-dev gcc g++ make libffi-dev openssl-dev git
+      &&     python3 -m ensurepip &&     rm -r /usr/lib/python*/ensurepip &&     pip3
+      install --upgrade pip setuptools &&     pip3 install pycrypto &&     rm -r /root/.cache
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /opt
+  - CmdLine:
+    - git clone https://github.com/opensvc/opensvc.git
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: opensvc
+  - CmdLine:
+    - VERSION=$(git describe --tags --abbrev=0) &&     RELEASE=$(git describe --tags|cut
+      -d- -f2) &&     echo "version = \"$VERSION-$RELEASE\"" | tee /opt/opensvc/lib/version.py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf .git* .codecov* .travis* *.cmd test*
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:latest AS builder
+- BaseName: alpine:latest
+  Commands:
+  - Env:
+    - Key: ADDR
+      Value: ${ADDR:-0.0.0.0}
+    Name: env
+  - Env:
+    - Key: PORT
+      Value: ${PORT:-1214}
+    Name: env
+  - CmdLine:
+    - apk add --no-cache python3 && ln -sf /usr/bin/python3 /usr/bin/python
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/python3.6/site-packages/Crypto
+    - /usr/lib/python3.6/site-packages/Crypto
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/python3.6/site-packages/pycrypto-2.6.1-py3.6.egg-info
+    - /usr/lib/python3.6/site-packages/pycrypto-2.6.1-py3.6.egg-info
+  - CmdLine:
+    - echo -e "OSVC_ROOT_PATH=/opt/opensvc\\nOSVC_PYTHON=/usr/bin/python" > /etc/conf.d/opensvc
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /opt/opensvc
+    - /opt/opensvc
+  - CmdLine:
+    - /usr/bin/python /opt/opensvc/bin/postinstall
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /opt/opensvc/bin:$PATH
+    Name: env
+  - Name: expose
+    Ports:
+    - ${PORT}/tcp
   - Chown: ""
     From: ""
     Name: copy
     SourcesAndDest:
-    - config_master.groovy
-    - /usr/share/jenkins/ref/init.groovy.d/config_master.groovy
-  - Name: expose
-    Ports:
-    - "8080"
+    - ./docker-entrypoint.sh
+    - /
+  - CmdLine:
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - relay
+    Name: cmd
+    PrependShell: false
   From:
-    Image: cloudbees/jenkins-enterprise:1.651.21.1
+    Image: alpine:latest
   Name: ""
   Platform: ""
-  SourceCode: FROM cloudbees/jenkins-enterprise:1.651.21.1
+  SourceCode: FROM alpine:latest

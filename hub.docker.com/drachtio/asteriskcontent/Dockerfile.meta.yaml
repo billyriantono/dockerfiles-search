@@ -1,0 +1,116 @@
+MetaArgs:
+- DefaultValue: "10"
+  Key: NODE_VERSION
+  ProvidedValue: null
+  Value: "10"
+Stages:
+- As: builder
+  BaseName: node:${NODE_VERSION}-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"David Perez Cabrera <dperezcabrera@gmail.com>"'
+    Name: label
+  - CmdLine:
+    - apk add --no-cache make gcc g++ python
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/theia
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - latest.package.json
+    - ./package.json
+  - CmdLine:
+    - yarn --pure-lockfile &&     NODE_OPTIONS="--max_old_space_size=4096" yarn theia
+      build &&     yarn --production &&     yarn autoclean --init &&     echo *.ts
+      >> .yarnclean &&     echo *.ts.map >> .yarnclean &&     echo *.spec.* >> .yarnclean
+      &&     yarn autoclean --force &&     yarn cache clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /home/theia/agent &&     cd /home/theia/agent &&     npm init -y &&     npm
+      install http-proxy basic-auth
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - proxy.js
+    - /home/theia/agent/
+  From:
+    Image: node:${NODE_VERSION}-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM node:${NODE_VERSION}-alpine AS builder
+- BaseName: node:${NODE_VERSION}-alpine
+  Commands:
+  - Env:
+    - Key: HOME
+      Value: /home/theia
+    Name: env
+  - Env:
+    - Key: USERNAME
+      Value: developer
+    Name: env
+  - Env:
+    - Key: PASSWORD
+      Value: password
+    Name: env
+  - Env:
+    - Key: MAVEN_VERSION
+      Value: 3.6.1
+    Name: env
+  - Env:
+    - Key: MAVEN_HOME
+      Value: /usr/lib/mvn
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $MAVEN_HOME/bin:$PATH
+    Name: env
+  - Env:
+    - Key: SHELL
+      Value: /bin/bash
+    Name: env
+  - Env:
+    - Key: USE_LOCAL_GIT
+      Value: "true"
+    Name: env
+  - CmdLine:
+    - apk add --no-cache openjdk8 git bash &&     addgroup theia &&     adduser -G
+      theia -s /bin/sh -D theia &&     chmod g+rw /home &&     mkdir -p /home/project
+      &&     chown -R theia:theia /home/project &&     chown -R theia:theia /usr/local/lib/node_modules
+      &&     wget http://archive.apache.org/dist/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz
+      &&     tar -zxvf apache-maven-$MAVEN_VERSION-bin.tar.gz &&     rm apache-maven-$MAVEN_VERSION-bin.tar.gz
+      &&     mv apache-maven-$MAVEN_VERSION /usr/lib/mvn
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /home/theia
+  - Chown: theia:theia
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /home/theia
+    - /home/theia
+  - Name: user
+    User: theia
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - entrypoint.sh
+    - /usr/local/bin/docker-entrypoint.sh
+  - Name: expose
+    Ports:
+    - "5050"
+  - CmdLine:
+    - /usr/local/bin/docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: node:${NODE_VERSION}-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM node:${NODE_VERSION}-alpine

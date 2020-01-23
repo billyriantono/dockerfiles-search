@@ -1,43 +1,46 @@
-FROM ubuntu:17.10
+FROM ubuntu:14.04
+MAINTAINER elseym <elseym@me.com>
 
 ENV DEBIAN_FRONTEND noninteractive
-ENV HOME /tmp
 
-RUN apt-get update && apt-get install -y apt-utils && apt-get upgrade -y && \
+ARG APT_PROXY
+COPY setup-cache /
+RUN /setup-cache $APT_PROXY
 
-    # Install packages for building
-    apt-get install -y wget git automake autoconf libtool intltool g++ yasm nasm \
-      swig libgavl-dev libsamplerate0-dev libxml2-dev ladspa-sdk libjack-dev \
-      libsox-dev libsdl2-dev libgtk2.0-dev libsoup2.4-dev \
-      qt5-default libqt5webkit5-dev libqt5svg5-dev \
-      libexif-dev libtheora-dev libvorbis-dev python-dev cmake xutils-dev \
-      libegl1-mesa-dev libeigen3-dev libfftw3-dev libvdpau-dev \
-      # Additional runtime libs \
-      libgavl1 libsox2 libexif12 xvfb libxkbcommon-x11-0 libhyphen0 libwebp6 \
-      # LADSPA plugins \
-      amb-plugins ambdec autotalent blepvco blop bs2b-ladspa calf-ladspa caps cmt \
-      csladspa fil-plugins guitarix-ladspa invada-studio-plugins-ladspa mcp-plugins \
-      omins rev-plugins ste-plugins swh-plugins tap-plugins vco-plugins wah-plugins \
-      # Fonts \
-      fonts-liberation 'ttf-adf-.+' && \
+ONBUILD ARG APT_PROXY
+ONBUILD RUN /setup-cache $APT_PROXY
 
-    wget --quiet -O /tmp/build-melt.sh https://raw.githubusercontent.com/mltframework/mlt-scripts/master/build/build-melt.sh && \
-    echo "INSTALL_DIR=\"/usr\"" > /tmp/build-melt.conf && \
-    echo "SOURCE_DIR=\"/tmp/melt\"" >> /tmp/build-melt.conf && \
-    echo "AUTO_APPEND_DATE=0" >> /tmp/build-melt.conf && \
-    bash /tmp/build-melt.sh -c /tmp/build-melt.conf && \
+# moar sources
+RUN echo "deb http://ppa.launchpad.net/transmissionbt/ppa/ubuntu trusty main" > /etc/apt/sources.list.d/transmissionbt.list; \
+    echo "deb http://ppa.launchpad.net/jcfp/ppa/ubuntu trusty main" > /etc/apt/sources.list.d/sabnzbdplus.list; \
+    echo "deb http://ppa.launchpad.net/fkrull/deadsnakes-python2.7/ubuntu trusty main" > /etc/apt/sources.list.d/python.list; \
+    echo "deb http://archive.ubuntu.com/ubuntu trusty multiverse" > /etc/apt/sources.list.d/multiverse.list; \
+    echo "deb http://apt.sonarr.tv/ master main" > /etc/apt/sources.list.d/sonarr.list
 
-    # Remove things for building
-    rm -r /tmp/melt && \
-    rm /tmp/build-melt.* && \
-    apt-get remove -y wget automake autoconf libtool intltool g++ yasm nasm swig \
-      libgavl-dev libsamplerate0-dev libxml2-dev libjack-dev libsox-dev libsdl2-dev \
-      libgtk2.0-dev libsoup2.4-dev libqt5webkit5-dev libqt5svg5-dev libexif-dev \
-      libtheora-dev libvorbis-dev python-dev cmake xutils-dev libegl1-mesa-dev \
-      libeigen3-dev libfftw3-dev libvdpau-dev && \
-    apt-get remove -y '.+-dev' manpages wget git yasm nasm swig cmake && \
-    apt-get autoclean -y && \
-    apt-get clean -y
+# moar keys
+RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 365C5CA1 2>&1 && \
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys FDA5DFFC 2>&1 && \
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys DB82666C 2>&1 && \
+    apt-key adv --keyserver p80.pool.sks-keyservers.net --recv-keys 4BB9F05F 2>&1
 
-WORKDIR /root
-ENTRYPOINT ["/usr/bin/melt"]
+# moar updates and software
+RUN apt-get update 2>&1 && \
+    apt-get -y install python git supervisor curl 2>&1
+
+# moar cleanup
+RUN apt-get -qy autoremove --purge >/dev/null && \
+    apt-get -qy clean >/dev/null && \
+    rm -rf /tmp/* /var/tmp/* >/dev/null && \
+    :> /etc/supervisor/supervisord.conf
+
+# moar volume
+VOLUME [ "/data", "/config" ]
+
+# moar supervisor
+ADD supervisor* /
+RUN sed -e 's,FLXEL_SERVICE_NAME,flxel,' \
+        -e 's,FLXEL_SERVICE_CMD,%(ENV_FLXEL_SERVICE_CMD)s,' \
+        /supervisor.conf.dist > flxel.supervisor.conf
+
+# fire
+CMD /usr/bin/supervisord -c /supervisord.conf -n -u root

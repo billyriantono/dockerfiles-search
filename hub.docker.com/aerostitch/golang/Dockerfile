@@ -1,29 +1,20 @@
-FROM golang:latest
+FROM ubuntu:16.04
 
-Maintainer Joseph Herlant<herlantj@gmail.com>
+LABEL maintainer="Aemooooon/aemooooon@gmail.com"
 
-ENV GOPATH /go
-ENV PATH ${GOPATH}/bin:${PATH}
+RUN apt-get -q update && apt-get -yq dist-upgrade
+RUN apt-get -yq install apache2
 
-COPY vimrc /root/.vimrc
-RUN apt update && apt install -y vim-nox git curl
-RUN mkdir -p ~/.vim/autoload ~/.vim/bundle \
-    && curl -LSso ~/.vim/autoload/pathogen.vim https://tpo.pe/pathogen.vim \
-    && git clone https://github.com/fatih/vim-go.git ~/.vim/bundle/vim-go
+ENV APACHE_RUN_USER www-data
+ENV APACHE_RUN_GROUP www-data
+ENV APACHE_LOG_DIR /var/log/apache2
+ENV APACHE_LOCK_DIR /var/run/apache
+ENV APACHE_PID_FILE /var/run/apache/httpd.pid
+RUN mkdir /var/run/apache
 
-RUN go get -u github.com/golang/lint/golint \
-    && go install github.com/golang/lint/golint
-RUN go get -u github.com/axw/gocov/gocov \
-    && go install github.com/axw/gocov/gocov
+ADD index.html /var/www/html/index.html
 
-# Trick to make ycm work
-COPY testing.list /etc/apt/sources.list.d/testing.list
-COPY preferences /etc/apt/preferences
-RUN apt update && \
-    apt install -y build-essential cmake python-dev python3-dev liblua5.2 vim-nox/testing && \
-    git clone https://github.com/Valloric/YouCompleteMe.git ~/.vim/bundle/YouCompleteMe
-RUN cd ~/.vim/bundle/YouCompleteMe && \
-    git submodule update --init --recursive && \
-    ./install.py --gocode-completer
+EXPOSE 80
 
-WORKDIR ${GOPATH}/src
+ENTRYPOINT ["/usr/sbin/apache2"]
+CMD ["-DFOREGROUND"]

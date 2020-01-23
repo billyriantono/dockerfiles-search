@@ -1,0 +1,138 @@
+MetaArgs: null
+Stages:
+- BaseName: php:7.2-fpm-alpine
+  Commands:
+  - Env:
+    - Key: RUNPKGS
+      Value: '"  unzip   patch   libpq   libmemcached   libpng   libjpeg-turbo   libzip   freetype   yaml   dumb-init   "'
+    Name: env
+  - Env:
+    - Key: DEVPKGS
+      Value: '"  freetype-dev   libjpeg-turbo-dev   libpng-dev   yaml-dev   libzip-dev   zlib-dev   autoconf   gcc   g++   make   libmemcached-dev   "'
+    Name: env
+  - CmdLine:
+    - set -ex     && apk add --no-cache $RUNPKGS $DEVPKGS
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://git.archlinux.org/svntogit/packages.git/plain/trunk/freetype.patch?h=packages/php
+    - /tmp/freetype.patch
+  - CmdLine:
+    - docker-php-source extract;     cd /usr/src/php;     patch -p1 -i /tmp/freetype.patch;     rm
+      /tmp/freetype.patch
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex     && docker-php-ext-install opcache
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex     && docker-php-ext-configure zip --with-libzip     && docker-php-ext-install
+      zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex     && docker-php-ext-configure gd --with-freetype-dir=/usr/include/
+      --with-jpeg-dir=/usr/include/     && docker-php-ext-install -j$(nproc) gd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "{ \t\techo 'opcache.memory_consumption=128'; \t\techo 'opcache.interned_strings_buffer=8';
+      \t\techo 'opcache.max_accelerated_files=4000'; \t\techo 'opcache.revalidate_freq=2';
+      \t\techo 'opcache.fast_shutdown=1'; \t\techo 'opcache.enable_cli=1'; \t\techo
+      'upload_max_filesize=128M'; \t\techo 'post_max_size=128M'; \t} > /usr/local/etc/php/conf.d/php-recommended.ini"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pecl install yaml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pecl install apcu
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-ext-enable yaml apcu
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - mkdir -p /usr/src/php/ext
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - http://pecl.php.net/get/memcached-3.0.3.tgz
+    - /tmp/memcached.tgz
+  - CmdLine:
+    - set -ex     && tar -xf memcached.tgz -C /usr/src/php/ext/     && echo extension=memcached.so
+      >> /usr/local/etc/php/conf.d/memcached.ini     && mv /usr/src/php/ext/memcached-3.0.3
+      /usr/src/php/ext/memcached
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - docker-php-ext-install memcached
+    Name: run
+    PrependShell: true
+  - Key: GRAV_VERSION
+    Name: arg
+    Value: 1.6.11
+  - Key: GRAV_SHA1
+    Name: arg
+    Value: 5bad00e7884dd1792820e192433bfd1a17b1ec27
+  - Key: WEBROOT
+    Name: arg
+    Value: /web
+  - Key: WEBROOT_GRAV
+    Name: arg
+    Value: ${WEBROOT}/grav
+  - Key: WEBROOT_GRAV_USER
+    Name: arg
+    Value: ${WEBROOT_GRAV}/user
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://getgrav.org/download/core/grav-admin/${GRAV_VERSION}
+    - /tmp/grav-admin.zip
+  - CmdLine:
+    - set -ex     && echo "${GRAV_SHA1}  /tmp/grav-admin.zip" | sha1sum -c -     &&
+      unzip -d ${WEBROOT} /tmp/grav-admin.zip     && mv ${WEBROOT}/grav-admin ${WEBROOT_GRAV}     &&
+      mv ${WEBROOT_GRAV_USER} ${WEBROOT_GRAV}/user_dist     && chown -R www-data:www-data
+      ${WEBROOT}
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex     && rm -rvf /tmp/*     && docker-php-source delete     && rm -rf
+      /usr/src     && apk del --purge $DEVPKGS
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - runtime
+    - /runtime
+  - Name: workdir
+    Path: ${WEBROOT}
+  - CmdLine:
+    - dumb-init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - run-parts
+    - --exit-on-error
+    - /runtime
+    Name: cmd
+    PrependShell: false
+  - Name: volume
+    Volumes:
+    - ${WEBROOT}
+  From:
+    Image: php:7.2-fpm-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.2-fpm-alpine

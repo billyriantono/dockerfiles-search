@@ -1,0 +1,115 @@
+MetaArgs: null
+Stages:
+- As: buildstep
+  BaseName: ubuntu:xenial
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Hans Lellelid <hans@xmpl.org>"'
+    Name: label
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - resources/docker/sources.list
+    - /etc/apt/sources.list
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y software-properties-common
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - add-apt-repository -y ppa:jonathonf/python-3.6
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y python3.6 python3.6-dev curl build-essential git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /build/wheels
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl https://bootstrap.pypa.io/get-pip.py | python3.6
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip3 install --upgrade pip setuptools wheel
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - requirements.txt
+    - /tmp/requirements.txt
+  - CmdLine:
+    - pip3 wheel -r /tmp/requirements.txt --wheel-dir=/build/wheels
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /app
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - python3.6 setup.py bdist_wheel -d /build/wheels
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:xenial
+  Name: buildstep
+  Platform: ""
+  SourceCode: FROM ubuntu:xenial as buildstep
+- As: deploystep
+  BaseName: ubuntu:xenial
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Hans Lellelid <hans@xmpl.org>"'
+    Name: label
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - resources/docker/sources.list
+    - /etc/apt/sources.list
+  - CmdLine:
+    - apt-get update   && apt-get install -y software-properties-common curl   &&
+      add-apt-repository -y ppa:jonathonf/python-3.6   && apt-get update   && apt-get
+      install -y python3.6 vim-tiny --no-install-recommends   && apt-get clean   &&
+      curl https://bootstrap.pypa.io/get-pip.py | python3.6   && pip3 install --upgrade
+      pip setuptools wheel   && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: buildstep
+    Name: copy
+    SourcesAndDest:
+    - /build/wheels
+    - /tmp/wheels
+  - CmdLine:
+    - pip3 install /tmp/wheels/*
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8000"
+  - CmdLine:
+    - gunicorn --bind 0.0.0.0:8000 'freezing.nq.app:make_app()'
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: ubuntu:xenial
+  Name: deploystep
+  Platform: ""
+  SourceCode: FROM ubuntu:xenial as deploystep

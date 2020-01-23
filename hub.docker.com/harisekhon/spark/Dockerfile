@@ -16,7 +16,7 @@
 FROM alpine:latest
 MAINTAINER Hari Sekhon (https://www.linkedin.com/in/harisekhon)
 
-ARG SPARK_VERSION=1.6.2
+ARG SPARK_VERSION=1.4.1
 ARG HADOOP_VERSION=2.6
 ARG TAR=spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz
 

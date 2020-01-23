@@ -2,7 +2,7 @@ FROM forsrc/dind
 
 RUN yum makecache fast
 
-RUN sed -i 's/^SELINUX=enforcing$/SELINUX=permissive/' /etc/selinux/config
+RUN sed -i 's/^SELINUX=enforcing$/SELINUX=disabled/' /etc/selinux/config
 
 RUN yum install -y yum-utils device-mapper-persistent-data lvm2 ipvsadm ipset conntrack ntp
 
@@ -11,7 +11,14 @@ RUN echo -e "[kubernetes]\nname=Kubernetes\nbaseurl=https://mirrors.aliyun.com/k
 RUN yum install -y kubelet kubeadm kubectl nfs-utils
 RUN kubelet --version
 
+RUN rm -rf /var/cache/yum/* && yum clean all
+
 RUN systemctl enable docker
 RUN systemctl enable kubelet
+
+VOLUME /var/lib/docker/
+VOLUME /var/lib/kubelet/
+VOLUME /var/lib/etcd/
+VOLUME /etc/kubernetes/
 
 CMD [ "/usr/sbin/init"]

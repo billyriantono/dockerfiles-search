@@ -1,13 +1,23 @@
-FROM ubuntu:latest
-MAINTAINER domnulnopcea@gmail.com
+FROM node:6.9
+MAINTAINER Dom & Tom Inc. <hello@domandtom.com>
 
-ENV DEBIAN_FRONTEND noninteractive
+WORKDIR /data/src
 
-RUN apt-get update
-RUN apt-get -y -q install gdb libreoffice libreoffice-writer ure libreoffice-java-common libreoffice-core libreoffice-common openjdk-8-jre fonts-opensymbol hyphen-fr hyphen-de hyphen-en-us hyphen-it hyphen-ru fonts-dejavu fonts-dejavu-core fonts-dejavu-extra fonts-droid-fallback fonts-dustin fonts-f500 fonts-fanwood fonts-freefont-ttf fonts-liberation fonts-lmodern fonts-lyx fonts-sil-gentium fonts-texgyre fonts-tlwg-purisa
-RUN apt-get -y -q remove libreoffice-gnome
-EXPOSE 8997
+ENV NODE_ENV production \
+    PORT 80
 
-RUN adduser --home=/opt/libreoffice --disabled-password --gecos "" --shell=/bin/bash libreoffice
+EXPOSE 80
 
-VOLUME ["/tmp"]
+CMD ["node", "index.js"]
+
+RUN apt-get update \
+ && apt-get install -y \
+        apt-transport-https \
+ && curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg \
+  | apt-key add - \
+ && echo "deb https://dl.yarnpkg.com/debian/ stable main" \
+  | tee /etc/apt/sources.list.d/yarn.list \
+ && apt-get update \
+ && apt-get install -y \
+        yarn \
+ && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*

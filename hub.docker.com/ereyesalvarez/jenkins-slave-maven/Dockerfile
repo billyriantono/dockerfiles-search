@@ -1,4 +1,4 @@
-FROM ereyesalvarez/jenkins-slave-docker-utils:1.0
+FROM ereyesalvarez/jenkins-slave-docker-utils:latest
 
 USER root
 

@@ -1,4 +1,4 @@
-FROM python:3.6
+FROM python:3.8
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG PIP_NO_CACHE_DIR=1

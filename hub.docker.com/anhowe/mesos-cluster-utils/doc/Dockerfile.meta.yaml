@@ -1,0 +1,104 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: python
+  Commands:
+  - Key: CCU_VERSION
+    Name: arg
+    Value: '"3.41.11"'
+  - Key: CCU_SERIAL
+    Name: arg
+    Value: '"ccu_docker"'
+  - Key: QEMU_VERSION
+    Name: arg
+    Value: '"v3.0.0"'
+  - CmdLine:
+    - export CCU_FW_LINK="http://update.homematic.com/firmware/download?cmd=download&version=${CCU_VERSION}&serial=${CCU_SERIAL}&lang=de&product=HM-CCU${CCU_VERSION%%.*}"     &&
+      echo "Downloading from $CCU_FW_LINK "     && wget --no-verbose $CCU_FW_LINK
+      -O -|tar -xzO rootfs.ext4.gz|gunzip>rootfs.ext4
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - folders=$(debugfs -R ls rootfs.ext4| sed -e 's/)/)\n/g' | egrep -i "[[:alpha:]]"
+      | awk '{print $1}')     && mkdir extracted     && for f in $folders; do echo
+      $f; debugfs -R "rdump /$f extracted/" rootfs.ext4; done
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf extracted/usr/local/*
+    Name: run
+    PrependShell: true
+  - Key: QEMU_TGZ
+    Name: arg
+    Value: https://github.com/multiarch/qemu-user-static/releases/download/${QEMU_VERSION}/qemu-arm-static.tar.gz
+  - CmdLine:
+    - wget --no-verbose $QEMU_TGZ -O - |tar -xz -C extracted/usr/bin
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth 1 --single-branch --branch ${CCU_VERSION} https://github.com/jens-maus/occu.git     ||
+      git clone --depth 1 --single-branch https://github.com/jens-maus/occu.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -avu /occu/firmware/* extracted/firmware     && mkdir -p extracted/opt/HMServer     &&
+      cp -avu /occu/HMserver/opt/HMServer/HMServer.jar extracted/opt/HMServer/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s / extracted/current     && mkdir -p extracted/original     && cp -a extracted/etc
+      extracted/original/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - additions
+    - /additions
+  - CmdLine:
+    - cp -av --remove-destination /additions/files/* /extracted/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd extracted/     && cat /additions/patches/*|patch -p1
+    Name: run
+    PrependShell: true
+  From:
+    Image: python
+  Name: builder
+  Platform: ""
+  SourceCode: FROM python as builder
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - extracted
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - LICENSE
+    - entrypoint.sh
+    - /
+  - CmdLine:
+    - /entrypoint.sh
+    Name: cmd
+    PrependShell: false
+  - Name: volume
+    Volumes:
+    - /usr/local
+  - Name: expose
+    Ports:
+    - "2001"
+    - "22"
+    - "80"
+    - "8181"
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

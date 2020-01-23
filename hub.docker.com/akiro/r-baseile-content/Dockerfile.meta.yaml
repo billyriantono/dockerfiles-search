@@ -1,0 +1,112 @@
+MetaArgs: null
+Stages:
+- As: proot
+  BaseName: debian:9
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -q -y build-essential git libseccomp-dev libtalloc-dev  libprotobuf-c-dev
+      libattr1-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/rootless-containers/PRoot.git   && cd PRoot   &&
+      git checkout 081bb63955eb4378e53cf4d0eb0ed0d3222bf66e   && cd src   && make
+      && mv proot / && make clean
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:9
+  Name: proot
+  Platform: ""
+  SourceCode: FROM debian:9 AS proot
+- As: runc
+  BaseName: golang:1.9-alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git g++ linux-headers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/opencontainers/runc.git /go/src/github.com/opencontainers/runc   &&
+      cd /go/src/github.com/opencontainers/runc   && git checkout -q e6516b3d5dc780cb57a976013c242a9a93052543   &&
+      go build -o /runc .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.9-alpine
+  Name: runc
+  Platform: ""
+  SourceCode: FROM golang:1.9-alpine AS runc
+- As: runrootless
+  BaseName: golang:1.9-alpine
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/rootless-containers/runrootless/
+  - CmdLine:
+    - go build -o /runrootless github.com/rootless-containers/runrootless
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.9-alpine
+  Name: runrootless
+  Platform: ""
+  SourceCode: FROM golang:1.9-alpine AS runrootless
+- BaseName: alpine:3.7
+  Commands:
+  - CmdLine:
+    - adduser -u 1000 -D user
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: proot
+    Name: copy
+    SourcesAndDest:
+    - /proot
+    - /home/user/.runrootless/runrootless-proot
+  - Chown: ""
+    From: runc
+    Name: copy
+    SourcesAndDest:
+    - /runc
+    - /home/user/bin/runc
+  - Chown: ""
+    From: runrootless
+    Name: copy
+    SourcesAndDest:
+    - /runrootless
+    - /home/user/bin/runrootless
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./examples
+    - /home/user/examples
+  - CmdLine:
+    - mkdir /home/user/run
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R user /home/user
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: user
+  - Name: workdir
+    Path: /home/user
+  - Env:
+    - Key: PATH
+      Value: /home/user/bin:$PATH
+    Name: env
+  - Env:
+    - Key: XDG_RUNTIME_DIR
+      Value: /home/user/run
+    Name: env
+  From:
+    Image: alpine:3.7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.7

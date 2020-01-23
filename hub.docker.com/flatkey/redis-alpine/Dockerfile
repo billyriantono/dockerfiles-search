@@ -1,5 +1,3 @@
-FROM redis:alpine
-
-COPY docker-entrypoint.sh /usr/bin/
-
-ENTRYPOINT docker-entrypoint.sh
+FROM nginx
+COPY ./index.html /usr/share/nginx/html
+EXPOSE 80

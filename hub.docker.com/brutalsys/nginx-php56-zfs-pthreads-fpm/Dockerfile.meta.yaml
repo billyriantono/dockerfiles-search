@@ -1,0 +1,149 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:14.04.2
+  Commands:
+  - Maintainer: Elliot Morales <elliot@brutalsys.com >
+    Name: maintainer
+  - Env:
+    - Key: NEWRELIC_LICENSE
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: NEWRELIC_APP
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: PHP_CHILDREN
+      Value: "false"
+    Name: env
+  - Env:
+    - Key: PHP_VERSION
+      Value: 5.6.18
+    Name: env
+  - CmdLine:
+    - dpkg-divert --local --rename --add /sbin/initctl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sf /bin/true /sbin/initctl
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get install -y software-properties-common && nginx=stable
+      && add-apt-repository ppa:nginx/$nginx && apt-get update && apt-get upgrade
+      -y && BUILD_PACKAGES="supervisor nginx pwgen wget autoconf build-essential libfcgi-dev
+      libfcgi0ldbl libjpeg62-dbg libmcrypt-dev libssl-dev libc-client2007e libc-client2007e-dev
+      libxml2-dev" && apt-get -y install $BUILD_PACKAGES && ln -s /usr/lib/libc-client.a
+      /usr/lib/x86_64-linux-gnu/libc-client.a && apt-get -y build-dep php5 && mkdir
+      -p /opt/php-$PHP_VERSION && mkdir -p mkdir /usr/local/src/php5-build && cd /usr/local/src/php5-build
+      && wget http://de.php.net/get/php-$PHP_VERSION.tar.bz2/from/this/mirror -O php-$PHP_VERSION.tar.bz2
+      && tar jxf php-$PHP_VERSION.tar.bz2 && cd php-$PHP_VERSION && ./configure     --prefix=/opt/php-$PHP_VERSION     --enable-maintainer-zts     --with-pdo-pgsql     --with-zlib-dir     --with-freetype-dir     --enable-mbstring     --with-libxml-dir=/usr     --enable-soap     --enable-calendar     --with-curl     --with-mcrypt     --with-zlib     --with-gd     --with-pgsql     --disable-rpath     --enable-inline-optimization     --with-bz2     --with-zlib     --enable-sockets     --enable-sysvsem     --enable-sysvshm     --enable-pcntl     --enable-mbregex     --enable-exif     --enable-bcmath     --with-mhash     --enable-zip     --with-pcre-regex     --with-mysql     --with-pdo-mysql     --with-mysqli     --with-jpeg-dir=/usr     --with-png-dir=/usr     --enable-gd-native-ttf     --with-openssl     --with-fpm-user=www-data     --with-fpm-group=www-data     --with-libdir=/lib/x86_64-linux-gnu     --enable-ftp     --with-imap     --with-imap-ssl     --with-kerberos     --with-gettext     --with-xmlrpc     --with-xsl     --enable-opcache     --enable-fpm
+      && make && make install && cp /usr/local/src/php5-build/php-$PHP_VERSION/php.ini-production
+      /opt/php-$PHP_VERSION/lib/php.ini && cp /opt/php-$PHP_VERSION/etc/php-fpm.conf.default
+      /opt/php-$PHP_VERSION/etc/php-fpm.conf && /opt/php-$PHP_VERSION/bin/pecl install
+      pthreads-1.0.0 && echo "extension=pthreads.so" >> /opt/php-$PHP_VERSION/lib/php.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get remove --purge -y software-properties-common && apt-get autoremove -y
+      && apt-get clean && apt-get autoclean && echo -n > /var/lib/apt/extended_states
+      && rm -rf /var/lib/apt/lists/* && rm -rf /usr/share/man/?? && rm -rf /usr/share/man/??_*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e"s/worker_processes  1/worker_processes 5/" /etc/nginx/nginx.conf &&
+      sed -i -e"s/keepalive_timeout\s*65/keepalive_timeout 2/" /etc/nginx/nginx.conf
+      && sed -i -e"s/keepalive_timeout 2/keepalive_timeout 2;\n\tclient_max_body_size
+      100m/" /etc/nginx/nginx.conf && echo "daemon off;" >> /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e "s/;cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/g" /opt/php-$PHP_VERSION/lib/php.ini
+      && sed -i -e "s/upload_max_filesize\s*=\s*2M/upload_max_filesize = 100M/g" /opt/php-$PHP_VERSION/lib/php.ini
+      && sed -i -e "s/post_max_size\s*=\s*8M/post_max_size = 100M/g" /opt/php-$PHP_VERSION/lib/php.ini
+      && sed -i -e "s/post_max_size\s*=\s*8M/post_max_size = 100M/g" /opt/php-$PHP_VERSION/lib/php.ini
+      && sed -i -e "s/short_open_tag = Off/short_open_tag = On/g" /opt/php-$PHP_VERSION/lib/php.ini
+      && sed -i -e "s/;daemonize\s*=\s*yes/daemonize = no/g" /opt/php-$PHP_VERSION/etc/php-fpm.conf
+      && sed -i -e "s/log_errors = On/log_errors = Off/g" /opt/php-$PHP_VERSION/lib/php.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -Rf /etc/nginx/conf.d/* && rm -Rf /etc/nginx/sites-available/default && mkdir
+      -p /etc/nginx/ssl/
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./nginx-site.conf
+    - /etc/nginx/sites-available/default.conf
+  - CmdLine:
+    - ln -s /etc/nginx/sites-available/default.conf /etc/nginx/sites-enabled/default.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo -e "[global]\nerror_log = /dev/null\ndaemonize = no\ninclude=etc/pool.d/*.conf"
+      > /opt/php-$PHP_VERSION/etc/php-fpm.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i 's/^# \(.*-backports\s\)/\1/g' /etc/apt/sources.list &&     wget -O -
+      https://download.newrelic.com/548C16BF.gpg | apt-key add - &&     echo "deb
+      http://apt.newrelic.com/debian/ newrelic non-free" > /etc/apt/sources.list.d/newrelic.list
+      &&     apt-get update -qqy
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install newrelic-php5 -y
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./www.conf
+    - /opt/php-$PHP_VERSION/etc/pool.d/www.conf
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./supervisord.conf
+    - /etc/supervisord.conf
+  - CmdLine:
+    - sed -i "s/PHP_VERSION/$PHP_VERSION/g" /etc/supervisord.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./start.sh
+    - /start.sh
+  - CmdLine:
+    - chmod 755 /start.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -Rf www-data.www-data /usr/share/nginx/html/
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /usr/share/nginx/html
+  - Name: expose
+    Ports:
+    - "443"
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - /bin/bash
+    - /start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:14.04.2
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:14.04.2

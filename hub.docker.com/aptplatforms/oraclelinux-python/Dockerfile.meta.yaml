@@ -1,0 +1,201 @@
+MetaArgs:
+- DefaultValue: '"gcc gcc-c++"'
+  Key: PYPI_BUILD_DEPS
+  ProvidedValue: null
+  Value: '"gcc gcc-c++"'
+- DefaultValue: '""'
+  Key: PYPI_DEPS
+  ProvidedValue: null
+  Value: '""'
+Stages:
+- As: base
+  BaseName: oraclelinux:7-slim
+  Commands:
+  - Env:
+    - Key: LANG
+      Value: C.UTF-8
+    Name: env
+  - Key: SYSTEM_DEPS
+    Name: arg
+    Value: '"bzip2 gnupg2 gzip tar tzdata which xz"'
+  - Key: PYTHON_DEPS
+    Name: arg
+    Value: '"bzip2-libs expat gdbm glibc keyutils-libs krb5-libs libcom_err libffi
+      libselinux                  libuuid ncurses-libs nss-softokn-freebl openssl-libs
+      pcre readline sqlite                  xz-libs zlib"'
+  - Key: SQLITE_DEPS
+    Name: arg
+    Value: '"tcl"'
+  - CmdLine:
+    - ':  && set -ex  && yum clean all  && yum -y upgrade  && yum -y install $SYSTEM_DEPS
+      $PYTHON_DEPS $SQLITE_DEPS  && yum clean all  && rm -rf /var/cache/yum/ /var/lib/yum/repos/*'
+    Name: run
+    PrependShell: true
+  From:
+    Image: oraclelinux:7-slim
+  Name: base
+  Platform: ""
+  SourceCode: FROM oraclelinux:7-slim AS base
+- As: builder
+  BaseName: base
+  Commands:
+  - Key: PYTHON_PIP_VERSION
+    Name: arg
+    Value: 19.0.3
+  - Key: PYTHON_VERSION
+    Name: arg
+    Value: 3.7.3
+  - Key: pybasever
+    Name: arg
+    Value: "3.7"
+  - Key: pyshortver
+    Name: arg
+    Value: "37"
+  - Key: _bindir
+    Name: arg
+    Value: /usr/local/bin
+  - Key: _libdir
+    Name: arg
+    Value: /usr/local/lib
+  - Key: pylibdir
+    Name: arg
+    Value: ${_libdir}/python${pybasever}
+  - Key: dynload_dir
+    Name: arg
+    Value: ${pylibdir}/lib-dynload
+  - Key: ABIFLAGS_optimized
+    Name: arg
+    Value: m
+  - Key: _arch
+    Name: arg
+    Value: x86_64
+  - Key: _gnu
+    Name: arg
+    Value: -gnu
+  - Key: bytecode_suffixes
+    Name: arg
+    Value: .cpython-${pyshortver}*.pyc
+  - Key: SOABI_optimized
+    Name: arg
+    Value: cpython-${pyshortver}${ABIFLAGS_optimized}-${_arch}-linux${_gnu}
+  - Key: PYTHON_BUILD_DEPS
+    Name: arg
+    Value: '"gcc gcc-c++ bzip2-devel glibc-devel expat-devel libffi-devel gdbm-devel                        xz-devel
+      ncurses-devel readline-devel sqlite-devel openssl-devel make                        tk-devel
+      libuuid-devel zlib-devel"'
+  - Key: SQLITE_BUILD_DEPS
+    Name: arg
+    Value: '"autoconf file pkgconfig ncurses-devel readline-devel glibc-devel tcl-devel"'
+  - Key: SQLITE_VERSION
+    Name: arg
+    Value: "3270200"
+  - Env:
+    - Key: PATH
+      Value: $_bindir:$PATH
+    Name: env
+  - Name: workdir
+    Path: /usr/src
+  - CmdLine:
+    - ':  && set -ex  && yum clean all  && yum -y install $PYTHON_BUILD_DEPS $SQLITE_BUILD_DEPS'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ':  && set -ex  && curl -sSLo sqlite.tar.gz "https://www.sqlite.org/2019/sqlite-autoconf-${SQLITE_VERSION}.tar.gz"  &&
+      mkdir -p /usr/src/sqlite  && tar -xzC /usr/src/sqlite --strip-components=1 -f
+      sqlite.tar.gz  && rm sqlite.tar.gz'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ':  && set -ex  && cd /usr/src/sqlite  && sh ./configure          --disable-static          --enable-silent-rules  &&
+      make -j $(nproc)  && make install'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ':  && set -ex  && curl -sSLo python.tar.xz "https://www.python.org/ftp/python/${PYTHON_VERSION%%[a-z]*}/Python-$PYTHON_VERSION.tar.xz"  &&
+      mkdir -p /usr/src/python  && tar -xJC /usr/src/python --strip-components=1 -f
+      python.tar.xz  && rm python.tar.xz'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ':  && set -ex  && cd /usr/src/python  && CXX="/usr/bin/g++" sh ./configure          --enable-ipv6          --enable-shared          --with-dbmliborder=gdbm:ndbm:bdb          --with-system-expat          --enable-loadable-sqlite-extensions          --without-ensurepip          --enable-optimizations          --with-lto  &&
+      make -j "$(nproc)"  && make install'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ':  && set -ex  && echo ${_libdir} >/etc/ld.so.conf.d/usr-local.conf  && ldconfig  &&
+      python3 --version'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ':  && set -ex  && cd ${_bindir}  && ln -s pydoc3 pydoc  && ln -s python3 python  &&
+      ln -s python3-config python-config'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ':  && set -ex  && curl -sSLo get-pip.py ''https://bootstrap.pypa.io/get-pip.py''  &&
+      python get-pip.py       --disable-pip-version-check       --no-cache-dir       "pip==$PYTHON_PIP_VERSION"  &&
+      pip --version  && rm -f get-pip.py'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ':  && set -ex  && rm -rf       ${pylibdir}/distutils/command/wininst-*.exe       ${pylibdir}/turtle.py       ${pylibdir}/__pycache__/turtle*${bytecode_suffixes}       ${_bindir}/idle*       ${pylibdir}/idlelib       ${pylibdir}/tkinter       ${dynload_dir}/_tkinter.${SOABI_optimized}.so       ${pylibdir}/turtledemo       ${pylibdir}/ctypes/test       ${pylibdir}/distutils/tests       ${pylibdir}/lib2to3/tests       ${pylibdir}/sqlite3/test       ${pylibdir}/test       ${dynload_dir}/_ctypes_test.${SOABI_optimized}.so       ${dynload_dir}/_testbuffer.${SOABI_optimized}.so       ${dynload_dir}/_testcapi.${SOABI_optimized}.so       ${dynload_dir}/_testimportmultiple.${SOABI_optimized}.so       ${pylibdir}/tkinter/test       ${pylibdir}/unittest/test  &&
+      find ${pylibdir} -type d -name __pycache__ -exec rm -rf ''{}'' +'
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: builder
+  Platform: ""
+  SourceCode: FROM base AS builder
+- As: python-oracle
+  BaseName: base
+  Commands:
+  - Labels:
+    - Key: vendor
+      Value: '"Apt Platform Technologies, Inc."'
+    - Key: maintainer
+      Value: '"Chris Cosby <chris.cosby@aptplatforms.com>"'
+    Name: label
+  - Key: ORA_VERSION
+    Name: arg
+    Value: "18.5"
+  - Env:
+    - Key: PATH
+      Value: ${_bin}:$PATH:/usr/lib/oracle/${ORA_VERSION}/client64/bin
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/ld.so.conf.d/usr-local.conf
+    - /etc/ld.so.conf.d/usr-local.conf
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/
+    - /usr/local/
+  - CmdLine:
+    - ':  && set -ex  && yum clean all  && curl -sSLo /etc/yum.repos.d/public-yum-ol7.repo
+      https://yum.oracle.com/public-yum-ol7.repo  && yum-config-manager --enable ol7_oracle_instantclient  &&
+      yum -y install oracle-instantclient${ORA_VERSION}-basic oracle-instantclient${ORA_VERSION}-sqlplus  &&
+      echo /usr/lib/oracle/${ORA_VERSION}/client64/lib >/etc/ld.so.conf.d/oracle-instantclient${ORA_VERSION}.conf  &&
+      ldconfig  && yum clean all  && rm -rf /var/cache/yum/ /var/lib/yum/repos/*'
+    Name: run
+    PrependShell: true
+  - CmdLine: null
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - python3
+    Name: cmd
+    PrependShell: false
+  From:
+    Stage:
+      Index: 0
+      Named: base
+  Name: python-oracle
+  Platform: ""
+  SourceCode: FROM base AS python-oracle

@@ -1,6 +1,7 @@
 MetaArgs: null
 Stages:
-- BaseName: ubuntu:14.04
+- As: builder
+  BaseName: alpine:3.10
   Commands:
   - Env:
     - Key: HOME
@@ -8,17 +9,54 @@ Stages:
     Name: env
   - Env:
     - Key: VERSION
-      Value: 7.4.41
+      Value: 7.4.42
     Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - response.varfile
+    - /response.varfile
   - CmdLine:
-    - 'export DEBIAN_FRONTEND=noninteractive     && apt-get update     && apt-get
-      dist-upgrade -y     && apt-get install -y wget     && wget -q -O service.sh
-      http://gridvis.janitza.de/download/$VERSION/GridVis-Service-$VERSION-64bit.sh     &&
-      sh service.sh -q     && rm service.sh     && ln -s /opt/GridVisData/security.properties
-      /opt/security.properties     && ln -s /opt/GridVisData/license2.lic /usr/local/GridVisService/license2.lic     &&
-      chmod -R a-w /usr/local/GridVisService     && apt-get clean     && echo "gridvis
-      ALL=NOPASSWD: /usr/local/bin/own-volume" >> /etc/sudoers     && rm -rf /var/lib/apt/lists/*
-      /tmp/* /var/tmp/*'
+    - apk add --no-cache openjdk8-jre fontconfig ttf-ubuntu-font-family wget gzip
+      bash
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q -O service.sh http://gridvis.janitza.de/download/${VERSION}/GridVis-Service-${VERSION}-unix.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sh service.sh -q -varfile /response.varfile
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.10
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.10 AS builder
+- BaseName: balenalib/armv7hf-alpine-openjdk:8--3.10-run
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/GridVisService
+    - /usr/local/GridVisService
+  - CmdLine:
+    - cross-build-start
+    Name: run
+    PrependShell: false
+  - CmdLine:
+    - apk add --no-cache fontconfig ttf-ubuntu-font-family bash
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/GridVisData     && mkdir -p /opt/GridVisProjects     && ln -s
+      /opt/GridVisData/security.properties /opt/security.properties     && sed -i
+      's#default_userdir.*$#default_userdir=/opt/GridVisData#' /usr/local/GridVisService/etc/server.conf     &&
+      addgroup -S gridvis     && adduser -S  gridvis gridvis     && chown gridvis:gridvis
+      /opt/GridVisData /opt/GridVisProjects     && chmod a-w /usr/local/GridVisService
     Name: run
     PrependShell: true
   - Env:
@@ -34,8 +72,8 @@ Stages:
       Value: NONE
     Name: env
   - Env:
-    - Key: FILE_ENCODING
-      Value: UTF-8
+    - Key: LANG
+      Value: en_US.UTF-8
     Name: env
   - Name: volume
     Volumes:
@@ -47,15 +85,13 @@ Stages:
     SourcesAndDest:
     - gridvis-service.sh
     - /gridvis-service.sh
-  - Chown: ""
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - own-volume.sh
-    - /usr/local/bin/own-volume
   - Name: expose
     Ports:
     - "8080"
+  - CmdLine:
+    - cross-build-end
+    Name: run
+    PrependShell: false
   - Name: user
     User: gridvis
   - CmdLine:
@@ -63,7 +99,7 @@ Stages:
     Name: cmd
     PrependShell: false
   From:
-    Image: ubuntu:14.04
+    Image: balenalib/armv7hf-alpine-openjdk:8--3.10-run
   Name: ""
   Platform: ""
-  SourceCode: FROM ubuntu:14.04
+  SourceCode: FROM balenalib/armv7hf-alpine-openjdk:8--3.10-run

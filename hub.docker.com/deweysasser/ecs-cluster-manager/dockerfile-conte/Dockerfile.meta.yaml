@@ -1,0 +1,214 @@
+MetaArgs:
+- DefaultValue: osrf/ros:kinetic-desktop
+  Key: BASE_IMAGE
+  ProvidedValue: null
+  Value: osrf/ros:kinetic-desktop
+Stages:
+- As: xsdcache
+  BaseName: maven
+  Commands:
+  - CmdLine:
+    - git clone --depth=1 https://github.com/mfalaize/schema-fetcher.git &&     cd
+      schema-fetcher &&     mvn install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/xsd/package.xml &&     java -jar schema-fetcher/target/schema-fetcher-1.0.0-SNAPSHOT.jar
+      /opt/xsd/package.xml http://download.ros.org/schema/package_format2.xsd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/xsd/roslaunch &&     java -jar schema-fetcher/target/schema-fetcher-1.0.0-SNAPSHOT.jar
+      /opt/xsd/roslaunch https://gist.githubusercontent.com/nalt/dfa2abc9d2e3ae4feb82ca5608090387/raw/roslaunch.xsd
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/xsd/sdf &&     java -jar schema-fetcher/target/schema-fetcher-1.0.0-SNAPSHOT.jar
+      /opt/xsd/sdf http://sdformat.org/schemas/root.xsd &&     sed -i 's|http://sdformat.org/schemas/||g'
+      /opt/xsd/sdf/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/xsd/urdf &&     java -jar schema-fetcher/target/schema-fetcher-1.0.0-SNAPSHOT.jar
+      /opt/xsd/urdf https://raw.githubusercontent.com/devrt/urdfdom/xsd-with-xacro/xsd/urdf.xsd
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven
+  Name: xsdcache
+  Platform: ""
+  SourceCode: FROM maven AS xsdcache
+- BaseName: $BASE_IMAGE
+  Commands:
+  - Maintainer: Yosuke Matsusaka <yosuke.matsusaka@gmail.com>
+    Name: maintainer
+  - CmdLine:
+    - useradd -m developer
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-key adv --keyserver 'hkp://keyserver.ubuntu.com:80' --recv-key C1CF6E31E6BADE8868B172B4F42ED6FBAB17C654
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /etc/apt/apt.conf.d/docker-clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&     apt-get install apt-transport-https &&     apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sh -c 'echo "deb http://packages.osrfoundation.org/gazebo/ubuntu-stable `lsb_release
+      -cs` main" > /etc/apt/sources.list.d/gazebo-stable.list' &&     curl -L http://packages.osrfoundation.org/gazebo.key
+      | apt-key add -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sh -c 'echo "deb https://deb.nodesource.com/node_11.x `lsb_release -cs` main"
+      > /etc/apt/sources.list.d/nodesource.list' &&     curl -sSL https://deb.nodesource.com/gpgkey/nodesource.gpg.key
+      | apt-key add -
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update &&     apt-get install -y bash-completion less wget vim-tiny
+      iputils-ping net-tools clang-6.0 clang-format-6.0 clang-tools-6.0 python-pip
+      openjdk-8-jdk-headless nodejs sudo supervisor byzanz &&     update-alternatives
+      --install /usr/bin/clang++ clang++ /usr/bin/clang++-6.0 100 &&     update-alternatives
+      --install /usr/bin/clang clang /usr/bin/clang-6.0 100 &&     update-alternatives
+      --install /usr/bin/clangd clangd /usr/bin/clangd-6.0 100 &&     update-alternatives
+      --install /usr/bin/clang-format clang-format /usr/bin/clang-format-6.0 100 &&     npm
+      install -g yarn &&     echo developer ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/developer
+      &&     chmod 0440 /etc/sudoers.d/developer &&     apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python -m pip install --upgrade pip &&     pip install --ignore-installed pylint==1.9.4
+      pyflakes autopep8 python-language-server notebook~=5.7 Pygments nbimporter
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/http:\/\/archive/mirror:\/\/mirrors/' -e 's/http:\/\/security/mirror:\/\/mirrors/'
+      -e 's/\/ubuntu\//\/mirrors.txt/' /etc/apt/sources.list
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .devcontainer/theia.conf
+    - /etc/supervisor/conf.d/theia.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .devcontainer/jupyter.conf
+    - /etc/supervisor/conf.d/jupyter.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .devcontainer/entrypoint.sh
+    - /entrypoint.sh
+  - Chown: ""
+    From: xsdcache
+    Name: copy
+    SourcesAndDest:
+    - /opt/xsd
+    - /opt/xsd
+  - Name: user
+    User: developer
+  - Name: workdir
+    Path: /home/developer
+  - Env:
+    - Key: HOME
+      Value: /home/developer
+    Name: env
+  - Env:
+    - Key: SHELL
+      Value: /bin/bash
+    Name: env
+  - Env:
+    - Key: CC
+      Value: /usr/bin/clang
+    Name: env
+  - Env:
+    - Key: CXX
+      Value: /usr/bin/clang++
+    Name: env
+  - Env:
+    - Key: JAVA_HOME
+      Value: /usr/lib/jvm/java-8-openjdk-amd64
+    Name: env
+  - CmdLine:
+    - echo "export LESS='-R'" >> ~/.bash_profile &&     echo "export LESSOPEN='|pygmentize
+      -g %s'" >> ~/.bash_profile
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone --depth=1 https://github.com/Bash-it/bash-it.git ~/.bash_it &&     ~/.bash_it/install.sh
+      --silent &&     rm ~/.bashrc.bak &&     echo "source /usr/share/bash-completion/bash_completion"
+      >> ~/.bashrc &&     bash -i -c "bash-it enable completion pip"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .vscode
+    - /home/developer/.vscode
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .vscode
+    - /home/developer/.theia
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .devcontainer/compile_flags.txt
+    - /home/developer/compile_flags.txt
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .devcontainer/templates
+    - /home/developer/templates
+  - CmdLine:
+    - sudo chown -R developer:developer /home/developer
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .devcontainer/theia-next.package.json
+    - /home/developer/package.json
+  - CmdLine:
+    - git clone -b enable-xml-fileassociations --depth=1 https://github.com/devrt/theia-xml-extension.git
+      &&     cd theia-xml-extension && yarn --cache-folder ./ycache && rm -rf ./ycache
+      && yarn prepare && cd .. &&     yarn --cache-folder ./ycache && rm -rf ./ycache
+      &&     NODE_OPTIONS="--max_old_space_size=4096" yarn theia build
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> ~/.bashrc
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "3000"
+    - "8888"
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - sudo
+    - -E
+    - supervisord
+    - -n
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: $BASE_IMAGE
+  Name: ""
+  Platform: ""
+  SourceCode: FROM $BASE_IMAGE

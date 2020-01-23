@@ -33,9 +33,9 @@ USER $USERNAME
 RUN mkdir -p $HOME/workspace
 WORKDIR $HOME/workspace
 
-# Set the PYTHONPATH environment variable
-# to know where the packages are installed
-ENV PYTHONPATH /home/$USERNAME/.local
+# Set the PYTHONPATH environment variable
+# to know where scikit-lr is installed
+ENV PYTHONPATH $HOME/.local
 
 # Set bash as default command
 CMD /bin/bash

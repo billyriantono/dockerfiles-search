@@ -1,18 +1,25 @@
-FROM continuumio/miniconda3
+# Alpine had problems with Java and SDKMAN!
+# lchmod (file attributes) error: Not supported
+# https://bugs.alpinelinux.org/issues/8089
 
-# Install libgl for matlibplot module
-#RUN apt-get update --fix-missing && \
-#    apt-get install -y wget bzip2 ca-certificates \
-#    libglib2.0-0 libxext6 libsm6 libxrender1 libxft-dev libfreetype6 libfreetype6-dev \
-#    git vim
-RUN apt-get update --fix-missing && \
-    apt-get install -y libgl1-mesa-glx build-essential
-	#mesa-libGL libXcomposite libXcursor libXi libXtst libXScrnSaver libXrandr alsa-lib mesa-libEGL
+FROM ubuntu:cosmic
 
-# Install required python modules
-RUN conda install -y python pandas matplotlib numpy scipy scikit-learn && \
-conda install -c conda-forge pyyaml scikit-sparse && \
-conda clean -y --all
+MAINTAINER serandel@gmail.com
 
-# Add VIFI astronomy python modules
-COPY gl_stat.py ssdf_functions.py ./
+SHELL ["/bin/bash", "-c"]
+
+RUN apt-get update && \
+	apt-get -y install curl zip unzip && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install SDKMAN!
+RUN curl -s "https://get.sdkman.io" | bash
+
+RUN source /root/.sdkman/bin/sdkman-init.sh && \
+    sdk install java 8.0.202-zulu && \
+    sdk install maven 3.6.0 && \
+    sdk install kotlin 1.3.21 && \
+    sdk install kscript 2.7.1
+
+ENTRYPOINT source /root/.sdkman/bin/sdkman-init.sh && /usr/bin/env kscript "$0" "$@"
+CMD        [ "--help" ]

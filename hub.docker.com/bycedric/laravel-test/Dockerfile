@@ -1,48 +1,21 @@
-# Use the multi-stage feature to import Composer securely
-FROM composer:1.6
-# Use PHP as primary language
-FROM php:7.2
+FROM nvidia/cuda:10.0-cudnn7-devel-ubuntu18.04
 
-# Update, upgrade and install some dependencies
-RUN apt-get update \
-	&& apt-get upgrade -y \
-	&& apt-get install -y \
-		git \
-		gnupg \
-		libpng-dev \
-		libsqlite3-dev \
-		unzip \
-	&& apt-get autoremove -y
+LABEL maintainer="Bryan Flood <bryanfloodcontact@gmail.com>"
+LABEL description="🐳 Docker environment for Swift GPU Accelerated Machine Learning"
+LABEL url="https://github.com/KnowledgePending/Swift-TensorFlow-with-CUDA-Docker"
 
-# Install additional required PHP extensions
-RUN docker-php-ext-install \
-	gd \
-	pdo_mysql \
-	pdo_sqlite \
-	zip
+RUN apt-get -qq update  && \
+    apt-get -qq upgrade && \
+    apt-get -qq install clang \
+                        libpython-dev \
+                        libblocksruntime-dev \
+                        wget \
+                        software-properties-common && \
+    add-apt-repository ppa:ubuntu-toolchain-r/test && \
+    apt-get -qq upgrade libstdc++6 
 
-# Install and enable xdebug
-RUN pecl install xdebug \
-	&& docker-php-ext-enable xdebug
 
-# Add Node 8 LTS
-RUN curl -sL https://deb.nodesource.com/setup_8.x | bash -- \
-	&& apt-get install -y nodejs \
-	&& apt-get autoremove -y
-
-# Update NPM to the latest version
-RUN npm install -g npm@latest \
-	&& rm -r ~/.npm
-
-# Add Composer
-COPY --from=composer /usr/bin/composer /usr/bin/composer
-
-# Suppress the do-not-run-as-root warning from composer
-ENV COMPOSER_ALLOW_SUPERUSER 1
-
-# Show the versions of PHP, Node, Composer and NPM
-CMD \
-	echo "Node $(node -v)"; \
-	echo "NPM $(npm -v)"; \
-	php -v; \
-	composer --version;
+RUN wget https://storage.googleapis.com/swift-tensorflow-artifacts/releases/v0.4/rc2/swift-tensorflow-RELEASE-0.4-cuda10.0-cudnn7-ubuntu18.04.tar.gz && \
+    tar xvzf swift-tensorflow-RELEASE-0.4-cuda10.0-cudnn7-ubuntu18.04.tar.gz   && \
+    rm swift-tensorflow-RELEASE-0.4-cuda10.0-cudnn7-ubuntu18.04.tar.gz        && \
+    export PATH=$(path)/usr/bin:"${PATH}"

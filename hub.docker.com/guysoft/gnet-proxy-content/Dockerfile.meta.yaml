@@ -1,0 +1,112 @@
+MetaArgs: null
+Stages:
+- As: console
+  BaseName: quay.io/coreos/tectonic-console-builder:v16
+  Commands:
+  - CmdLine:
+    - mkdir -p /go/src/github.com/openshift/ && cd /go/src/github.com/openshift/ &&
+      git clone https://github.com/openshift/console && cd console && ./build.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /console
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -r /go/src/github.com/openshift/console/frontend/public/dist/ /console/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -r /go/src/github.com/openshift/console/contrib /console/contrib
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp -r /go/src/github.com/openshift/console/examples /console/examples
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /go/src/github.com/openshift/console/bin/bridge /console/bridge
+    Name: run
+    PrependShell: true
+  From:
+    Image: quay.io/coreos/tectonic-console-builder:v16
+  Name: console
+  Platform: ""
+  SourceCode: FROM quay.io/coreos/tectonic-console-builder:v16 as console
+- BaseName: fedora:29
+  Commands:
+  - Maintainer: gustavonalle@gmail.com
+    Name: maintainer
+  - CmdLine:
+    - dnf -y install golang-1.11.4 git findutils which sudo krb5-devel jq docker &&
+      dnf clean all
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HOME
+      Value: /root/
+    Name: env
+  - Env:
+    - Key: GOPATH
+      Value: $HOME/go
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"$PATH:$GOPATH/bin"'
+    Name: env
+  - CmdLine:
+    - echo $'export GOPATH=$HOME/go \nexport PATH=$PATH:$GOPATH/bin     \nexport OS_OUTPUT_GOPATH=1         \nexport
+      ORIGIN_BIN=$GOPATH/src/github.com/openshift/origin/_output/local/bin/linux/amd64/
+      \nPATH=$ORIGIN_BIN:$PATH' >> /root/.bash_profile
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - patches/
+    - /patches/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - compile.sh
+    - /root/
+  - CmdLine:
+    - mkdir -p $GOPATH/src/github.com/openshift && cd $GOPATH/src/github.com/openshift
+      && git clone https://github.com/openshift/origin && cd origin &&     /patches/apply.sh
+      &&     /root/compile.sh &&     rm -Rf pkg/ vendor/ _output/local/bin/linux/amd64/openshift-tests
+      /api/ docs/ examples/ &&     git config pack.windowMemory 512m && git gc --prune=now
+      --aggressive
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: console
+    Name: copy
+    SourcesAndDest:
+    - /console
+    - /console
+  - CmdLine:
+    - git clone https://github.com/operator-framework/operator-lifecycle-manager ~/operator-lifecycle-manager
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - $GOPATH/src/github.com/openshift/origin
+  - Name: expose
+    Ports:
+    - "9000"
+  - Name: workdir
+    Path: $GOPATH/src/github.com/openshift/origin/
+  - CmdLine:
+    - $GOPATH/src/github.com/openshift/origin/run.sh
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: fedora:29
+  Name: ""
+  Platform: ""
+  SourceCode: FROM fedora:29

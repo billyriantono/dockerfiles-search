@@ -1,60 +1,51 @@
-FROM centos:7 as builder
+FROM php:7.0-apache
 
-WORKDIR /root
+RUN apt-get update && \
+    apt-get install --fix-missing -y \
+      g++ \
+      git \
+      vim \
+      libgd-dev \
+      libxml2 \
+      libxml2-dev \
+      libxslt-dev \
+      libfreetype6-dev \
+      mysql-client && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get autoremove -y && \
+    apt-get clean all
 
-COPY docker/openssl.conf /root/
+RUN apt-get update && \
+    apt-get install -y software-properties-common && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get autoremove -y && \
+    apt-get clean all
+RUN curl -sL https://deb.nodesource.com/setup_10.x | bash -
+RUN apt-get update && \
+    apt-get install --fix-missing -y nodejs && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get autoremove -y && \
+    apt-get clean all
+RUN npm install -g bower
 
-RUN yum -y install openssl && \
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout ssl.key -out ssl.crt -config openssl.conf && \
-    cat ssl.crt ssl.key > ssl.pem && \
-    cat ssl.pem && \
-    curl -L -o /tmp/go.sh https://install.direct/go.sh && \
-    chmod +x /tmp/go.sh && \
-    /tmp/go.sh
+RUN docker-php-ext-configure gd --with-freetype-dir=/usr
+RUN docker-php-ext-install \
+      mbstring \
+      xsl \
+      gd \
+      exif \
+      mysqli \
+      pdo \
+      pdo_mysql \
+      zip \
+      soap
 
-FROM centos:7
+RUN pecl install channel://pecl.php.net/xdebug-2.7.2; \
+  echo 'zend_extension = /usr/local/lib/php/extensions/no-debug-non-zts-20151012/xdebug.so' >> /usr/local/etc/php/php.ini
 
-ENV NODE_ENV=production
+RUN curl -sS https://getcomposer.org/installer | php \
+    && mv composer.phar /usr/local/bin/composer
 
-COPY --from=builder /usr/bin/v2ray/v2ray /usr/bin/v2ray/
-COPY --from=builder /usr/bin/v2ray/v2ctl /usr/bin/v2ray/
-COPY --from=builder /usr/bin/v2ray/geoip.dat /usr/bin/v2ray/
-COPY --from=builder /usr/bin/v2ray/geosite.dat /usr/bin/v2ray/
-COPY --from=builder /root/ssl.key /etc/nginx/
-COPY --from=builder /root/ssl.pem /etc/nginx/
-# copy v2ray & nginx config
-COPY docker/config.json /etc/v2ray/
-COPY docker/https.conf /etc/nginx/conf.d/
-# copy api files
-COPY api/package.json /root/api/
-COPY api/index.js /root/api/
-COPY api/src /root/api/src/
+ENV PHP_TIMEZONE America/Santiago
 
-WORKDIR /root/api
-RUN set -ex && \
-    mkdir /var/log/v2ray/ && \
-    chmod +x /usr/bin/v2ray/v2ctl && \
-    chmod +x /usr/bin/v2ray/v2ray && \
-    # install nvm & node
-    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash && \
-    source ~/.bashrc && \
-    nvm install 10.15.3 && \
-    ln -sf /root/.nvm/versions/node/v10.15.3/bin/node /usr/bin/node && \
-    ln -sf /root/.nvm/versions/node/v10.15.3/bin/npm /usr/bin/npm && \
-    # install api node_modules
-    npm install --production && \
-    # install crontab
-    yum -y install crontabs && \
-    # install nginx
-    yum -y install epel-release && \
-    yum -y install nginx && \
-    # install certbot
-    yum-config-manager --enable rhui-REGION-rhel-server-extras rhui-REGION-rhel-server-optional && \
-    yum -y install certbot python2-certbot-nginx && \
-    # install crontab
-    echo "0 0 15 */3 * certbot renew" | tee -a /etc/crontab > /dev/null
-
-EXPOSE 80
-EXPOSE 443
-
-ENTRYPOINT [ "node", "/root/api/index" ]
+RUN a2enmod rewrite

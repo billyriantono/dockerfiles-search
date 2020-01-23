@@ -3,7 +3,8 @@ Stages:
 - BaseName: php:7.3-fpm-alpine3.11
   Commands:
   - CmdLine:
-    - set -ex;         apk add --no-cache         c-client         icu         libintl         libpng         libzip         msmtp         nginx         openldap         runit     ;         apk
+    - set -ex;         export CFLAGS="-Os";     export CPPFLAGS="${CFLAGS}";     export
+      LDFLAGS="-Wl,--strip-all";         apk add --no-cache         c-client         icu         libintl         libpng         libzip         msmtp         nginx         openldap         runit     ;         apk
       add --no-cache --virtual .build-deps         ${PHPIZE_DEPS}         gettext-dev         icu-dev         imap-dev         libpng-dev         libzip-dev         openldap-dev     ;         docker-php-ext-configure
       imap --with-imap-ssl;     docker-php-ext-install -j "$(nproc)"         gd         gettext         imap         intl         ldap         mysqli         sockets         zip     ;     pecl
       install apcu;     docker-php-ext-enable         apcu         opcache     ;         touch
@@ -18,21 +19,41 @@ Stages:
       Value: fa751b78fe84212376ab25e867b93c8a45d426917ae7d946f4be216d9b23505f
     Name: env
   - CmdLine:
-    - set -ex;         apk add --no-cache --virtual .build-deps         git     ;         wget
-      -q -O osTicket.zip https://github.com/osTicket/osTicket/releases/download/v${OSTICKET_VERSION}/osTicket-v${OSTICKET_VERSION}.zip;     echo
+    - set -ex;         wget -q -O osTicket.zip https://github.com/osTicket/osTicket/releases/download/v${OSTICKET_VERSION}/osTicket-v${OSTICKET_VERSION}.zip;     echo
       "${OSTICKET_SHA256SUM}  osTicket.zip" | sha256sum -c;     unzip osTicket.zip
       'upload/*';     rm osTicket.zip;     mkdir /usr/local/src;     mv upload /usr/local/src/osticket;     cp
       -al /usr/local/src/osticket/. /var/www/html;     rm -r /var/www/html/setup;         for
       lang in ar az bg ca cs da de el es_ES et fr hr hu it ja ko lt mk mn nl no fa
-      pl pt_PT         pt_BR sk sl sr_CS fi sv_SE ro ru vi th tr uk zh_CN zh_TW; do         curl
-      -so /var/www/html/include/i18n/${lang}.phar             https://s3.amazonaws.com/downloads.osticket.com/lang/${lang}.phar;     done;         git
-      clone --depth 1 https://github.com/devinsolutions/osTicket-plugins.git;     cd
-      osTicket-plugins;     php make.php hydrate;     for plugin in $(find * -maxdepth
-      0 -type d ! -path doc ! -path lib); do         mv ${plugin} /var/www/html/include/plugins;     done;     cd
-      ..;     rm -rf osTicket-plugins;         git clone --depth 1 https://github.com/devinsolutions/osTicket-slack-plugin.git;     cd
-      osTicket-slack-plugin;     mv slack /var/www/html/include/plugins;     cd ..;     rm
-      -rf osTicket-slack-plugin;         apk del .build-deps;     rm -rf /root/.composer
-      /var/cache/apk/*
+      pl pt_PT         pt_BR sk sl sr_CS fi sv_SE ro ru vi th tr uk zh_CN zh_TW; do         wget
+      -q -O /var/www/html/include/i18n/${lang}.phar             https://s3.amazonaws.com/downloads.osticket.com/lang/${lang}.phar;     done
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: OSTICKET_PLUGINS_VERSION
+      Value: 6ba7e511e7d24c73603be88e51f13b035ca8a79c
+    - Key: OSTICKET_PLUGINS_SHA256SUM
+      Value: a6ca85c960d13d07192aa2864845ff4d7cc356d6460ec2465e0b9332e2de899d
+    Name: env
+  - CmdLine:
+    - set -ex;         wget -q -O osTicket-plugins.tar.gz https://github.com/devinsolutions/osTicket-plugins/archive/${OSTICKET_PLUGINS_VERSION}.tar.gz;     echo
+      "${OSTICKET_PLUGINS_SHA256SUM}  osTicket-plugins.tar.gz" | sha256sum -c;     tar
+      -xzf osTicket-plugins.tar.gz --one-top-level --strip-components 1;     rm osTicket-plugins.tar.gz;         cd
+      osTicket-plugins;     php make.php hydrate;     find * -maxdepth 0 -type d !
+      -path doc ! -path lib -exec mv '{}'         /var/www/html/include/plugins +;     cd
+      ..;         rm -r osTicket-plugins /root/.composer
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: OSTICKET_SLACK_VERSION
+      Value: cd98e54fcadf1a5dd8e78b0a0380561c7ef29b02
+    - Key: OSTICKET_SLACK_SHA256SUM
+      Value: 9cdead701fd1be91a64451dfaca98148b997dc4e5a0ff1a61965bffeebd65540
+    Name: env
+  - CmdLine:
+    - set -ex;         wget -q -O osTicket-slack-plugin.tar.gz https://github.com/devinsolutions/osTicket-slack-plugin/archive/${OSTICKET_SLACK_VERSION}.tar.gz;     echo
+      "${OSTICKET_SLACK_SHA256SUM}  osTicket-slack-plugin.tar.gz" | sha256sum -c;     tar
+      -xzf osTicket-slack-plugin.tar.gz -C /var/www/html/include/plugins --strip-components
+      1         osTicket-slack-plugin-${OSTICKET_SLACK_VERSION}/slack;     rm osTicket-slack-plugin.tar.gz
     Name: run
     PrependShell: true
   - Chown: ""

@@ -1,1 +1,9 @@
-FROM gcr.io/google_containers/k8s-dns-dnsmasq-nanny-amd64:1.14.2
+FROM dynverse/dynwrap:r
+
+RUN R -e 'devtools::install_cran("SCORPIUS")'
+
+LABEL version 0.1.4
+
+ADD . /code
+
+ENTRYPOINT Rscript /code/run.R

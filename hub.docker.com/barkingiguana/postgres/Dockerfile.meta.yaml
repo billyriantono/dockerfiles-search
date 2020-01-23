@@ -1,46 +1,75 @@
 MetaArgs: null
 Stages:
-- BaseName: barkingiguana/base
+- As: builder
+  BaseName: alpine:3.7
   Commands:
-  - Maintainer: Craig R Webster <craig@barkingiguana.com>
-    Name: maintainer
   - CmdLine:
-    - DEBIAN_FRONTEND=noninteractive apt-get install -qq postgresql-server-dev-9.3
-      postgresql-9.3 postgresql-contrib-9.3
+    - apk update && apk add gcc g++ cmake make linux-headers musl-dev ninja     gmp-dev
+      autoconf  automake libtool binutils     fcgi geoip fcgi-dev geoip-dev &&     mkdir
+      /src && mkdir /build
     Name: run
     PrependShell: true
   - Chown: ""
-    Name: add
+    From: ""
+    Name: copy
     SourcesAndDest:
-    - ./pg_hba.conf
-    - /etc/postgresql/9.3/main/pg_hba.conf
-  - Chown: ""
-    Name: add
-    SourcesAndDest:
-    - ./postgresql.conf
-    - /etc/postgresql/9.3/main/postgresql.conf
-  - Chown: ""
-    Name: add
-    SourcesAndDest:
-    - ./start-postgres.sh
-    - /usr/sbin/start-postgres
+    - .
+    - /src
+  - Name: workdir
+    Path: /build
   - CmdLine:
-    - chmod +x /usr/sbin/start-postgres
+    - cmake -DCMAKE_C_FLAGS="-U_FORTIFY_SOURCE"           -DCMAKE_BUILD_TYPE=Release
+      -DWITH_CHROOT=OFF /src &&     make -j$(nproc) VERBOSE=1
     Name: run
     PrependShell: true
+  From:
+    Image: alpine:3.7
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.7 as builder
+- BaseName: alpine:3.7
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /build/ip_api
+    - /usr/local/bin/ip_api.fastcgi
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - install_geoip.sh
+    - /tmp/
   - CmdLine:
-    - chown postgres:postgres /var/lib/postgresql/9.3/main/base
+    - apk --no-cache add fcgi geoip lighttpd &&     /tmp/install_geoip.sh &&     rm
+      -f /tmp/install_geoip.sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - sample_conf/lighttpd.conf
+    - /etc/lighttpd.conf
+  - CmdLine:
+    - chmod o+r /etc/lighttpd.conf && chown 1000 /run
     Name: run
     PrependShell: true
   - Name: expose
     Ports:
-    - "5432"
+    - "8080"
+  - Name: user
+    User: 1000:1000
   - CmdLine:
-    - /usr/sbin/start-postgres
-    Name: cmd
+    - /usr/sbin/lighttpd
+    - -f
+    - /etc/lighttpd.conf
+    - -D
+    Name: entrypoint
     PrependShell: false
   From:
-    Image: barkingiguana/base
+    Image: alpine:3.7
   Name: ""
   Platform: ""
-  SourceCode: FROM barkingiguana/base
+  SourceCode: FROM alpine:3.7

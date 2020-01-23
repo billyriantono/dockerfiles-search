@@ -1,0 +1,79 @@
+MetaArgs: null
+Stages:
+- As: exporter-builder
+  BaseName: golang@sha256:dc6ec3db081a5d2a6425a648720fd1c8888a138cb59e6aeb301174de0c99c5cb
+  Commands:
+  - Labels:
+    - Key: disposable
+      Value: "true"
+    Name: label
+  - Env:
+    - Key: EXPORTER_URL
+      Value: https://github.com/percona/mongodb_exporter/archive
+    - Key: EXPORTER_VERSION
+      Value: 0.6.1
+    Name: env
+  - Env:
+    - Key: EXPORTER_PATH
+      Value: $GOPATH/src/github.com/percona
+    Name: env
+  - CmdLine:
+    - apk --update add build-base git openssh     && wget $EXPORTER_URL/$EXPORTER_VERSION.tar.gz
+      -P /tmp     && mkdir -p $EXPORTER_PATH     && tar -xzvf /tmp/$EXPORTER_VERSION.tar.gz
+      -C $EXPORTER_PATH     && mv $EXPORTER_PATH/mongodb_exporter-$EXPORTER_VERSION
+      $EXPORTER_PATH/mongodb_exporter     && cd $EXPORTER_PATH/mongodb_exporter     &&
+      make build
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang@sha256:dc6ec3db081a5d2a6425a648720fd1c8888a138cb59e6aeb301174de0c99c5cb
+  Name: exporter-builder
+  Platform: ""
+  SourceCode: FROM golang@sha256:dc6ec3db081a5d2a6425a648720fd1c8888a138cb59e6aeb301174de0c99c5cb
+    AS exporter-builder
+- BaseName: mongo@sha256:bf2281831947dbbce14d4ebba4378ba599bf4b889f86d3af7070c4288ae53f3a
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Adrian Riobo Lorenzo <adrian.riobo.lorenzo@google.com>"'
+    Name: label
+  - Chown: ""
+    From: exporter-builder
+    Name: copy
+    SourcesAndDest:
+    - /go/src/github.com/percona/mongodb_exporter/mongodb_exporter
+    - /usr/local/bin/
+  - Env:
+    - Key: COORDINATOR
+      Value: "false"
+    Name: env
+  - CmdLine:
+    - apt-get update -y     && apt-get install -y gettext-base
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - init.sh
+    - /docker-entrypoint-initdb.d/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - rs_initiate.js.template
+    - /tmp
+  - CmdLine:
+    - --replSet
+    - rs0
+    - --bind_ip_all
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - "9216"
+  From:
+    Image: mongo@sha256:bf2281831947dbbce14d4ebba4378ba599bf4b889f86d3af7070c4288ae53f3a
+  Name: ""
+  Platform: ""
+  SourceCode: FROM mongo@sha256:bf2281831947dbbce14d4ebba4378ba599bf4b889f86d3af7070c4288ae53f3a

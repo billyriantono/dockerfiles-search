@@ -1,23 +1,49 @@
-FROM alpine:latest
-MAINTAINER Luis Muniz <luis.muniz@b2boost.com>
-ENV REFRESHED_AT 2016-09-30
-ENV VAULT_VERSION 0.6.1
+# The container includes:
+#
+# azukiapp/ruby:
+# * MRI Ruby 2.2.3
+# * Bundler
+# * Image Magick
+#
 
-ENV AWS_S3_BUCKET <BUCKET NAME>
-ENV AWS_ACCESS_KEY_ID <CHANGEME>
-ENV AWS_SECRET_ACCESS_KEY <CHANGEME>
-ENV AWS_DEFAULT_REGION <CHANGEME>
+FROM azukiapp/node
+MAINTAINER Azuki <support@azukiapp.com>
 
-# x509 expects certs to be in this file only.
-RUN apk update && apk add openssl ca-certificates && rm -rf /var/cache/apk/*
+ENV RUBY_MAJOR 2.2
+ENV RUBY_VERSION 2.2.6
 
-# Download, unzip the given version of vault and set permissions
-RUN wget -qO /tmp/vault.zip https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_linux_amd64.zip && \
-      unzip -d /bin /tmp/vault.zip && rm /tmp/vault.zip && chmod 755 /bin/vault
+# Set $PATH so that non-login shells will see the Ruby binaries
+ENV PATH $PATH:/opt/rubies/ruby-$RUBY_VERSION/bin
 
-EXPOSE 8200
-VOLUME "/config"
-COPY config/s3.hcl /config/server.hcl
+# Install MRI Ruby $RUBY_VERSION
+RUN curl -O http://ftp.ruby-lang.org/pub/ruby/$RUBY_MAJOR/ruby-$RUBY_VERSION.tar.gz && \
+    tar -zxvf ruby-$RUBY_VERSION.tar.gz && \
+    cd ruby-$RUBY_VERSION && \
+    ./configure --disable-install-doc && \
+    make && \
+    make install && \
+    cd .. && \
+    rm -r ruby-$RUBY_VERSION ruby-$RUBY_VERSION.tar.gz && \
+    echo 'gem: --no-document' > /usr/local/etc/gemrc
 
-ENTRYPOINT ["/bin/vault"]
-CMD server -config=/config/server.hcl
+# ==============================================================================
+# Rubygems and Bundler
+# ==============================================================================
+
+ENV RUBYGEMS_MAJOR 2.3
+ENV RUBYGEMS_VERSION 2.3.0
+
+# Install rubygems and bundler
+ADD http://production.cf.rubygems.org/rubygems/rubygems-$RUBYGEMS_VERSION.tgz /tmp/
+RUN cd /tmp && \
+    tar -zxf /tmp/rubygems-$RUBYGEMS_VERSION.tgz && \
+    cd /tmp/rubygems-$RUBYGEMS_VERSION && \
+    ruby setup.rb && \
+    /bin/bash -l -c 'gem install bundler --no-rdoc --no-ri' && \
+    echo "gem: --no-ri --no-rdoc" > ~/.gemrc
+
+# Define working directory
+WORKDIR /app
+
+# Set bash as a default process
+CMD ["bash"]

@@ -1,4 +1,4 @@
-FROM node:12-alpine
+FROM node:13-alpine
 
 # 设置镜像
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apk/repositories

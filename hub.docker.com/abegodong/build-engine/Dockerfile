@@ -1,30 +1,37 @@
-FROM ubuntu:16.04
-MAINTAINER Abraham Godong <abrahamg@strategies360.com>
+FROM python:slim-buster
 
-RUN apt update && apt -y upgrade && \
-    apt -y install \
-        apt-transport-https \
-        ca-certificates \
-        curl \
-        wget \
-        gnupg2 \
-        libpng-dev \
-    && \
-    (curl -sL https://deb.nodesource.com/setup_11.x | bash -) && \
-    apt -y install nodejs && \
-    npm install -g bower gulp && \
-    (echo "deb https://packages.cloud.google.com/apt cloud-sdk-$(lsb_release -c -s) main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list) && \
-    (curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -) && \
-    apt update && \
-    apt -y install \
-        google-cloud-sdk \
-        google-cloud-sdk-app-engine-python \
-        git \
-        python \
-        python-crypto \
-        python-pip \
-        && \
-    pip install pycrypto && \
-    rm -rf /var/lib/apt/lists/*
+ENV PYENV_ROOT=/root/.pyenv
+ENV PATH $PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH
 
-ENV ENDPOINTS_GAE_SDK /usr/lib/google-cloud-sdk
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      build-essential \
+      curl \
+      git \
+      libbz2-dev \
+      libffi-dev \
+      liblzma-dev \
+      libncurses5-dev \
+      libncursesw5-dev \
+      libreadline-dev \
+      libsqlite3-dev \
+      libssl-dev \
+      llvm \
+      make \
+      python-openssl \
+      tk-dev \
+      wget \
+      xz-utils \
+      zlib1g-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pyenv, then install python versions
+RUN git clone --depth 1 https://github.com/pyenv/pyenv.git $PYENV_ROOT && \
+    rm -rfv $PYENV_ROOT/.git
+
+# Install xxenv-latest, for inferring latest version of python
+RUN git clone https://github.com/momo-lab/xxenv-latest.git $PYENV_ROOT/plugins/xxenv-latest
+
+COPY requirements.txt entrypoint.sh /
+ENTRYPOINT ["/entrypoint.sh"]

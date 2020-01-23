@@ -1,20 +1,27 @@
-FROM ubuntu:14.04
+FROM debian:stretch
+MAINTAINER nobody@nowhere.ws
 
-WORKDIR /opt
+RUN set -x \
+	&& apt-get update && apt-get install -y --no-install-recommends \
+		gir1.2-poppler-0.18 \
+		python-cairo \
+		python-gi \
+		python-gi-cairo \
+		python-gobject \
+		python-pip \
+		python-setuptools \
+		python-wheel
 
-RUN apt-get update && apt-get install -y \
-        wget \
-        unzip \
-        build-essential \
-        apt-utils --yes --force-yes \
-        openssh-client \
-        curl \
-        zlib1g-dev \
-        libncurses5-dev \
-        git
+RUN mkdir /srv/eventmap
+WORKDIR /srv/eventmap
+COPY requirements.txt /srv/eventmap/requirements.txt
 
-ADD http://download.asperasoft.com/download/sw/ascp-client/3.5.4/ascp-install-3.5.4.102989-linux-64.sh /opt/
+RUN pip install -r requirements.txt
 
-# No https, so verify sha1
-RUN test $(sha1sum /opt/ascp-install-3.5.4.102989-linux-64.sh |cut -f1 -d\ ) = a99a63a85fee418d16000a1a51cc70b489755957 && \
-    sh /opt/ascp-install-3.5.4.102989-linux-64.sh
+COPY ./ /srv/eventmap
+
+VOLUME [ "/srv/eventmap/data" ]
+
+CMD [ "python", "run_server.py", "-P" ]
+
+EXPOSE 8023

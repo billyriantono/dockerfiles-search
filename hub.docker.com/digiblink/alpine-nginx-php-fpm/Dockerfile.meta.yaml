@@ -1,0 +1,211 @@
+MetaArgs: null
+Stages:
+- BaseName: alpine:3.4
+  Commands:
+  - Env:
+    - Key: PHPIZE_DEPS
+      Value: "autoconf \t\tdpkg-dev dpkg \t\tfile \t\tg++ \t\tgcc \t\tlibc-dev \t\tmake
+        \t\tpcre-dev \t\tpkgconf \t\tre2c"
+    Name: env
+  - CmdLine:
+    - "apk add --no-cache --virtual .persistent-deps \t\tnginx \t\tca-certificates
+      \t\tbash \t\tsed \t\tcurl \t\ttar \t\txz \t\tgit \t\topenssh"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -x \t&& adduser -u 82 -D -S -G www-data www-data"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_INI_DIR
+      Value: /usr/local/etc/php
+    Name: env
+  - CmdLine:
+    - mkdir -p $PHP_INI_DIR/conf.d
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_EXTRA_CONFIGURE_ARGS
+      Value: --enable-fpm --with-fpm-user=nginx --with-fpm-group=www-data
+    Name: env
+  - Env:
+    - Key: PHP_CFLAGS
+      Value: '"-fstack-protector-strong -fpic -fpie -O2"'
+    Name: env
+  - Env:
+    - Key: PHP_CPPFLAGS
+      Value: '"$PHP_CFLAGS"'
+    Name: env
+  - Env:
+    - Key: PHP_LDFLAGS
+      Value: '"-Wl,-O1 -Wl,--hash-style=both -pie"'
+    Name: env
+  - Env:
+    - Key: GPG_KEYS
+      Value: 1A4E8B7277C42E53DBA9C7B9BCAA30EA9C0D5763 6E4F6AB321FDC07F2C332E3AC2BF0BC433CFC8B3
+    Name: env
+  - Env:
+    - Key: PHP_VERSION
+      Value: 7.0.32
+    Name: env
+  - Env:
+    - Key: PHP_URL
+      Value: '"https://secure.php.net/get/php-7.0.32.tar.xz/from/this/mirror"'
+    - Key: PHP_ASC_URL
+      Value: '"https://secure.php.net/get/php-7.0.32.tar.xz.asc/from/this/mirror"'
+    Name: env
+  - Env:
+    - Key: PHP_SHA256
+      Value: '"ff6f62afeb32c71b3b89ecbd42950ef6c5e0c329cc6e1c58ffac47e6f1f883c4"'
+    - Key: PHP_MD5
+      Value: '""'
+    Name: env
+  - CmdLine:
+    - "set -xe; \t\tapk add --no-cache --virtual .fetch-deps \t\tgnupg \t\topenssl
+      \t; \t\tmkdir -p /usr/src; \tcd /usr/src; \t\twget -O php.tar.xz \"$PHP_URL\";
+      \t\tif [ -n \"$PHP_SHA256\" ]; then \t\techo \"$PHP_SHA256 *php.tar.xz\" | sha256sum
+      -c -; \tfi; \tif [ -n \"$PHP_MD5\" ]; then \t\techo \"$PHP_MD5 *php.tar.xz\"
+      | md5sum -c -; \tfi; \t\tif [ -n \"$PHP_ASC_URL\" ]; then \t\twget -O php.tar.xz.asc
+      \"$PHP_ASC_URL\"; \t\texport GNUPGHOME=\"$(mktemp -d)\"; \t\tfor key in $GPG_KEYS;
+      do \t\t\tgpg --keyserver pgp.mit.edu --recv-keys \"$key\" || \t\t\tgpg --keyserver
+      keyserver.pgp.com --recv-keys \"$key\" || \t\t\tgpg --keyserver ha.pool.sks-keyservers.net
+      --recv-keys \"$key\"; \t\tdone; \t\tgpg --batch --verify php.tar.xz.asc php.tar.xz;
+      \t\trm -rf \"$GNUPGHOME\"; \tfi; \t\tapk del .fetch-deps"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/docker-php-source
+    - /usr/local/bin/
+  - CmdLine:
+    - "set -xe \t&& apk add --no-cache --virtual .build-deps \t\t$PHPIZE_DEPS \t\tcoreutils
+      \t\tcurl-dev \t\tlibedit-dev \t\tlibxml2-dev \t\topenssl-dev \t\tsqlite-dev
+      \t\tlibpng-dev \t\tlibjpeg-turbo-dev \t\t&& export CFLAGS=\"$PHP_CFLAGS\" \t\tCPPFLAGS=\"$PHP_CPPFLAGS\"
+      \t\tLDFLAGS=\"$PHP_LDFLAGS\" \t&& docker-php-source extract \t&& cd /usr/src/php
+      \t&& gnuArch=\"$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)\" \t&& ./configure
+      \t\t--build=\"$gnuArch\" \t\t--with-config-file-path=\"$PHP_INI_DIR\" \t\t--with-config-file-scan-dir=\"$PHP_INI_DIR/conf.d\"
+      \t\t\t\t--disable-cgi \t\t\t\t--enable-ftp \t\t--enable-mbstring \t\t--enable-mysqlnd
+      \t\t--enable-zip \t\t--with-curl \t\t--with-libedit \t\t--with-openssl \t\t--with-zlib
+      \t\t--with-mysqli \t\t--with-pdo-mysql \t\t--with-gd \t\t--with-png-dir \t\t--with-jpeg-dir
+      \t\t--with-opcache \t\t\t\t--with-pcre-regex=/usr \t\t\t\t$PHP_EXTRA_CONFIGURE_ARGS
+      \t&& make -j \"$(nproc)\" \t&& make install \t&& { find /usr/local/bin /usr/local/sbin
+      -type f -perm +0111 -exec strip --strip-all '{}' + || true; } \t&& make clean
+      \t&& cd / \t&& docker-php-source delete \t\t&& runDeps=\"$( \t\tscanelf --needed
+      --nobanner --recursive /usr/local \t\t\t| awk '{ gsub(/,/, \"\\nso:\", $2);
+      print \"so:\" $2 }' \t\t\t| sort -u \t\t\t| xargs -r apk info --installed \t\t\t|
+      sort -u \t)\" \t&& apk add --no-cache --virtual .php-rundeps $runDeps \t\t&&
+      apk del .build-deps \t\t&& pecl update-channels \t&& rm -rf /tmp/pear ~/.pearrc"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "{ \t\techo 'opcache.memory_consumption=128'; \t\techo 'opcache.interned_strings_buffer=8';
+      \t\techo 'opcache.max_accelerated_files=4000'; \t\techo 'opcache.revalidate_freq=2';
+      \t\techo 'opcache.fast_shutdown=1'; \t\techo 'opcache.enable_cli=1'; \t} > /usr/local/etc/php/conf.d/opcache-recommended.ini"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TZ
+      Value: Europe/Riga
+    Name: env
+  - CmdLine:
+    - apk add --no-cache tzdata    && cp /usr/share/zoneinfo/$TZ /etc/localtime    &&
+      echo "$TZ" >> /etc/timezone    && echo "$TZ" >> /etc/TZ    && date    && apk
+      del tzdata
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files/docker-php-ext-*
+    - /usr/local/bin/
+  - CmdLine:
+    - rm -rf /var/cache/apk/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TERM
+      Value: '"xterm"'
+    - Key: PAGER
+      Value: '"more"'
+    - Key: DB_HOST
+      Value: '"mysql"'
+    - Key: DB_NAME
+      Value: '""'
+    - Key: DB_USER
+      Value: '""'
+    - Key: DB_PASS
+      Value: '""'
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: /DATA/bin:$PATH
+    Name: env
+  - CmdLine:
+    - "set -ex \t&& cd /usr/local/etc \t&& if [ -d php-fpm.d ]; then \t\tsed 's!=NONE/!=!g'
+      php-fpm.conf.default | tee php-fpm.conf > /dev/null; \t\tcp php-fpm.d/www.conf.default
+      php-fpm.d/www.conf; \telse \t\tmkdir php-fpm.d; \t\tcp php-fpm.conf.default
+      php-fpm.d/www.conf; \t\t{ \t\t\techo '[global]'; \t\t\techo 'include=etc/php-fpm.d/*.conf';
+      \t\t} | tee php-fpm.conf; \tfi \t&& { \t\techo '[global]'; \t\techo 'error_log
+      = /proc/self/fd/2'; \t\techo; \t\techo '[www]'; \t\techo '; if we send this
+      to /proc/self/fd/1, it never appears'; \t\techo 'access.log = /proc/self/fd/2';
+      \t\techo; \t\techo 'clear_env = no'; \t\techo; \t\techo '; Ensure worker stdout
+      and stderr are sent to the main error log.'; \t\techo 'catch_workers_output
+      = yes'; \t} | tee php-fpm.d/docker.conf \t&& { \t\techo '[global]'; \t\techo
+      'daemonize = no'; \t\techo; \t\techo '[www]'; \t\techo 'listen = [::]:9000';
+      \t} | tee php-fpm.d/zz-docker.conf"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/nginx.conf
+    - /etc/nginx/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/php-fpm.conf
+    - /usr/local/etc/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/php.ini
+    - /usr/local/etc/php/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - files/run.sh
+    - /
+  - CmdLine:
+    - chmod +x /run.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i "s/nginx:x:100:101:nginx:\/var\/lib\/nginx:\/sbin\/nologin/nginx:x:100:101:nginx:\/DATA:\/bin\/bash/g"
+      /etc/passwd &&     sed -i "s/nginx:x:100:101:nginx:\/var\/lib\/nginx:\/sbin\/nologin/nginx:x:100:101:nginx:\/DATA:\/bin\/bash/g"
+      /etc/passwd-
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+      && chmod +x wp-cli.phar && mv wp-cli.phar /usr/bin/wp-cli && chown nginx:nginx
+      /usr/bin/wp-cli
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: volume
+    Volumes:
+    - /DATA
+  - CmdLine:
+    - /run.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.4
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.4

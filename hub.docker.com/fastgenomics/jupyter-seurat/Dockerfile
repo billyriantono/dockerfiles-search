@@ -1,4 +1,4 @@
-FROM fastgenomics/jupyter-base:0.1.8
+FROM fastgenomics/jupyter-base:0.1.9
 
 COPY requirements_conda.txt /tmp/
 

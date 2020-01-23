@@ -1,37 +1,94 @@
 MetaArgs: null
 Stages:
-- BaseName: ubuntu:16.04
+- As: node-build-env
+  BaseName: node:10-alpine
   Commands:
-  - Maintainer: Frederic Lemoine <frederic.lemoine@pasteur.fr>
-    Name: maintainer
-  - Env:
-    - Key: BOOST_ROOT
-      Value: /usr
-    Name: env
-  - Env:
-    - Key: ALFRED_VERSION
-      Value: v0.1.17
-    Name: env
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./web/package.json
+    - /usr/src/app/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./web/yarn.lock
+    - /usr/src/app/
+  - Name: workdir
+    Path: /usr/src/app
   - CmdLine:
-    - "apt-get update     && apt-get install -y build-essential cmake g++ gfortran
-      git         hdf5-tools libboost-date-time-dev libboost-program-options-dev libboost-system-dev
-      \tlibboost-filesystem-dev libboost-iostreams-dev libbz2-dev libhdf5-dev libncurses-dev
-      \tliblzma-dev zlib1g-dev     && cd /usr/local     && git clone --recursive https://github.com/tobiasrausch/alfred.git
-      \    && cd alfred     && git checkout ${ALFRED_VERSION}     && make STATIC=1
-      all     && cp src/alfred /usr/local/bin     && cd ..     && rm -rf alfred     &&
-      apt-get remove -y build-essential cmake g++ gfortran git libboost-date-time-dev
-      \       libboost-program-options-dev libboost-system-dev libboost-filesystem-dev
-      \       libboost-iostreams-dev libbz2-dev libhdf5-dev libncurses-dev liblzma-dev
-      zlib1g-dev     && apt-get autoremove -y     && apt-get clean     && rm -rf /var/lib/apt/lists/*
-      \    && mkdir /pasteur"
+    - yarn install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - ./web
+    - /usr/src/app/
+  - CmdLine:
+    - yarn build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:10-alpine
+  Name: node-build-env
+  Platform: ""
+  SourceCode: FROM node:10-alpine AS node-build-env
+- As: go-build-env
+  BaseName: golang:alpine
+  Commands:
+  - CmdLine:
+    - apk update && apk add git
     Name: run
     PrependShell: true
   - CmdLine:
-    - /usr/local/bin/alfred
+    - go get -u github.com/golang/dep/cmd/dep
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -u github.com/UnnoTed/fileb0x
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /go/src/github.com/esnunes/multiproxy
+  - Chown: ""
+    From: node-build-env
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/app/dist/*
+    - /go/src/github.com/esnunes/multiproxy/web/dist/
+  - CmdLine:
+    - cd /go/src/github.com/esnunes/multiproxy/ &&     dep ensure -v &&     fileb0x
+      assets.yaml &&     go install ./...
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:alpine
+  Name: go-build-env
+  Platform: ""
+  SourceCode: FROM golang:alpine AS go-build-env
+- BaseName: alpine
+  Commands:
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: go-build-env
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/multiproxy
+    - /app/
+  - CmdLine:
+    - ./multiproxy
     Name: entrypoint
     PrependShell: false
+  - CmdLine:
+    - ./config.json
+    Name: cmd
+    PrependShell: false
   From:
-    Image: ubuntu:16.04
+    Image: alpine
   Name: ""
   Platform: ""
-  SourceCode: FROM ubuntu:16.04
+  SourceCode: FROM alpine

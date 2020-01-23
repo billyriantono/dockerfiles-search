@@ -1,0 +1,83 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:1.12-alpine
+  Commands:
+  - Env:
+    - Key: TZ
+      Value: Asia/Shanghai
+    Name: env
+  - Env:
+    - Key: LANG
+      Value: '"en_US.UTF-8"'
+    Name: env
+  - CmdLine:
+    - apk add --no-cache     wget     make     git     gcc     musl-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -O /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.2/dumb-init_1.2.2_amd64  &&
+      chmod +x /usr/local/bin/dumb-init
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/hhyo/goInception.git     && cd goInception     &&
+      rm -f go.sum     && make parser     && go build -o bin/goInception tidb-server/main.go     &&
+      cp bin/goInception /goInception     && cp dockersrc/pt-online-schema-change
+      /tmp/pt-online-schema-change     && cp config/config.toml.default /etc/config.toml     &&
+      cd ../ && rm -rf goInception
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.12-alpine
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.12-alpine as builder
+- BaseName: alpine
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /goInception
+    - /goInception
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /etc/config.toml
+    - /etc/config.toml
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/dumb-init
+    - /usr/local/bin/dumb-init
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /tmp/pt-online-schema-change
+    - /usr/local/bin/pt-online-schema-change
+  - Name: workdir
+    Path: /
+  - Name: expose
+    Ports:
+    - "4000"
+  - CmdLine:
+    - set -x   && apk add --no-cache perl perl-dbi perl-dbd-mysql perl-io-socket-ssl
+      perl-term-readkey tzdata   && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime
+      && echo $TZ > /etc/timezone   && chmod +x /usr/local/bin/pt-online-schema-change
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/dumb-init
+    - /goInception
+    - --config=/etc/config.toml
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

@@ -1,117 +1,123 @@
 MetaArgs: null
 Stages:
-- BaseName: debian:jessie
+- BaseName: nvidia/cuda:10.0-cudnn7-devel
   Commands:
-  - Maintainer: Fabio Montefuscolo <fabio.montefuscolo@hacklab.com.br>
-    Name: maintainer
   - Env:
     - Key: DEBIAN_FRONTEND
       Value: noninteractive
     Name: env
-  - CmdLine:
-    - apt-get update
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - apt-get install -y python python-pip python-dev
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - apt-get install -y libpq-dev libgeos-dev libjpeg-dev
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - apt-get install -y nginx gunicorn supervisor
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - apt-get install -y npm git
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - ln -s /usr/bin/nodejs /usr/bin/node
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - useradd -m -u 1000 -s /bin/bash bikeanjo
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - mkdir /app
-    Name: run
-    PrependShell: true
   - Env:
-    - Key: DJANGO_DATABASE_URL
-      Value: '''postgis://bikeanjo:bikeanjo@postgis/bikeanjo'''
+    - Key: PYTHON_VERSION
+      Value: 3.7.1
     Name: env
   - Env:
-    - Key: DJANGO_SETTINGS_MODULE
-      Value: '''bikeanjo.settings'''
+    - Key: HOME
+      Value: /root
     Name: env
+  - Env:
+    - Key: PYTHON_ROOT
+      Value: $HOME/local/python-$PYTHON_VERSION
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $PYTHON_ROOT/bin:$PATH
+    Name: env
+  - Env:
+    - Key: PYENV_ROOT
+      Value: $HOME/.pyenv
+    Name: env
+  - CmdLine:
+    - apt-get update && apt-get upgrade -y  && apt-get install -y     gdebi     git     make     build-essential     libssl-dev     zlib1g-dev     libbz2-dev     libreadline-dev     libsqlite3-dev     wget     unzip     curl     llvm     libncurses5-dev     libncursesw5-dev     xz-utils     tk-dev     libffi-dev     liblzma-dev  &&
+      git clone https://github.com/pyenv/pyenv.git $PYENV_ROOT  && $PYENV_ROOT/plugins/python-build/install.sh  &&
+      /usr/local/bin/python-build -v $PYTHON_VERSION $PYTHON_ROOT  && rm -rf $PYENV_ROOT
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt remove --allow-change-held-packages -y libcudnn7 libcudnn7-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1604/x86_64/libcudnn7_7.5.0.56-1+cuda10.0_amd64.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1604/x86_64/libcudnn7-dev_7.5.0.56-1+cuda10.0_amd64.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dpkg -i libcudnn7_7.5.0.56-1+cuda10.0_amd64.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - dpkg -i libcudnn7-dev_7.5.0.56-1+cuda10.0_amd64.deb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install tensorflow-gpu==1.13.1
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /protoc_3.3 &&     cd protoc_3.3 &&     wget https://github.com/google/protobuf/releases/download/v3.3.0/protoc-3.3.0-linux-x86_64.zip
+      &&     chmod 775 protoc-3.3.0-linux-x86_64.zip &&     unzip protoc-3.3.0-linux-x86_64.zip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y protobuf-compiler python-pil python-lxml python-tk
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install --user Cython contextlib2 pillow lxml matplotlib
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/tensorflow/models.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git clone https://github.com/cocodataset/cocoapi.git &&     cd cocoapi/PythonAPI
+      &&     make &&     cp -r pycocotools /models/research/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /models/research &&     /protoc_3.3/bin/protoc object_detection/protos/*.proto
+      --python_out=.
+    Name: run
+    PrependShell: true
   - Env:
     - Key: PYTHONPATH
-      Value: '''/app'''
-    Name: env
-  - Env:
-    - Key: GUNICORN_LOG_LEVEL
-      Value: '''info'''
-    Name: env
-  - Env:
-    - Key: GUNICORN_EXTRA_FLAGS
-      Value: ''''''
+      Value: $PYTHONPATH:/models/research:/models/research/slim
     Name: env
   - Chown: ""
     From: ""
     Name: copy
     SourcesAndDest:
-    - .
-    - /app
-  - Name: workdir
-    Path: /app
+    - utils/create_tf_record.py
+    - /models/research/object_detection/dataset_tools/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - utils/shell_script
+    - /models/reserach/.
   - CmdLine:
-    - pip install -r requirements.txt
+    - curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
     Name: run
     PrependShell: true
   - CmdLine:
-    - chown -R bikeanjo /app
-    Name: run
-    PrependShell: true
-  - Name: user
-    User: bikeanjo
-  - CmdLine:
-    - npm install
+    - echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" |
+      tee /etc/apt/sources.list.d/coral-edgetpu.list
     Name: run
     PrependShell: true
   - CmdLine:
-    - node node_modules/bower/bin/bower install
+    - apt-get update
     Name: run
     PrependShell: true
   - CmdLine:
-    - node node_modules/grunt-cli/bin/grunt all
+    - apt-get install -y edgetpu
     Name: run
     PrependShell: true
-  - CmdLine:
-    - python manage.py collectstatic --noinput
-    Name: run
-    PrependShell: true
-  - Name: user
-    User: root
-  - Name: expose
-    Ports:
-    - "80"
-    - "8000"
-  - CmdLine:
-    - /app/docker/entrypoint.py
-    Name: entrypoint
-    PrependShell: false
-  - CmdLine:
-    - supervisord
-    - -c
-    - /app/docker/supervisord.conf
-    Name: cmd
-    PrependShell: false
   From:
-    Image: debian:jessie
+    Image: nvidia/cuda:10.0-cudnn7-devel
   Name: ""
   Platform: ""
-  SourceCode: FROM debian:jessie
+  SourceCode: FROM nvidia/cuda:10.0-cudnn7-devel

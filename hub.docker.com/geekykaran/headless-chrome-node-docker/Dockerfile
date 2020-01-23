@@ -1,47 +1,92 @@
-FROM debian:stable-slim
+# use the ubuntu base image
+FROM ubuntu:18.04
 
-# Install basic tools/utilities and google Chrome unstable (which has cross platform support for headless mode). Combining theem together so that apt cache cleanup would need to be done just once.
-RUN apt-get update -y && \
-    apt-get install ca-certificates \
-      gconf-service \
-      libasound2 \
-      libatk1.0-0 \
-      libatk1.0-0 \
-      libdbus-1-3 \
-      libgconf-2-4 \
-      libgtk-3-0 \
-      libnspr4 \
-      libnss3 \
-      libx11-xcb1 \
-      libxss1 \
-      libxtst6 \
-      fonts-liberation \
-      libappindicator1 \
-      xdg-utils \
-      lsb-release \
-      wget \
-      curl \
-      xz-utils -y --no-install-recommends && \
-    wget https://dl.google.com/linux/direct/google-chrome-unstable_current_amd64.deb && \
-    dpkg -i google-chrome*.deb && \
-    apt-get install -f && \
-    apt-get clean autoclean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* google-chrome-unstable_current_amd64.deb
+# install required packages
+RUN apt-get update && apt-get install -y  \
+    build-essential \
+    cmake \
+    g++ \
+    gfortran \
+    git \
+    libboost-date-time-dev \
+    libboost-program-options-dev \
+    libboost-system-dev \
+    libboost-filesystem-dev \
+    libboost-iostreams-dev \
+    libbz2-dev \
+    libhdf5-dev \
+    libncurses-dev \
+    liblzma-dev \
+    primer3 \
+    python \
+    python-dev \
+    python-pip \
+    wget \
+    zlib1g-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install nodejs
-ENV NPM_CONFIG_LOGLEVEL=info NODE_VERSION=8.4.0
+# set environment
+ENV BOOST_ROOT /usr
+ENV EBROOTHTSLIB /opt/htslib
 
-RUN curl -SLO "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.xz" \
-  && tar -xJf "node-v$NODE_VERSION-linux-x64.tar.xz" -C /usr/local --strip-components=1 \
-  && rm "node-v$NODE_VERSION-linux-x64.tar.xz" \
-  && ln -s /usr/local/bin/node /usr/local/bin/nodejs
+# install htslib
+RUN cd /opt \
+    && git clone https://github.com/samtools/htslib.git \
+    && cd /opt/htslib \
+    && make \
+    && make lib-static \
+    && make install
 
-# Install yarn
-ENV YARN_VERSION 0.27.5
+# install samtools
+RUN cd /opt \
+    && git clone https://github.com/samtools/samtools.git \
+    && cd /opt/samtools \
+    && make \
+    && make install
 
-RUN curl -fSLO --compressed "https://yarnpkg.com/downloads/$YARN_VERSION/yarn-v$YARN_VERSION.tar.gz" \
-  && mkdir -p /opt/yarn \
-  && tar -xzf yarn-v$YARN_VERSION.tar.gz -C /opt/yarn --strip-components=1 \
-  && ln -s /opt/yarn/bin/yarn /usr/local/bin/yarn \
-  && ln -s /opt/yarn/bin/yarn /usr/local/bin/yarnpkg \
-  && rm yarn-v$YARN_VERSION.tar.gz
+# install tracy
+RUN cd /opt \
+    && git clone --recursive https://github.com/gear-genomics/tracy.git \
+    && cd /opt/tracy \
+    && make \
+    && make install
+
+# install silica
+RUN cd /opt \
+    && git clone --recursive https://github.com/gear-genomics/silica.git \
+    && cd /opt/silica \
+    && make \
+    && make install
+
+# include silica in path
+ENV PATH="/opt/tracy/bin:/opt/silica/bin:/opt/htslib:/opt/samtools:${PATH}"
+
+# install verdin
+RUN cd /opt \
+    && git clone --recursive https://github.com/gear-genomics/verdin.git
+
+# install python packages
+RUN pip install -r /opt/verdin/docker/requirements.txt
+
+# GRCh37: ftp://ftp.ensembl.org/pub/release-75/fasta/homo_sapiens/dna/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa.gz
+# C. elegans for testing: ftp://ftp.ensembl.org/pub/release-92/fasta/caenorhabditis_elegans/dna/Caenorhabditis_elegans.WBcel235.dna.toplevel.fa.gz
+# download and index reference genome
+RUN cd /opt/silica/fm \
+    && wget -O Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz ftp://ftp.ensembl.org/pub/release-92/fasta/caenorhabditis_elegans/dna/Caenorhabditis_elegans.WBcel235.dna.toplevel.fa.gz \
+    && gunzip Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz \
+    && bgzip Homo_sapiens.GRCh37.dna.primary_assembly.fa \
+    && samtools faidx Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz \
+    && tracy -o Homo_sapiens.GRCh37.dna.primary_assembly.fa.fm9 Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz
+
+
+# generate links
+RUN cd /opt/verdin/fm \
+    && ln -s /opt/silica/fm/Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz.fai \
+    && ln -s /opt/silica/fm/Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz.gzi \
+    && ln -s /opt/silica/fm/Homo_sapiens.GRCh37.dna.primary_assembly.fa.fm9 \
+    && ln -s /opt/silica/fm/Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz
+
+WORKDIR /opt/verdin/server/
+EXPOSE 8666
+CMD ["gunicorn", "--timeout", "125", "-w", "5", "-b", "0.0.0.0:8666", "server:app"]

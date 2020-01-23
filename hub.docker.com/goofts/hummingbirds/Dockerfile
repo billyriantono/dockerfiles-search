@@ -1,55 +1,46 @@
-FROM alpine:edge
+FROM goofts/hummingbirds:latest
 
 MAINTAINER goofts loking.zhao.moshang@icloud.com
-# jupyterlab安装的其他内核存于 ~/.local/share/jupyter/kernels 文件夹
-ENV HUMMINGBIRDS_VERSION 13.21.34
+
+ENV HUMMINGBIRDS_VERSION 3.5.8
+
+ENV PYTHON_PACKAGES /usr/local/lib/python3*/dist-packages
+
+ENV LAB_PATH=/usr/share/jupyter/lab
+
+ENV LATEX_PATH=/hummingbirds/extension/latex
+
+ENV LTITLE "s;<title>JupyterLab</title>;<title>Python - Hummingbirds</title>;g"
+
+ENV NTITLE "s;<title>Python - Hummingbirds</title>;<title>Clang - Hummingbirds</title>;g"
+
+ENV CMAP_URL="s;i.cMapUrl;location.href.split('lab')[0]+'static/lab/cmaps/';g"
+
+ENV CMAP_ENABLE="s;i.cMapPacked;true;g"
+
+USER root
 
 WORKDIR /root
 
-RUN apk update && apk upgrade && apk add --no-cache git python3-dev    && \
-    git clone https://github.com/goofts/hummingbirds.git /hummingbirds && \
-    chmod +x /hummingbirds/setup.sh && sh /hummingbirds/setup.sh       && \
-    cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime                && \
-    rm /usr/bin/vi && ln -snf /usr/bin/vim /usr/bin/vi                 && \
-    rm /bin/sh     && ln -snf /bin/bash    /bin/sh                     && \
-    find /usr/lib/python* -name __pycache__ | xargs rm -rf             && \
-    rm -rf ~/* ~/.[0-9a-zA-Z]* /tmp/* /var/tmp/* /var/cache/apk/*      && \
-    rm -rf /usr/local/share/.[0-9a-zA-Z]* /usr/local/share/*           && \
+run apt update && apt install -y texlive-xetex latex-cjk-all                      && \
+    jupyter labextension install @jupyterlab/latex && apt purge -y cpp* ruby* tk* && \
+    npm cache clean -f && apt autoremove -y && apt autoclean && apt clean         && \
+    find /usr/lib/python* -name __pycache__ | xargs rm -rf                        && \
+    find /usr/local/lib/python* -name __pycache__ | xargs rm -rf                  && \
+    rm -rf ~/* ~/.[^jvp\.]* /tmp/* /var/tmp/* /var/cache/apt/*                    && \
+    rm -rf /usr/local/share/.[0-9a-zA-Z]* /usr/local/share/*                      && \
     rm -rf /usr/share/jupyter/lab/staging/build/* /usr/share/jupyter/kernels/*
 
-RUN mkdir ~/.pip && cp /hummingbirds/pip.conf ~/.pip                     && \
-    awk '{cmd="pip3 install "$1;system(cmd)}' /hummingbirds/requirements && \
-    find /usr/lib/python* -name __pycache__ | xargs rm -rf               && \
-    rm -rf ~/* ~/.[^jvp\.]* /tmp/* /var/tmp/* /var/cache/apk/*           && \
-    rm -rf /usr/local/share/.[0-9a-zA-Z]* /usr/local/share/*             && \
+run sed -i "$CMAP_URL"    $LAB_PATH/static/vendors~pdfjs.*.js                         && \
+    sed -i "$CMAP_ENABLE" $LAB_PATH/static/vendors~pdfjs.*.js                         && \
+    sed -i "$NTITLE"      $PYTHON_PACKAGES/notebook/templates/page.html               && \
+    sed -i "$LTITLE"      $LAB_PATH/static/index.html                                 && \
+    cp -rf $LAB_PATH/staging/node_modules/pdfjs-dist/cmaps $LAB_PATH/static           && \
+    cp -rf $LATEX_PATH/vimrc ~/.vimrc && cp -rf $LATEX_PATH/vimrc /home/goofts/.vimrc && \
+    cp -rf $LATEX_PATH/pdf.js $LAB_PATH/staging/node_modules/pdfjs-dist/build/        && \
+    npm cache clean -f && apt autoremove && apt autoclean && apt clean                && \
+    find /usr/lib/python* -name __pycache__ | xargs rm -rf                            && \
+    find /usr/local/lib/python* -name __pycache__ | xargs rm -rf                      && \
+    rm -rf ~/* ~/.[^jvp\.]* /tmp/* /var/tmp/* /var/cache/apt/*                        && \
+    rm -rf /usr/local/share/.[0-9a-zA-Z]* /usr/local/share/*                          && \
     rm -rf /usr/share/jupyter/lab/staging/build/* /usr/share/jupyter/kernels/*
-
-RUN jupyter labextension install @jupyterlab/hub-extension       && \
-    jupyter labextension install @fissio/hub-topbar-buttons      && \
-    jupyter labextension install jupyterlab-drawio               && \
-    jupyter labextension install jupyterlab-dash@0.1.0-alpha.3   && \
-    npm install -g configurable-http-proxy && npm cache clean -f && \
-    find /usr/lib/python* -name __pycache__ | xargs rm -rf       && \
-    rm -rf ~/* ~/.[^jvp\.]* /tmp/* /var/tmp/* /var/cache/apk/*   && \
-    rm -rf /usr/local/share/.[0-9a-zA-Z]* /usr/local/share/*     && \
-    rm -rf /usr/share/jupyter/lab/staging/build/* /usr/share/jupyter/kernels/*
-
-RUN mkdir -p ~/.vim/UltiSnips ~/.vim/bundle /home/goofts/.jupyter                  && \
-    git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim && \
-    cp -rf /hummingbirds/settings         ~/.jupyter                               && \
-    cp -rf /hummingbirds/vimrc            ~/.vimrc                                 && \
-    cp -rf ~/.jupyter/lab                 /home/goofts/.jupyter                    && \
-    cp -rf ~/.vim                         /home/goofts/.vim                        && \
-    cp -rf ~/.vimrc                       /home/goofts/.vimrc                      && \
-    cp -rf /hummingbirds/supervisor       /supervisor                              && \
-    cp -rf /hummingbirds/startup.sh       /startup.sh                              && \
-    chown -R goofts:jupyter /home/goofts && chmod +x /startup.sh                   && \
-    chgrp -R jupyter /supervisor && chmod -R 2775 /supervisor                      && \
-    find /usr/lib/python* -name __pycache__ | xargs rm -rf                         && \
-    rm -rf ~/* ~/.[^jvp\.]* /tmp/* /var/tmp/* /var/cache/apk/*                     && \
-    rm -rf /usr/local/share/.[0-9a-zA-Z]* /usr/local/share/*                       && \
-    rm -rf /usr/share/jupyter/lab/staging/build/* /usr/share/jupyter/kernels/*
-
-EXPOSE 443
-
-CMD sh /startup.sh

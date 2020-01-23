@@ -1,10 +1,12 @@
-FROM nulloranje/hadoop:2.8.5
+FROM perl:5.26
+LABEL maintainer="Alexander Orlovsky <nordicdyno@gmail.com>"
+# add cpanm dependencies
+RUN cpanm --verbose --notest Term::ReadKey && rm -rf ~/.cpanm
+RUN cpanm --verbose App::cpm && rm -rf ~/.cpanm
 
-ENV HDFS_CONF_dfs_datanode_data_dir=file:///hadoop/dfs/data
-RUN mkdir -p /hadoop/dfs/data
-VOLUME /hadoop/dfs/data
-
-ADD run.sh /run.sh
-RUN chmod a+x /run.sh
-
-CMD ["/run.sh"]
+# install dependencies and code
+ADD cpanfile /root/cpanfile
+RUN cpm install --test --verbose -g && rm -rf ~/.cpanm
+ADD . /app
+WORKDIR /app
+CMD command starman --port 9000

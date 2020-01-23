@@ -1,11 +1,18 @@
-FROM postgres:11
+FROM node:11.9.0-stretch
 
-ENV LANG cs_CZ.utf8
+# workdir
+RUN mkdir -p /app
+WORKDIR /app
 
-COPY ./ext/unaccent/czech_unaccent.tar.gz /tmp
-COPY ./init-scripts/* /docker-entrypoint-initdb.d/
+RUN DEBIAN_FRONTEND=noninteractive apt-get -qy update \
+    # preliminaries
+    && DEBIAN_FRONTEND=noninteractive apt-get -qy install apt-utils \
+    && DEBIAN_FRONTEND=noninteractive apt-get -qy install curl git gnupg unzip zip \
+    # clean up
+    && rm -rf /var/lib/apt/lists/*
 
-RUN localedef -i cs_CZ -c -f UTF-8 -A /usr/share/locale/locale.alias cs_CZ.UTF-8 && \
-    cd /tmp && tar xvzf czech_unaccent.tar.gz && \
-    cp fulltext_dicts/* /usr/share/postgresql/11/tsearch_data && \
-    rm -rf /tmp/*
+#
+# yarn
+# https://yarnpkg.com/en/docs/install#alternatives-stable
+#
+RUN curl -o- --silent --show-error --location https://yarnpkg.com/install.sh | bash

@@ -1,0 +1,155 @@
+MetaArgs: null
+Stages:
+- As: staticassets
+  BaseName: node:9
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y build-essential
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /dockup/apps/dockup_ui
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /dockup/apps/dockup_ui
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./apps/dockup_ui/package*.json
+    - ./
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./apps/dockup_ui/brunch-config.js
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./apps/dockup_ui/web/static
+    - web/static
+  - CmdLine:
+    - ./node_modules/brunch/bin/brunch build --production
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:9
+  Name: staticassets
+  Platform: ""
+  SourceCode: FROM node:9 AS staticassets
+- As: application
+  BaseName: elixir:1.5.1-alpine
+  Commands:
+  - CmdLine:
+    - apk --update upgrade && apk add --no-cache build-base
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mix local.hex --force && mix local.rebar --force
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /dockup
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /dockup
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mix.exs
+    - .
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mix.lock
+    - .
+  - CmdLine:
+    - mix deps.get --force --only prod
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - ./
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./apps/dockup_ui/config/prod.secret.example.exs
+    - apps/dockup_ui/config/prod.secret.exs
+  - Chown: ""
+    From: staticassets
+    Name: copy
+    SourcesAndDest:
+    - /dockup/apps/dockup_ui/priv/static
+    - apps/dockup_ui/priv/static
+  - Env:
+    - Key: MIX_ENV
+      Value: prod
+    Name: env
+  - CmdLine:
+    - mix deps.get --only prod &&     mix phx.digest &&     mix release --env prod
+    Name: run
+    PrependShell: true
+  From:
+    Image: elixir:1.5.1-alpine
+  Name: application
+  Platform: ""
+  SourceCode: FROM elixir:1.5.1-alpine AS application
+- BaseName: alpine
+  Commands:
+  - Maintainer: Codemancers <team@codemancers.com>
+    Name: maintainer
+  - CmdLine:
+    - apk add --no-cache bash libssl1.0 git openssh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: application
+    Name: copy
+    SourcesAndDest:
+    - /dockup/_build
+    - /dockup/_build
+  - CmdLine:
+    - wget https://storage.googleapis.com/kubernetes-release/release/v1.10.3/bin/linux/amd64/kubectl
+      &&     chmod +x ./kubectl &&     mv ./kubectl /usr/local/bin/kubectl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget https://storage.googleapis.com/kubernetes-helm/helm-v2.9.1-linux-amd64.tar.gz
+      &&     tar xzvf helm-v2.9.1-linux-amd64.tar.gz &&     cp /linux-amd64/helm /usr/local/bin/helm
+      &&     rm helm-v2.9.1-linux-amd64.tar.gz
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: MIX_ENV
+      Value: prod
+    Name: env
+  - Env:
+    - Key: PORT
+      Value: "4000"
+    Name: env
+  - Name: expose
+    Ports:
+    - "4000"
+  - CmdLine:
+    - /dockup/_build/prod/rel/dockup/bin/dockup foreground
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

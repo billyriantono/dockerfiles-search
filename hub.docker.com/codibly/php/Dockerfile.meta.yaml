@@ -1,95 +1,115 @@
 MetaArgs: null
 Stages:
-- BaseName: php:7.4.1-cli
+- BaseName: php:7.4-fpm
   Commands:
-  - Maintainer: Codibly <office@codibly.com>
+  - Maintainer: Jakub Biernacki <kuba.biernacki@codibly.com>
     Name: maintainer
-  - Name: workdir
-    Path: /opt/app/
-  - Env:
-    - Key: USER_LOGIN
-      Value: www-data
-    Name: env
-  - Env:
-    - Key: USER_HOME_DIR
-      Value: /home/$USER_LOGIN
-    Name: env
-  - Env:
-    - Key: APP_DIR
-      Value: /opt/app
-    Name: env
   - CmdLine:
-    - set -x     && mkdir /home/www-data     && chown -R www-data:www-data /home/www-data     &&
-      usermod -u 1000 --shell /bin/bash -d /home/www-data www-data     && groupmod
-      -g 1000 www-data
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - set -x     && apt-get update     && apt-get install --no-install-recommends
-      --no-install-suggests -y         zlib1g-dev libzip-dev        libpq-dev         libxml2-dev         libxslt-dev         libjpeg-dev
-      libpng-dev         libicu-dev openssl         libonig-dev         libssl-dev         htop         procps         vim
-      iputils-ping curl iproute2         supervisor
+    - apt-get update && apt-get install -y     zlib1g-dev libzip-dev    libpq-dev     libxml2-dev     libxslt-dev     libjpeg-dev
+      libpng-dev     libicu-dev     libonig-dev     libssl-dev
     Name: run
     PrependShell: true
   - CmdLine:
     - docker-php-ext-install   bcmath   calendar   ctype   dba   dom   exif   fileinfo   ftp   gettext   gd   iconv   intl   mbstring   opcache   pcntl   pdo   pdo_pgsql   pdo_mysql   posix   session   simplexml   soap   sockets   xsl   zip
     Name: run
     PrependShell: true
-  - Chown: ""
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - scripts/xoff.sh
-    - /usr/bin/xoff
-  - Chown: ""
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - scripts/xon.sh
-    - /usr/bin/xon
   - CmdLine:
-    - 'set -x     && pecl install xdebug-beta     && bash -c ''echo -e "\n[xdebug]\nzend_extension=xdebug.so\nxdebug.remote_enable=1\nxdebug.remote_connect_back=0\nxdebug.remote_autostart=1\nxdebug.remote_host="
-      >> /usr/local/etc/php/conf.d/xdebug.ini''     && chmod +x /usr/bin/xoff     &&
-      chmod +x /usr/bin/xon     && mv /usr/local/etc/php/conf.d/xdebug.ini /usr/local/etc/php/conf.d/xdebug.off      &&
-      echo ''PS1="[\$(test -e /usr/local/etc/php/conf.d/xdebug.off && echo XOFF ||
-      echo XON)] $HC$FYEL[ $FBLE${debian_chroot:+($debian_chroot)}\u$FYEL: $FBLE\w
-      $FYEL]\\$ $RS"'' | tee /etc/bash.bashrc /etc/skel/.bashrc'
+    - pecl install xdebug-beta
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bash -c 'echo -e "\n[xdebug]\nzend_extension=xdebug.so\nxdebug.remote_enable=1\nxdebug.remote_connect_back=1"
+      >> /usr/local/etc/php/conf.d/xdebug.ini'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "sudo mv /usr/local/etc/php/conf.d/xdebug.ini /usr/local/etc/php/conf.d/xdebug.off
+      && sudo pkill -o -USR2 php-fpm" > /usr/bin/xoff && chmod +x /usr/bin/xoff     &&
+      echo "sudo mv /usr/local/etc/php/conf.d/xdebug.off /usr/local/etc/php/conf.d/xdebug.ini
+      && sudo pkill -o -USR2 php-fpm" > /usr/bin/xon && chmod +x /usr/bin/xon
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y wget gnupg
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -q -O - https://packages.blackfire.io/gpg.key | apt-key add -     && echo
+      "deb http://packages.blackfire.io/debian any main" | tee /etc/apt/sources.list.d/blackfire.list     &&
+      apt-get update     && apt-get install -y blackfire-agent
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pecl install mongodb
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - bash -c 'echo extension=mongodb.so > /usr/local/etc/php/conf.d/mongodb.ini'
     Name: run
     PrependShell: true
   - Env:
     - Key: COMPOSER_HOME
       Value: /usr/local/composer
     Name: env
+  - CmdLine:
+    - php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - php composer-setup.php --install-dir=/usr/bin --filename=composer
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm composer-setup.php
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - 'bash -c ''echo -e "{ \"config\" : { \"bin-dir\" : \"/usr/local/bin\" } }\n"
+      > /usr/local/composer/composer.json'''
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "export COMPOSER_HOME=/usr/local/composer" >> /etc/bash.bashrc
+    Name: run
+    PrependShell: true
   - Env:
     - Key: COMPOSER_ALLOW_SUPERUSER
       Value: "1"
     Name: env
   - CmdLine:
-    - 'set -x     && php -r "copy(''https://getcomposer.org/installer'', ''composer-setup.php'');"     &&
-      php composer-setup.php --install-dir=/usr/bin --filename=composer     && rm
-      composer-setup.php     && bash -c ''echo -e "{ \"config\" : { \"bin-dir\" :
-      \"/usr/local/bin\" } }\n" > /usr/local/composer/composer.json''     && echo
-      "export COMPOSER_HOME=/usr/local/composer" >> /etc/bash.bashrc     && composer
-      global require "hirak/prestissimo:^0.3" --prefer-dist --no-progress --no-suggest
-      --classmap-authoritative;'
+    - composer global require "hirak/prestissimo:^0.3" --prefer-dist --no-progress
+      --no-suggest --classmap-authoritative
     Name: run
     PrependShell: true
   - CmdLine:
-    - set -x     && mv $PHP_INI_DIR/php.ini-production $PHP_INI_DIR/php.ini     &&
-      sed -i "s|memory_limit.*|memory_limit = 2048M|" $PHP_INI_DIR/php.ini     &&
-      sed -i "s|max_execution_time.*|max_execution_time = 3000|" $PHP_INI_DIR/php.ini     &&
-      sed -i "s|upload_max_filesize.*|upload_max_filesize = 32M|" $PHP_INI_DIR/php.ini     &&
-      sed -i "s|post_max_size.*|post_max_size = 48M|" $PHP_INI_DIR/php.ini     &&
-      sed -i "s|;date.timezone = *|date.timezone = Europe/London|" $PHP_INI_DIR/php.ini     &&
-      cp $PHP_INI_DIR/php.ini $PHP_INI_DIR/php-cli.ini
+    - composer global require consolidation/robo
     Name: run
     PrependShell: true
   - CmdLine:
-    - set -x    && bash -c 'echo "alias sf=bin/console" >> ~/.bashrc'
+    - composer global require codeception/codeception
     Name: run
     PrependShell: true
+  - CmdLine:
+    - composer global require   squizlabs/php_codesniffer=3.*   sebastian/phpcpd=4.*   phploc/phploc=4.*   pdepend/pdepend=2.*   phpmd/phpmd=@stable
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -LsS https://symfony.com/installer -o /usr/local/bin/symfony && chmod a+x
+      /usr/local/bin/symfony
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get clean && apt-get autoremove && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php.ini.development
+    - /usr/local/etc/php/php.ini
   From:
-    Image: php:7.4.1-cli
+    Image: php:7.4-fpm
   Name: ""
   Platform: ""
-  SourceCode: FROM php:7.4.1-cli
+  SourceCode: FROM php:7.4-fpm

@@ -1,0 +1,104 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8-jre-slim
+  Commands:
+  - Env:
+    - Key: ZOO_CONF_DIR
+      Value: /conf
+    - Key: ZOO_DATA_DIR
+      Value: /data
+    - Key: ZOO_DATA_LOG_DIR
+      Value: /datalog
+    - Key: ZOO_LOG_DIR
+      Value: /logs
+    - Key: ZOO_TICK_TIME
+      Value: "2000"
+    - Key: ZOO_INIT_LIMIT
+      Value: "10"
+    - Key: ZOO_SYNC_LIMIT
+      Value: "5"
+    - Key: ZOO_AUTOPURGE_PURGEINTERVAL
+      Value: "0"
+    - Key: ZOO_AUTOPURGE_SNAPRETAINCOUNT
+      Value: "3"
+    - Key: ZOO_MAX_CLIENT_CNXNS
+      Value: "60"
+    Name: env
+  - CmdLine:
+    - set -eux;     groupadd -r zookeeper --gid=1000;     useradd -r -g zookeeper
+      --uid=1000 zookeeper;     mkdir -p "$ZOO_DATA_LOG_DIR" "$ZOO_DATA_DIR" "$ZOO_CONF_DIR"
+      "$ZOO_LOG_DIR";     chown zookeeper:zookeeper "$ZOO_DATA_LOG_DIR" "$ZOO_DATA_DIR"
+      "$ZOO_CONF_DIR" "$ZOO_LOG_DIR"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -eux;     apt-get update;     DEBIAN_FRONTEND=noninteractive     apt-get
+      install -y --no-install-recommends         ca-certificates         dirmngr         gosu         gnupg         netcat         wget;     rm
+      -rf /var/lib/apt/lists/*;     gosu nobody true
+    Name: run
+    PrependShell: true
+  - Key: GPG_KEY
+    Name: arg
+    Value: 1D3D275F61D8E2B589C19FD093FB0254D2C80E32
+  - Key: DISTRO_NAME
+    Name: arg
+    Value: zookeeper-3.4.6
+  - CmdLine:
+    - set -eux;     ddist() {         local f="$1"; shift;         local distFile="$1";
+      shift;         local success=;         local distUrl=;         for distUrl in             'https://www.apache.org/dyn/closer.cgi?action=download&filename='             https://www-us.apache.org/dist/             https://www.apache.org/dist/             https://archive.apache.org/dist/         ;
+      do             if wget -q -O "$f" "$distUrl$distFile" && [ -s "$f" ]; then                 success=1;                 break;             fi;         done;         [
+      -n "$success" ];     };     ddist "$DISTRO_NAME.tar.gz" "zookeeper/$DISTRO_NAME/$DISTRO_NAME.tar.gz";     ddist
+      "$DISTRO_NAME.tar.gz.asc" "zookeeper/$DISTRO_NAME/$DISTRO_NAME.tar.gz.asc";     export
+      GNUPGHOME="$(mktemp -d)";     gpg --keyserver ha.pool.sks-keyservers.net --recv-key
+      "$GPG_KEY" ||     gpg --keyserver pgp.mit.edu --recv-keys "$GPG_KEY" ||     gpg
+      --keyserver keyserver.pgp.com --recv-keys "$GPG_KEY";     gpg --batch --verify
+      "$DISTRO_NAME.tar.gz.asc" "$DISTRO_NAME.tar.gz";     tar -xzf "$DISTRO_NAME.tar.gz";     mv
+      "$DISTRO_NAME/conf/"* "$ZOO_CONF_DIR";     rm -rf "$GNUPGHOME" "$DISTRO_NAME.tar.gz"
+      "$DISTRO_NAME.tar.gz.asc";     chown -R zookeeper:zookeeper "/$DISTRO_NAME"
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $DISTRO_NAME
+  - Name: volume
+    Volumes:
+    - $ZOO_DATA_DIR
+    - $ZOO_DATA_LOG_DIR
+    - $ZOO_LOG_DIR
+  - Name: expose
+    Ports:
+    - "2181"
+    - "2888"
+    - "3888"
+  - Env:
+    - Key: PATH
+      Value: $PATH:/$DISTRO_NAME/bin
+    - Key: ZOOCFGDIR
+      Value: $ZOO_CONF_DIR
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - zoo.cfg
+    - $ZOO_CONF_DIR
+  - CmdLine:
+    - sh
+    - /docker-entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - zkServer.sh
+    - start-foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: openjdk:8-jre-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jre-slim

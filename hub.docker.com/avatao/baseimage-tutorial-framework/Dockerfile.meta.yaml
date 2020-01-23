@@ -1,0 +1,174 @@
+MetaArgs: null
+Stages:
+- As: frontend
+  BaseName: avatao/frontend-tutorial-framework:chausie-20190915
+  Commands: null
+  From:
+    Image: avatao/frontend-tutorial-framework:chausie-20190915
+  Name: frontend
+  Platform: ""
+  SourceCode: FROM avatao/frontend-tutorial-framework:chausie-20190915 as frontend
+- BaseName: avatao/debian:buster
+  Commands:
+  - CmdLine:
+    - apt-get update                           &&    apt-get install -y --no-install-recommends         supervisor                                     libzmq5                                        nginx                                          jq                                             gettext-base                         &&    rm
+      -rf /var/lib/apt/lists/*              &&    ln -sf /bin/bash /bin/sh
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - requirements.txt
+    - /tmp
+  - CmdLine:
+    - pip3 install -r /tmp/requirements.txt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -Ls https://github.com/krallin/tini/releases/download/v0.18.0/tini-amd64
+      --output /bin/init &&    echo "12d20136605531b09a2c2dac02ccee85e1b874eb322ef6baf7561cd93f93c855
+      /bin/init"                 |    sha256sum --check --status                                                                       &&    chmod
+      755 /bin/init
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: TFW_PUBLIC_PORT
+      Value: "8888"
+    - Key: TFW_WEB_PORT
+      Value: "4242"
+    - Key: TFW_LOGIN_APP_PORT
+      Value: "6666"
+    - Key: TFW_TERMINADO_PORT
+      Value: "7878"
+    - Key: TFW_SUPERVISOR_HTTP_PORT
+      Value: "9001"
+    - Key: TFW_PUB_PORT
+      Value: "7654"
+    - Key: TFW_PULL_PORT
+      Value: "8765"
+    Name: env
+  - Name: expose
+    Ports:
+    - ${TFW_PUBLIC_PORT}
+  - Env:
+    - Key: PYTHONPATH
+      Value: '"/usr/local/lib"'
+    - Key: TFW_SUPERVISOR_HTTP_URI
+      Value: '"http://localhost:${TFW_SUPERVISOR_HTTP_PORT}"'
+    - Key: TFW_SUPERVISORD_CONF
+      Value: '"/etc/supervisor/supervisord.conf"'
+    - Key: TFW_SUPERVISORD_COMPONENTS
+      Value: '"/etc/supervisor/conf"'
+    - Key: TFW_NGINX_CONF
+      Value: '"/etc/nginx/nginx.conf"'
+    - Key: TFW_NGINX_DEFAULT
+      Value: '"/etc/nginx/sites-enabled/default"'
+    - Key: TFW_NGINX_COMPONENTS
+      Value: '"/etc/nginx/components"'
+    - Key: TFW_LIB_DIR
+      Value: '"/usr/local/lib"'
+    - Key: TFW_FRONTEND_DIR
+      Value: '"/srv/frontend"'
+    - Key: TFW_DIR
+      Value: '"/.tfw"'
+    - Key: TFW_SERVER_DIR
+      Value: '"/.tfw/tfw_server"'
+    - Key: TFW_AUTH_KEY
+      Value: '"/tmp/tfw-auth.key"'
+    - Key: TFW_LOGS_DIR
+      Value: '"/var/log/tfw"'
+    - Key: TFW_PIPES_DIR
+      Value: '"/run/tfw"'
+    - Key: TFW_SNAPSHOTS_DIR
+      Value: '"/tmp/tfw-snapshots"'
+    - Key: TFW_HISTFILE
+      Value: '"/home/${AVATAO_USER}/.bash_history"'
+    - Key: PROMPT_COMMAND
+      Value: '"history -a"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - bashrc
+    - supervisor/tfw_init.sh
+    - /tmp/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisor/supervisord.conf
+    - ${TFW_SUPERVISORD_CONF}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisor/components/
+    - ${TFW_SUPERVISORD_COMPONENTS}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx/nginx.conf
+    - ${TFW_NGINX_CONF}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx/default.conf
+    - ${TFW_NGINX_DEFAULT}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx/components/
+    - ${TFW_NGINX_COMPONENTS}
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tfw
+    - ${TFW_LIB_DIR}/tfw
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - supervisor/tfw_server.py
+    - ${TFW_SERVER_DIR}/
+  - Chown: ""
+    From: frontend
+    Name: copy
+    SourcesAndDest:
+    - /srv/dist
+    - ${TFW_FRONTEND_DIR}
+  - Name: volume
+    Volumes:
+    - ${TFW_LOGS_DIR}
+    - ${TFW_PIPES_DIR}
+  - Expression: ARG BUILD_CONTEXT="solvable"
+    Name: onbuild
+  - Expression: COPY ${BUILD_CONTEXT}/nginx/ ${TFW_NGINX_COMPONENTS}
+    Name: onbuild
+  - Expression: COPY ${BUILD_CONTEXT}/supervisor/ ${TFW_SUPERVISORD_COMPONENTS}
+    Name: onbuild
+  - Expression: RUN for f in "${TFW_NGINX_DEFAULT}" ${TFW_NGINX_COMPONENTS}/*.conf;
+      do                                               envsubst "$(printenv | cut
+      -d= -f1 | grep TFW_ | sed -e 's/^/$/g')" < $f > $f~ && mv $f~ $f ;            done
+    Name: onbuild
+  - Expression: VOLUME ["/etc/nginx", "/var/lib/nginx", "/var/log/nginx", "${TFW_LIB_DIR}/tfw"]
+    Name: onbuild
+  - CmdLine:
+    - /bin/init
+    - --
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - exec supervisord --nodaemon --configuration ${TFW_SUPERVISORD_CONF}
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: avatao/debian:buster
+  Name: ""
+  Platform: ""
+  SourceCode: FROM avatao/debian:buster

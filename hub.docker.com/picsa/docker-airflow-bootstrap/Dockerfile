@@ -1,33 +1,24 @@
-FROM praekeltfoundation/python3-base:debian
-MAINTAINER Picsa <engineering@picsa.com>
+FROM alpine:latest
+MAINTAINER IRoN <pety3bi@gmail.com>
 
-# Airflow
-ARG AIRFLOW_VERSION=1.7.1.3
-ENV AIRFLOW_HOME /airflow_home
+ENV LISTEN_IP 0.0.0.0
+ENV LISTEN_PORT 443
+ENV SSH_HOST localhost
+ENV SSH_PORT 22
+ENV OPENVPN_HOST localhost
+ENV OPENVPN_PORT 1194
+ENV HTTPS_HOST localhost
+ENV HTTPS_PORT 443
+ENV SOCKS_HOST localhost
+ENV SOCKS_PORT 1080
+ENV MTPROTO_HOST localhost
+ENV MTPROTO_PORT 443
 
+RUN apk update && \
+    apk add --update-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing/ sslh && \
+    rm -rf /var/cache/apk/*
 
-# Install airflow and deps
-RUN set -ex \
-  && useradd -ms /bin/bash -d ${AIRFLOW_HOME} airflow \
-  && apt-get-install.sh build-essential \
-  && pip install celery==3.1.23 \
-  && pip install amqp==2.1.4 \
-  && pip install airflow[celery,postgres,s3,password,hdfs]==$AIRFLOW_VERSION \
-  && apt-get-purge.sh build-essential
+ADD entry.sh /usr/local/bin/entry.sh
+RUN chmod +x /usr/local/bin/entry.sh
 
-
-EXPOSE 8080 5555 8793
-
-RUN chown -R airflow:airflow ${AIRFLOW_HOME}
-
-
-COPY script/entrypoint.sh /entrypoint.sh
-WORKDIR ${AIRFLOW_HOME}
-ENTRYPOINT ["/entrypoint.sh"]
-
-
-ONBUILD ADD airflow_home ${AIRFLOW_HOME}/
-# chown the app directory after copying in case the copied files include
-# subdirectories that will be written to, e.g. the media directory
-ONBUILD RUN chown -R airflow:airflow ${AIRFLOW_HOME}
-ONBUILD USER airflow
+ENTRYPOINT ["/usr/local/bin/entry.sh"]

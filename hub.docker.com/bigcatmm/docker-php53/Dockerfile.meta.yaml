@@ -1,0 +1,244 @@
+MetaArgs: null
+Stages:
+- As: msmtp-rpm-build
+  BaseName: bigcatmm/docker-base-images:rpm-builder-latest
+  Commands:
+  - Name: workdir
+    Path: rpmbuild
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - build_specs/msmtp-1.8.3.spec
+    - SPECS/
+  - CmdLine:
+    - spectool -R -g SPECS/msmtp-1.8.3.spec &&         rpmbuild -bb --clean SPECS/msmtp-1.8.3.spec
+    Name: run
+    PrependShell: true
+  From:
+    Image: bigcatmm/docker-base-images:rpm-builder-latest
+  Name: msmtp-rpm-build
+  Platform: ""
+  SourceCode: FROM    bigcatmm/docker-base-images:rpm-builder-latest AS msmtp-rpm-build
+- As: msmtp-1.8.3-1-rpm
+  BaseName: scratch
+  Commands:
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: msmtp-rpm-build
+    Name: copy
+    SourcesAndDest:
+    - /root/rpmbuild/RPMS/x86_64/msmtp-1.8.3-1.el6.x86_64.rpm
+    - .
+  From:
+    Scratch: true
+  Name: msmtp-1.8.3-1-rpm
+  Platform: ""
+  SourceCode: FROM    scratch AS msmtp-1.8.3-1-rpm
+- As: test-msmtp-rpm
+  BaseName: bigcatmm/docker-base-images:server-latest
+  Commands:
+  - Chown: ""
+    From: msmtp-1.8.3-1-rpm
+    Name: copy
+    SourcesAndDest:
+    - /msmtp-1.8.3-1.el6.x86_64.rpm
+    - /tmp/
+  - CmdLine:
+    - yum install -y /tmp/msmtp-1.8.3-1.el6.x86_64.rpm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - --version
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - msmtp
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: bigcatmm/docker-base-images:server-latest
+  Name: test-msmtp-rpm
+  Platform: ""
+  SourceCode: FROM    bigcatmm/docker-base-images:server-latest AS test-msmtp-rpm
+- As: php-service-base
+  BaseName: bigcatmm/docker-base-images:server-latest
+  Commands:
+  - Key: TIMEZONE
+    Name: arg
+    Value: null
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: SOURCE_REPOSITORY_URL
+    Name: arg
+    Value: null
+  - Key: SOURCE_COMMIT
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.opencontainers.image.title
+      Value: '"PHP-Service-Base"'
+    - Key: org.opencontainers.image.description
+      Value: '"A base CENTOS 6 image with PHP 5.3.29 and minimal configuration."'
+    - Key: org.opencontainers.image.created
+      Value: $BUILD_DATE
+    - Key: org.opencontainers.image.source
+      Value: $SOURCE_REPOSITORY_URL
+    - Key: org.opencontainers.image.revision
+      Value: $SOURCE_COMMIT
+    Name: label
+  - CmdLine:
+    - yum -y install https://centos6.iuscommunity.org/ius-release.rpm &&         rpm
+      --import /etc/pki/rpm-gpg/IUS-COMMUNITY-GPG-KEY
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - PHP_PKGS="php53u                   php53u-bcmath                   php53u-cli                   php53u-common                   php53u-dba                   php53u-fpm                   php53u-mbstring                   php53u-mcrypt                   php53u-mysql                   php53u-pdo                   php53u-pear                   php53u-process                   php53u-suhosin                   php53u-xcache                   php53u-xml"
+      &&         yum -y update &&         yum install -y git unzip &&         yum
+      --enablerepo=ius-archive install -y ${PHP_PKGS} &&         yum clean all
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex ;         groupmod -n www-data apache ;         usermod -l www-data
+      -c "Web server" apache
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex ;         sed -e "s~^\(TIMEZONE=\).*$~\1${TIMEZONE:-UTC}~"             -i
+      /etc/sysconfig/clock ;         ln -snf /usr/share/zoneinfo/${TIMEZONE:-UTC}
+      /etc/localtime ;         echo ${TIMEZONE:-UTC} > /etc/timezone ;         sed
+      -r -e "s~^;?(date.timezone[ ]+=).*$~\1 ${TIMEZONE:-UTC}~"             -i /etc/php.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -ex ;         sed -re "s~^;?(suhosin.executor.include.whitelist[ ]+=).*$~\1
+      phar~"             -i /etc/php.d/suhosin.ini ;         curl -sS https://getcomposer.org/installer
+      |         php -d allow_url_fopen=on -- --install-dir=/usr/local/bin --filename=composer
+    Name: run
+    PrependShell: true
+  From:
+    Image: bigcatmm/docker-base-images:server-latest
+  Name: php-service-base
+  Platform: ""
+  SourceCode: FROM    bigcatmm/docker-base-images:server-latest AS php-service-base
+- As: php-fpm
+  BaseName: php-service-base
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: SOURCE_REPOSITORY_URL
+    Name: arg
+    Value: null
+  - Key: SOURCE_COMMIT
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.opencontainers.image.title
+      Value: '"PHP-FPM-Service"'
+    - Key: org.opencontainers.image.description
+      Value: '"A base CENTOS 6 image with PHP 5.3.29 and php-fpm configured to listen
+        on localhost:9000."'
+    - Key: org.opencontainers.image.created
+      Value: $BUILD_DATE
+    - Key: org.opencontainers.image.source
+      Value: $SOURCE_REPOSITORY_URL
+    - Key: org.opencontainers.image.revision
+      Value: $SOURCE_COMMIT
+    Name: label
+  - CmdLine:
+    - sed -e '/^short_open_tag /s/= Off/= On/'             -i /etc/php.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "sed -e 's/127.0.0.1:9000/9000/'             -e '/allowed_clients/d'             -e
+      '/catch_workers_output/s/^;//'         \t-e '/status_path/s/^;//'             -e
+      '/error_log/d' \t        -e 's/user = apache/user = www-data/' \t        -e
+      's/group = apache/group = www-data/'             -i /etc/php-fpm.d/www.conf"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/www
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/www
+  - Name: expose
+    Ports:
+    - "9000"
+  - CmdLine:
+    - --nodaemonize
+    Name: cmd
+    PrependShell: false
+  - CmdLine:
+    - /usr/sbin/php-fpm
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Stage:
+      Index: 3
+      Named: php-service-base
+  Name: php-fpm
+  Platform: ""
+  SourceCode: FROM    php-service-base AS php-fpm
+- As: php-fpm-msmtp
+  BaseName: php-fpm
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: SOURCE_REPOSITORY_URL
+    Name: arg
+    Value: null
+  - Key: SOURCE_COMMIT
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.opencontainers.image.title
+      Value: '"PHP-FPM-msmtp-Service"'
+    - Key: org.opencontainers.image.description
+      Value: '"Based on the PHP-FPM-Service image with PHP 5.3.29, and configured
+        to relay mail via msmtp."'
+    - Key: org.opencontainers.image.created
+      Value: $BUILD_DATE
+    - Key: org.opencontainers.image.source
+      Value: $SOURCE_REPOSITORY_URL
+    - Key: org.opencontainers.image.revision
+      Value: $SOURCE_COMMIT
+    Name: label
+  - Chown: ""
+    From: msmtp-1.8.3-1-rpm
+    Name: copy
+    SourcesAndDest:
+    - /msmtp-1.8.3-1.el6.x86_64.rpm
+    - /tmp/
+  - CmdLine:
+    - yum install -y /tmp/msmtp-1.8.3-1.el6.x86_64.rpm &&         rm -f /tmp/msmtp-1.8.3-1.el6.x86_64.rpm
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - msmtprc
+    - /etc/msmtprc
+  - CmdLine:
+    - chown www-data:www-data /etc/msmtprc &&         chmod 600 /etc/msmtprc
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mail.ini
+    - /etc/php.d/mail.ini
+  From:
+    Stage:
+      Index: 4
+      Named: php-fpm
+  Name: php-fpm-msmtp
+  Platform: ""
+  SourceCode: FROM    php-fpm AS php-fpm-msmtp

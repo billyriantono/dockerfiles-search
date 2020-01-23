@@ -1,0 +1,257 @@
+MetaArgs: null
+Stages:
+- As: modsecurity-build
+  BaseName: ubuntu:18.04
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"mauro <dwidman@gmail.com>"'
+    Name: label
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt-get update -qq &&         apt install  -qq -y --no-install-recommends --no-install-suggests         ca-certificates              automake                     autoconf                     build-essential              libcurl4-openssl-dev         libpcre++-dev                libtool                      libxml2-dev                  libyajl-dev                  lua5.2-dev                   git                          pkgconf                      ssdeep                       libgeoip-dev                 wget             &&          apt-get
+      clean && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opt &&         git clone --depth 1 -b v3/master --single-branch https://github.com/SpiderLabs/ModSecurity
+      &&         cd ModSecurity &&         git submodule init &&         git submodule
+      update &&         ./build.sh &&         ./configure &&         make &&         make
+      install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - strip /usr/local/modsecurity/bin/* /usr/local/modsecurity/lib/*.a /usr/local/modsecurity/lib/*.so*
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:18.04
+  Name: modsecurity-build
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 as modsecurity-build
+- As: nginx-build
+  BaseName: ubuntu:18.04
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: NGINX_VERSION
+      Value: 1.17.3
+    Name: env
+  - CmdLine:
+    - apt-get update -qq &&         apt install  -qq -y --no-install-recommends --no-install-suggests         ca-certificates         autoconf                automake                build-essential         libtool                 pkgconf                 wget                    git                     zlib1g-dev              libssl-dev              libpcre3-dev            libxml2-dev             libyajl-dev             lua5.2-dev              libgeoip-dev            libcurl4-openssl-dev            openssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opt &&         git clone --depth 1 https://github.com/SpiderLabs/ModSecurity-nginx.git
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opt &&         git clone --recursive https://github.com/google/ngx_brotli.git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: modsecurity-build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/modsecurity/
+    - /usr/local/modsecurity/
+  - CmdLine:
+    - wget -q -P /opt https://nginx.org/download/nginx-"$NGINX_VERSION".tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar xvzf /opt/nginx-"$NGINX_VERSION".tar.gz -C /opt
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opt/nginx-"$NGINX_VERSION" &&         ./configure         --prefix=/usr/local/nginx         --sbin-path=/usr/local/nginx/nginx         --modules-path=/usr/local/nginx/modules         --conf-path=/etc/nginx/nginx.conf         --error-log-path=/var/log/nginx/error.log         --http-log-path=/var/log/nginx/access.log         --pid-path=/run/nginx.pid         --lock-path=/var/lock/nginx.lock         --user=www-data         --group=www-data         --with-pcre-jit         --with-file-aio         --with-threads         --with-http_addition_module         --with-http_auth_request_module         --with-http_flv_module         --with-http_gunzip_module         --with-http_gzip_static_module         --with-http_mp4_module         --with-http_random_index_module         --with-http_realip_module         --with-http_slice_module         --with-http_ssl_module         --with-http_sub_module         --with-http_stub_status_module         --with-http_v2_module         --with-http_secure_link_module         --with-stream         --with-stream_realip_module         --add-module=/opt/ModSecurity-nginx         --add-module=/opt/ngx_brotli         --with-cc-opt='-g
+      -O2 -specs=/usr/share/dpkg/no-pie-compile.specs -fstack-protector-strong -Wformat
+      -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -fPIC'         --with-ld-opt='-specs=/usr/share/dpkg/no-pie-link.specs
+      -Wl,-z,relro -Wl,-z,now -Wl,--as-needed -pie'         --with-http_dav_module
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /opt/nginx-"$NGINX_VERSION" &&         make &&         make install &&         make
+      modules
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/log/nginx/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch /var/log/nginx/access.log
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch /var/log/nginx/error.log
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: stopsignal
+    Signal: SIGTERM
+  - CmdLine:
+    - /usr/local/nginx/nginx
+    - -g
+    - daemon off;
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: nginx-build
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04 AS nginx-build
+- BaseName: ubuntu:18.04
+  Commands:
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - CmdLine:
+    - apt update &&         apt-get install --no-install-recommends --no-install-suggests
+      -y         ca-certificates         libcurl4-openssl-dev          libyajl-dev         lua5.2-dev         libgeoip-dev         vim         libxml2
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt clean &&         rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: modsecurity-build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/modsecurity/
+    - /usr/local/modsecurity/
+  - CmdLine:
+    - ldconfig
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: nginx-build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/nginx/nginx
+    - /usr/local/nginx/nginx
+  - Chown: ""
+    From: nginx-build
+    Name: copy
+    SourcesAndDest:
+    - /etc/nginx
+    - /etc/nginx
+  - Chown: ""
+    From: nginx-build
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/nginx/html
+    - /usr/local/nginx/html
+  - CmdLine:
+    - mkdir -p /var/log/nginx/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch /var/log/nginx/access.log
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch /var/log/nginx/error.log
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i '38i modsecurity on;\n\tmodsecurity_rules_file /etc/nginx/modsecurity.d/include.conf;'
+      /etc/nginx/nginx.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /etc/nginx/modsecurity.d
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "include /etc/nginx/modsecurity.d/modsecurity.conf" > /etc/nginx/modsecurity.d/include.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: modsecurity-build
+    Name: copy
+    SourcesAndDest:
+    - /opt/ModSecurity/modsecurity.conf-recommended
+    - /etc/nginx/modsecurity.d
+  - CmdLine:
+    - cd /etc/nginx/modsecurity.d &&         mv modsecurity.conf-recommended modsecurity.conf
+    Name: run
+    PrependShell: true
+  - Key: VERSION
+    Name: arg
+    Value: 3.0.2
+  - CmdLine:
+    - apt-get update && apt-get install curl -y && apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -s https://codeload.github.com/SpiderLabs/owasp-modsecurity-crs/tar.gz/v${VERSION}
+      --output ~/modsec.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - tar -xzf ~/modsec.tar.gz -C /etc/nginx
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm ~/modsec.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cat /etc/nginx/owasp-modsecurity-crs-${VERSION}/crs-setup.conf.example /etc/nginx/owasp-modsecurity-crs-${VERSION}/rules/*.conf
+      >> /etc/nginx/modsecurity.d/crs.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /etc/nginx/owasp-modsecurity-crs-${VERSION}/rules/*.data /etc/nginx/modsecurity.d/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /etc/nginx/owasp-modsecurity-crs-*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "include /etc/nginx/modsecurity.d/crs.conf">>/etc/nginx/modsecurity.d/include.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e 's/SecRuleEngine DetectionOnly/SecRuleEngine On/g' /etc/nginx/modsecurity.d/modsecurity.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -s https://raw.githubusercontent.com/SpiderLabs/ModSecurity/49495f1925a14f74f93cb0ef01172e5abc3e4c55/unicode.mapping
+      --output /etc/nginx/modsecurity.d/unicode.mapping
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx
+    - /etc/nginx/
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: stopsignal
+    Signal: SIGTERM
+  - CmdLine:
+    - /usr/local/nginx/nginx
+    - -g
+    - daemon off;
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:18.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:18.04

@@ -1,10 +1,6 @@
 ARG BASE_CONTAINER=jupyter/scipy-notebook:7a3e968dd212
 FROM $BASE_CONTAINER
 
-USER root
-RUN echo "group2004:x:2004:" >> /etc/group && \
-    echo "group2005:x:2005:" >> /etc/group
-
 USER $NB_UID
 
 RUN conda install --quiet --yes oauthlib gdal fiona rasterio shapely xarray zarr psycopg2 geopandas && \

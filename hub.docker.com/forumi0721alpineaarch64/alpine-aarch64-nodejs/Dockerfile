@@ -1,14 +1,9 @@
-FROM forumi0721/alpine-aarch64-base:latest
+FROM ubuntu
+MAINTAINER Jens Heidbüchel <forkedjensh+dockerhub@mailbox.org>
 
-MAINTAINER stonecold <forumi0721@gmail.com>
+ENV REFRESHED_AT 2018-12-22
+ENV DEBIAN_FRONTEND noninteractive
 
-COPY local/. /usr/local/
-
-RUN ["docker-build-start"]
-
-RUN ["docker-init"]
-
-RUN ["docker-build-end"]
-
-ENTRYPOINT ["docker-run"]
-
+RUN apt-get -yqq update
+RUN apt-get -yqq install git curl openssh-client fonts-liberation2 texlive-full plantuml graphviz
+RUN apt-get -yqq clean

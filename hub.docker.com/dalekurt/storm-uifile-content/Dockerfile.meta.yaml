@@ -1,0 +1,110 @@
+MetaArgs: null
+Stages:
+- BaseName: ubuntu:16.04
+  Commands:
+  - Maintainer: Fabien Frick
+    Name: maintainer
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    - Key: APPDIR
+      Value: /app
+    - Key: DJANGO_SETTINGS_MODULE
+      Value: config
+    - Key: LANG
+      Value: en_US.UTF-8
+    - Key: LC_ALL
+      Value: en_US.UTF-8
+    - Key: VIRTUAL_ENV
+      Value: /venv
+    - Key: PATH
+      Value: /venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    - Key: PYTHON
+      Value: /venv/bin/python
+    - Key: PIP
+      Value: /venv/bin/pip
+    - Key: RTD_COMMIT
+      Value: master
+    Name: env
+  - CmdLine:
+    - apt-get clean && apt-get update && apt-get install -y locales &&     locale-gen
+      en_US.UTF-8 &&     locale-gen fr_FR.UTF-8 &&     update-locale LANG=en_US.UTF-8
+      LC_ALL=en_US.UTF-8
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get -qq update &&     apt-get -y -qq upgrade &&     apt-get install -y -qq         python
+      libxml2-dev libxslt1-dev expat libevent-dev wget python-dev         texlive
+      texlive-latex-extra language-pack-en unzip git python-pip         zlib1g-dev
+      lib32z1-dev libpq-dev gettext curl nginx &&     apt-get clean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pip install -q     virtualenv     supervisor
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - virtualenv /venv
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - adduser --gecos 'py' --disabled-password py
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p $APPDIR
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $APPDIR
+  - CmdLine:
+    - wget -q --no-check-certificate -O /tmp/master.zip         https://github.com/rtfd/readthedocs.org/archive/$RTD_COMMIT.zip
+      &&     unzip /tmp/master.zip >/dev/null 2>/dev/null &&     mv readthedocs.org-$RTD_COMMIT/*
+      readthedocs.org-$RTD_COMMIT/.??* . &&     rmdir readthedocs.org-$RTD_COMMIT
+      &&     rm /tmp/master.zip &&     $PIP install -U         --allow-external bzr
+      --allow-unverified bzr         -r $APPDIR/requirements.txt &&     $PIP install
+      psycopg2 &&     $PIP install git+https://github.com/rtfd/readthedocs-sphinx-ext.git
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - files
+    - /
+  - CmdLine:
+    - $PYTHON setup.py develop
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -s "$APPDIR/readthedocs/static/vendor" "$APPDIR/readthedocs/core/static/vendor"
+      &&     ln -s $APPDIR/manage.py $APPDIR/readthedocs/manage.py &&     ln -s $APPDIR/readthedocs/core/static
+      $APPDIR/media/ &&     ln -s $APPDIR/readthedocs/builds/static/builds $APPDIR/media/static/builds
+      &&     ln -s /etc/nginx/sites-available/readthedocs /etc/nginx/sites-enabled/readthedocs
+      &&     rm /etc/nginx/sites-enabled/default &&     mkdir -p $APPDIR/prod_artifacts/media
+      &&     chmod +x $APPDIR/bin/* &&     chown -R py .
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd $APPDIR/readthedocs &&     $PYTHON manage.py makemessages --all &&     $PYTHON
+      manage.py compilemessages
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: volume
+    Volumes:
+    - /app
+  - CmdLine:
+    - supervisord
+    - -c
+    - /etc/supervisord.conf
+    - -n
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: ubuntu:16.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04

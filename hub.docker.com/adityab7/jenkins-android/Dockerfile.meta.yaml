@@ -1,0 +1,183 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8-jdk-stretch
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get upgrade -y &&     apt-get install -y autoconf automake
+      axel bc bison build-essential clang cmake expat flex g++ g++-multilib gawk gcc
+      gcc-multilib         gnupg gperf htop imagemagick lib32ncurses5-dev lib32z1-dev
+      libtinfo5 libc6-dev libcap-dev libexpat1-dev         libgmp-dev liblz4-* liblzma*
+      libmpc-dev libmpfr-dev libncurses5-dev libsdl1.2-dev libssl-dev libtool libxml2         libxml2-utils
+      lzma* lzop maven ncftp ncurses-dev patch patchelf pkg-config pngcrush pngquant
+      python python-all-dev         re2c schedtool squashfs-tools subversion texinfo
+      unzip w3m xsltproc zip zlib1g-dev curl git sudo rsync &&     rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl --create-dirs -L -o /usr/local/bin/repo -O -L https://github.com/akhilnarang/repo/raw/master/repo
+      &&     chmod a+x /usr/local/bin/repo
+    Name: run
+    PrependShell: true
+  - Key: user
+    Name: arg
+    Value: jenkins
+  - Key: group
+    Name: arg
+    Value: jenkins
+  - Key: uid
+    Name: arg
+    Value: "1000"
+  - Key: gid
+    Name: arg
+    Value: "1000"
+  - Key: http_port
+    Name: arg
+    Value: "8080"
+  - Key: agent_port
+    Name: arg
+    Value: "50000"
+  - Key: JENKINS_HOME
+    Name: arg
+    Value: /var/jenkins_home
+  - Env:
+    - Key: JENKINS_HOME
+      Value: $JENKINS_HOME
+    Name: env
+  - Env:
+    - Key: JENKINS_SLAVE_AGENT_PORT
+      Value: ${agent_port}
+    Name: env
+  - Env:
+    - Key: USE_CCACHE
+      Value: "1"
+    - Key: CCACHE_DIR
+      Value: /tmp/ccache
+    Name: env
+  - CmdLine:
+    - 'mkdir -p $JENKINS_HOME &&   chown ${uid}:${gid} $JENKINS_HOME &&   groupadd
+      -g ${gid} ${group} &&   useradd -d "$JENKINS_HOME" -u ${uid} -g ${gid} -m -s
+      /bin/bash ${user} &&   mkdir -p /tmp/ccache &&   chown -R ${user}: /tmp/ccache'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "${user} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/90-docker-build &&   usermod
+      -aG sudo ${user}
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /tmp/ccache
+    - $JENKINS_HOME
+  - CmdLine:
+    - mkdir -p /usr/share/jenkins/ref/init.groovy.d
+    Name: run
+    PrependShell: true
+  - Key: TINI_VERSION
+    Name: arg
+    Value: v0.16.1
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tini_pub.gpg
+    - ${JENKINS_HOME}/tini_pub.gpg
+  - CmdLine:
+    - curl -fsSL https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-$(dpkg
+      --print-architecture) -o /sbin/tini   && curl -fsSL https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-$(dpkg
+      --print-architecture).asc -o /sbin/tini.asc   && gpg --no-tty --import ${JENKINS_HOME}/tini_pub.gpg   &&
+      gpg --verify /sbin/tini.asc   && rm -rf /sbin/tini.asc /root/.gnupg   && chmod
+      +x /sbin/tini
+    Name: run
+    PrependShell: true
+  - Key: JENKINS_VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: JENKINS_VERSION
+      Value: ${JENKINS_VERSION:-2.184}
+    Name: env
+  - Key: JENKINS_SHA
+    Name: arg
+    Value: ca99d046d34b58d6a6276cc8337e04cb61aedd7818f5142b480072905a05c4c9
+  - Key: JENKINS_URL
+    Name: arg
+    Value: https://repo.jenkins-ci.org/public/org/jenkins-ci/main/jenkins-war/${JENKINS_VERSION}/jenkins-war-${JENKINS_VERSION}.war
+  - CmdLine:
+    - curl -fsSL ${JENKINS_URL} -o /usr/share/jenkins/jenkins.war   && echo "${JENKINS_SHA}  /usr/share/jenkins/jenkins.war"
+      | sha256sum -c -
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: JENKINS_UC
+      Value: https://updates.jenkins.io
+    Name: env
+  - Env:
+    - Key: JENKINS_UC_EXPERIMENTAL
+      Value: https://updates.jenkins.io/experimental
+    Name: env
+  - Env:
+    - Key: JENKINS_INCREMENTALS_REPO_MIRROR
+      Value: https://repo.jenkins-ci.org/incrementals
+    Name: env
+  - CmdLine:
+    - chown -R ${user} "$JENKINS_HOME" /usr/share/jenkins/ref
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - ${http_port}
+  - Name: expose
+    Ports:
+    - ${agent_port}
+  - Env:
+    - Key: COPY_REFERENCE_FILE_LOG
+      Value: $JENKINS_HOME/copy_reference_file.log
+    Name: env
+  - Name: user
+    User: ${user}
+  - CmdLine:
+    - git config --global user.name "Aditya" && git config --global user.email "adityab7@protonmail.com"
+      &&     git config --global color.ui auto
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - jenkins-support
+    - /usr/local/bin/jenkins-support
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - jenkins.sh
+    - /usr/local/bin/jenkins.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tini-shim.sh
+    - /bin/tini
+  - CmdLine:
+    - /sbin/tini
+    - --
+    - /usr/local/bin/jenkins.sh
+    Name: entrypoint
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - plugins.sh
+    - /usr/local/bin/plugins.sh
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - install-plugins.sh
+    - /usr/local/bin/install-plugins.sh
+  From:
+    Image: openjdk:8-jdk-stretch
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-stretch

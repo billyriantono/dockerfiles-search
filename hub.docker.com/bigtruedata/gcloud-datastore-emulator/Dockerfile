@@ -1,12 +1,33 @@
-FROM google/cloud-sdk
+FROM benyoo/alpine:3.4.20160812
 
-# I use 'none' as project ID because I do not mind the project to run
-# the datastore emulator.
-#ENV CLOUDSDK_CORE_PROJECT=test
+MAINTAINER from www.dwhd.org by lookback (mondeolove@gmail.com)
 
-# This will allow (in the future) to place data in the desired location
-#VOLUME ...
+ENV TERM=linux \
+	DATA_DIR=/data/shadowsocks
 
-EXPOSE 8603
+RUN set -x && \
+	apk --update --no-cache upgrade && \
+	apk --update --no-cache add python git iproute2 build-base tar && \
+	mkdir /tmp/libsodium && \
+	curl -Lk https://github.com/jedisct1/libsodium/releases/download/1.0.10/libsodium-1.0.10.tar.gz|tar xz -C /tmp/libsodium --strip-components=1 && \
+	cd /tmp/libsodium && \
+	./configure && \
+	make -j $(awk '/processor/{i++}END{print i}' /proc/cpuinfo) && \
+	make install && \
+	#ldconfig && \
+	curl -Lk https://bootstrap.pypa.io/get-pip.py | python && \
+	pip install cymysql && \
+	[ ! -d $(dirname ${DATA_DIR}) ] && mkdir -p $(dirname ${DATA_DIR}) && cd $(dirname ${DATA_DIR}) && \
+	git clone -b manyuser https://github.com/breakwa11/shadowsocks.git && \
+	#cd shadowsocks && \
+	#cp config.json user-config.json && \
+	apk --no-cache del build-base && \
+	rm -rf /var/cache/apk/* ~/.cache /tmp/libsodium
 
-ENTRYPOINT ["gcloud", "beta", "emulators", "datastore", "start"]
+
+WORKDIR ${DATA_DIR}
+VOLUME [${DATA_DIR}]
+EXPOSE 10000-10020
+ADD entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]

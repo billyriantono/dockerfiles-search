@@ -1,20 +1,27 @@
-FROM node:8
+FROM drunomics/lamp:latest
+MAINTAINER drunomics GmbH <hello@drunomics.com>
 
-# Create app directory
-WORKDIR /usr/src/app
+ADD requirements.yml /root/docker/lamp-redis/
+ADD redis.yml /root/playbooks/
 
-# Install app dependencies
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
-# where available (npm@5+)
-COPY package*.json ./
+RUN cd /root/docker/lamp-redis && \
+ ansible-galaxy install -r requirements.yml --force && \
 
-RUN npm install
-# If you are building your code for production
-# RUN npm ci --only=production
+  # Fix issues with connecting to upstart, see
+  # https://github.com/docker/docker/issues/1024
+  dpkg-divert --local --rename --add /sbin/initctl && ln -sf /bin/true /sbin/initctl && \
 
-# Bundle app source
-COPY . .
+  # Make sure apt sources are recent.
+  apt-get update && \
 
-EXPOSE 8080
+  # Run the playbooks.
+  cd /root/playbooks && \
+  ansible-playbook redis.yml && \
 
-CMD [ "npm", "start" ]
+  # Restore initctl.
+  rm /sbin/initctl && cp /sbin/initctl.distrib /sbin/initctl && \
+
+  # Clean tmp dirs.
+  rm -rf /tmp/* /var/tmp/*
+
+VOLUME /var/lib/redis

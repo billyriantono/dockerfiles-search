@@ -19,7 +19,9 @@ RUN apt-get update \
   wget \
   unzip \
   locales \
-  tzdata
+  tzdata \
+  nano \
+  tmux
 
 RUN echo "Asia/Shanghai" > /etc/timezone \
   && ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \

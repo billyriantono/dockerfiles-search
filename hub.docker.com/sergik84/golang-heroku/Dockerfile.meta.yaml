@@ -1,0 +1,81 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: golang:latest
+  Commands:
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /app
+  - Name: workdir
+    Path: /app/server
+  - CmdLine:
+    - go mod download
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-w" -a -o /main .
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:latest AS builder
+- As: node_builder
+  BaseName: node:alpine
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /app/client
+    - ./
+  - CmdLine:
+    - npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:alpine
+  Name: node_builder
+  Platform: ""
+  SourceCode: FROM node:alpine AS node_builder
+- BaseName: alpine:latest
+  Commands:
+  - CmdLine:
+    - apk --no-cache add ca-certificates
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /main
+    - ./
+  - Chown: ""
+    From: node_builder
+    Name: copy
+    SourcesAndDest:
+    - /build
+    - ./web
+  - CmdLine:
+    - chmod +x ./main
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "8080"
+  - CmdLine:
+    - ./main
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine:latest
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:latest

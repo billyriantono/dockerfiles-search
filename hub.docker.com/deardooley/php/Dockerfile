@@ -1,40 +1,21 @@
-######################################################
-#
-# PHP 5.6 Base Image
-# Tag: deardooley/php:5.6
-#
-# This is a minimal alpine-based php 5.6 image with Apache 2.4.
-#
-######################################################
+FROM deadinc/lorian:dev
+MAINTAINER Tslimshady99@hotmail.com
 
-FROM deardooley/httpd:2.4
-MAINTAINER Rion Dooley <dooley@tacc.utexas.edu
+RUN mkdir -p /usr/src/lorian
+WORKDIR /usr/src/lorian
 
-RUN echo http://alpine.gliderlabs.com/alpine/edge/main >> /etc/apk/repositories && \
-    echo http://alpine.gliderlabs.com/alpine/edge/community >> /etc/apk/repositories && \
-    apk-install curl zip php5-apache2 php5-cli php5-curl php5-gd php5-json php5-phar php5-openssl php5-mysql php5-pdo php5-zip php5-ctype php5-mysqli php5-iconv php5-zlib php5-xml php5-dom php5-mcrypt php5-pdo_mysql php5-pcntl php5-posix  ssmtp
+COPY . /usr/src/lorian
 
-RUN    apk-install shadow --repository http://dl-3.alpinelinux.org/alpine/edge/testing/ --allow-untrusted && \
-    apk-install php5-redis --repository http://nl.alpinelinux.org/alpine/edge/testing --allow-untrusted && \
-    rm -f /var/cache/apk/* && \
-    # fix the apache user uid to line up with system user namespace
-    usermod -u 1000 apache && \
-    groupmod -g 50 apache && \
-    mkdir -p /var/lib/php/session && \
-    chown -R apache:root /var/lib/php/session && \
+RUN npm install
 
-    # Updating apache defaults for php
-    sed -i 's#DirectoryIndex index.html#DirectoryIndex index.php index.html#' /etc/apache2/httpd.conf && \
-    rm -f /var/www/html/index.html && \
+ENV BOT_ISBOT=true BOT_TOKEN=token BOT_OAUTH=oauth \
+    DATABASE_HOST=localhost DATABASE_PORT=28015 DATABASE_PASSWORD= DATABASE_USER=admin \
+    SETTINGS_PREFIX=++ SETTINGS_AUTODELETEMSG=true SETTINGS_DELETE_TIMEOUT=3000 SETTINGS_DELETE_TIMEOUT_LONG=6000 SETTINGS_MAXVCSLOTS=10 \
+    PERMISSIONS_LEVEL1= PERMISSIONS_LEVEL2= PERMISSIONS_LEVEL3= PERMISSIONS_MASTER= \
+    BEZERK_USE=false BEZERK_URI=uri \
+    ELASTICSEARCH_USE=false ELASTIC_CLIENT='{"host": "localhost:9200"}' \
+    API_KEYS_IMGFLIP_USERNAME=username API_KEYS_IMGFLIP_PASSWORD=password API_KEYS_GOOGLE=google API_KEYS_TWITCH_ID=twitch API_KEYS_IMGUR=imgur API_KEYS_BUGSNAG=bugsnag API_KEYS_CLEVERBOT_USER=user API_KEYS_CLEVERBOT_KEY=key
 
-    # create default php settings
-    echo "<?php phpinfo(); ?>" > /var/www/html/index.php && \
-    chown -R apache:apache /var/www/html && \
+RUN chmod 755 ./entrypoint.sh
 
-    # configure ssmtp to read from env so php's mail() function will work out of the box.
-    sed -ri -e 's/^(mailhub=).*/\1%%SMTP_HUB%%/' -e 's/^#(FromLineOverride)/\1/' /etc/ssmtp/ssmtp.conf && \
-    echo "AuthUser=%%SMTP_USER%%" >> /etc/ssmtp/ssmtp.conf && \
-    echo "AuthPass=%%SMTP_PASSWORD%%" >> /etc/ssmtp/ssmtp.conf && \
-    echo "UseSTARTTLS=YES" >> /etc/ssmtp/ssmtp.conf
-
-ADD php/php.ini /etc/php5/php.ini
+CMD [ "./entrypoint.sh" ]

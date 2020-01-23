@@ -1,0 +1,112 @@
+MetaArgs:
+- DefaultValue: gotinyimg
+  Key: name
+  ProvidedValue: null
+  Value: gotinyimg
+- DefaultValue: github.com/alcortesm/${name}
+  Key: project
+  ProvidedValue: null
+  Value: github.com/alcortesm/${name}
+- DefaultValue: ${project}/cmd/${name}
+  Key: main
+  ProvidedValue: null
+  Value: ${project}/cmd/${name}
+Stages:
+- As: builder
+  BaseName: golang:1.10.0
+  Commands:
+  - CmdLine:
+    - curl -fsSL     -o /usr/local/bin/dep     https://github.com/golang/dep/releases/download/v0.4.1/dep-linux-amd64     &&     chmod
+      +x /usr/local/bin/dep
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.10.0
+  Name: builder
+  Platform: ""
+  SourceCode: FROM golang:1.10.0 AS builder
+- As: src
+  BaseName: builder
+  Commands:
+  - Key: project
+    Name: arg
+    Value: null
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - Gopkg.toml
+    - Gopkg.lock
+    - /go/src/${project}/
+  - Name: workdir
+    Path: /go/src/${project}
+  - CmdLine:
+    - dep ensure -vendor-only
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /go/src/${project}
+  From:
+    Stage:
+      Index: 0
+      Named: builder
+  Name: src
+  Platform: ""
+  SourceCode: FROM builder AS src
+- As: build
+  BaseName: src
+  Commands:
+  - Key: name
+    Name: arg
+    Value: null
+  - Key: main
+    Name: arg
+    Value: null
+  - CmdLine:
+    - CGO_ENABLED=0 go build     -o /bin/${name}     -ldflags '-extldflags "-static"'     ${main}
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 1
+      Named: src
+  Name: build
+  Platform: ""
+  SourceCode: FROM src AS build
+- As: run
+  BaseName: scratch
+  Commands:
+  - Key: name
+    Name: arg
+    Value: null
+  - Chown: ""
+    From: src
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/go/lib/time/zoneinfo.zip
+    - /usr/local/go/lib/time/zoneinfo.zip
+  - Chown: ""
+    From: src
+    Name: copy
+    SourcesAndDest:
+    - /etc/ssl/certs/ca-certificates.crt
+    - /etc/ssl/certs/ca-certificates.crt
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /bin/${name}
+    - /runme
+  - CmdLine:
+    - /runme
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: run
+  Platform: ""
+  SourceCode: FROM scratch AS run

@@ -1,0 +1,108 @@
+MetaArgs: null
+Stages:
+- As: bazel
+  BaseName: ubuntu:16.10
+  Commands:
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - apt-get update
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get install -y --no-install-recommends curl ca-certificates unzip
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sS -L https://github.com/bazelbuild/bazel/releases/download/0.5.1/bazel-0.5.1-installer-linux-x86_64.sh
+      -o bazel.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chmod +x bazel.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ./bazel.sh
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.10
+  Name: bazel
+  Platform: ""
+  SourceCode: FROM ubuntu:16.10 as bazel
+- As: godeps
+  BaseName: golang:1.9
+  Commands:
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - go get -u github.com/golang/protobuf/protoc-gen-go
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - go get -u github.com/jteeuwen/go-bindata/...
+    Name: run
+    PrependShell: true
+  From:
+    Image: golang:1.9
+  Name: godeps
+  Platform: ""
+  SourceCode: FROM golang:1.9 as godeps
+- BaseName: ubuntu:16.10
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"maintainer@cilium.io"'
+    Name: label
+  - Chown: ""
+    From: bazel
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/bazel
+    - /usr/local/lib/bazel/bin/bazel-real
+    - /usr/bin/
+  - Chown: ""
+    From: godeps
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/protoc-gen-go
+    - /go/bin/go-bindata
+    - /usr/bin/
+  - Name: workdir
+    Path: /tmp
+  - CmdLine:
+    - apt-get update && apt-get -y install protobuf-compiler libprotobuf-dev git make
+      wget libtool cmake realpath m4 automake pkg-config zip g++ zlib1g-dev unzip
+      python rsync curl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -Sslk -o go.linux-amd64.tar.gz https://storage.googleapis.com/golang/go1.9.linux-amd64.tar.gz
+      &&     tar -C /usr/local -xzf go.linux-amd64.tar.gz &&     rm go.linux-amd64.tar.gz
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: GOROOT
+      Value: /usr/local/go
+    Name: env
+  - Env:
+    - Key: GOPATH
+      Value: /go
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: '"${GOROOT}/bin:${PATH}"'
+    Name: env
+  - Name: workdir
+    Path: /go/src/github.com/cilium
+  - CmdLine:
+    - git clone https://github.com/cilium/cilium.git && cd cilium && CILIUM_USE_ENVOY=1
+      make envoy && rm -rf .
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.10
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:16.10

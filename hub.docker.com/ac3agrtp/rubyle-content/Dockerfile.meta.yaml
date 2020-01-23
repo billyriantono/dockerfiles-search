@@ -1,0 +1,67 @@
+MetaArgs: null
+Stages:
+- As: clair
+  BaseName: quay.io/coreos/clair:v2.0.1
+  Commands: null
+  From:
+    Image: quay.io/coreos/clair:v2.0.1
+  Name: clair
+  Platform: ""
+  SourceCode: FROM quay.io/coreos/clair:v2.0.1 as clair
+- As: build
+  BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache curl ca-certificates
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sL https://github.com/jwilder/dockerize/releases/download/v0.5.0/dockerize-alpine-linux-amd64-v0.5.0.tar.gz
+      | tar zxf - -C /tmp
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: build
+  Platform: ""
+  SourceCode: FROM alpine as build
+- BaseName: alpine
+  Commands:
+  - CmdLine:
+    - apk add --no-cache git bzr rpm xz
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: clair
+    Name: copy
+    SourcesAndDest:
+    - /clair
+    - /usr/local/bin/clair
+  - Chown: ""
+    From: build
+    Name: copy
+    SourcesAndDest:
+    - /tmp/dockerize
+    - /usr/local/bin/dockerize
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - config.tpl.yaml
+    - /etc/clair/config.tpl.yaml
+  - Name: expose
+    Ports:
+    - "6060"
+    - "6061"
+  - Name: volume
+    Volumes:
+    - /tmp
+  - CmdLine:
+    - dockerize -template /etc/clair/config.tpl.yaml:/etc/clair/config.yaml -wait
+      tcp://${DB_HOST}:${DB_PORT} -timeout 60s clair
+    Name: cmd
+    PrependShell: true
+  From:
+    Image: alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine

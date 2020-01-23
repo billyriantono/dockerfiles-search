@@ -1,0 +1,99 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: maven:latest
+  Commands:
+  - Key: REPO
+    Name: arg
+    Value: '''https://github.com/kubernauts/prometheus_example.git'''
+  - Name: workdir
+    Path: /prometheus_example
+  - CmdLine:
+    - git clone $REPO . && cd springboot/uninstrumented && mvn package
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:latest
+  Name: builder
+  Platform: ""
+  SourceCode: FROM maven:latest as builder
+- As: jmx
+  BaseName: maven:latest
+  Commands:
+  - Key: REPO
+    Name: arg
+    Value: '''https://github.com/prometheus/jmx_exporter.git'''
+  - Name: workdir
+    Path: /jmx_exporter
+  - CmdLine:
+    - git clone $REPO . && mvn package
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven:latest
+  Name: jmx
+  Platform: ""
+  SourceCode: FROM maven:latest as jmx
+- BaseName: openjdk:8-jdk-slim
+  Commands:
+  - Key: BUILD_DATE
+    Name: arg
+    Value: null
+  - Key: VCS_REF
+    Name: arg
+    Value: null
+  - Labels:
+    - Key: org.label-schema.description
+      Value: '"A hello world application to demonstrate Prometheus Java Spring Boot
+        instrumentation."'
+    - Key: org.label-schema.usage
+      Value: '"docker run -d -p :8080 -p :8888 kubernautslabs/prometheus_example:jmx"'
+    - Key: org.label-schema.docker.cmd
+      Value: '"docker run -d -p :8080 -p :8888 kubernautslabs/prometheus_example:jmx"'
+    - Key: org.label-schema.build-date
+      Value: $BUILD_DATE
+    - Key: org.label-schema.name
+      Value: '"kubernauts/prometheus_example"'
+    - Key: org.label-schema.schema-version
+      Value: '"1.0.0-rc.1"'
+    - Key: org.label-schema.url
+      Value: '"https://github.com/kubernauts/prometheus_example"'
+    - Key: org.label-schema.vcs-ref
+      Value: $VCS_REF
+    - Key: org.label-schema.vcs-url
+      Value: '"https://github.com/kubernauts/prometheus_example.git"'
+    - Key: org.label-schema.vendor
+      Value: '"kubernauts"'
+    Name: label
+  - Name: expose
+    Ports:
+    - "8080"
+    - "8888"
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /prometheus_example/springboot/uninstrumented/target/prometheus_example-*-SNAPSHOT.jar
+    - /uninstrumented.jar
+  - Chown: ""
+    From: jmx
+    Name: copy
+    SourcesAndDest:
+    - /jmx_exporter/jmx_prometheus_javaagent/target/jmx_prometheus_javaagent-*-SNAPSHOT.jar
+    - /jmx_exporter.jar
+  - Chown: ""
+    From: jmx
+    Name: copy
+    SourcesAndDest:
+    - /jmx_exporter/example_configs/httpserver_sample_config.yml
+    - /config.yml
+  - CmdLine:
+    - sed -i 's/5555/8080/g' /config.yml && java -javaagent:/jmx_exporter.jar=8888:/config.yml
+      -jar /uninstrumented.jar
+    Name: entrypoint
+    PrependShell: true
+  From:
+    Image: openjdk:8-jdk-slim
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8-jdk-slim

@@ -1,205 +1,38 @@
 MetaArgs: null
 Stages:
-- As: builder
-  BaseName: centos:centos7
+- BaseName: ypcs/debian:buster
   Commands:
-  - Key: YUM_FLAGS_COMMON
-    Name: arg
-    Value: '"-y"'
-  - Key: YUM_FLAGS_DEV
-    Name: arg
-    Value: '"${YUM_FLAGS_COMMON}"'
-  - Key: MAJOR_VERSION
-    Name: arg
-    Value: "3.0"
-  - Key: ZBX_VERSION
-    Name: arg
-    Value: ${MAJOR_VERSION}.29
-  - Key: ZBX_SOURCES
-    Name: arg
-    Value: https://git.zabbix.com/scm/zbx/zabbix.git
-  - Env:
-    - Key: TERM
-      Value: xterm
-    - Key: ZBX_VERSION
-      Value: ${ZBX_VERSION}
-    - Key: ZBX_SOURCES
-      Value: ${ZBX_SOURCES}
-    - Key: ZBX_TYPE
-      Value: frontend
-    - Key: ZBX_DB_TYPE
-      Value: postgresql
-    - Key: ZBX_OPT_TYPE
-      Value: nginx
-    Name: env
   - CmdLine:
-    - set -eux &&     yum --quiet makecache &&     yum ${YUM_FLAGS_DEV} install             gettext             git
-      &&     cd /tmp/ &&     git clone ${ZBX_SOURCES} --branch ${ZBX_VERSION} --depth
-      1 --single-branch zabbix-${ZBX_VERSION} &&     mkdir /tmp/zabbix/ &&     cp
-      -R /tmp/zabbix-${ZBX_VERSION}/frontends/php/* /tmp/zabbix/ &&     rm -rf /tmp/zabbix-${ZBX_VERSION}/
-      &&     cd /tmp/zabbix/ &&     rm -f conf/zabbix.conf.php &&     rm -rf tests
-      &&     ./locale/make_mo.sh
+    - /usr/lib/docker-helpers/apt-setup &&     /usr/lib/docker-helpers/apt-upgrade
+      &&     apt-get --assume-yes install         gosu         redis-server &&     /usr/lib/docker-helpers/apt-cleanup
     Name: run
     PrependShell: true
-  From:
-    Image: centos:centos7
-  Name: builder
-  Platform: ""
-  SourceCode: FROM centos:centos7 as builder
-- BaseName: centos:centos7
-  Commands:
-  - Labels:
-    - Key: maintainer
-      Value: '"Alexey Pustovalov <alexey.pustovalov@zabbix.com>"'
-    Name: label
-  - Key: BUILD_DATE
-    Name: arg
-    Value: null
-  - Key: VCS_REF
-    Name: arg
-    Value: null
-  - Key: YUM_FLAGS_COMMON
-    Name: arg
-    Value: '"-y"'
-  - Key: YUM_FLAGS_PERSISTENT
-    Name: arg
-    Value: '"${YUM_FLAGS_COMMON}"'
-  - Key: MAJOR_VERSION
-    Name: arg
-    Value: "3.0"
-  - Key: ZBX_VERSION
-    Name: arg
-    Value: ${MAJOR_VERSION}.29
-  - Key: ZBX_SOURCES
-    Name: arg
-    Value: https://git.zabbix.com/scm/zbx/zabbix.git
-  - Env:
-    - Key: TERM
-      Value: xterm
-    - Key: ZBX_VERSION
-      Value: ${ZBX_VERSION}
-    - Key: ZBX_SOURCES
-      Value: ${ZBX_SOURCES}
-    - Key: ZBX_TYPE
-      Value: frontend
-    - Key: ZBX_DB_TYPE
-      Value: postgresql
-    - Key: ZBX_OPT_TYPE
-      Value: nginx
-    Name: env
-  - Labels:
-    - Key: org.label-schema.name
-      Value: '"zabbix-web-${ZBX_OPT_TYPE}-${ZBX_DB_TYPE}-centos"'
-    - Key: org.label-schema.vendor
-      Value: '"Zabbix LLC"'
-    - Key: org.label-schema.url
-      Value: '"https://zabbix.com/"'
-    - Key: org.label-schema.description
-      Value: '"Zabbix web-interface based on Nginx web server with PostgreSQL database
-        support"'
-    - Key: org.label-schema.vcs-ref
-      Value: '"${VCS_REF}"'
-    - Key: org.label-schema.build-date
-      Value: '"${BUILD_DATE}"'
-    - Key: org.label-schema.schema-version
-      Value: '"1.0"'
-    - Key: org.label-schema.license
-      Value: '"GPL v2.0"'
-    - Key: org.label-schema.usage
-      Value: '"https://www.zabbix.com/documentation/${MAJOR_VERSION}/manual/installation/containers"'
-    - Key: org.label-schema.version
-      Value: '"${ZBX_VERSION}"'
-    - Key: org.label-schema.vcs-url
-      Value: '"${ZBX_SOURCES}"'
-    - Key: org.label-schema.docker.cmd
-      Value: '"docker run --name zabbix-web-${ZBX_OPT_TYPE}-pgsql --link postgres-server:postgres
-        --link zabbix-server:zabbix-server -p 80:80 -d zabbix-web-${ZBX_OPT_TYPE}-pgsql:centos-${ZBX_VERSION}"'
-    Name: label
-  - Name: stopsignal
-    Signal: SIGTERM
   - Chown: ""
-    From: builder
+    From: ""
     Name: copy
     SourcesAndDest:
-    - /tmp/zabbix/
-    - /usr/share/zabbix/
+    - entrypoint.sh
+    - /entrypoint.sh
   - CmdLine:
-    - set -eux &&     groupadd --system zabbix &&     adduser -r --shell /sbin/nologin             -g
-      zabbix             -d /var/lib/zabbix/         zabbix &&     mkdir -p /etc/zabbix
-      &&     mkdir -p /etc/zabbix/web &&     chown --quiet -R zabbix:root /etc/zabbix
-      &&     yum ${YUM_FLAGS_COMMON} makecache &&     yum ${YUM_FLAGS_PERSISTENT}
-      install epel-release &&     yum ${YUM_FLAGS_PERSISTENT} install supervisor             curl             nginx             postgresql             php-bcmath             php-fpm             php-gd             php-ldap             php-mbstring             php-pgsql             php-xml
-      &&     rm -f /etc/nginx/conf.d/*.conf &&     cat /usr/share/zabbix/include/locales.inc.php
-      | grep display | grep true | awk '{$1=$1};1' |                 cut -d"'" -f
-      2 | sort |                 xargs -I '{}' bash -c 'echo "{}" && localedef -c
-      -i {} -f UTF-8 {}.UTF-8 2>/dev/null' &&     rm -f /etc/php-fpm.d/www.conf &&     mkdir
-      -p /var/lib/php/ &&     chown --quiet -R nginx:nginx /var/lib/php/ &&     yum
-      ${YUM_FLAGS_PERSISTENT} clean all &&     rm -rf /var/cache/yum/
+    - mkdir -p /var/run/redis &&     chown redis:redis /var/run/redis &&     sed -i
+      "s/^daemonize yes/daemonize no/g" /etc/redis/redis.conf &&     sed -i "s/^logfile
+      .*/logfile \/dev\/stdout/g" /etc/redis/redis.conf &&     sed -i "s/^bind .*/bind
+      0.0.0.0/g" /etc/redis/redis.conf
     Name: run
     PrependShell: true
-  - Name: expose
-    Ports:
-    - 443/TCP
-    - 80/TCP
-  - Name: workdir
-    Path: /usr/share/zabbix
-  - Name: volume
-    Volumes:
-    - /etc/ssl/nginx
-  - Chown: ""
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - conf/etc/supervisor/
-    - /etc/supervisor/
-  - Chown: ""
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - conf/etc/zabbix/nginx.conf
-    - /etc/zabbix/
-  - Chown: ""
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - conf/etc/zabbix/nginx_ssl.conf
-    - /etc/zabbix/
-  - Chown: ""
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - conf/etc/zabbix/web/zabbix.conf.php
-    - /etc/zabbix/web/
-  - Chown: ""
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - conf/etc/nginx/nginx.conf
-    - /etc/nginx/
-  - Chown: ""
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - conf/etc/php-fpm.conf
-    - /etc/php-fpm.conf
-  - Chown: ""
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - conf/etc/php.d/99-zabbix.ini
-    - /etc/php.d/99-zabbix.ini
-  - Chown: ""
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - docker-entrypoint.sh
-    - /usr/bin/
   - CmdLine:
-    - docker-entrypoint.sh
+    - /entrypoint.sh
     Name: entrypoint
     PrependShell: false
+  - Name: user
+    User: redis
+  - CmdLine:
+    - redis-server
+    - /etc/redis/redis.conf
+    Name: cmd
+    PrependShell: false
   From:
-    Image: centos:centos7
+    Image: ypcs/debian:buster
   Name: ""
   Platform: ""
-  SourceCode: FROM centos:centos7
+  SourceCode: FROM ypcs/debian:buster

@@ -1,52 +1,41 @@
-FROM ubuntu:16.04
-MAINTAINER dreamcat4 <dreamcat4@gmail.com>
+############## build stage ##############
+FROM lsiobase/alpine:3.8 as buildstage
 
+COPY build/ /
+WORKDIR /src
+RUN echo "**** build mp4v2 (for mp4track) from source since no alpine package exists ****" && \
+    apk add --no-cache --virtual=build-dependencies g++ make && \
+    tar -xjf mp4v2-2.0.0.tar.bz2
+WORKDIR /src/mp4v2-2.0.0
+RUN ./configure --disable-debug && make && make install
 
-# ENV sonarr_release=develop
-ENV sonarr_release=master
+############## runtime stage ##############
+FROM lsiobase/alpine:3.8
 
+LABEL maintainer="Dragonfyre13"
 
-ENV _clean="rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*"
-ENV _apt_clean="eval apt-get clean && $_clean"
+COPY root/etc/apk/repositories /etc/apk/repositories
+COPY --from=buildstage /usr/local/bin/mp4* /usr/local/bin/
+COPY --from=buildstage /usr/local/lib/libmp4v2* /usr/local/lib/
 
+# Required for runtime of mp4track: libgcc libstdc++
+RUN echo "**** install supporting packages ****" && \
+    apk add --no-cache \
+        libgcc libstdc++ \
+        python2 py2-pip ruby ruby-rdoc \
+        handbrake@edgetesting x265-libs@edgecommunity \
+        ffmpeg mkvtoolnix && \
+    echo "**** install video_transcoding gem ****" && \
+    gem install video_transcoding && \
+    echo "**** install latest pip version ****" && \
+    pip install --no-cache-dir -U pip && \
+    echo "**** install other pip packages ****" && \
+    pip install --no-cache-dir -U pyyaml && \
+    echo "**** Clean up temporary files ****" && \
+    rm -rf /root/.cache /tmp/*
 
-# Install s6-overlay
-ENV s6_overlay_version="1.17.1.1"
-ADD https://github.com/just-containers/s6-overlay/releases/download/v${s6_overlay_version}/s6-overlay-amd64.tar.gz /tmp/
-RUN tar zxf /tmp/s6-overlay-amd64.tar.gz -C / && $_clean
-ENV S6_LOGGING="1"
-# ENV S6_KILL_GRACETIME="3000"
+COPY root/ /
 
-
-# Install pipework
-ADD https://github.com/jpetazzo/pipework/archive/master.tar.gz /tmp/pipework-master.tar.gz
-RUN tar -zxf /tmp/pipework-master.tar.gz -C /tmp && cp /tmp/pipework-master/pipework /sbin/ && $_clean
-
-
-# Install sonarr
-RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys FDA5DFFC \
- && echo "deb http://apt.sonarr.tv ${sonarr_release} main" >> /etc/apt/sources.list \
- && apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -qqy sudo libmono-cil-dev nzbdrone \
- && $_apt_clean
-
-
-# Setup sonarr /config dir and /media folder
-RUN groupadd -o -g 8989 sonarr \
- && useradd -o -c "Also known as nzbdrone - runs mono NzbDrone.exe" \
-    -u 8989 -N -g sonarr --shell /bin/sh -d /config sonarr \
- && install -o sonarr -g sonarr -d /config /media
-
-
-# Launch script
-ADD entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-
-# Default container settings
-VOLUME /config /media
-EXPOSE 8989 9898
-ENTRYPOINT ["/init","/entrypoint.sh"]
-
-
-
-
+# /config - Holds the auto-transcoding config and the harness process logs (not the handbrake logs)
+# /video_files - Holds the folder structures containing things to transcode, gets populated after running the first time
+VOLUME ["/video_files", "/config"]

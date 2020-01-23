@@ -1,0 +1,87 @@
+MetaArgs: null
+Stages:
+- BaseName: centos:7
+  Commands:
+  - Key: BIND_PREFIX
+    Name: arg
+    Value: /usr/local/named
+  - Key: BIND_SYSDIR
+    Name: arg
+    Value: /etc/named
+  - Key: BIND_VERSION
+    Name: arg
+    Value: 9-12-2
+  - Key: BIND_VERSION_DOT
+    Name: arg
+    Value: 9.12.2
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - script/start.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - script/entrypoint.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - script/replace.sh
+    - /
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - named.conf
+    - ${BIND_SYSDIR}/named.conf.template
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - statistics.conf
+    - /statistics.conf
+  - CmdLine:
+    - yum install -y gcc make perl-devel openssl-devel mysql-devel libxml2-devel wget
+      gettext sysvinit-tools      && curl -L https://www.isc.org/downloads/file/bind-${BIND_VERSION}/?version=tar-gz
+      -o /tmp/bind.tar.gz     && tar -zxvf /tmp/bind.tar.gz -C /tmp     && /bin/bash
+      /replace.sh /tmp/bind-${BIND_VERSION_DOT}     && cd /tmp/bind-${BIND_VERSION_DOT}     &&
+      ./configure --prefix=${BIND_PREFIX} --sysconfdir=${BIND_SYSDIR} --enable-threads
+      --enable-epoll --disable-chroot --enable-backtrace --enable-largefile --disable-ipv6
+      --with-openssl  --with-libxml2     && make && make install     && cd /root &&
+      rm -rf /tmp/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ${BIND_PREFIX}/sbin/rndc-confgen -r /dev/urandom > ${BIND_SYSDIR}/rndc.conf     &&
+      tail -n 10 ${BIND_SYSDIR}/rndc.conf | head -n 9 | sed 's/#\ //g' > /tmp/tmp.conf     &&
+      sed -i '/#rndc/r /tmp/tmp.conf' ${BIND_SYSDIR}/named.conf.template     && wget
+      -O ${BIND_SYSDIR}/named.ca  http://www.internic.net/domain/named.root     &&
+      mkdir ${BIND_SYSDIR}/acl && touch ${BIND_SYSDIR}/acl/acl.conf     && mkdir ${BIND_SYSDIR}/view
+      && touch ${BIND_SYSDIR}/view/view.conf     && yum remove -y gcc make wget     &&
+      yum clean all     && ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime     &&
+      echo 'LANG="en_US.UTF-8"' > /etc/locale.conf
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - 53/TCP
+    - 53/UDP
+    - "8053"
+    - "953"
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - /start.sh
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: centos:7
+  Name: ""
+  Platform: ""
+  SourceCode: FROM centos:7

@@ -1,0 +1,98 @@
+MetaArgs: null
+Stages:
+- BaseName: library/tomcat:9-jre8
+  Commands:
+  - Env:
+    - Key: ARCH
+      Value: amd64
+    - Key: GUAC_VER
+      Value: 1.0.0
+    - Key: GUACAMOLE_HOME
+      Value: /app/guacamole
+    - Key: PG_MAJOR
+      Value: "9.6"
+    - Key: PGDATA
+      Value: /config/postgres
+    - Key: POSTGRES_USER
+      Value: guacamole
+    - Key: POSTGRES_DB
+      Value: guacamole_db
+    Name: env
+  - CmdLine:
+    - curl -SLO "https://github.com/just-containers/s6-overlay/releases/download/v1.20.0.0/s6-overlay-${ARCH}.tar.gz"   &&
+      tar -xzf s6-overlay-${ARCH}.tar.gz -C /   && tar -xzf s6-overlay-${ARCH}.tar.gz
+      -C /usr ./bin   && rm -rf s6-overlay-${ARCH}.tar.gz   && mkdir -p ${GUACAMOLE_HOME}     ${GUACAMOLE_HOME}/lib     ${GUACAMOLE_HOME}/extensions
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: ${GUACAMOLE_HOME}
+  - CmdLine:
+    - apt-get update && apt-get install -y     libcairo2-dev libjpeg62-turbo-dev libpng-dev     libossp-uuid-dev
+      libavcodec-dev libavutil-dev     libswscale-dev libfreerdp-dev libpango1.0-dev     libssh2-1-dev
+      libtelnet-dev libvncserver-dev     libpulse-dev libssl-dev libvorbis-dev libwebp-dev     ghostscript
+      postgresql-${PG_MAJOR}   && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '[ "$ARCH" = "armhf" ] && ln -s /usr/local/lib/freerdp /usr/lib/arm-linux-gnueabihf/freerdp
+      || exit 0'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - '[ "$ARCH" = "amd64" ] && ln -s /usr/local/lib/freerdp /usr/lib/x86_64-linux-gnu/freerdp
+      || exit 0'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -SLO "http://apache.org/dyn/closer.cgi?action=download&filename=guacamole/${GUAC_VER}/source/guacamole-server-${GUAC_VER}.tar.gz"   &&
+      tar -xzf guacamole-server-${GUAC_VER}.tar.gz   && cd guacamole-server-${GUAC_VER}   &&
+      ./configure   && make -j$(getconf _NPROCESSORS_ONLN)   && make install   &&
+      cd ..   && rm -rf guacamole-server-${GUAC_VER}.tar.gz guacamole-server-${GUAC_VER}   &&
+      ldconfig
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -x   && rm -rf ${CATALINA_HOME}/webapps/ROOT   && curl -SLo ${CATALINA_HOME}/webapps/ROOT.war
+      "http://apache.org/dyn/closer.cgi?action=download&filename=guacamole/${GUAC_VER}/binary/guacamole-${GUAC_VER}.war"   &&
+      curl -SLo ${GUACAMOLE_HOME}/lib/postgresql-42.1.4.jar "https://jdbc.postgresql.org/download/postgresql-42.1.4.jar"   &&
+      curl -SLO "http://apache.org/dyn/closer.cgi?action=download&filename=guacamole/${GUAC_VER}/binary/guacamole-auth-jdbc-${GUAC_VER}.tar.gz"   &&
+      tar -xzf guacamole-auth-jdbc-${GUAC_VER}.tar.gz   && cp -R guacamole-auth-jdbc-${GUAC_VER}/postgresql/guacamole-auth-jdbc-postgresql-${GUAC_VER}.jar
+      ${GUACAMOLE_HOME}/extensions/   && cp -R guacamole-auth-jdbc-${GUAC_VER}/postgresql/schema
+      ${GUACAMOLE_HOME}/   && rm -rf guacamole-auth-jdbc-${GUAC_VER} guacamole-auth-jdbc-${GUAC_VER}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - set -xe   && mkdir ${GUACAMOLE_HOME}/extensions-available   && for i in auth-ldap
+      auth-duo auth-header auth-cas auth-openid auth-quickconnect auth-totp; do     echo
+      "http://apache.org/dyn/closer.cgi?action=download&filename=guacamole/${GUAC_VER}/binary/guacamole-${i}-${GUAC_VER}.tar.gz"     &&
+      curl -SLO "http://apache.org/dyn/closer.cgi?action=download&filename=guacamole/${GUAC_VER}/binary/guacamole-${i}-${GUAC_VER}.tar.gz"     &&
+      tar -xzf guacamole-${i}-${GUAC_VER}.tar.gz     && cp guacamole-${i}-${GUAC_VER}/guacamole-${i}-${GUAC_VER}.jar
+      ${GUACAMOLE_HOME}/extensions-available/     && rm -rf guacamole-${i}-${GUAC_VER}
+      guacamole-${i}-${GUAC_VER}.tar.gz   ;done
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PATH
+      Value: /usr/lib/postgresql/${PG_MAJOR}/bin:$PATH
+    Name: env
+  - Env:
+    - Key: GUACAMOLE_HOME
+      Value: /config/guacamole
+    Name: env
+  - Name: workdir
+    Path: /config
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - root
+    - /
+  - CmdLine:
+    - /init
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: library/tomcat:9-jre8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM library/tomcat:9-jre8

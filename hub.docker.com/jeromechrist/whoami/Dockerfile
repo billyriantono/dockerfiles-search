@@ -1,18 +1,23 @@
-FROM microsoft/dotnet:2.1.301-sdk-alpine AS build
-WORKDIR /app
+FROM python:3.6-alpine3.8
 
-# copy csproj and restore as distinct layers
-COPY src/*.csproj .
-RUN dotnet restore
+RUN addgroup -S app && adduser -S -g app app
+WORKDIR /usr/src/app
 
-# copy everything else and build app
-COPY src/. .
-RUN dotnet publish -c Release -o out
+RUN pip install --upgrade pip
 
-FROM microsoft/dotnet:2.1.1-aspnetcore-runtime AS runtime
-WORKDIR /app
-COPY --from=build /app/out ./
+RUN apk --update --upgrade add --virtual deps \
+  gcc python3-dev linux-headers musl-dev \
+  alpine-sdk libressl-dev gmp-dev libffi-dev \
+  postgresql-dev && \
+  apk --update --upgrade add --no-cache libpq gmp libstdc++
 
-EXPOSE 80
+COPY ./requirements.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+RUN apk del deps
 
-ENTRYPOINT ["dotnet", "whoami.dll"]
+COPY . /usr/src/app
+RUN chown -R app:app /usr/src/app
+
+USER app
+ENV PYTHONUNBUFFERED=1
+EXPOSE 8080

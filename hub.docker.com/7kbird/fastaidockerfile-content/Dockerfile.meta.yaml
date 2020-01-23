@@ -1,0 +1,157 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: alpine:3.9
+  Commands:
+  - Maintainer: Nicholas Laurent 0x666f6f@nym.hush.com
+    Name: maintainer
+  - Key: PYTHON_VERSION
+    Name: arg
+    Value: '"3.7.3"'
+  - Env:
+    - Key: LANG
+      Value: '"C.UTF-8"'
+    - Key: PYTHONHOME
+      Value: '"/usr/local"'
+    - Key: PYTHONPATH
+      Value: '"/usr/local/bin"'
+    - Key: LD_LIBRARY_PATH
+      Value: '"${LD_LIBRARY_PATH}:${PYTHONHOME}/lib"'
+    - Key: C_INCLUDE_PATH
+      Value: '"${C_INCLUDE_PATH}:${PYTHONHOME}/include"'
+    - Key: PATH
+      Value: '"${PYTHONPATH}:${PATH}"'
+    Name: env
+  - CmdLine:
+    - set -e   && echo -n "Installing fetcher dependencies... "     && apk --no-cache
+      add --virtual .fetch-deps wget xz-dev >/dev/null 2>&1     && echo "Done."       &&
+      echo -n "Installing Python dependencies... "     && apk --no-cache add --virtual
+      .python-deps       bzip2-dev       expat-dev       gdbm-dev       libffi-dev       ncurses-dev       openssl-dev       sqlite-dev       zlib-dev         >/dev/null
+      2>&1   && echo "Done."       && echo -n "Installing build dependencies... "     &&
+      apk --no-cache add --virtual .build-deps       build-base       coreutils       findutils       libnsl-dev       libtirpc-dev       linux-headers       pax-utils       readline-dev       util-linux-dev         >/dev/null
+      2>&1     && echo "Done."     && echo -n "Downloading source... "     && wget
+      -O python.tar.xz "https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tar.xz"
+      >/dev/null 2>&1     && mkdir -p /usr/src/python     && tar -xJC /usr/src/python
+      --strip-components=1 -f python.tar.xz >/dev/null 2>&1     && rm python.tar.xz     &&
+      cd /usr/src/python     && echo "Done."     && echo -n "Configuring build parameters...
+      "     && ./configure       --prefix="$PYTHONHOME"       --build="x86_64-linux-musl"       --enable-optimizations       --enable-shared       --enable-loadable-sqlite-extensions       --enable-ipv6       --with-ensurepip="install"       --with-system-expat       --without-dtrace         >/dev/null
+      2>&1     && echo "Done."     && echo -n "Compiling the application [this will
+      take a while]... "     && make -j "$(nproc)"       EXTRA_CFLAGS="-Os -g0 -Wl,--strip-all
+      -DTHREAD_STACK_SIZE=0x100000"         >/dev/null 2>&1     && echo "Done."     &&
+      echo -n "Installing the application to ${PYTHONHOME}... "     && make install
+      >/dev/null 2>&1     && echo "Done."     && echo -n "Upgrading Pip and Setuptools...
+      "     && ln -sf "${PYTHONHOME}/lib/libpython3.7m.so.1.0" /usr/lib/libpython3.7m.so.1.0     &&
+      "${PYTHONHOME}/bin/pip3" install --upgrade pip setuptools >/dev/null 2>&1     &&
+      echo "Done."     && echo -n "Saving the runtime dependencies... "     && runDeps="$(         scanelf
+      --needed --nobanner --recursive "$PYTHONHOME"             | awk '{ gsub(/,/,
+      "\nso:", $2); print "so:" $2 }'             | sort -u             | xargs -r
+      apk info --installed             | sort -u         )"     && echo "$runDeps"
+      > "${PYTHONHOME}/run-dependencies.txt"     && echo "Done."     && echo "Cleaning
+      image of unnecessary files."     && if [ -n "$(find "$PYTHONHOME" -name "*.c")"
+      ]; then echo -n "> Removing *.c artifacts... ";       find "$PYTHONHOME" -name
+      "*.c" -delete && echo "Done.";  fi         && if [ -n "$(find "$PYTHONHOME"
+      -name "*.pxd")" ]; then echo -n "> Removing *.pxd artifacts... ";       find
+      "$PYTHONHOME" -name "*.pxd" -delete && echo "Done.";  fi         && if [ -n
+      "$(find "$PYTHONHOME" -name "*.pyd")" ]; then echo -n "> Removing *.pyd artifacts...
+      ";       find "$PYTHONHOME" -name "*.pyd" -delete && echo "Done."; fi         &&
+      if [ -n "$(find "$PYTHONHOME" -regex "^.*\(__pycache__\|\.py[co]\)$")" ]; then
+      echo -n "> Removing __pycache__ artifacts... ";       find "$PYTHONHOME" -regex
+      "^.*\(__pycache__\|\.py[co]\)$" -delete && echo "Done."; fi         && if [
+      -n "$(find "$PYTHONHOME" -type d -a \( -name test -o -name tests \))" ]; then
+      echo -n "> Removing test[s] artifacts... ";       find "$PYTHONHOME" -type d
+      -a \( -name test -o -name tests \) -exec rm -rf '{}' + && echo "Done."; fi         &&
+      if [ -n "$(find "$PYTHONHOME" -type d -name "ensurepip")" ]; then echo -n ">
+      Removing ensurepip... ";       find "$PYTHONHOME" -type d -name "ensurepip"
+      -exec rm -rf '{}' + && echo "Done."; fi         && if [ -n "$(find "$PYTHONHOME"
+      -type d -name "idlelib")" ]; then echo -n "> Removing idlelib... ";       find
+      "$PYTHONHOME" -type d -name "idlelib" -exec rm -rf '{}' + && echo "Done."; fi         &&
+      echo "Stage one (builder) complete!"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: builder
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as builder
+- As: production
+  BaseName: alpine:3.9
+  Commands:
+  - Maintainer: Nicholas Laurent 0x666f6f@nym.hush.com
+    Name: maintainer
+  - Labels:
+    - Key: IMAGE
+      Value: '"0x666f6f/alpine-python3-minimal:optimised-3.7"'
+    - Key: DISTRIBUTION
+      Value: '"Alpine Linux 3.9.3"'
+    - Key: PYTHON
+      Value: '"3.7.3"'
+    - Key: PIP
+      Value: '"19.1"'
+    Name: label
+  - CmdLine:
+    - sh
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - -c
+    - python
+    Name: cmd
+    PrependShell: false
+  - Env:
+    - Key: LANG
+      Value: '"C.UTF-8"'
+    - Key: PYTHONHOME
+      Value: '"/usr/local"'
+    - Key: PYTHONPATH
+      Value: '"/usr/local/bin"'
+    - Key: LD_LIBRARY_PATH
+      Value: '"${LD_LIBRARY_PATH}:${PYTHONHOME}/lib"'
+    - Key: C_INCLUDE_PATH
+      Value: '"${C_INCLUDE_PATH}:${PYTHONHOME}/include"'
+    Name: env
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - '"${PYTHONHOME}/bin"'
+    - '"${PYTHONHOME}/bin"'
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - '"${PYTHONHOME}/include"'
+    - '"${PYTHONHOME}/include"'
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - '"${PYTHONHOME}/lib"'
+    - '"${PYTHONHOME}/lib"'
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - '"${PYTHONHOME}/share"'
+    - '"${PYTHONHOME}/share"'
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - '"${PYTHONHOME}/run-dependencies.txt"'
+    - /root/
+  - CmdLine:
+    - set -e   && echo -n "Installing packages... "     && cat /root/run-dependencies.txt
+      | xargs -rt apk --no-cache add >/dev/null 2>&1     && echo "Done."     && echo
+      -n "Creating symlinks... "     && if [ ! -e "/usr/bin/python" ]; then ln -sf
+      "$(which python3)" /usr/bin/python; fi     && if [ ! -e "/usr/bin/pydoc" ];
+      then ln -sf "$(which pydoc3)" /usr/bin/pydoc; fi     && if [ ! -e "/usr/bin/python-config"
+      ]; then ln -sf "$(which python3-config)" /usr/bin/python-config; fi     && if
+      [ ! -e "/usr/bin/pip" ]; then ln -sf "$(which pip3)" /usr/bin/pip; fi     &&
+      echo "Done."     && echo "Stage two (production) complete!"
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.9
+  Name: production
+  Platform: ""
+  SourceCode: FROM alpine:3.9 as production

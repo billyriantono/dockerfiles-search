@@ -1,0 +1,87 @@
+MetaArgs: null
+Stages:
+- As: composer
+  BaseName: php:7.3-cli
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /mnt
+  - CmdLine:
+    - apt-get update && apt-get install -y --no-install-recommends git unzip zip     &&
+      curl https://getcomposer.org/composer.phar > /usr/local/bin/composer     &&
+      chmod +x /usr/local/bin/composer     && cd /mnt     && composer install --no-dev
+      --optimize-autoloader --ignore-platform-reqs
+    Name: run
+    PrependShell: true
+  From:
+    Image: php:7.3-cli
+  Name: composer
+  Platform: ""
+  SourceCode: FROM php:7.3-cli AS composer
+- As: mix
+  BaseName: node:12
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /mnt
+  - CmdLine:
+    - cd /mnt     && yarn install     && yarn run prod
+    Name: run
+    PrependShell: true
+  From:
+    Image: node:12
+  Name: mix
+  Platform: ""
+  SourceCode: FROM node:12 as mix
+- BaseName: php:7.3-apache
+  Commands:
+  - CmdLine:
+    - docker-php-ext-install pdo_mysql opcache     && pecl install redis     && docker-php-ext-enable
+      redis
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod rewrite remoteip ;    {     echo RemoteIPHeader X-Real-IP ;     echo
+      RemoteIPTrustedProxy 10.0.0.0/8 ;     echo RemoteIPTrustedProxy 172.16.0.0/12
+      ;     echo RemoteIPTrustedProxy 192.168.0.0/16 ;    } > /etc/apache2/conf-available/remoteip.conf;    a2enconf
+      remoteip     && sed -i '/DocumentRoot/c\DocumentRoot \/var\/www\/html\/public'
+      /etc/apache2/sites-available/000-default.conf
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - /var/www/html
+  - Chown: ""
+    From: composer
+    Name: copy
+    SourcesAndDest:
+    - /mnt/vendor
+    - /var/www/html/vendor
+  - Chown: ""
+    From: mix
+    Name: copy
+    SourcesAndDest:
+    - /mnt/public
+    - /var/www/html/public
+  - Env:
+    - Key: LOG_CHANNEL
+      Value: errorlog
+    Name: env
+  - CmdLine:
+    - chown -R www-data:www-data /var/www/html/storage     && php artisan package:discover
+    Name: run
+    PrependShell: true
+  From:
+    Image: php:7.3-apache
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.3-apache

@@ -1,10 +1,13 @@
-FROM oaklabs/oak:3.2.0
+FROM openjdk:8-jdk-alpine
 
-WORKDIR /app
-COPY . /app
+# Install docker
+RUN apk update --no-cache && \
+    apk add docker py-pip
 
-RUN npm i --engine-strict=true --progress=false --loglevel="error" \
-    && npm test \
-    && npm cache clean
+# Install docker-compose
+RUN pip install docker-compose
 
-CMD ["/app"]
+COPY entrypoint.sh /entrypoint.sh
+ENTRYPOINT [ "/entrypoint.sh" ]
+# Install docker at boot
+#RUN rc-update add docker boot

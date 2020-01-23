@@ -1,0 +1,115 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: gcc
+  Commands:
+  - Env:
+    - Key: VERSION
+      Value: 2.4.7
+    Name: env
+  - Env:
+    - Key: OPENSSL_VERSION
+      Value: 1_1_1c
+    Name: env
+  - Env:
+    - Key: LZO_VERSION
+      Value: "2.10"
+    Name: env
+  - Name: workdir
+    Path: /
+  - CmdLine:
+    - apt update -q &&     apt install -y net-tools &&     mkdir vpn_compile &&     wget
+      https://github.com/openssl/openssl/archive/OpenSSL_${OPENSSL_VERSION}.tar.gz
+      &&     tar -zxvf OpenSSL_${OPENSSL_VERSION}.tar.gz &&     wget http://www.oberhumer.com/opensource/lzo/download/lzo-${LZO_VERSION}.tar.gz
+      &&     tar -zxvf lzo-${LZO_VERSION}.tar.gz &&     wget https://swupdate.openvpn.org/community/releases/openvpn-${VERSION}.tar.gz
+      &&     tar -zxvf openvpn-${VERSION}.tar.gz &&     git clone https://github.com/ecki/net-tools
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /openssl-OpenSSL_${OPENSSL_VERSION}
+  - CmdLine:
+    - ./Configure gcc -static -no-shared --prefix=/vpn_compile &&     make &&     make
+      install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /lzo-${LZO_VERSION}
+  - CmdLine:
+    - ./configure --prefix=/vpn_compile --enable-static --disable-debug &&     make
+      && make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /openvpn-${VERSION}
+  - CmdLine:
+    - ./configure --prefix=/vpn_compile     --disable-server     --enable-static     --disable-shared     --disable-debug     --disable-plugins     OPENSSL_SSL_LIBS="-L/vpn_compile/lib
+      -lssl"     OPENSSL_SSL_CFLAGS="-I/vpn_compile/include"     OPENSSL_CRYPTO_LIBS="-L/vpn_compile/lib
+      -lcrypto"     OPENSSL_CRYPTO_CFLAGS="-I/vpn_compile/include"     LZO_CFLAGS="-I/vpn_compile/include"     LZO_LIBS="-L/vpn_compile/lib
+      -llzo2" &&     make LIBS="-all-static -L/vpn_compile/lib -lssl -lcrypto -llzo2"
+      &&     make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /net-tools
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.status
+    - config.status
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.h
+    - config.h
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - config.in
+    - config.in
+  - CmdLine:
+    - echo "" > configure.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - make ifconfig LDFLAGS="-Llib -static" &&     make route LDFLAGS="-Llib -static"
+    Name: run
+    PrependShell: true
+  From:
+    Image: gcc
+  Name: builder
+  Platform: ""
+  SourceCode: FROM gcc as builder
+- BaseName: gcr.io/distroless/base
+  Commands:
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /vpn_compile/sbin/openvpn
+    - /openvpn
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /net-tools/ifconfig
+    - /sbin/ifconfig
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /net-tools/route
+    - /sbin/route
+  - CmdLine:
+    - /openvpn
+    - --config
+    - /default.ovpn
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: gcr.io/distroless/base
+  Name: ""
+  Platform: ""
+  SourceCode: FROM gcr.io/distroless/base

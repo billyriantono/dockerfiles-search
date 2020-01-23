@@ -12,7 +12,7 @@ Stages:
     Value: null
   - CmdLine:
     - apk add --no-cache libstdc++ gcc g++ make git ca-certificates linux-headers
-      wget curl jq
+      wget curl jq libsass
     Name: run
     PrependShell: true
   - CmdLine:
@@ -25,20 +25,36 @@ Stages:
   - Chown: ""
     Name: add
     SourcesAndDest:
+    - Makefile
+    - go.mod
+    - /go/src/github.com/hunterlong/statping/
+  - CmdLine:
+    - go mod vendor &&     make dev-deps
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
     - .
     - /go/src/github.com/hunterlong/statping
-  - CmdLine:
-    - go mod vendor
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - make dev-deps
-    Name: run
-    PrependShell: true
   - CmdLine:
     - make install
     Name: run
     PrependShell: true
+  From:
+    Image: golang:1.13.5-alpine
+  Name: base
+  Platform: ""
+  SourceCode: FROM golang:1.13.5-alpine as base
+- BaseName: alpine:latest
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Hunter Long (https://github.com/hunterlong)"'
+    Name: label
+  - Key: VERSION
+    Name: arg
+    Value: null
   - Env:
     - Key: IS_DOCKER
       Value: "true"
@@ -47,14 +63,48 @@ Stages:
     - Key: STATPING_DIR
       Value: /app
     Name: env
+  - Env:
+    - Key: PORT
+      Value: "8080"
+    Name: env
+  - CmdLine:
+    - apk --no-cache add curl jq libsass
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: base
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/bin/sass
+    - /usr/local/bin/sass
+  - Chown: ""
+    From: base
+    Name: copy
+    SourcesAndDest:
+    - /go/bin/statping
+    - /usr/local/bin/statping
   - Name: workdir
     Path: /app
+  - Name: volume
+    Volumes:
+    - /app
+  - Name: expose
+    Ports:
+    - $PORT
+  - Health:
+      Interval: 60000000000
+      Retries: 3
+      Test:
+      - CMD-SHELL
+      - curl -s "http://localhost:$PORT/health" | jq -r -e ".online==true"
+      Timeout: 10000000000
+    Name: healthcheck
   - CmdLine:
-    - statping
+    - statping -port $PORT
     Name: cmd
-    PrependShell: false
+    PrependShell: true
   From:
-    Image: golang:1.13.5-alpine
-  Name: base
+    Image: alpine:latest
+  Name: ""
   Platform: ""
-  SourceCode: FROM golang:1.13.5-alpine as base
+  SourceCode: FROM alpine:latest

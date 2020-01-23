@@ -1,0 +1,85 @@
+MetaArgs: null
+Stages:
+- BaseName: java:openjdk-8-jre-alpine
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"Tobias Vollmer <info+docker@tvollmer.de>"'
+    Name: label
+  - Key: freenet_build
+    Name: arg
+    Value: null
+  - Env:
+    - Key: allowedhosts
+      Value: 127.0.0.1,0:0:0:0:0:0:0:1
+    - Key: darknetport
+      Value: "12345"
+    - Key: opennetport
+      Value: "12346"
+    Name: env
+  - Name: expose
+    Ports:
+    - ${darknetport}/udp
+    - ${opennetport}/udp
+    - "8888"
+    - "9481"
+  - Name: volume
+    Volumes:
+    - /conf
+    - /data
+  - CmdLine:
+    - /fred/docker-run
+    Name: cmd
+    PrependShell: false
+  - Health:
+      Interval: 300000000000
+      Test:
+      - CMD-SHELL
+      - /fred/run.sh status || exit 1
+      Timeout: 3000000000
+    Name: healthcheck
+  - CmdLine:
+    - apk add --update openssl libc6-compat && ln -s /lib /lib64
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - addgroup -S -g 1000 fred && adduser -S -u 1000 -G fred -h /fred fred
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: fred
+  - Name: workdir
+    Path: /fred
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - ./defaults/freenet.ini
+    - /defaults/
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-run
+    - /fred/
+  - CmdLine:
+    - 'build=$(test -n "${freenet_build}" && echo ${freenet_build}             ||
+      wget -qO - https://api.github.com/repos/freenet/fred/releases/latest | grep
+      ''tag_name''| cut -d''"'' -f 4)     && short_build=$(echo ${build}|cut -c7-)     &&
+      echo -e "build: $build\nurl: https://github.com/freenet/fred/releases/download/$build/new_installer_offline_$short_build.jar"
+      >buildinfo.json'
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - wget -O /tmp/new_installer.jar $(grep url /fred/buildinfo.json |cut -d" " -f2)     &&
+      echo "INSTALL_PATH=/fred/" >/tmp/install_options.conf     && java -jar /tmp/new_installer.jar
+      -options /tmp/install_options.conf     && sed -i 's#wrapper.app.parameter.1=freenet.ini#wrapper.app.parameter.1=/conf/freenet.ini#'
+      /fred/wrapper.conf     && rm /tmp/new_installer.jar /tmp/install_options.conf     &&
+      echo "Build successful"     && echo "----------------"     && cat /fred/buildinfo.json
+    Name: run
+    PrependShell: true
+  From:
+    Image: java:openjdk-8-jre-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM java:openjdk-8-jre-alpine

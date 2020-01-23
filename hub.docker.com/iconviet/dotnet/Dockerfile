@@ -1,2 +1,2 @@
-FROM agiper/dotnet:latest
+FROM agiper/dotnet
 MAINTAINER Tom Nuen <tomnuen@iconviet.io>

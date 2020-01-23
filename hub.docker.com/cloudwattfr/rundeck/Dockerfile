@@ -1,18 +1,28 @@
-FROM java:7
+FROM python:2
 
-RUN wget -O /usr/bin/confd https://github.com/kelseyhightower/confd/releases/download/v0.11.0/confd-0.11.0-linux-amd64 && chmod +x /usr/bin/confd
+VOLUME /logs
+VOLUME /data
 
-ENV RUN_DECK_VERSION 2.6.2-1-GA
+ENV HOME /app
+ENV SHELL bash
+ENV WORKON_HOME /app
 
-RUN wget http://dl.bintray.com/rundeck/rundeck-deb/rundeck-${RUN_DECK_VERSION}.deb && dpkg -i rundeck-${RUN_DECK_VERSION}.deb && rm -f rundeck-${RUN_DECK_VERSION}.deb
+ADD *.txt /tmp/
 
-ADD entrypoint.sh /entrypoint.sh
+WORKDIR /app
 
-ADD conf/* /etc/confd/conf.d/
-ADD templates/* /etc/confd/templates/
+RUN apt-get update && \
+    apt-get -y upgrade && \
+    apt-get -y autoremove && \
+    xargs apt-get -y -q install < /tmp/apt.txt && \
+    apt-get clean && \
+    pip install --no-cache-dir -r /tmp/pip.txt && \
+    ln /usr/lib/python2.7/dist-packages/cv2.x86_64-linux-gnu.so /usr/local/lib/python2.7/cv2.so && \
+    ln /usr/lib/python2.7/dist-packages/cv.py /usr/local/lib/python2.7/cv.py && \
+    ln /dev/null /dev/raw1394 && \
+    rm -f /tmp/*.txt
 
-CMD ["/entrypoint.sh"]
+ADD start /start
+ENTRYPOINT ["/start"]
 
-EXPOSE 4440
-VOLUME /etc/rundeck
-VOLUME /var/rundeck
+CMD ["remotecv"]

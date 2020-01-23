@@ -1,0 +1,173 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie-backports
+  Commands:
+  - Maintainer: Sergio Fernández <wikier@apache.org>
+    Name: maintainer
+  - Name: expose
+    Ports:
+    - "8080"
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - .
+    - /src
+  - Env:
+    - Key: DEBIAN_FRONTEND
+      Value: noninteractive
+    Name: env
+  - Env:
+    - Key: DB_NAME
+      Value: marmotta
+    Name: env
+  - Env:
+    - Key: DB_USER
+      Value: marmotta
+    Name: env
+  - Env:
+    - Key: DB_PASS
+      Value: s3cr3t
+    Name: env
+  - Env:
+    - Key: PG_VERSION
+      Value: "9.4"
+    Name: env
+  - Env:
+    - Key: WAR_PATH
+      Value: /src/launchers/marmotta-webapp/target/marmotta.war
+    Name: env
+  - Env:
+    - Key: CONF_PATH
+      Value: /var/lib/marmotta/system-config.properties
+    Name: env
+  - CmdLine:
+    - "apt-get update     && apt-get upgrade -y     && apt-get install -y \t\topenjdk-8-jdk
+      \t\tmaven         tomcat7     || apt-get install -y -f"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn clean install -DskipTests -DskipITs
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - test -e $WAR_PATH || exit
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get update && apt-get install -y locales apt-utils \t&& localedef -i en_US
+      -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: LANG
+      Value: en_US.utf8
+    Name: env
+  - CmdLine:
+    - apt-key adv --keyserver ha.pool.sks-keyservers.net --recv-keys B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'deb http://apt.postgresql.org/pub/repos/apt/ jessie-pgdg main' > /etc/apt/sources.list.d/pgdg.list
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "apt-get update \t&& apt-get install -y postgresql-common \t&& sed -ri 's/#(create_main_cluster)
+      .*$/\\1 = false/' /etc/postgresql-common/createcluster.conf \t&& apt-get install
+      -y \t\tpostgresql-$PG_VERSION \t\tpostgresql-contrib-$PG_VERSION"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - pg_createcluster $PG_VERSION main --start
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: postgres
+  - CmdLine:
+    - service postgresql start     && psql --command "CREATE USER $DB_USER WITH PASSWORD
+      '$DB_PASS';"     && psql --command "CREATE DATABASE $DB_NAME WITH OWNER $DB_USER;"
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: root
+  - CmdLine:
+    - service postgresql stop
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "host all  all    127.0.0.1/32  md5" >> /etc/postgresql/$PG_VERSION/main/pg_hba.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "listen_addresses='*'" >> /etc/postgresql/$PG_VERSION/main/postgresql.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /usr/share/marmotta
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp $WAR_PATH /usr/share/marmotta/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown tomcat7:tomcat7 /usr/share/marmotta/marmotta.war
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /src/launchers/marmotta-webapp/src/deb/tomcat/marmotta.xml /var/lib/tomcat7/conf/Catalina/localhost/
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown tomcat7:tomcat7 /var/lib/tomcat7/conf/Catalina/localhost/marmotta.xml
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p "$(dirname $CONF_PATH)"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "security.enabled = false" > $CONF_PATH
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "database.type = postgres" >> $CONF_PATH
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "database.url = jdbc:postgresql://localhost:5432/$DB_NAME?prepareThreshold=3"
+      >> $CONF_PATH
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "database.user = $DB_USER" >> $CONF_PATH
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo "database.password = $DB_PASS" >> $CONF_PATH
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown -R tomcat7:tomcat7 "$(dirname $CONF_PATH)"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn clean     && rm -rf ~/.m2     && apt-get remove maven --purge -y     &&
+      apt-get autoremove -y     && apt-get clean -y     && apt-get autoclean -y     &&
+      apt-get autoremove -y     && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /src/launchers/marmotta-webapp/src/docker/entrypoint.sh /usr/local/bin/marmotta.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /usr/local/bin/marmotta.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: debian:jessie-backports
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie-backports

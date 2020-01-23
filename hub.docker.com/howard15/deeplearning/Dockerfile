@@ -1,14 +1,11 @@
 
 ARG UBUNTU_VERSION=16.04
-
 ARG CUDA=10.1
-FROM nvidia/cuda:${CUDA}-base-ubuntu${UBUNTU_VERSION} as base
-# ARCH and CUDA are specified again because the FROM directive resets ARGs
-# (but their default value is retained if set previously)
-ARG UBUNTU_VERSION
+ARG CUDNN=7
+
+FROM nvidia/cuda:${CUDA}-cudnn${CUDNN}-runtime-ubuntu${UBUNTU_VERSION} as base
+
 ARG CUDA
-ARG CUDNN=7.6.4.38
-ARG NCCL=2.4.8
 ARG LIBNVINFER=6.0.1-1
 ARG LIBNVINFER_MAJOR_VERSION=6
 
@@ -18,32 +15,24 @@ SHELL ["/bin/bash", "-c"]
 ENV DEBIAN_FRONTEND noninteractive
 
 # fix apt-utils warning
-RUN apt-get update && apt-get install -y --no-install-recommends apt-utils
+# RUN apt-get update && apt-get install -y --no-install-recommends apt-utils
 
 # Pick up some TF dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
+        apt-utils \
         build-essential \
         cuda-command-line-tools-${CUDA/./-} \
-        libcublas10=10.1.0.105-1 \
-        cuda-cufft-${CUDA/./-} \
-        cuda-curand-${CUDA/./-} \
-        cuda-cusolver-${CUDA/./-} \
-        cuda-cusparse-${CUDA/./-} \
-        curl \
-        libcudnn7=${CUDNN}-1+cuda${CUDA} \
-        libnccl2=${NCCL}-1+cuda${CUDA} \
         libfreetype6-dev \
         libhdf5-serial-dev \
         libzmq3-dev \
         pkg-config \
-        software-properties-common \
         unzip
 
 RUN apt-get update \
-        && apt-get install -y --no-install-recommends libnvinfer${LIBNVINFER_MAJOR_VERSION}=${LIBNVINFER}+cuda${CUDA} \
+    && apt-get install -y --no-install-recommends libnvinfer${LIBNVINFER_MAJOR_VERSION}=${LIBNVINFER}+cuda${CUDA} \
         libnvinfer-plugin${LIBNVINFER_MAJOR_VERSION}=${LIBNVINFER}+cuda${CUDA} \
-        && apt-get clean \
-        && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # fix warning: underlay of /usr/bin/nvidia-smi required more than 50 bind mounts
 RUN touch /usr/bin/nvidia-smi /usr/bin/nvidia-persistenced /usr/bin/nvidia-debugdump /usr/bin/nvidia-cuda-mps-server /usr/bin/nvidia-cuda-mps-control
@@ -60,20 +49,18 @@ RUN ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/lib
     && echo "/usr/local/cuda/lib64/stubs" > /etc/ld.so.conf.d/z-cuda-stubs.conf \
     && ldconfig
 
+ARG PYTHON_VERSION=3.6
 RUN apt-get update \
- && apt-get install -y --no-install-recommends \
-        build-essential \
-        curl \
-        software-properties-common \
-        python3-pip \
- && add-apt-repository -y ppa:deadsnakes/ppa \
- && apt-get update \
- && apt-get install -y python3.6 python3.6-dev \
- && apt-get clean \
- && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends software-properties-common \
+    && add-apt-repository -y ppa:deadsnakes/ppa \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends python${PYTHON_VERSION/.[0-9]/}-pip python${PYTHON_VERSION} python${PYTHON_VERSION}-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN touch /usr/bin/python3 && rm /usr/bin/python3
-RUN ln -s /usr/bin/python3.6 /usr/bin/python3
+RUN touch /usr/bin/python${PYTHON_VERSION/.[0-9]/} \
+    && rm /usr/bin/python${PYTHON_VERSION/.[0-9]/} \
+    && ln -s /usr/bin/python${PYTHON_VERSION} /usr/bin/python${PYTHON_VERSION/.[0-9]/}
 
 ARG USE_PYTHON_3_NOT_2=1
 ARG _PY_SUFFIX=${USE_PYTHON_3_NOT_2:+3}
@@ -83,9 +70,6 @@ ARG PIP=pip${_PY_SUFFIX}
 # See http://bugs.python.org/issue19846
 ENV LANG C.UTF-8
 
-RUN apt-get update && apt-get install -y \
-    ${PYTHON} \
-    ${PYTHON}-pip
 
 RUN ${PIP} --no-cache-dir install --upgrade \
     pip \
@@ -97,6 +81,7 @@ RUN ln -s $(which ${PYTHON}) /usr/local/bin/python
 RUN ${PIP} --no-cache-dir install --upgrade \
         Pillow \
         h5py \
+        prompt-toolkit==2.0.10 \
         ipykernel \
         jupyter \
         jupyter_http_over_ws \
@@ -115,7 +100,7 @@ RUN ${PIP} --no-cache-dir install --upgrade \
         hyperopt \
         lifelines \
         gensim \
-        tensorflow-gpu \
+        tensorflow \
         torch \
         torchvision \
         transformers

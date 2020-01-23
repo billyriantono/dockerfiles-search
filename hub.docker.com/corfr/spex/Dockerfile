@@ -12,16 +12,6 @@ RUN sed -i 's/# deb-src/deb-src/g' /etc/apt/sources.list && \
     rm -rf /var/lib/apt/lists/*
 
 RUN cd /tmp && \
-    git clone https://github.com/fontforge/fontforge.git && \
-    cd fontforge && \
-    mkdir build && \
-    cd build && \
-    cmake -GNinja .. && \
-    ninja && \
-    ninja install && \
-    cd && rm -rf /tmp/fontforge
-
-RUN cd /tmp && \
     git clone git://git.freedesktop.org/git/poppler/poppler && \
     cd poppler && \
     git checkout poppler-0.81.0 && \
@@ -53,9 +43,6 @@ RUN cd /tmp && \
     make && \
     make install && \
     cd && rm -rf /tmp/pdf2htmlEX
-
-# TODO: Prevent pdf2htmlEX execution for now as it doesn't work
-RUN mv /usr/local/bin/pdf2htmlEX /usr/local/bin/pdf2htmlEX-notworking
 
 # Set correct environment variables.
 ENV HOME /root

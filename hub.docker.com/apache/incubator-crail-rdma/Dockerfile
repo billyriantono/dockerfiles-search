@@ -14,16 +14,16 @@
 # limitations under the License.)
 
 # TODO: automate update version
-FROM apache/incubator-crail:1.1
+FROM apache/incubator-crail:1.2
 MAINTAINER Apache Crail <dev@crail.apache.org>
 
-# TODO: automate update version
-ARG DISNI_COMMIT="v1.7"
-
 RUN echo "Crail-$LOG_COMMIT install rdma libraries and autotools" && \
-    apt-get install -y --no-install-recommends \
+    apt-get update && apt-get install -y --no-install-recommends \
     autoconf autotools-dev automake libtool make g++ \
     librdmacm-dev libibverbs-dev ibverbs-providers
+
+RUN echo "Retrieve DiSNI jar version to match native library build" && \
+    DISNI_COMMIT=v$(ls $CRAIL_HOME/jars/disni* | grep -oP "\d+\.\d+(?=\.jar$)")
 
 RUN echo "Crail-$LOG_COMMIT clone and build disni native library" && \
     cd && git clone https://github.com/zrlio/disni.git && \

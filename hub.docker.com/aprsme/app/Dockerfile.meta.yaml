@@ -1,11 +1,30 @@
 MetaArgs: null
 Stages:
-- BaseName: elixir:1.9.4-alpine
+- As: build-elixir
+  BaseName: elixir:1.9.4-alpine
   Commands:
   - CmdLine:
-    - apk add --update nodejs nodejs-npm git bash
+    - apk add --update git bash nodejs npm
     Name: run
     PrependShell: true
+  - CmdLine:
+    - mkdir /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - CmdLine:
+    - mkdir -p /app/assets
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: NODE_ENV
+      Value: prod
+    Name: env
+  - Env:
+    - Key: MIX_ENV
+      Value: prod
+    Name: env
   - CmdLine:
     - mix do local.hex --force, local.rebar --force
     Name: run
@@ -14,8 +33,31 @@ Stages:
     From: ""
     Name: copy
     SourcesAndDest:
+    - mix.exs
+    - mix.lock
+    - ./
+  - CmdLine:
+    - mix deps.get --only prod
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
     - assets
-    - /app/assets/
+    - ./assets/
+  - CmdLine:
+    - cd assets && npm install
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd assets && npm rebuild node-sass
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd assets && npm run deploy
+    Name: run
+    PrependShell: true
   - Chown: ""
     From: ""
     Name: copy
@@ -38,18 +80,6 @@ Stages:
     From: ""
     Name: copy
     SourcesAndDest:
-    - mix.exs
-    - /app/
-  - Chown: ""
-    From: ""
-    Name: copy
-    SourcesAndDest:
-    - mix.*
-    - /app/
-  - Chown: ""
-    From: ""
-    Name: copy
-    SourcesAndDest:
     - start.sh
     - /app/
   - Chown: ""
@@ -58,30 +88,8 @@ Stages:
     SourcesAndDest:
     - wait-for-it.sh
     - /app/
-  - Name: workdir
-    Path: /app
-  - Env:
-    - Key: MIX_ENV
-      Value: prod
-    Name: env
-  - Env:
-    - Key: PORT
-      Value: "80"
-    Name: env
   - CmdLine:
-    - mix do deps.get --only $MIX_ENV, deps.compile, compile
-    Name: run
-    PrependShell: true
-  - Name: workdir
-    Path: /app/assets
-  - CmdLine:
-    - npm install && ./node_modules/webpack/bin/webpack.js --mode production
-    Name: run
-    PrependShell: true
-  - Name: workdir
-    Path: /app
-  - CmdLine:
-    - npm run deploy --prefix ./assets
+    - mix deps.compile
     Name: run
     PrependShell: true
   - CmdLine:
@@ -89,11 +97,53 @@ Stages:
     Name: run
     PrependShell: true
   - CmdLine:
-    - /app/wait-for-it.sh rabbitmq:5672 -- /app/start.sh
-    Name: cmd
+    - mix release
+    Name: run
     PrependShell: true
   From:
     Image: elixir:1.9.4-alpine
+  Name: build-elixir
+  Platform: ""
+  SourceCode: FROM elixir:1.9.4-alpine as build-elixir
+- BaseName: alpine:3.11.2
+  Commands:
+  - CmdLine:
+    - apk add --update bash openssl
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir /app
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /app
+  - Chown: ""
+    From: build-elixir
+    Name: copy
+    SourcesAndDest:
+    - /app/_build/prod/rel/aprsme
+    - ./
+  - Key: VERSION
+    Name: arg
+    Value: null
+  - Env:
+    - Key: VERSION
+      Value: $VERSION
+    Name: env
+  - Env:
+    - Key: REPLACE_OS_VARS
+      Value: "true"
+    Name: env
+  - CmdLine:
+    - /app/bin/aprsme
+    Name: entrypoint
+    PrependShell: false
+  - CmdLine:
+    - start
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: alpine:3.11.2
   Name: ""
   Platform: ""
-  SourceCode: FROM elixir:1.9.4-alpine
+  SourceCode: FROM alpine:3.11.2

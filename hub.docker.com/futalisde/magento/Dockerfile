@@ -41,6 +41,8 @@ RUN git clone --recursive --depth=1 https://github.com/kjdev/php-ext-lz4.git \
  && make -j8 \
  && make install
 
+RUN echo "extension=lz4.so" > /usr/local/etc/php/conf.d/docker-php-ext-lz4.ini
+
 RUN git clone --recursive --depth=1 https://github.com/kjdev/php-ext-snappy.git \
  && cd php-ext-snappy \
  && phpize \
@@ -48,11 +50,15 @@ RUN git clone --recursive --depth=1 https://github.com/kjdev/php-ext-snappy.git 
  && make -j8 \
  && make install
 
+RUN echo "extension=snappy.so" > /usr/local/etc/php/conf.d/docker-php-ext-snappy.ini
+
 RUN git clone --recursive --depth=1 https://github.com/kjdev/php-ext-brotli.git \
  && cd php-ext-brotli \
  && phpize \
  && ./configure \
  && make -j8 \
  && make install
+
+RUN echo "extension=brotli.so" > /usr/local/etc/php/conf.d/docker-php-ext-brotli.ini
 
 RUN a2enmod rewrite headers

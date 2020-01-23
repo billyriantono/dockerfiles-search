@@ -1,19 +1,11 @@
-# last version of Alpine-node OS
-FROM mhart/alpine-node:latest
+FROM itdevdixons/ubuntu:14.04
 
-# Ceate app dir
-RUN mkdir -p /user/src/app
-WORKDIR /usr/src/app
+MAINTAINER Viliam Husar viliam.husar@dixonscarphonegroup.com
 
-# Install app dependencies
-COPY package.json /usr/src/app
-RUN npm install
+ENV DEBIAN_FRONTEND noninteractive
 
-# Bundle your app source code
-COPY . /usr/src/app
+RUN apt-get update && apt-get -y install memcached
 
-# Port binding
-EXPOSE 8080
+EXPOSE 11211
 
-# Command to run your app using CMD (using npm start to run the server.js to start the server)
-CMD [ "npm", "start" ]
+CMD ["/usr/bin/memcached", "-u", "memcache", "-v"]

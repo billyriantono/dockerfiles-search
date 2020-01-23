@@ -1,22 +1,32 @@
-FROM phusion/baseimage
-MAINTAINER arr0n 
+# Basic docker image for PokeAlarm
+# Usage:
+#   docker build -t pokealarm .
+#   docker run -d -P pokealarm 
 
-RUN apt-get update && apt-get install -y \
-	curl 
+FROM python:2.7-alpine
 
-ADD etcinitdpixelserv.sh /etc/init.d/pixelserv
-RUN	chmod 755 /etc/init.d/pixelserv
+# Default port the webserver runs on
+EXPOSE 4000
 
-RUN cd /usr/local/bin/ && \
-	curl http://proxytunnel.sourceforge.net/files/pixelserv.pl.txt > pixelserv && \
-	chmod 755 pixelserv
+# Working directory for the application
+WORKDIR /usr/src/app
 
-RUN update-rc.d pixelserv defaults
+# Set Entrypoint with hard-coded options
+ENTRYPOINT ["python", "./runwebhook.py"]
 
-RUN apt-get clean
+# Set default options when container is run without any command line arguments
+CMD ["-h"]
 
-RUN rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+# Install required system packages
+RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache bash git openssh
 
-EXPOSE 80
+COPY requirements.txt /usr/src/app/
 
-CMD ["/usr/local/bin/pixelserv", "&"]
+RUN apk add --no-cache build-base \
+ && pip install --no-cache-dir -r requirements.txt \
+ && apk del build-base
+
+
+# Copy everything to the working directory (Python files, templates, config) in one go.
+COPY . /usr/src/app/

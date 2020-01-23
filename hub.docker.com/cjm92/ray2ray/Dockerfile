@@ -1,27 +1,14 @@
-FROM ubuntu:latest as builder
+FROM gitlab/gitlab-runner:latest
 
-RUN apt-get update
-RUN apt-get install curl -y
-RUN curl -L -o /tmp/go.sh https://install.direct/go.sh
-RUN chmod +x /tmp/go.sh
-RUN /tmp/go.sh
+# Install Docker
+RUN curl -sSL https://get.docker.com/ | sh
 
-FROM alpine:latest
 
-LABEL maintainer "ray2ray <admin@ray2ray.com>"
-ENV CONFIG=https://pastebin.com/raw/hBr3fDw9
+# Install latest version of Docker Compose
+RUN curl -L "https://github.com/docker/compose/releases/download/1.22.0/docker-compose-$(uname -s)-$(uname -m)" > /usr/local/bin/docker-compose && \
+    chmod +x /usr/local/bin/docker-compose
 
-COPY --from=builder /usr/bin/v2ray/v2ray /usr/bin/ray2ray/
-COPY --from=builder /usr/bin/v2ray/v2ctl /usr/bin/ray2ray/
-COPY --from=builder /usr/bin/v2ray/geoip.dat /usr/bin/ray2ray/
-COPY --from=builder /usr/bin/v2ray/geosite.dat /usr/bin/ray2ray/
+# Install git lfs
+RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash && \
+    apt-get -y install git-lfs
 
-RUN set -ex && \
-    apk --no-cache add ca-certificates && \
-    mv -f /usr/bin/ray2ray/v2ray /usr/bin/ray2ray/ray2ray &&\
-    chmod +x /usr/bin/ray2ray/*
-
-ENV PATH /usr/bin/ray2ray:$PATH
-
-CMD exec ray2ray\
-	-config=$CONFIG

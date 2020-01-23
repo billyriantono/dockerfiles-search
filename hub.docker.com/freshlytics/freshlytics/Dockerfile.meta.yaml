@@ -1,0 +1,118 @@
+MetaArgs:
+- DefaultValue: '"12.2.0"'
+  Key: NODE_VERSION
+  ProvidedValue: null
+  Value: '"12.2.0"'
+Stages:
+- As: development
+  BaseName: node:${NODE_VERSION}
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: '"development"'
+    Name: env
+  - Name: workdir
+    Path: /usr/src/freshlytics
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - package*.json
+    - ./
+  - CmdLine:
+    - npm install --no-optional
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - npm
+    - run
+    - dev
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - 3000/tcp
+    - 3001/tcp
+  From:
+    Image: node:${NODE_VERSION}
+  Name: development
+  Platform: ""
+  SourceCode: FROM node:${NODE_VERSION} AS development
+- As: builder
+  BaseName: development
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: '"production"'
+    Name: env
+  - CmdLine:
+    - npm run build
+    Name: run
+    PrependShell: true
+  From:
+    Stage:
+      Index: 0
+      Named: development
+  Name: builder
+  Platform: ""
+  SourceCode: FROM development AS builder
+- As: production
+  BaseName: node:${NODE_VERSION}-slim
+  Commands:
+  - Env:
+    - Key: NODE_ENV
+      Value: '"production"'
+    Name: env
+  - Name: workdir
+    Path: /usr/src/freshlytics
+  - Env:
+    - Key: BUILD_DEPS
+      Value: '"python2.7 make g++"'
+    Name: env
+  - CmdLine:
+    - apt-get update &&   apt-get install -y --no-install-recommends     ${BUILD_DEPS}
+      &&   rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/freshlytics/package*.json
+    - ./
+  - CmdLine:
+    - PYTHON=/usr/bin/python2.7   npm install --production --no-optional &&   apt-get
+      purge -y ${BUILD_DEPS} &&   apt-get autoremove -y
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /usr/src/freshlytics/dist
+    - ./dist/
+  - CmdLine:
+    - chown -R node:node .
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: node
+  - CmdLine:
+    - npm
+    - start
+    Name: cmd
+    PrependShell: false
+  - Name: expose
+    Ports:
+    - 3001/tcp
+  From:
+    Image: node:${NODE_VERSION}-slim
+  Name: production
+  Platform: ""
+  SourceCode: FROM node:${NODE_VERSION}-slim AS production

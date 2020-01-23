@@ -1,0 +1,96 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: maven
+  Commands:
+  - CmdLine:
+    - mkdir /workdir
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /workdir
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - CmdLine:
+    - cd src/main/resources/config/ &&     [ -f course_config.properties ] && cat
+      course_config.properties || cp course_config.properties.example course_config.properties
+      &&     [ -f db_config.properties ] && cat db_config.properties || cp db_config.properties.example
+      db_config.properties &&     [ -f gitlab_config.properties ] && cat gitlab_config.properties
+      || cp gitlab_config.properties.example gitlab_config.properties &&     [ -f
+      jenkins_config.properties ] && cat jenkins_config.properties || cp jenkins_config.properties.example
+      jenkins_config.properties
+    Name: run
+    PrependShell: true
+  - Key: WEB_API_BASEURI
+    Name: arg
+    Value: ""
+  - Env:
+    - Key: WEB_API_BASEURI
+      Value: $WEB_API_BASEURI
+    Name: env
+  - CmdLine:
+    - apt-get update     && apt-get -y install gettext-base     && apt-get clean     &&
+      rm -rf /var/lib/apt/lists/*     && envsubst < front/src/environments/environment.docker.ts
+      > front/src/environments/environment.prod.ts
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mvn -T 1C clean package -DskipTests
+    Name: run
+    PrependShell: true
+  From:
+    Image: maven
+  Name: builder
+  Platform: ""
+  SourceCode: FROM maven as builder
+- BaseName: tomcat
+  Commands:
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tomcat-config/context.xml
+    - /usr/local/tomcat/webapps/manager/META-INF/context.xml
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - tomcat-config/tomcat-users.xml
+    - /usr/local/tomcat/conf/tomcat-users.xml
+  - Key: DEBUG
+    Name: arg
+    Value: "false"
+  - Env:
+    - Key: DEBUG
+      Value: $DEBUG
+    Name: env
+  - Env:
+    - Key: LOG_LEVEL
+      Value: $LOG_LEVEL
+    Name: env
+  - CmdLine:
+    - echo $DEBUG
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - git config --global user.email "admin@example.com" &&     git config --global
+      user.name "Administrator" &&     if [ ${DEBUG} = true ]; then     rm -rf /usr/local/tomcat/webapps/ROOT
+      /usr/local/tomcat/webapps/ROOT.war     ;else     rm -rf /usr/local/tomcat/webapps/
+      && mkdir /usr/local/tomcat/webapps/     ;fi
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /workdir/target/ProgEdu.war
+    - /usr/local/tomcat/webapps/ROOT.war
+  From:
+    Image: tomcat
+  Name: ""
+  Platform: ""
+  SourceCode: FROM tomcat

@@ -1,31 +1,26 @@
-FROM python:3.5-slim
+FROM askcs/java:openjdk-8-jre
+MAINTAINER Sven Stam <sven.stam@gmail.com>
 
-MAINTAINER Alexandr Soldatov <alexsandr.soldatow@gmail.com>
+# Install packages
+RUN apt-get update && \ 
+    apt-get update --fix-missing && \ 
+    apt-get install -y wget
 
-# Install nginx and supervisor
-ENV NGINX_VERSION 1.10.1-1~jessie
+# Download and install jetty
+ENV JETTY_VERSION 9.2.7
+ENV RELEASE_DATE v20150116
+RUN wget http://archive.eclipse.org/jetty/${JETTY_VERSION}.${RELEASE_DATE}/dist/jetty-distribution-${JETTY_VERSION}.${RELEASE_DATE}.tar.gz && \
+    tar -xzvf jetty-distribution-${JETTY_VERSION}.${RELEASE_DATE}.tar.gz && \
+    rm -rf jetty-distribution-${JETTY_VERSION}.${RELEASE_DATE}.tar.gz && \
+    mv jetty-distribution-${JETTY_VERSION}.${RELEASE_DATE}/ /opt/jetty
 
-RUN apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62 \
-	&& echo "deb http://nginx.org/packages/debian/ jessie nginx" >> /etc/apt/sources.list \
-	&& apt-get update \
-	&& apt-get install -y supervisor \
-	&& apt-get install --no-install-recommends --no-install-suggests -y \
-						ca-certificates \
-						nginx=${NGINX_VERSION} \
-						nginx-module-xslt \
-						nginx-module-geoip \
-						nginx-module-image-filter \
-						nginx-module-perl \
-						nginx-module-njs \
-						gettext-base \
-	&& rm -rf /var/lib/apt/lists/*
+# Configure Jetty user and clean up install
+RUN useradd jetty && \
+    chown -R jetty:jetty /opt/jetty && \
+    rm -rf /opt/jetty/webapps.demo
 
-# configure nginx
-RUN rm /etc/nginx/nginx.conf /etc/nginx/mime.types && mkdir /var/www/
-COPY nginx /etc/nginx
-# link nginx logs to docker logs collector
-RUN ln -sf /dev/stdout /var/log/nginx/access.log && ln -sf /dev/stderr /var/log/nginx/error.log
-# install django
-RUN pip install --upgrade pip && pip install django==1.9
-# expose static port
-EXPOSE 80
+RUN cp /opt/jetty/bin/jetty.sh /etc/init.d/jetty
+
+COPY jetty.xml /opt/jetty/etc/jetty.xml
+
+RUN echo "NO_START=0 # Start on boot\nJETTY_HOST=0.0.0.0 # Listen to all hosts\nJETTY_ARGS=jetty.port=8080\nJETTY_USER=jetty # Run as this user\n JETTY_HOME=/opt/jetty" >> /etc/default/jetty

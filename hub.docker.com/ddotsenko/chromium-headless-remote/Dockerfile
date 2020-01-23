@@ -1,30 +1,17 @@
-FROM ubuntu:bionic
+from alpine:latest as veraBase
+WORKDIR /opt/veraPDF
+RUN apk update && apk add openjdk8 
+RUN apk add git maven nss
+ENV BUILD_DATE 20190318
+RUN git clone git://github.com/~git/veraPDF/veraPDF-rest.git
+WORKDIR /opt/veraPDF/veraPDF-rest
+RUN git checkout integration
+RUN mvn clean package
 
-# Run `make show-versions` to see latest versions
-# Pick one that's higher than one below and paste here.
-# Because actual package versions are long: '77.0.3865.90-0ubuntu0.18.04.1'
-# we use wildcard.
-# Match the value here to that assigned to TAGS variable inside Makefile.
-# Commit both changes, run `make push-tags` and wait for Docker Hub to build new images.
-ARG CHROMIUM_VERSION=77.0.3865.90\*
-
-RUN apt-get update && \
-    apt-get --no-install-recommends --yes install \
-        chromium-browser=${CHROMIUM_VERSION} \
-        dumb-init \
-        fontconfig \
-    && \
-    rm -rf /var/lib/apt/lists/* && \
-    groupadd chromium && \
-    useradd --create-home --gid chromium chromium && \
-    chown --recursive chromium:chromium /home/chromium/
-
-VOLUME ["/home/chromium/.fonts"]
-
-COPY --chown=chromium:chromium entrypoint.sh /home/chromium/
-
-USER chromium
-
-EXPOSE 9222
-
-ENTRYPOINT ["dumb-init", "--", "/bin/sh", "/home/chromium/entrypoint.sh"]
+from alpine:latest
+WORKDIR /opt/verapdf
+RUN apk update && apk add openjdk8
+COPY --from=veraBase /opt/veraPDF/veraPDF-rest/target .
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "verapdf-rest-0.1.0-SNAPSHOT.jar"]
+CMD ["help"]

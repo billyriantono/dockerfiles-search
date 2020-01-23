@@ -1,0 +1,186 @@
+MetaArgs: null
+Stages:
+- BaseName: debian:jessie
+  Commands:
+  - Env:
+    - Key: PHPIZE_DEPS
+      Value: "autoconf \t\tfile \t\tg++ \t\tgcc \t\tlibc-dev \t\tmake \t\tpkg-config
+        \t\tre2c"
+    Name: env
+  - CmdLine:
+    - "apt-get update && apt-get install -y \t\t$PHPIZE_DEPS \t\tca-certificates \t\tcurl
+      \t\tlibedit2 \t\tlibsqlite3-0 \t\tlibxml2 \t\txz-utils \t--no-install-recommends
+      && rm -r /var/lib/apt/lists/*"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_INI_DIR
+      Value: /usr/local/etc/php
+    Name: env
+  - CmdLine:
+    - mkdir -p $PHP_INI_DIR/conf.d
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get update && apt-get install -y apache2-bin apache2.2-common --no-install-recommends
+      && rm -rf /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: APACHE_CONFDIR
+      Value: /etc/apache2
+    Name: env
+  - Env:
+    - Key: APACHE_ENVVARS
+      Value: $APACHE_CONFDIR/envvars
+    Name: env
+  - CmdLine:
+    - "set -ex \t\t&& sed -ri 's/^export ([^=]+)=(.*)$/: ${\\1:=\\2}\\nexport \\1/'
+      \"$APACHE_ENVVARS\" \t\t&& . \"$APACHE_ENVVARS\" \t&& for dir in \t\t\"$APACHE_LOCK_DIR\"
+      \t\t\"$APACHE_RUN_DIR\" \t\t\"$APACHE_LOG_DIR\" \t\t/var/www/html \t; do \t\trm
+      -rvf \"$dir\" \t\t&& mkdir -p \"$dir\" \t\t&& chown -R \"$APACHE_RUN_USER:$APACHE_RUN_GROUP\"
+      \"$dir\"; \tdone"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2dismod mpm_event && a2enmod mpm_prefork
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "set -ex \t&& . \"$APACHE_ENVVARS\" \t&& ln -sfT /dev/stderr \"$APACHE_LOG_DIR/error.log\"
+      \t&& ln -sfT /dev/stdout \"$APACHE_LOG_DIR/access.log\" \t&& ln -sfT /dev/stdout
+      \"$APACHE_LOG_DIR/other_vhosts_access.log\""
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "{ \t\techo '<FilesMatch \\.php$>'; \t\techo '\\tSetHandler application/x-httpd-php';
+      \t\techo '</FilesMatch>'; \t\techo; \t\techo 'DirectoryIndex disabled'; \t\techo
+      'DirectoryIndex index.php index.html'; \t\techo; \t\techo '<Directory /var/www/>';
+      \t\techo '\\tOptions -Indexes'; \t\techo '\\tAllowOverride All'; \t\techo '</Directory>';
+      \t} | tee \"$APACHE_CONFDIR/conf-available/docker-php.conf\" \t&& a2enconf docker-php"
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: PHP_EXTRA_BUILD_DEPS
+      Value: apache2-dev
+    Name: env
+  - Env:
+    - Key: PHP_EXTRA_CONFIGURE_ARGS
+      Value: --with-apxs2
+    Name: env
+  - Env:
+    - Key: PHP_CFLAGS
+      Value: '"-fstack-protector-strong -fpic -fpie -O2"'
+    Name: env
+  - Env:
+    - Key: PHP_CPPFLAGS
+      Value: '"$PHP_CFLAGS"'
+    Name: env
+  - Env:
+    - Key: PHP_LDFLAGS
+      Value: '"-Wl,-O1 -Wl,--hash-style=both -pie"'
+    Name: env
+  - Env:
+    - Key: GPG_KEYS
+      Value: 0BD78B5F97500D450838F95DFE857D9A90D90EC1 6E4F6AB321FDC07F2C332E3AC2BF0BC433CFC8B3
+    Name: env
+  - Env:
+    - Key: PHP_VERSION
+      Value: 5.6.30
+    Name: env
+  - Env:
+    - Key: PHP_URL
+      Value: '"https://secure.php.net/get/php-5.6.30.tar.xz/from/this/mirror"'
+    - Key: PHP_ASC_URL
+      Value: '"https://secure.php.net/get/php-5.6.30.tar.xz.asc/from/this/mirror"'
+    Name: env
+  - Env:
+    - Key: PHP_SHA256
+      Value: '"a363185c786432f75e3c7ff956b49c3369c3f6906a6b10459f8d1ddc22f70805"'
+    - Key: PHP_MD5
+      Value: '"68753955a8964ae49064c6424f81eb3e"'
+    Name: env
+  - CmdLine:
+    - "set -xe; \t\tfetchDeps=' \t\twget \t'; \tapt-get update; \tapt-get install
+      -y --no-install-recommends $fetchDeps; \trm -rf /var/lib/apt/lists/*; \t\tmkdir
+      -p /usr/src; \tcd /usr/src; \t\twget -O php.tar.xz \"$PHP_URL\"; \t\tif [ -n
+      \"$PHP_SHA256\" ]; then \t\techo \"$PHP_SHA256 *php.tar.xz\" | sha256sum -c
+      -; \tfi; \tif [ -n \"$PHP_MD5\" ]; then \t\techo \"$PHP_MD5 *php.tar.xz\" |
+      md5sum -c -; \tfi; \t\tif [ -n \"$PHP_ASC_URL\" ]; then \t\twget -O php.tar.xz.asc
+      \"$PHP_ASC_URL\"; \t\texport GNUPGHOME=\"$(mktemp -d)\"; \t\tfor key in $GPG_KEYS;
+      do \t\t\tgpg --keyserver ha.pool.sks-keyservers.net --recv-keys \"$key\"; \t\tdone;
+      \t\tgpg --batch --verify php.tar.xz.asc php.tar.xz; \t\trm -r \"$GNUPGHOME\";
+      \tfi; \t\tapt-get purge -y --auto-remove $fetchDeps"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-source
+    - /usr/local/bin/
+  - CmdLine:
+    - "set -xe \t&& buildDeps=\" \t\t$PHP_EXTRA_BUILD_DEPS \t\tlibcurl4-openssl-dev
+      \t\tlibedit-dev \t\tlibsqlite3-dev \t\tlibssl-dev \t\tlibxml2-dev \t\" \t&&
+      apt-get update && apt-get install -y $buildDeps --no-install-recommends && rm
+      -rf /var/lib/apt/lists/* \t\t&& export CFLAGS=\"$PHP_CFLAGS\" \t\tCPPFLAGS=\"$PHP_CPPFLAGS\"
+      \t\tLDFLAGS=\"$PHP_LDFLAGS\" \t&& docker-php-source extract \t&& cd /usr/src/php
+      \t&& ./configure \t\t--with-config-file-path=\"$PHP_INI_DIR\" \t\t--with-config-file-scan-dir=\"$PHP_INI_DIR/conf.d\"
+      \t\t\t\t--disable-cgi \t\t\t\t--enable-ftp \t\t--enable-mbstring \t\t--enable-mysqlnd
+      \t\t\t\t--with-curl \t\t--with-libedit \t\t--with-openssl \t\t--with-zlib \t\t\t\t$PHP_EXTRA_CONFIGURE_ARGS
+      \t&& make -j \"$(nproc)\" \t&& make install \t&& { find /usr/local/bin /usr/local/sbin
+      -type f -executable -exec strip --strip-all '{}' + || true; } \t&& make clean
+      \t&& docker-php-source delete \t\t&& apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
+      $buildDeps"
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - docker-php-ext-*
+    - docker-php-entrypoint
+    - /usr/local/bin/
+  - CmdLine:
+    - "set -ex; \t        apt-get update; \tapt-get install -y \t\tlibjpeg-dev \t\tlibpng12-dev
+      \t; \trm -rf /var/lib/apt/lists/*; \t\tdocker-php-ext-configure gd --with-png-dir=/usr
+      --with-jpeg-dir=/usr; \tdocker-php-ext-install gd mysqli opcache"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - "{ \t\techo 'opcache.memory_consumption=128'; \t\techo 'opcache.interned_strings_buffer=8';
+      \t\techo 'opcache.max_accelerated_files=4000'; \t\techo 'opcache.revalidate_freq=2';
+      \t\techo 'opcache.fast_shutdown=1'; \t\techo 'opcache.enable_cli=1'; \t} > /usr/local/etc/php/conf.d/opcache-recommended.ini"
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - a2enmod rewrite expires
+    Name: run
+    PrependShell: true
+  - Name: volume
+    Volumes:
+    - /var/www/html
+  - CmdLine:
+    - docker-php-entrypoint
+    Name: entrypoint
+    PrependShell: false
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - apache2-foreground
+    - /usr/local/bin/
+  - Name: workdir
+    Path: /var/www/html
+  - Name: expose
+    Ports:
+    - "80"
+  - CmdLine:
+    - apache2-foreground
+    Name: cmd
+    PrependShell: false
+  From:
+    Image: debian:jessie
+  Name: ""
+  Platform: ""
+  SourceCode: FROM debian:jessie

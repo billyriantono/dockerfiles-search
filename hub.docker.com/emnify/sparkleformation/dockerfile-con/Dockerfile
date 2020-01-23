@@ -1,0 +1,39 @@
+FROM bvlc/caffe:gpu
+
+# Labels to identify the image
+LABEL maintainer="Emilio Garcia-Fidalgo"
+
+# Parameters
+ARG USER=caffe
+ARG UID=1001
+ARG GID=1001
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Installing some software
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        apt-utils \
+        ca-certificates \
+        apt-transport-https \
+        wget \
+        software-properties-common \
+        curl \
+        vim \
+        git \
+        bash-completion \
+        net-tools \
+        sudo && \
+    rm -rf /var/lib/apt/lists/*
+
+# Adding a user and a group
+RUN groupadd -g $GID $USER && \
+    useradd --no-log-init --create-home --shell /bin/bash -u $UID -g $GID $USER && \
+    chown -R $USER:$USER /home/$USER && \
+    echo $USER:$USER | chpasswd && \
+    adduser $USER sudo
+
+# Switching to the new user
+USER $USER
+WORKDIR /home/$USER
+
+CMD ["bash"]

@@ -1,6 +1,7 @@
-FROM jupyter/tensorflow-notebook:1386e2046833 
-# latest as of 10-15-2019
+FROM alpine:latest
+MAINTAINER Tom Denham <tom@projectcalico.org>
 
-# install R and dependancies into image 
-RUN conda update -n base conda && \
-    conda install -c r r-irkernel
+RUN apk update
+RUN apk add alpine-sdk linux-headers autoconf flex bison ncurses-dev readline-dev 
+
+WORKDIR /code

@@ -1,60 +1,55 @@
-FROM alpine
+FROM ubuntu:18.04
+MAINTAINER CHEN, Yuelong <yuelong.chen.btr@gmail.com>
 
-LABEL maintainer="peace0phmind@gmail.com"
+ENV DEBIAN_FRONTEND noninteractive
 
-ARG SS_LIBEV_VERSION=3.2.3
-ARG KCP_VERSION=20181114
+ARG vcftools_version=0.1.16
+ARG samtools_version=1.9
+ARG plink_version=1.07
+ARG htslib_version=1.9
+ARG depends_remove="git make g++ pkg-config build-essential gcc-multilib apt-utils zlib1g-dev wget gcc curl vim unzip "
+ARG depends_still="zlib1g perl bzip2 libbz2-dev liblzma-dev  \
+    libcurl4-gnutls-dev libssl-dev libncurses5-dev python3-pip python3-dev perl-base graphviz graphviz-dev dos2unix "
 
-ARG SS_DOWNLOAD_URL=https://github.com/shadowsocks/shadowsocks-libev/releases/download/v${SS_LIBEV_VERSION}/shadowsocks-libev-${SS_LIBEV_VERSION}.tar.gz
-ARG OBFS_DOWNLOAD_URL=https://github.com/shadowsocks/simple-obfs.git
-ARG KCP_DOWNLOAD_URL=https://github.com/xtaci/kcptun/releases/download/v${KCP_VERSION}/kcptun-linux-amd64-${KCP_VERSION}.tar.gz
+RUN apt update && \
+    apt install -y $depends_remove $depends_still
 
-RUN apk add --no-cache --virtual .build-deps \
-      autoconf \
-      automake \
-      build-base \
-      c-ares-dev \
-      libev-dev \
-      libtool \
-      libsodium-dev \
-      linux-headers \
-      mbedtls-dev \
-      pcre-dev \
-      curl \
-      tar \
-      xmlto \
-      udns-dev \
-      git \
-    # build ss
-    && curl -sSLO ${SS_DOWNLOAD_URL} \
-    && tar -zxf shadowsocks-libev-${SS_LIBEV_VERSION}.tar.gz \
-    && (cd shadowsocks-libev-${SS_LIBEV_VERSION} \
-    && ./configure --prefix=/usr --disable-documentation \
-    && make install) \
-    # build simple-obfs
-    && git clone ${OBFS_DOWNLOAD_URL} \
-    && (cd simple-obfs \
-    && git submodule update --init --recursive \
-    && ./autogen.sh && ./configure --disable-documentation\
-    && make && make install) \
-    # install kcp
-    && curl -sSLO ${KCP_DOWNLOAD_URL} \
-    && tar -zxf kcptun-linux-amd64-${KCP_VERSION}.tar.gz \
-    && mv server_linux_amd64 /usr/bin/kcpserver \
-    && mv client_linux_amd64 /usr/bin/kcpclient \
-    # clear sys
-    && apk del .build-deps \
-    && rm -rf shadowsocks-libev-${SS_LIBEV_VERSION}.tar.gz \
-        shadowsocks-libev-${SS_LIBEV_VERSION} \
-        kcptun-linux-amd64-${KCP_VERSION}.tar.gz \
-        simple-obfs \
-    # Runtime dependencies setup
-    && apk add --no-cache \
-         rng-tools \
-         $(scanelf --needed --nobanner /usr/bin/ss-* \
-          | awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }' \
-          | sort -u)
+RUN cd /tmp/ && \
+    wget https://github.com/vcftools/vcftools/releases/download/v$vcftools_version/vcftools-$vcftools_version.tar.gz && \
+    tar -zxvf vcftools-$vcftools_version.tar.gz && \
+    cd vcftools-$vcftools_version && \
+    ./configure && make && make install
 
-ADD entrypoint.sh /entrypoint.sh
 
-ENTRYPOINT ["/entrypoint.sh"]
+RUN cd /tmp && \
+    wget http://dougspeed.com/wp-content/uploads/ldak5.linux_.zip && \
+    unzip ldak5.linux_.zip && mv ldak5.linux /usr/local/bin
+
+RUN cd /tmp && \
+    wget https://github.com/samtools/samtools/releases/download/$samtools_version/samtools-$samtools_version.tar.bz2 && \
+    tar -xjf samtools-$samtools_version.tar.bz2 && \
+    cd samtools-$samtools_version && \
+    ./configure && make && make install
+
+RUN cd /tmp && \
+    wget http://zzz.bwh.harvard.edu/plink/dist/plink-${plink_version}-x86_64.zip && \
+    unzip plink-${plink_version}-x86_64.zip && \
+    cp plink-${plink_version}-x86_64/* /usr/local/bin/
+
+RUN cd /tmp && \
+    wget https://github.com/samtools/htslib/releases/download/$htslib_version/htslib-$htslib_version.tar.bz2 && \
+    tar -xjf htslib-$htslib_version.tar.bz2 && \
+    cd htslib-$htslib_version && \
+    ./configure && make && make install
+
+WORKDIR /tmp/
+ADD . ./
+RUN pip3 install -r requirements.txt && \
+    python3 setup.py install && \
+    cp database/indep_pairwise.prune.in /usr/local/bin/
+
+# remove
+
+RUN rm -rf /tmp/* /tmp/.git /tmp/.gitignore
+CMD bash
+

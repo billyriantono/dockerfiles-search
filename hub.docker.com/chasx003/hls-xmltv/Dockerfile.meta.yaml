@@ -1,0 +1,241 @@
+MetaArgs:
+- DefaultValue: 1.17.7
+  Key: NGINX_VERSION
+  ProvidedValue: null
+  Value: 1.17.7
+- DefaultValue: 1.2.1
+  Key: NGINX_RTMP_VERSION
+  ProvidedValue: null
+  Value: 1.2.1
+- DefaultValue: 4.2.2
+  Key: FFMPEG_VERSION
+  ProvidedValue: null
+  Value: 4.2.2
+Stages:
+- As: build-nginx
+  BaseName: alpine:3.8
+  Commands:
+  - Key: NGINX_VERSION
+    Name: arg
+    Value: null
+  - Key: NGINX_RTMP_VERSION
+    Name: arg
+    Value: null
+  - CmdLine:
+    - apk add --update   build-base   ca-certificates   curl   gcc   libc-dev   libgcc   linux-headers   make   musl-dev   openssl   openssl-dev   pcre   pcre-dev   pkgconf   pkgconfig   zlib-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp &&   wget https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz &&   tar
+      zxf nginx-${NGINX_VERSION}.tar.gz &&   rm nginx-${NGINX_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp &&   wget https://github.com/arut/nginx-rtmp-module/archive/v${NGINX_RTMP_VERSION}.tar.gz
+      &&   tar zxf v${NGINX_RTMP_VERSION}.tar.gz && rm v${NGINX_RTMP_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp/nginx-${NGINX_VERSION} &&   ./configure   --prefix=/usr/local/nginx   --add-module=/tmp/nginx-rtmp-module-${NGINX_RTMP_VERSION}   --conf-path=/etc/nginx/nginx.conf   --with-threads   --with-file-aio   --with-http_ssl_module   --with-debug
+      &&   cd /tmp/nginx-${NGINX_VERSION} && make && make install
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.8
+  Name: build-nginx
+  Platform: ""
+  SourceCode: FROM alpine:3.8 as build-nginx
+- As: build-ffmpeg
+  BaseName: alpine:3.8
+  Commands:
+  - Key: FFMPEG_VERSION
+    Name: arg
+    Value: null
+  - Key: PREFIX
+    Name: arg
+    Value: /usr/local
+  - Key: MAKEFLAGS
+    Name: arg
+    Value: '"-j4"'
+  - CmdLine:
+    - apk add --update   build-base   coreutils   freetype-dev   lame-dev   libogg-dev   libass   libass-dev   libvpx-dev   libvorbis-dev   libwebp-dev   libtheora-dev   opus-dev   pkgconf   pkgconfig   rtmpdump-dev   wget   x264-dev   x265-dev   yasm
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo http://dl-cdn.alpinelinux.org/alpine/edge/testing >> /etc/apk/repositories
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apk add --update fdk-aac-dev
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp/ &&   wget http://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.gz
+      &&   tar zxf ffmpeg-${FFMPEG_VERSION}.tar.gz && rm ffmpeg-${FFMPEG_VERSION}.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp/ffmpeg-${FFMPEG_VERSION} &&   ./configure   --prefix=${PREFIX}   --enable-version3   --enable-gpl   --enable-nonfree   --enable-small   --enable-libmp3lame   --enable-libx264   --enable-libx265   --enable-libvpx   --enable-libtheora   --enable-libvorbis   --enable-libopus   --enable-libfdk-aac   --enable-libass   --enable-libwebp   --enable-librtmp   --enable-postproc   --enable-avresample   --enable-libfreetype   --enable-openssl   --disable-debug   --disable-doc   --disable-ffplay   --extra-libs="-lpthread
+      -lm" &&   make && make install && make distclean
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cd /tmp/ &&   wget https://github.com/deanochips/HLS-XMLTV---Home-Broadcasting/archive/master.tar.gz
+      &&   tar zxf master.tar.gz
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mv /tmp/HLS-XMLTV---Home-Broadcasting-master /HLS_XMLTV
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm -rf /var/cache/* /tmp/*
+    Name: run
+    PrependShell: true
+  From:
+    Image: alpine:3.8
+  Name: build-ffmpeg
+  Platform: ""
+  SourceCode: FROM alpine:3.8 as build-ffmpeg
+- BaseName: alpine:3.8
+  Commands:
+  - CmdLine:
+    - apk add --update --no-cache   ca-certificates   coreutils   ncurses   procps   bash   python3   jq        openssl   pcre   lame   libogg   libass   libvpx   libvorbis   libwebp   libtheora   opus   rtmpdump   x264-dev   x265-dev
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: build-nginx
+    Name: copy
+    SourcesAndDest:
+    - /usr/local/nginx
+    - /usr/local/nginx
+  - Chown: ""
+    From: build-ffmpeg
+    Name: copy
+    SourcesAndDest:
+    - /usr/local
+    - /usr/local
+  - Chown: ""
+    From: build-ffmpeg
+    Name: copy
+    SourcesAndDest:
+    - /usr/lib/libfdk-aac.so.2
+    - /usr/lib/libfdk-aac.so.2
+  - Chown: ""
+    From: build-ffmpeg
+    Name: copy
+    SourcesAndDest:
+    - /HLS_XMLTV
+    - /opt/HLS_XMLTV
+  - Env:
+    - Key: PATH
+      Value: '"${PATH}:/usr/local/nginx/sbin"'
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - nginx.conf
+    - /etc/nginx/nginx.conf
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - mime.types
+    - /etc/nginx/mime.types
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - run.sh
+    - /run.sh
+  - CmdLine:
+    - chmod +x /run.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /opt/data && mkdir -p /var/www/html/streams && mkdir -p /var/www/html/xmltv
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - ln -sf /dev/null /usr/local/nginx/logs/access.log
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: HOME_DIR
+      Value: /opt/HLS_XMLTV
+    - Key: PYTHON
+      Value: python3
+    - Key: CACHE_DIR
+      Value: /opt/HLS_XMLTV/cache
+    - Key: CONCAT_LIST_DIR
+      Value: /opt/HLS_XMLTV/concat_lists
+    - Key: CHANNELS_DIR
+      Value: /opt/HLS_XMLTV/channels
+    - Key: PLUGIN_DIR
+      Value: /opt/HLS_XMLTV/plugins
+    - Key: TMP_DIR
+      Value: /tmp
+    - Key: XMLTV_DIR
+      Value: /var/www/html/xmltv
+    - Key: STREAM_DIR
+      Value: /var/www/html/streams
+    - Key: M3U_DIR
+      Value: /var/www/html
+    - Key: PID_DIR
+      Value: /tmp/hxhb/pid
+    - Key: TMP_TVLISTS_DIR
+      Value: /tmp/hxhb/tv_lists
+    - Key: FFMPEG_LOG_DIR
+      Value: /tmp/hxhb/logs/ffmpeg
+    - Key: EPG_LOG_DIR
+      Value: /tmp/hxhb/logs/epg
+    - Key: CACHE_SPLITTER_LOG_DIR
+      Value: /tmp/hxhb/logs/cache_splitter
+    - Key: CLEAN_STREAM_DIR
+      Value: "OFF"
+    - Key: STREAM_CLEANUP_TIME
+      Value: "5"
+    - Key: XMLTV_HTTP_DIR
+      Value: http://192.168.1.214/xmltv
+    - Key: STREAM_HTTP_DIR
+      Value: http://192.168.1.214/streams
+    - Key: M3U_HTTP_DIR
+      Value: http://192.168.1.214
+    - Key: FFMPEG_BIN_LOCATION
+      Value: /usr/local/bin/ffmpeg
+    - Key: FFPROBE_BIN_LOCATION
+      Value: /usr/local/bin/ffprobe
+    - Key: HLS_TIME
+      Value: "10"
+    - Key: HLS_LIST_SIZE
+      Value: "6"
+    Name: env
+  - CmdLine:
+    - chmod +x /opt/HLS_XMLTV/cron.sh &&     chmod +x /opt/HLS_XMLTV/clear_cache.sh
+      &&     chmod +x /opt/HLS_XMLTV/generate_epg.sh &&     chmod +x /opt/HLS_XMLTV/kill_stream.sh
+      &&     chmod +x /opt/HLS_XMLTV/plugins/randomize.sh &&     chmod +x /opt/HLS_XMLTV/plugins/randomize_idents_only.sh
+      &&     chmod +x /opt/HLS_XMLTV/plugins/split_finished_cache_file.sh &&     chmod
+      +x /opt/HLS_XMLTV/plugins/xmltv-join &&     chmod +x /opt/HLS_XMLTV/stream_laucher.sh
+      &&     mkdir -p -m777 $FFMPEG_LOG_DIR &&     mkdir -p -m777 $EPG_LOG_DIR &&     mkdir
+      -p -m777 $PID_DIR &&     mkdir -p -m777 $TMP_TVLISTS_DIR &&     mkdir -p -m777
+      $CACHE_SPLITTER_LOG_DIR
+    Name: run
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "80"
+  - Name: volume
+    Volumes:
+    - /opt/HLS_XMLTV/
+  - CmdLine:
+    - /bin/bash
+    - -c
+    - /run.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: alpine:3.8
+  Name: ""
+  Platform: ""
+  SourceCode: FROM alpine:3.8

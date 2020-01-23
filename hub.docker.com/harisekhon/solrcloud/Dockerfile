@@ -16,7 +16,7 @@
 FROM alpine:latest
 MAINTAINER Hari Sekhon (https://www.linkedin.com/in/harisekhon)
 
-ARG SOLRCLOUD_VERSION=6.2.1
+ARG SOLRCLOUD_VERSION=5.5.2
 
 ARG TAR="solr-$SOLRCLOUD_VERSION.tgz"
 

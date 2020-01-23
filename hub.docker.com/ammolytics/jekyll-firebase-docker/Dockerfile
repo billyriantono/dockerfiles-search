@@ -23,5 +23,6 @@ RUN apk upgrade --update \
     jekyll-sitemap \
     jekyll-feed \
     jekyll-redirect-from \
+    rdoc \
   && gem cleanup
 

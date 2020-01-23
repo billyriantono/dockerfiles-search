@@ -1,0 +1,137 @@
+MetaArgs: null
+Stages:
+- BaseName: php:7.3-fpm
+  Commands:
+  - Labels:
+    - Key: maintainer
+      Value: '"antoine@gomez.lu"'
+    Name: label
+  - CmdLine:
+    - buildDeps="         default-libmysqlclient-dev         libbz2-dev         software-properties-common     "     runtimeDeps="         curl         git         libfreetype6-dev         libicu-dev         libjpeg-dev         libmcrypt-dev         libpng-dev         libxml2-dev         libpq-dev         libzip-dev         pkg-config         libbson-1.0         libmongoc-1.0-0         python3-pip         vim         cron
+      python wget sudo unzip gettext-base     "     && apt-get update && DEBIAN_FRONTEND=noninteractive
+      apt-get install -y $buildDeps $runtimeDeps     && pecl install mcrypt-1.0.2     &&
+      docker-php-ext-enable mcrypt     && docker-php-ext-install bcmath bz2 calendar
+      pcntl iconv intl mbstring mysqli opcache pdo_mysql zip exif     && docker-php-ext-configure
+      gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/     && docker-php-ext-install
+      gd     && pecl install redis     && docker-php-ext-enable redis.so     && docker-php-ext-enable
+      exif     && pip3 install awscli --upgrade     && apt-get purge -y --auto-remove
+      $buildDeps     && rm -r /var/lib/apt/lists/*
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
+    - /awslogs-agent-setup.py
+  - CmdLine:
+    - mkdir -p /var/awslogs/conf.d
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - touch /var/awslogs/awslogs.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - python /awslogs-agent-setup.py -n -r eu-west-1 -c /var/awslogs/awslogs.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - mkdir -p /var/www/html
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - chown www-data:www-data /var/www/html -R
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - passwd -d www-data
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - echo 'www-data ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - cp /usr/local/etc/php/php.ini-production /usr/local/etc/php/php.ini
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - sed -i -e "s/;cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/g" /usr/local/etc/php/php.ini
+      &&     sed -i -e "s/;daemonize\s*=\s*yes/daemonize = no/g" /usr/local/etc/php-fpm.conf
+      &&     sed -i -e "s/;catch_workers_output\s*=\s*yes/catch_workers_output = yes/g"
+      /usr/local/etc/php-fpm.d/www.conf &&     sed -i -e "s/pm.max_children = 5/pm.max_children
+      = 9/g" /usr/local/etc/php-fpm.d/www.conf &&     sed -i -e "s/pm.start_servers
+      = 2/pm.start_servers = 3/g" /usr/local/etc/php-fpm.d/www.conf &&     sed -i
+      -e "s/pm.min_spare_servers = 1/pm.min_spare_servers = 2/g" /usr/local/etc/php-fpm.d/www.conf
+      &&     sed -i -e "s/pm.max_spare_servers = 3/pm.max_spare_servers = 4/g" /usr/local/etc/php-fpm.d/www.conf
+      &&     sed -i -e "s/pm.max_requests = 500/pm.max_requests = 200/g" /usr/local/etc/php-fpm.d/www.conf
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin
+      --filename=composer     && ln -s $(composer config --global home) /composer
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: www-data
+  - Env:
+    - Key: PATH
+      Value: $PATH:/composer/vendor/bin
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php/7.3/test.php
+    - test.php
+  - CmdLine:
+    - php test.php
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: FILE_UPLOADS
+      Value: "On"
+    Name: env
+  - Env:
+    - Key: MEMORY_LIMIT
+      Value: "32"
+    Name: env
+  - Env:
+    - Key: UPLOAD_MAX_FILE_SIZE
+      Value: "1"
+    Name: env
+  - Env:
+    - Key: POST_MAX_SIZE
+      Value: "1"
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php/7.3/php-upload.template
+    - /usr/local/etc/php/conf.d/php-upload.template
+  - Name: user
+    User: root
+  - Env:
+    - Key: PATH
+      Value: $PATH:/composer/vendor/bin
+    Name: env
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - php/7.3/entrypoint.sh
+    - /entrypoint.sh
+  - CmdLine:
+    - chmod +x /entrypoint.sh
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /entrypoint.sh
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: php:7.3-fpm
+  Name: ""
+  Platform: ""
+  SourceCode: FROM php:7.3-fpm

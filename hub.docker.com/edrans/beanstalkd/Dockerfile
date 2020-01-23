@@ -1,9 +1,19 @@
-FROM edrans/centos6
+FROM microsoft/dotnet:2.1-aspnetcore-runtime AS base
+WORKDIR /app
+EXPOSE 80
 
-MAINTAINER Nicolás de la Torre <ntorre@edrans.com>
+FROM microsoft/dotnet:2.1-sdk AS build
+WORKDIR /src
+COPY GatechPF/GatechPF.csproj GatechPF/
+RUN dotnet restore GatechPF/GatechPF.csproj
+COPY . .
+WORKDIR /src/GatechPF
+RUN dotnet build GatechPF.csproj -c Release -o /app
 
-RUN yum install beanstalkd -y && yum clean all -y
+FROM build AS publish
+RUN dotnet publish GatechPF.csproj -c Release -o /app
 
-EXPOSE 11300
-ENTRYPOINT ["usr/bin/beanstalkd"]
-CMD ["-u", "nobody"]
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app .
+ENTRYPOINT ["dotnet", "GatechPF.dll"]

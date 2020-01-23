@@ -1,0 +1,96 @@
+FROM ubuntu:16.04
+
+MAINTAINER chenzhenpeng
+
+#!/bin/bash
+RUN apt update && apt install -y \
+    curl \
+    gnupg2 \
+    lsb-release
+
+RUN curl http://repo.ros2.org/repos.key | apt-key add -
+RUN sh -c 'echo "deb [arch=amd64,arm64] http://packages.ros.org/ros2/ubuntu `lsb_release -cs` main" > /etc/apt/sources.list.d/ros2-latest.list'
+
+# install necessary packages
+RUN apt update && apt install -y \
+    libcv2.4\
+    build-essential \
+    cmake \
+    git \
+    python3-colcon-common-extensions \
+    python3-pip \
+    python-rosdep \
+    python3-vcstool \
+    wget
+
+# install some pip packages needed for testing
+RUN python3 -m pip install -U \
+    argcomplete \
+    flake8 \
+    flake8-blind-except \
+    flake8-builtins \
+    flake8-class-newline \
+    flake8-comprehensions \
+    flake8-deprecated \
+    flake8-docstrings \
+    flake8-import-order \
+    flake8-quotes \
+    git+https://github.com/lark-parser/lark.git@0.7d \
+    pytest-repeat \
+    pytest-rerunfailures \
+    pytest \
+    pytest-cov \
+    pytest-runner \
+    setuptools
+
+# install Fast-RTPS dependencies
+RUN apt install --no-install-recommends -y \
+    libasio-dev \
+    libtinyxml2-dev
+
+# install opencv3.3.1 ------------------------------------------------------------------
+# url: https://github.com/BVLC/caffe/wiki/OpenCV-3.3-Installation-Guide-on-Ubuntu-16.04
+# First: get all the dependencies:
+#
+RUN apt-get update
+RUN apt-get install --assume-yes build-essential cmake git
+RUN apt-get install --assume-yes pkg-config unzip ffmpeg qtbase5-dev python-dev python3-dev python-numpy python3-numpy
+RUN apt-get install --assume-yes libopencv-dev libgtk-3-dev libdc1394-22 libdc1394-22-dev libjpeg-dev libpng12-dev libtiff5-dev libjasper-dev
+RUN apt-get install --assume-yes libavcodec-dev libavformat-dev libswscale-dev libxine2-dev libgstreamer0.10-dev libgstreamer-plugins-base0.10-dev
+RUN apt-get install --assume-yes libv4l-dev libtbb-dev libfaac-dev libmp3lame-dev libopencore-amrnb-dev libopencore-amrwb-dev libtheora-dev
+RUN apt-get install --assume-yes libvorbis-dev libxvidcore-dev v4l-utils vtk6
+RUN apt-get install --assume-yes liblapacke-dev libopenblas-dev libgdal-dev checkinstall
+RUN apt-get install -y wget
+
+# Just get a simple editor for convienience (you could just cancel this line)
+RUN sudo apt-get install -y vim
+
+RUN git clone https://github.com/opencv/opencv.git \
+    && cd opencv \
+    && git checkout 3.3.1 \
+    && cd ..
+ 
+RUN git clone https://github.com/opencv/opencv_contrib.git \
+    && cd opencv_contrib \
+    && git checkout 3.3.1 \
+    && cd ..
+
+RUN cd opencv \
+    && mkdir build \
+    && cd build \
+    && cmake -D CMAKE_BUILD_TYPE=RELEASE \
+      -D CMAKE_INSTALL_PREFIX=/usr/local \
+      -D INSTALL_C_EXAMPLES=ON \
+      -D INSTALL_PYTHON_EXAMPLES=ON \
+      -D WITH_TBB=ON \
+      -D WITH_V4L=ON \
+      -D WITH_QT=ON \
+      -D WITH_OPENGL=ON \
+      -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
+      -D BUILD_EXAMPLES=ON .. \
+    && make -j4 \
+    && make install \
+    && sh -c 'echo "/usr/local/lib" >> /etc/ld.so.conf.d/opencv.conf' \
+    && ldconfig
+
+CMD ["/bin/bash"]

@@ -1,0 +1,137 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: ubuntu:16.04
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get --no-install-recommends --yes install         ca-certificates         cmake         g++         make         pkg-config         graphviz         doxygen         git         libboost1.58-all-dev         curl         libtool-bin         autoconf         automake
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /usr/local
+  - Key: OPENSSL_VERSION
+    Name: arg
+    Value: 1.0.2n
+  - Key: OPENSSL_HASH
+    Name: arg
+    Value: 370babb75f278c39e0c50e8c4e7493bc0f18db6867478341a832a982fd15a8fe
+  - CmdLine:
+    - curl -s -O https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz     &&
+      echo "${OPENSSL_HASH} openssl-${OPENSSL_VERSION}.tar.gz" | sha256sum -c     &&
+      tar -xzf openssl-${OPENSSL_VERSION}.tar.gz     && cd openssl-${OPENSSL_VERSION}     &&
+      ./Configure linux-x86_64 no-shared --static -fPIC     && make build_crypto build_ssl     &&
+      make install
+    Name: run
+    PrependShell: true
+  - Env:
+    - Key: OPENSSL_ROOT_DIR
+      Value: /usr/local/openssl-${OPENSSL_VERSION}
+    Name: env
+  - Key: ZMQ_VERSION
+    Name: arg
+    Value: v4.2.3
+  - Key: ZMQ_HASH
+    Name: arg
+    Value: 3226b8ebddd9c6c738ba42986822c26418a49afb
+  - CmdLine:
+    - git clone https://github.com/zeromq/libzmq.git -b ${ZMQ_VERSION}     && cd libzmq     &&
+      test `git rev-parse HEAD` = ${ZMQ_HASH} || exit 1     && ./autogen.sh     &&
+      CFLAGS="-fPIC" CXXFLAGS="-fPIC" ./configure --enable-static --disable-shared     &&
+      make     && make install     && ldconfig
+    Name: run
+    PrependShell: true
+  - Key: CPPZMQ_HASH
+    Name: arg
+    Value: 6aa3ab686e916cb0e62df7fa7d12e0b13ae9fae6
+  - CmdLine:
+    - git clone https://github.com/zeromq/cppzmq.git -b ${ZMQ_VERSION}     && cd cppzmq     &&
+      test `git rev-parse HEAD` = ${CPPZMQ_HASH} || exit 1     && mv *.hpp /usr/local/include
+    Name: run
+    PrependShell: true
+  - Key: READLINE_VERSION
+    Name: arg
+    Value: "7.0"
+  - Key: READLINE_HASH
+    Name: arg
+    Value: 750d437185286f40a369e1e4f4764eda932b9459b5ec9a731628393dd3d32334
+  - CmdLine:
+    - curl -s -O https://ftp.gnu.org/gnu/readline/readline-${READLINE_VERSION}.tar.gz     &&
+      echo "${READLINE_HASH} readline-${READLINE_VERSION}.tar.gz" | sha256sum -c     &&
+      tar -xzf readline-${READLINE_VERSION}.tar.gz     && cd readline-${READLINE_VERSION}     &&
+      CFLAGS="-fPIC" CXXFLAGS="-fPIC" ./configure     && make     && make install
+    Name: run
+    PrependShell: true
+  - Key: SODIUM_VERSION
+    Name: arg
+    Value: 1.0.16
+  - Key: SODIUM_HASH
+    Name: arg
+    Value: 675149b9b8b66ff44152553fb3ebf9858128363d
+  - CmdLine:
+    - git clone https://github.com/jedisct1/libsodium.git -b ${SODIUM_VERSION}     &&
+      cd libsodium     && test `git rev-parse HEAD` = ${SODIUM_HASH} || exit 1     &&
+      ./autogen.sh     && CFLAGS="-fPIC" CXXFLAGS="-fPIC" ./configure     && make     &&
+      make check     && make install
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /src
+  - Chown: ""
+    From: ""
+    Name: copy
+    SourcesAndDest:
+    - .
+    - .
+  - Key: NPROC
+    Name: arg
+    Value: null
+  - CmdLine:
+    - rm -rf build &&     if [ -z "$NPROC" ];then make -j$(nproc) release-static;else
+      make -j$NPROC release-static;fi
+    Name: run
+    PrependShell: true
+  From:
+    Image: ubuntu:16.04
+  Name: builder
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04 as builder
+- BaseName: ubuntu:16.04
+  Commands:
+  - CmdLine:
+    - apt-get update &&     apt-get --no-install-recommends --yes install ca-certificates
+      &&     apt-get clean &&     rm -rf /var/lib/apt
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /src/build/release/bin/*
+    - /usr/local/bin/
+  - Name: volume
+    Volumes:
+    - /root/.electroneum
+  - Name: volume
+    Volumes:
+    - /wallet
+  - Name: expose
+    Ports:
+    - "26967"
+  - Name: expose
+    Ports:
+    - "26968"
+  - CmdLine:
+    - electroneumd
+    - --p2p-bind-ip=0.0.0.0
+    - --p2p-bind-port=26967
+    - --rpc-bind-ip=0.0.0.0
+    - --rpc-bind-port=26968
+    - --non-interactive
+    - --confirm-external-bind
+    Name: entrypoint
+    PrependShell: false
+  From:
+    Image: ubuntu:16.04
+  Name: ""
+  Platform: ""
+  SourceCode: FROM ubuntu:16.04

@@ -1,23 +1,57 @@
-FROM shinymayhem/dev
+FROM ubuntu:xenial
+MAINTAINER Felix Seidel <felix@seidel.me>
 
-ADD run.sh /opt/deploy/run.sh
-ADD init-home.sh /opt/deploy/init-home.sh
+ENV LANGUAGE en_US.UTF-8
+ENV LANG en_US.UTF-8
+ENV TZ "Europe/Berlin"
+ENV SELENIUM_MAJOR_VERSION 3.0
+ENV SELENIUM_COMPLETE_VERSION 3.0.1
+ENV CHROMEDRIVER_VERSION 2.27
+ENV SCREEN_RESOLUTION "1440x900"
+ENV SELENIUM_PORT 4444
+ENV DISPLAY :0.0
 
-RUN \
-	apt-get update && \
-	apt-get install -y screen && \
-	rm -rf /var/lib/apt/lists/* && \
-	chmod +x /opt/deploy/*.sh && \
-	useradd -m reese -s /bin/bash && \
-	usermod -a -G admin reese
+RUN apt-get update && \
+    apt-get -y --no-install-recommends install language-pack-en ca-certificates curl dnsutils man openssl unzip wget xvfb fonts-ipafont-gothic xfonts-100dpi xfonts-75dpi xfonts-scalable xfonts-cyrillic fluxbox x11vnc supervisor openjdk-8-jre-headless net-tools xterm git chromium-browser libgconf-2-4 ffmpeg && \
+    locale-gen en_US.UTF-8 && \
+    echo 'Europe/Berlin' > /etc/timezone && \
+    dpkg-reconfigure --frontend noninteractive locales tzdata && \
+    mkdir -p ~/.vnc /var/log/supervisor && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-USER reese
+RUN mkdir -p /opt/selenium && \
+    wget --no-verbose -O /opt/selenium/selenium-server-standalone-${SELENIUM_COMPLETE_VERSION}.jar http://selenium-release.storage.googleapis.com/${SELENIUM_MAJOR_VERSION}/selenium-server-standalone-${SELENIUM_COMPLETE_VERSION}.jar && \
+    ln -fs /opt/selenium/selenium-server-standalone-${SELENIUM_COMPLETE_VERSION}.jar /opt/selenium/selenium-server-standalone.jar
 
-RUN \
-	cd /home/reese && \
-	git clone http://github.com/shinymayhem/home && \
-	cp -R home/. . && \
-	echo 'so ~/.syncedvimrc' > .vimrc && \
-	vim -E -u NONE -S ~/.vimrc +qall
+RUN wget --no-verbose -O /tmp/chromedriver_linux64.zip http://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip && \
+    mkdir -p /opt/chromedriver-${CHROMEDRIVER_VERSION} && \
+    unzip /tmp/chromedriver_linux64.zip -d /opt/chromedriver-${CHROMEDRIVER_VERSION} && \
+    chmod +x /opt/chromedriver-${CHROMEDRIVER_VERSION}/chromedriver && \
+    rm /tmp/chromedriver_linux64.zip && \
+    ln -fs /opt/chromedriver-${CHROMEDRIVER_VERSION}/chromedriver /usr/local/bin/chromedriver
 
-USER root
+RUN x11vnc -storepasswd selenium ~/.vnc/passwd && \
+    useradd selenium --shell /bin/bash --create-home --uid 1000 && \
+    echo "#!/bin/bash\nexec /usr/bin/chromium-browser --no-sandbox \"\$@\"" > /usr/bin/google-chrome && \
+    chmod 755 /usr/bin/google-chrome
+
+RUN temp="$(mktemp -d)" && \
+    cd "$temp" && \
+    wget https://github.com/kanaka/noVNC/archive/v0.6.1.zip && \
+    unzip v0.6.1.zip && \
+    mv noVNC-0.6.1 /usr/local/share/novnc && \
+    sed -i "s/'password', ''/'password', 'selenium'/i" /usr/local/share/novnc/vnc_auto.html && \
+    cp /usr/local/share/novnc/vnc_auto.html /usr/local/share/novnc/index.html && \
+    chown -R selenium:selenium /usr/local/share/novnc && \
+    cd / && \
+    rm -rf "$temp"
+
+COPY etc /etc
+COPY usr /usr
+COPY docker-entrypoint.sh /
+
+EXPOSE 4444 5900 6080
+VOLUME ["/logs"]
+
+CMD ["/docker-entrypoint.sh"]

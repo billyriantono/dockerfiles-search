@@ -1,18 +1,25 @@
 
 ###
-# Avian
+# Avian Docker Image
 ###
 
-FROM alpine:edge as Avian
+FROM alpine:latest as Avian
 LABEL name="Avian"
 LABEL description="Create Enterprise-class component driven applications that scale."
 LABEL version="latest"
 
-RUN apk update
-RUN apk add alpine-sdk coreutils python3 nodejs npm redis
-RUN npm install -g @flypapertech/avian
-RUN npm install -g webpack
-RUN npm install pm2 -g
-RUN pm2 install pm2-redis
-WORKDIR /app
-CMD ["/bin/sh"]
+RUN apk update \
+    && apk add --no-cache alpine-sdk coreutils git python3 nodejs npm openrc redis
+
+WORKDIR /tmp
+RUN git clone https://github.com/flypapertech/avian \
+    && cd /tmp/avian && npm install \
+    && npm run build \
+    && npm run test \
+    && npm install -g webpack \
+    && npm install -g .
+
+ENV AVIAN_APP_HOME /usr/lib/node_modules/@flypapertech/avian/examples/hello-world
+WORKDIR ${AVIAN_APP_HOME}
+EXPOSE 8080
+CMD ["avian"]

@@ -1,0 +1,101 @@
+MetaArgs: null
+Stages:
+- As: builder
+  BaseName: debian:stretch
+  Commands:
+  - CmdLine:
+    - apt-get update && apt-get install -y debootstrap && apt-get clean
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: /root
+  - CmdLine:
+    - debootstrap --foreign --no-check-gpg --variant minbase --arch armhf                 stretch
+      fs http://mirrordirector.raspbian.org/raspbian
+    Name: run
+    PrependShell: true
+  From:
+    Image: debian:stretch
+  Name: builder
+  Platform: ""
+  SourceCode: FROM debian:stretch as builder
+- As: layered
+  BaseName: scratch
+  Commands:
+  - Name: workdir
+    Path: /
+  - Chown: ""
+    From: builder
+    Name: copy
+    SourcesAndDest:
+    - /root/fs
+    - .
+  - Chown: ""
+    From: resin/armv7hf-debian-qemu
+    Name: copy
+    SourcesAndDest:
+    - /usr/bin/qemu-arm-static
+    - /usr/bin/
+  - Name: shell
+    Shell:
+    - /usr/bin/qemu-arm-static
+    - -execve
+    - /bin/sh
+    - -c
+  - CmdLine:
+    - ln -sf /bin/true /bin/mount
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - /debootstrap/debootstrap --second-stage
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - apt-get clean
+    Name: run
+    PrependShell: true
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - sources.list
+    - /etc/apt/sources.list
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - raspi.list
+    - /etc/apt/sources.list.d/
+  - Chown: ""
+    Name: add
+    SourcesAndDest:
+    - 82B129927FA3303E.pub
+    - /tmp/
+  - CmdLine:
+    - apt-key add /tmp/82B129927FA3303E.pub
+    Name: run
+    PrependShell: true
+  - CmdLine:
+    - rm /tmp/82B129927FA3303E.pub
+    Name: run
+    PrependShell: true
+  From:
+    Scratch: true
+  Name: layered
+  Platform: ""
+  SourceCode: FROM scratch as layered
+- BaseName: scratch
+  Commands:
+  - Chown: ""
+    From: layered
+    Name: copy
+    SourcesAndDest:
+    - /
+    - /
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: false
+  From:
+    Scratch: true
+  Name: ""
+  Platform: ""
+  SourceCode: FROM scratch

@@ -1,0 +1,84 @@
+MetaArgs: null
+Stages:
+- BaseName: openjdk:8u151-jdk-alpine
+  Commands:
+  - Maintainer: Maksim Kostromin https://github.com/daggerok
+    Name: maintainer
+  - Key: GLASSFISH_VERSION_ARG
+    Name: arg
+    Value: '"5.0"'
+  - Key: GLASSFISH_ADMIN_PASSWORD_ARG
+    Name: arg
+    Value: '"Admin.123"'
+  - Env:
+    - Key: GLASSFISH_VERSION
+      Value: ${GLASSFISH_VERSION_ARG}
+    - Key: GLASSFISH_USER
+      Value: '"glassfish5"'
+    - Key: GLASSFISH_ADMIN_USER
+      Value: '"admin"'
+    - Key: GLASSFISH_ADMIN_PASSWORD
+      Value: ${GLASSFISH_ADMIN_PASSWORD_ARG}
+    Name: env
+  - Env:
+    - Key: GLASSFISH_FILE
+      Value: '"glassfish-${GLASSFISH_VERSION}.zip"'
+    - Key: GLASSFISH_USER_HOME
+      Value: '"/home/${GLASSFISH_USER}"'
+    Name: env
+  - Env:
+    - Key: GLASSFISH_HOME
+      Value: '"${GLASSFISH_USER_HOME}/${GLASSFISH_USER}"'
+    - Key: GLASSFISH_URL
+      Value: '"http://download.oracle.com/glassfish/${GLASSFISH_VERSION}/release/${GLASSFISH_FILE}"'
+    Name: env
+  - CmdLine:
+    - 'apk --no-cache --update add busybox-suid bash wget ca-certificates unzip sudo
+      openssh-client shadow  && addgroup ${GLASSFISH_USER}-group  && echo "${GLASSFISH_USER}
+      ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers  && sed -i "s/.*requiretty$/Defaults
+      !requiretty/" /etc/sudoers  && adduser -h ${GLASSFISH_USER_HOME} -s /bin/bash
+      -D -u 1025 ${GLASSFISH_USER} ${GLASSFISH_USER}-group  && usermod -a -G wheel
+      ${GLASSFISH_USER}  && wget --no-cookies          --no-check-certificate          --header
+      "Cookie: oraclelicense=accept-securebackup-cookie"                   "http://download.oracle.com/otn-pub/java/jce/8/jce_policy-8.zip"          -O
+      /tmp/jce_policy-8.zip  && unzip -o /tmp/jce_policy-8.zip -d /tmp  && mv -f ${JAVA_HOME}/lib/security
+      ${JAVA_HOME}/lib/backup-security || true  && mv -f /tmp/UnlimitedJCEPolicyJDK8
+      ${JAVA_HOME}/lib/security  && apk --no-cache --no-network --purge del busybox-suid
+      ca-certificates unzip shadow  && rm -rf /var/cache/apk/* /tmp/*'
+    Name: run
+    PrependShell: true
+  - Name: user
+    User: ${GLASSFISH_USER}
+  - Name: workdir
+    Path: ${GLASSFISH_USER_HOME}
+  - CmdLine:
+    - /bin/bash
+    Name: cmd
+    PrependShell: true
+  - Name: expose
+    Ports:
+    - "4848"
+    - "8080"
+  - CmdLine:
+    - /bin/bash ${GLASSFISH_HOME}/bin/asadmin start-domain domain1         && tail
+      -f ${GLASSFISH_HOME}/glassfish/domains/domain1/logs/server.log
+    Name: entrypoint
+    PrependShell: true
+  - CmdLine:
+    - wget ${GLASSFISH_URL} -O ${GLASSFISH_USER_HOME}/${GLASSFISH_FILE}  && unzip
+      ${GLASSFISH_USER_HOME}/${GLASSFISH_FILE} -d ${GLASSFISH_USER_HOME}  && rm -rf
+      ${GLASSFISH_USER_HOME}/${GLASSFISH_FILE}  && echo "AS_ADMIN_PASSWORD=" >> ${GLASSFISH_HOME}/bin/tempfile  &&
+      echo "AS_ADMIN_NEWPASSWORD=${GLASSFISH_ADMIN_PASSWORD}" >> ${GLASSFISH_HOME}/bin/tempfile  &&
+      echo "AS_ADMIN_PASSWORD=${GLASSFISH_ADMIN_PASSWORD}" >> ${GLASSFISH_HOME}/bin/passwordfile  &&
+      /bin/bash ${GLASSFISH_HOME}/bin/asadmin restart-domain domain1  && /bin/bash
+      ${GLASSFISH_HOME}/bin/asadmin --user=${GLASSFISH_ADMIN_USER} --passwordfile=${GLASSFISH_HOME}/bin/tempfile
+      change-admin-password  && /bin/bash ${GLASSFISH_HOME}/bin/asadmin --host 0.0.0.0
+      --port 4848 --user=${GLASSFISH_ADMIN_USER} --passwordfile=${GLASSFISH_HOME}/bin/passwordfile
+      enable-secure-admin  && /bin/bash ${GLASSFISH_HOME}/bin/asadmin restart-domain
+      domain1  && /bin/bash ${GLASSFISH_HOME}/bin/asadmin stop-domain domain1
+    Name: run
+    PrependShell: true
+  From:
+    Image: openjdk:8u151-jdk-alpine
+  Name: ""
+  Platform: ""
+  SourceCode: FROM openjdk:8u151-jdk-alpine

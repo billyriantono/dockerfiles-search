@@ -1,22 +1,33 @@
-FROM debian:jessie
+FROM jenkins/jnlp-slave:latest-jdk11
 
-RUN buildDeps='wget unzip gcc g++ make cmake libncurses5-dev bison python libbz2-dev' \
-    && apt-get update \
-    && apt-get install -y $buildDeps \
-    && apt-get install -y libcurl4-openssl-dev mysql-client \
-    && wget -O rdp.zip "https://github.com/vipshop/rdp/archive/master.zip" \
-    && mkdir -p /usr/src \
-    && unzip rdp.zip -d /usr/src \
-    && chmod +x /usr/src/rdp-master/build/build.sh \
-    && make -C /usr/src/rdp-master \
-    && make -C /usr/src/rdp-master install \
-    && mkdir -p /apps/svr/rdp_syncer/base/rdp_mysql \
-    && mkdir -p /apps/svr/rdp_syncer/data/10000/conf \
-    && tar -xzvf /usr/src/rdp-master/package/*.tgz -C /apps/svr/rdp_syncer/base/rdp_mysql \
-    && cp /apps/svr/rdp_syncer/base/rdp_mysql/syncer.cfg.example /apps/svr/rdp_syncer/data/10000/conf/syncer.cfg \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm rdp.zip \
-    && rm -r /usr/src/rdp-master \
-    && apt-get purge -y --auto-remove $buildDeps
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH \
+    RUST_VERSION=1.39.0
 
-CMD ["bash"]
+# For testing purpose only
+USER root
+RUN apt-get update
+RUN set -eux; \
+    dpkgArch="$(dpkg --print-architecture)"; \
+    case "${dpkgArch##*-}" in \
+        amd64) rustArch='x86_64-unknown-linux-gnu'; rustupSha256='e68f193542c68ce83c449809d2cad262cc2bbb99640eb47c58fc1dc58cc30add' ;; \
+        armhf) rustArch='armv7-unknown-linux-gnueabihf'; rustupSha256='7c1c329a676e50c287d8183b88f30cd6afd0be140826a9fbbc0e3d717fab34d7' ;; \
+        arm64) rustArch='aarch64-unknown-linux-gnu'; rustupSha256='d861cc86594776414de001b96964be645c4bfa27024052704f0976dc3aed1b18' ;; \
+        i386) rustArch='i686-unknown-linux-gnu'; rustupSha256='89f1f797dca2e5c1d75790c3c6b7be0ee473a7f4eca9663e623a41272a358da0' ;; \
+        *) echo >&2 "unsupported architecture: ${dpkgArch}"; exit 1 ;; \
+    esac; \
+    url="https://static.rust-lang.org/rustup/archive/1.20.2/${rustArch}/rustup-init"; \
+    wget "$url"; \
+    echo "${rustupSha256} *rustup-init" | sha256sum -c -; \
+    chmod +x rustup-init; \
+    ./rustup-init -y --no-modify-path --profile minimal --default-toolchain $RUST_VERSION; \
+    rm rustup-init; \
+    chmod -R a+w $RUSTUP_HOME $CARGO_HOME; \
+    rustup --version; \
+    cargo --version; \
+    rustc --version;
+
+RUN apt-get install nodejs -y 
+
+ENTRYPOINT ["jenkins-slave"]

@@ -1,24 +1,9 @@
-FROM openshift/postgresql-92-centos7
+FROM sebp/elk
 
-USER root
+ADD 90-kv-filter.conf /etc/logstash/conf.d/90-kv-filter.conf
 
-ENV BACKUP_DATA_DIR=/tmp BACKUP_KEEP=2 BACKUP_MINUTE=* BACKUP_HOUR=*
+WORKDIR ${LOGSTASH_HOME}
+RUN gosu logstash bin/logstash-plugin install logstash-filter-kv
 
-RUN yum -y install epel-release && yum update -y
-RUN yum -y install python \
-    python-devel \
-    python-pip \
-    mercurial \
-    yum clean all
-
-# Install dev cron
-RUN pip install -e hg+https://bitbucket.org/dbenamy/devcron#egg=devcron
-
-WORKDIR /opt/app-root/src
-
-ADD ./bin ./bin
-RUN chmod -R 777 /opt/app-root/src
-
-USER 1001
-
-CMD ./bin/run.sh
+WORKDIR ${KIBANA_HOME}
+RUN gosu kibana bin/kibana-plugin install https://github.com/sivasamyk/logtrail/releases/download/v0.1.25/logtrail-6.1.2-0.1.25.zip

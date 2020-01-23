@@ -1,7 +1,7 @@
 FROM openjdk:8-jre-slim
 
 ARG BUILD_DATE
-ARG SPARK_VERSION=2.4.0
+ARG SPARK_VERSION=2.4.4
 
 LABEL org.label-schema.name="Apache PySpark $SPARK_VERSION" \
       org.label-schema.build-date=$BUILD_DATE \
@@ -17,8 +17,8 @@ RUN apt-get update && \
     rm /tmp/miniconda.sh && \
     conda config --set auto_update_conda true && \
     conda config --set channel_priority false && \
-    conda update conda -y --force && \
-    conda clean -tipsy && \
+    conda update conda -y --force-reinstall && \
+    conda clean -tipy && \
     echo "PATH=/opt/miniconda3/bin:\${PATH}" > /etc/profile.d/miniconda.sh && \
     pip install --no-cache pyspark==${SPARK_VERSION} && \
     SPARK_HOME=$(python /opt/miniconda3/bin/find_spark_home.py) && \

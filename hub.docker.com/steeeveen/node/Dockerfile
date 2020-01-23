@@ -1,33 +1,9 @@
-# Set the base image to Ubuntu
-FROM    ubuntu
+FROM node:7-alpine
 
-# File Author / Maintainer
-MAINTAINER Anand Mani Sankar
+RUN mkdir -p /app
+WORKDIR /app
 
-# Install Node.js and other dependencies
-RUN apt-get update && \
-    apt-get -y install curl && \
-    curl -sL https://deb.nodesource.com/setup | sudo bash - && \
-    apt-get -y install python build-essential nodejs
+EXPOSE 80
 
-# Install nodemon
-RUN npm install -g nodemon
-
-# Provides cached layer for node_modules
-ADD package.json /tmp/package.json
-RUN cd /tmp && npm install
-RUN mkdir -p /src && cp -a /tmp/node_modules /src/
-
-# Define working directory
-WORKDIR /src
-ADD . /src
-
-# Expose port
-EXPOSE  8080
-
-# Steven: Added entrypoint
-COPY docker-entrypoint.sh /entrypoint.sh
-ENTRYPOINT ["/entrypoint.sh"]
-
-# Run app using nodemon
-CMD ["nodemon", "/src/index.js"]
+COPY . /app
+CMD node app.js

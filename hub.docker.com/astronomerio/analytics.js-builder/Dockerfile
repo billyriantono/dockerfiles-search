@@ -1,16 +1,26 @@
-FROM node:7.4
+FROM ubuntu:14.04
+MAINTAINER Dmitry Sinev <astartsky@gmail.com>
+ENV DEBIAN_FRONTEND=noninteractive \
+    REFRESHED_AT=2015_09_03
 
-# Create app directory
-RUN mkdir -p /usr/src/app
-WORKDIR /usr/src/app
+# install custom repositories
+RUN apt-get update && apt-get install -y software-properties-common && \
+    add-apt-repository -y ppa:nginx/stable
 
-COPY package.json /usr/src/app/
-RUN npm install
+# install packages
+RUN apt-get update && apt-get install -y \
+    nginx
 
-COPY . /usr/src/app
+# configure nginx
+RUN rm /etc/nginx/sites-enabled/default && \
+    echo "\ndaemon off;" >> /etc/nginx/nginx.conf
 
-RUN mkdir -p /usr/src/app/log
-ENV LOG_PATH /usr/src/app/log
+# cleanup
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
-EXPOSE 8080
-CMD ["npm", "start"]
+VOLUME ["/var/www"]
+WORKDIR /var/www
+
+EXPOSE 80
+
+CMD ["/usr/sbin/nginx"]

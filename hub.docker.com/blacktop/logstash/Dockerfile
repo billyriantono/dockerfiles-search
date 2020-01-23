@@ -4,11 +4,11 @@ LABEL maintainer "https://github.com/blacktop"
 
 RUN apk add --no-cache openjdk8-jre su-exec
 
-ENV VERSION 7.5.0
+ENV VERSION 7.5.1
 ENV DOWNLOAD_URL https://artifacts.elastic.co/downloads/logstash
-ENV TARBALL "${DOWNLOAD_URL}/logstash-oss-${VERSION}.tar.gz"
-ENV TARBALL_ASC "${DOWNLOAD_URL}/logstash-oss-${VERSION}.tar.gz.asc"
-ENV TARBALL_SHA "b7cf702efa112bf5b550a0c8927f87ebf3a8947b4325b0aeec44bdfef4c307cbdcfa3bf55a884a2fc492b4e494d4a266f96dc032d549ab39dde8dde7700c4f35"
+ENV TARBALL "${DOWNLOAD_URL}/logstash-${VERSION}.tar.gz"
+ENV TARBALL_ASC "${DOWNLOAD_URL}/logstash-${VERSION}.tar.gz.asc"
+ENV TARBALL_SHA "a7841423db3e66680227b3ae41622c531d47baad9b01830fe6e6823e8cdb78b98987ecd8cc2d0a3ffc3ea822bf69f8df000d4ffac708788ddb9279e15b38b9b4"
 ENV GPG_KEY "46095ACC8548582C1A2699A9D27D666CD88E42B4"
 
 RUN apk add --no-cache libzmq bash
@@ -35,11 +35,8 @@ RUN apk add --no-cache -t .build-deps wget ca-certificates gnupg openssl \
   && rm -rf /tmp/* \
   && apk del --purge .build-deps
 
-RUN apk add --no-cache libc6-compat
-
 ENV PATH /usr/share/logstash/bin:/sbin:$PATH
 ENV LS_SETTINGS_DIR /usr/share/logstash/config
-ENV LANG='en_US.UTF-8' LC_ALL='en_US.UTF-8'
 
 RUN set -ex; \
   if [ -f "$LS_SETTINGS_DIR/log4j2.properties" ]; then \
@@ -49,12 +46,7 @@ RUN set -ex; \
 
 VOLUME ["/etc/logstash/conf.d"]
 
-COPY config/logstash /usr/share/logstash/config/
-COPY config/pipeline/default.conf /usr/share/logstash/pipeline/logstash.conf
 COPY logstash-entrypoint.sh /
-RUN chmod +x /logstash-entrypoint.sh
-
-EXPOSE 9600 5044
 
 ENTRYPOINT ["/logstash-entrypoint.sh"]
 CMD ["-e", ""]

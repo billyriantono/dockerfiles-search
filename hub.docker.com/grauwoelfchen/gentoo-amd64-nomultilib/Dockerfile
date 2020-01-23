@@ -1,14 +1,18 @@
-FROM gentoo/portage:latest as portage
-FROM gentoo/stage3-amd64-nomultilib:latest
+FROM golang:1.11 as build
 
-LABEL maintainer="Yasuhiro Яша Asaka <yasuhiro.asaka@grauwoelfchen.net>"
+RUN go get github.com/golang/dep \
+	&& go install github.com/golang/dep/...
 
-COPY --from=portage /var/db/repos/gentoo /var/db/repos/gentoo
+ADD . /go/src/github.com/Al2Klimov/check_systemd_needrestart
 
-WORKDIR /
-RUN set -eux; \
-    \
-    eselect news read --quiet new >/dev/null 2>&1; \
-    emerge --info
+RUN cd /go/src/github.com/Al2Klimov/check_systemd_needrestart \
+	&& /go/bin/dep ensure \
+	&& go generate \
+	&& go install . \
+	&& go build -o /go/bin/systemctl _docker/systemctl.go
 
-CMD ["/bin/bash"]
+FROM grandmaster/check-plugins-demo
+
+COPY --from=build /go/bin/check_systemd_needrestart /usr/lib/nagios/plugins/
+COPY --from=build /go/bin/systemctl /bin/
+COPY icinga2/check_systemd_needrestart.conf _docker/icinga2-monobjs.conf /etc/icinga2/conf.d/

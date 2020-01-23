@@ -1,40 +1,40 @@
-# This tag use ubuntu 14.04
-FROM redis:alpine
+FROM rust:1.26
 
-#MAINTAINER Johan Andersson <Grokzen@gmail.com>
-MAINTAINER Eloy Coto <eloy.coto@gmail.com>
+# Create 'app' user.
+RUN groupadd --gid 1000 app \
+	 && useradd --uid 1000 --gid app --shell /bin/bash --create-home app \
+	 && chown -R app:app /home/app
 
-# Some Environment Variables
-ENV HOME /root
-RUN apk update && apk --update add ruby ruby-rdoc ruby-irb supervisor git
-RUN /usr/bin/gem install redis
-RUN git clone -b 3.0.6 https://github.com/antirez/redis.git /redis
+# Install dependencies.
+RUN apt-get update \
+	 && apt-get install -y --no-install-recommends \
+		  ca-certificates \
+		  curl \
+		  fish \
+		  git \
+		  neovim \
+	 && rm -rf /var/lib/apt/lists/*
 
-# Build redis from source
-#RUN (cd /redis && make)
+USER app
+ENV USER app
 
-RUN mkdir /redis-data && \
-    mkdir /redis-data/7000 && \
-    mkdir /redis-data/7001 && \
-    mkdir /redis-data/7002 && \
-    mkdir /redis-data/7003 && \
-    mkdir /redis-data/7004 && \
-    mkdir /redis-data/7005 && \
-    mkdir /redis-data/7006 && \
-    mkdir /redis-data/7007 && \
-    mkdir -p /var/log/supervisor/ && \
-    mkdir -p /etc/supervisor.d
+# Configure fish.
+ADD config.fish /home/app/.config/fish/config.fish
 
-# Add all config files for all clusters
-ADD ./docker-data/redis-conf /redis-conf
+# Configure neovim.
+ADD init.vim /home/app/.config/nvim/init.vim
+RUN curl -fLo /home/app/.local/share/nvim/site/autoload/plug.vim \
+		  --create-dirs \
+		  https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim \
+	 && nvim +PlugInstall +qall
 
-# Add supervisord configuration
-ADD ./docker-data/supervisord.conf /etc/supervisor.d/supervisord.ini
+# Create and set working space.
+USER root
+RUN cd /home/app \
+	 && cargo new --bin --name=app src \
+	 && chown -R app:app /home/app
+WORKDIR /home/app/src
+USER app
 
-ADD ./docker-data/start.sh /start.sh
-RUN chmod 755 /start.sh
+CMD ["nvim"]
 
-EXPOSE 7000 7001 7002 7003 7004 7005 7006 7007
-
-CMD ["/bin/sh", "/start.sh"]
-ENTRYPOINT ["/bin/sh", "/start.sh"]

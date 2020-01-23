@@ -1,82 +1,83 @@
 MetaArgs: null
 Stages:
-- BaseName: ubuntu
+- BaseName: alpine:3.5
   Commands:
-  - Maintainer: vishnu@cloudron.in
-    Name: maintainer
-  - CmdLine:
-    - apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 7F0CEB10 &&    echo
-      'deb http://downloads-distro.mongodb.org/repo/ubuntu-upstart dist 10gen' | sudo
-      tee /etc/apt/sources.list.d/mongodb.list &&    apt-get update &&    apt-get
-      install -y mongodb-org
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - apt-get update --fix-missing
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - apt-get install -y --fix-missing wget default-jdk
-    Name: run
-    PrependShell: true
-  - Env:
-    - Key: JAVA_HOME
-      Value: /usr/lib/jvm/default-java
-    Name: env
-  - Chown: ""
-    Name: add
-    SourcesAndDest:
-    - http://www.us.apache.org/dist/maven/maven-3/3.3.3/binaries/apache-maven-3.3.3-bin.tar.gz
-    - /tmp/
-  - CmdLine:
-    - tar xzvf /tmp/apache-maven-3.3.3-bin.tar.gz --directory /usr/lib
-    Name: run
-    PrependShell: true
-  - Env:
-    - Key: PATH
-      Value: /usr/lib/apache-maven-3.3.3/bin:$PATH
-    Name: env
-  - CmdLine:
-    - mkdir -p /opt/cyber-event-collector
-    Name: run
-    PrependShell: true
-  - Chown: ""
-    Name: add
-    SourcesAndDest:
-    - src
-    - /opt/cyber-event-collector/src
-  - Chown: ""
-    Name: add
-    SourcesAndDest:
-    - pom.xml
-    - /opt/cyber-event-collector/pom.xml
-  - CmdLine:
-    - mvn --file /opt/cyber-event-collector/pom.xml clean install
-    Name: run
-    PrependShell: true
-  - Name: volume
-    Volumes:
-    - /data/db
-  - Name: workdir
-    Path: /data
   - Name: expose
     Ports:
-    - "27017"
+    - "7000"
+    - "7001"
+    - "7199"
+    - "9042"
+    - "9160"
+  - Key: APK_CACHE_IP
+    Name: arg
+    Value: 172.17.0.1
+  - Key: APK_CACHE_DOMAIN
+    Name: arg
+    Value: '''dl-cdn.alpinelinux.org'''
+  - Key: RUN_DEPS
+    Name: arg
+    Value: '''su-exec openjdk8-jre openssl bash'''
+  - Key: BUILD_DEPS
+    Name: arg
+    Value: '''tar coreutils'''
+  - Key: CASSANDRA_VERSION
+    Name: arg
+    Value: "3.9"
+  - Key: CASSANDRA_URL
+    Name: arg
+    Value: '''http://artfiles.org/apache.org/cassandra'''
+  - Env:
+    - Key: CASSANDRA_HOME
+      Value: /opt/cassandra
+    Name: env
+  - Env:
+    - Key: CASSANDRA_CONF
+      Value: $CASSANDRA_HOME/conf
+    Name: env
+  - Env:
+    - Key: PATH
+      Value: $CASSANDRA_HOME/bin:$PATH
+    Name: env
+  - Env:
+    - Key: CASSANDRA_START_RPC
+      Value: "true"
+    Name: env
+  - CmdLine:
+    - 'nc -z $APK_CACHE_IP 80 && echo $APK_CACHE_IP $APK_CACHE_DOMAIN >>/etc/hosts   ;
+      apk --update add --no-cache $RUN_DEPS $BUILD_DEPS     && mkdir -p $CASSANDRA_HOME/data
+      $CASSANDRA_HOME/logs $CASSANDRA_HOME/commitlog     && cd $CASSANDRA_HOME     &&
+      CASSANDRA_LATEST=$(wget -qO- $CASSANDRA_URL | egrep -o "[0-9]+\.[0-9]+" | sort
+      -Vr | head -1)     && : ${CASSANDRA_VERSION:=$CASSANDRA_LATEST}     && wget
+      -O- $CASSANDRA_URL/${CASSANDRA_VERSION}/apache-cassandra-${CASSANDRA_VERSION}-bin.tar.gz
+      | tar xz --strip-components=1     && sed -i ''s|^start_rpc:.*$|start_rpc: true|''
+      $CASSANDRA_CONF/cassandra.yaml     && adduser -DH -s /sbin/nologin cassandra
+      && chown -R cassandra:cassandra $CASSANDRA_HOME   && apk del $BUILD_DEPS &&
+      rm -rf /var/cache/apk/*'
+    Name: run
+    PrependShell: true
+  - Name: workdir
+    Path: $CASSANDRA_HOME
   - Chown: ""
     Name: add
     SourcesAndDest:
-    - server.sh
-    - /
+    - .
+    - .
+  - Name: volume
+    Volumes:
+    - $CASSANDRA_HOME/data
+    - $CASSANDRA_HOME/logs
+    - $CASSANDRA_HOME/commitlog
+    - /tmp
   - CmdLine:
-    - chmod u+x /server.sh
-    Name: run
-    PrependShell: true
-  - CmdLine:
-    - /server.sh
+    - su-exec
+    - cassandra
+    - cassandra
+    - -f
     Name: cmd
     PrependShell: false
   From:
-    Image: ubuntu
+    Image: alpine:3.5
   Name: ""
   Platform: ""
-  SourceCode: FROM ubuntu
+  SourceCode: FROM alpine:3.5

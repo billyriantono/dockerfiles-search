@@ -1,4 +1,4 @@
-FROM alpine:3.9
+FROM alpine:3.11
 LABEL description="Alpine Python 3" \
       maintainer="Djerfy <djerfy@gmail.com>"
 

@@ -1,16 +1,11 @@
-FROM ubuntu:17.04
-MAINTAINER Muhammad Ebraheem <muhaeb@gmail.com>
+FROM golang:1.10
 
-RUN apt-get update -qq && \
-    apt-get install -y \
-    mono-complete wget build-essential unzip sudo && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+WORKDIR /go/src/app
+COPY . .
 
-WORKDIR /root
+RUN go get -d -v ./...
+RUN go install -v ./...
 
-COPY / /root/
+WORKDIR /tmp
 
-RUN ./install.sh
-
-ENTRYPOINT ["/root/run.sh"]
+ENTRYPOINT ["textql"]
